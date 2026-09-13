@@ -697,12 +697,25 @@ def test_no_function_in_this_module_names_a_network_call() -> None:
 # ── policy: the shipped file is currently, correctly, unresolved ─────────
 
 
-def test_the_shipped_policy_file_correctly_refuses_because_its_repository_id_is_unresolved() -> (
-    None
-):
+def test_the_shipped_policy_file_loads_and_binds_the_real_repository_id() -> None:
+    """The shipped policy carries the RESOLVED immutable repository id.
+
+    This inverted when the id was resolved from the GitHub API. The refusal
+    behaviour it used to prove is not lost: it is proven independently, and
+    better, by `test_a_policy_with_a_non_positive_repository_id_is_refused`,
+    which plants a bad value rather than depending on the shipped file being
+    broken. A guard that can only fire while the repository is misconfigured
+    stops being a guard the moment someone fixes the configuration.
+
+    Both identifiers are asserted deliberately. A `full_name` survives a
+    rename or transfer while the numeric id never does, so checking only the
+    name would let a different repository that briefly held this name satisfy
+    the binding.
+    """
     policy_path = ROOT / ".github" / "dependency-bundle-policy.json"
-    with pytest.raises(db.PolicyError, match="UNRESOLVED"):
-        db.load_policy(policy_path)
+    policy = db.load_policy(policy_path)
+    assert policy["repository"]["full_name"] == "michaelayoade/dotmac_erp"
+    assert policy["repository"]["id"] == 1141216651
 
 
 def test_a_policy_with_a_real_positive_repository_id_loads() -> None:
