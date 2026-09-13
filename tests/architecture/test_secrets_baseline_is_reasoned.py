@@ -70,6 +70,10 @@ REASONS = {
         "rule 15) and schema-9 conservation fingerprints. Both are hex by "
         "definition; neither authenticates an actor or grants access."
     ),
+    ".github/dependency-bundle-policy.json": (
+        "Public immutable Git commit ID for the one permitted off-index "
+        "dependency. The policy binds it to its URL and tag; it grants no access."
+    ),
     ".github/workflows/ci.yml": (
         "`secrets: |` is a YAML KEY, not a value, and the DATABASE_URL is "
         "`postgres:postgres` against the ephemeral service container that "
@@ -159,7 +163,8 @@ def test_the_suppression_count_only_shrinks() -> None:
     The published OCI digest remains projected into the rendered collector.
     This release's 12-character projection crosses the entropy detector's
     threshold, while the full digest is recognized as an indirect public
-    reference, so the reviewed suppression total is 28.
+    reference. The dependency-bundle policy adds one public immutable Git
+    commit ID, so the reviewed suppression total is 29.
 
     The v3 composition record no longer consumes a baseline slot: it is a
     closed digest-only envelope whose SHA-pinned verifier independently
@@ -167,7 +172,7 @@ def test_the_suppression_count_only_shrinks() -> None:
     expected digests with an entropy heuristic would add eleven findings
     without increasing secret coverage.
 
-    Every entry above the reviewed 28 would be unexplained, and the reason
+    Every entry above the reviewed 29 would be unexplained, and the reason
     check above only fires per FILE — a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
@@ -178,8 +183,8 @@ def test_the_suppression_count_only_shrinks() -> None:
     someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total == 28, (
-        f"{total} suppressed findings, expected exactly 28. A rise means fix "
+    assert total == 29, (
+        f"{total} suppressed findings, expected exactly 29. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
         "change -- never leave a stale number unexamined either direction."
