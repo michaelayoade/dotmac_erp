@@ -330,11 +330,35 @@ never runs under this environment and never receives the credential.
 
 Every function in `scripts/dependency_bundle.py` that can fail raises one of
 its `DependencyBundleError` subclasses (`ManifestError`, `PolicyError`,
-`BundleVerificationError`, `ExtractionError`). None of them falls back to
-fetching from the registry on a verification failure — see that module's
-"No registry fallback" docstring section. A caller that hits a refusal must
-obtain a new, independently verifiable bundle; there is no degraded-trust
-path.
+`BundleVerificationError`, `ExtractionError`) — including the standard
+library exceptions the underlying operations can raise. This was not
+always true and is now enforced at every site that touches adversarial
+input: `zipfile.BadZipFile` and `OSError` from opening or reading a ZIP
+archive (`_extract_zip_members`'s archive open and its per-member
+open/read/write loop), `OSError` from reading an extracted file
+(`verify_member_hashes`), from staging or publishing a local index
+(`build_local_index`), and from reading an acquired file or the outer
+archive (`create_bundle_manifest`) are all caught and re-raised as the
+matching `DependencyBundleError` subclass. A malformed `poetry.lock`
+`[[package]]` entry that is not itself a table, or whose `source`,
+`dependencies`, `groups`, `markers`, or `extras` field is not the shape
+expected, is refused by an explicit type check rather than left to raise a
+raw `AttributeError`/`TypeError` when something later calls `.get(...)` on
+it. `verify_run_metadata` refuses a non-dict `metadata` or `policy`
+outright rather than raising `AttributeError` on the first `.get(...)`.
+
+**Stated boundary, not silently assumed:** `policy` (the return value of
+`load_policy`) and a `RunMetadata` instance are treated as validated ONCE,
+at their own construction (`load_policy`'s checks; `RunMetadata
+.__post_init__`), not re-validated at every downstream use — the same
+posture `extract_verified_bundle` and `bind_bundle_to_candidate` already
+took toward a `bundle_manifest` dict, which they DO fully shape-check
+before use (every `members[...]` and `run[...]` access is behind an
+`isinstance`/key-presence check, never a bare index). None of them falls
+back to fetching from the registry on a verification failure — see that
+module's "No registry fallback" docstring section. A caller that hits a
+refusal must obtain a new, independently verifiable bundle; there is no
+degraded-trust path.
 
 **`verify_run_metadata` is LOCAL validation only — this is a deliberate,
 stated limit, not an oversight.** It proves that a metadata dict, IF

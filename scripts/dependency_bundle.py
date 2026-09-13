@@ -802,6 +802,11 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
                     "list of requirement strings"
                 )
             extras[str(extra_name)] = list(requirement_list)
+        if not isinstance(groups_raw, list):
+            raise ManifestError(f"lock package {name!r} has a non-list groups")
+        dependencies_raw = pkg.get("dependencies", {})
+        if not isinstance(dependencies_raw, dict):
+            raise ManifestError(f"lock package {name!r} has a non-table dependencies")
         packages.append(
             LockPackage(
                 name=name,
@@ -814,7 +819,7 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
                 python_versions=python_versions,
                 markers=markers,
                 extras=extras,
-                dependencies=dict(pkg.get("dependencies", {}) or {}),
+                dependencies=dict(dependencies_raw),
                 source_type=str(source["type"]),
                 source_url=str(source["url"]),
                 source_reference=str(source["reference"]),
@@ -1413,6 +1418,15 @@ def verify_run_metadata(
         candidate_root, permitted_off_index
     )
 
+    if not isinstance(metadata, dict):
+        raise BundleVerificationError(
+            f"run metadata must be a dict, got a {type(metadata).__name__}"
+        )
+    if not isinstance(policy, dict) or not isinstance(policy.get("repository"), dict):
+        raise BundleVerificationError(
+            "policy must be a dict shaped like load_policy's return value"
+        )
+
     missing = [
         field for field in _RUN_METADATA_FIELDS if metadata.get(field) in (None, "")
     ]
@@ -1697,9 +1711,20 @@ def _extract_zip_members(
     """
 
     staging_dir = staging_dir.resolve()
-    staging_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        staging_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ExtractionError(
+            f"cannot create staging directory {staging_dir}: {exc}"
+        ) from exc
     extracted: list[str] = []
-    with zipfile.ZipFile(archive_path) as archive:
+    try:
+        archive = zipfile.ZipFile(archive_path)
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ExtractionError(
+            f"cannot open {archive_path} as a ZIP archive: {exc}"
+        ) from exc
+    with archive:
         infos = archive.infolist()
         if len(infos) > MAX_MEMBER_COUNT:
             raise ExtractionError(
@@ -1793,29 +1818,34 @@ def _extract_zip_members(
         running_total = 0
         for info in infos:
             target = staging_dir / info.filename
-            target.parent.mkdir(parents=True, exist_ok=True)
             written = 0
-            with archive.open(info) as source, open(target, "wb") as sink:
-                while True:
-                    chunk = source.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    written += len(chunk)
-                    running_total += len(chunk)
-                    if written > MAX_MEMBER_BYTES:
-                        raise ExtractionError(
-                            f"archive member {info.filename!r} exceeded the "
-                            f"{MAX_MEMBER_BYTES}-byte cap while extracting "
-                            "(declared size cannot be trusted; this is the "
-                            "zip-bomb guard)"
-                        )
-                    if running_total > MAX_TOTAL_UNCOMPRESSED_BYTES:
-                        raise ExtractionError(
-                            "aggregate extracted bytes exceeded "
-                            f"{MAX_TOTAL_UNCOMPRESSED_BYTES}; refusing (zip-"
-                            "bomb guard)"
-                        )
-                    sink.write(chunk)
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(info) as source, open(target, "wb") as sink:
+                    while True:
+                        chunk = source.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        running_total += len(chunk)
+                        if written > MAX_MEMBER_BYTES:
+                            raise ExtractionError(
+                                f"archive member {info.filename!r} exceeded the "
+                                f"{MAX_MEMBER_BYTES}-byte cap while extracting "
+                                "(declared size cannot be trusted; this is the "
+                                "zip-bomb guard)"
+                            )
+                        if running_total > MAX_TOTAL_UNCOMPRESSED_BYTES:
+                            raise ExtractionError(
+                                "aggregate extracted bytes exceeded "
+                                f"{MAX_TOTAL_UNCOMPRESSED_BYTES}; refusing (zip-"
+                                "bomb guard)"
+                            )
+                        sink.write(chunk)
+            except (zipfile.BadZipFile, OSError) as exc:
+                raise ExtractionError(
+                    f"cannot extract archive member {info.filename!r}: {exc}"
+                ) from exc
             if written != info.file_size:
                 raise ExtractionError(
                     f"archive member {info.filename!r} extracted "
@@ -1840,7 +1870,12 @@ def verify_member_hashes(dest_dir: Path, expected_hashes: dict[str, str]) -> Non
             raise BundleVerificationError(
                 f"expected extracted member {name!r} is missing on disk"
             )
-        digest = sha256_hex(path.read_bytes())
+        try:
+            digest = sha256_hex(path.read_bytes())
+        except OSError as exc:
+            raise BundleVerificationError(
+                f"cannot read extracted member {name!r}: {exc}"
+            ) from exc
         if digest != expected_hex:
             raise BundleVerificationError(
                 f"extracted member {name!r} hash mismatch: expected "

@@ -625,6 +625,88 @@ def test_a_malformed_forgejo_lock_source_is_refused(tmp_path: Path) -> None:
         db.extract_dependency_surface(root)
 
 
+def test_a_non_table_lock_package_entry_is_refused_not_a_raw_crash(
+    tmp_path: Path,
+) -> None:
+    """Finding 7: a `[[package]]` entry that is not itself a table used to
+    reach `pkg.get(...)` and raise a raw AttributeError."""
+
+    lock = (
+        'package = ["not-a-table"]\n\n'
+        "[metadata]\n"
+        'lock-version = "2.1"\n'
+        'python-versions = ">=3.11,<3.13"\n'
+        'content-hash = "0000000000000000000000000000000000000000000000000000000000000000"\n'
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="must be a table"):
+        db.extract_dependency_surface(root)
+
+
+def test_a_non_table_lock_source_does_not_crash_and_is_still_caught(
+    tmp_path: Path,
+) -> None:
+    """A `[[package]].source` that is a scalar, not a table, used to reach
+    `source.get(...)` and raise a raw AttributeError. It no longer crashes
+    -- the package is treated as not-obviously-private (its source cannot
+    be read at all) and SKIPPED, but since the manifest still declares
+    dotmac-kernel as a forgejo dependency, the existing manifest/lock
+    cross-check catches the resulting disagreement anyway: private state
+    is not silently accepted, it surfaces one check later."""
+
+    lock = (
+        '[[package]]\nname = "dotmac-kernel"\nversion = "0.1.0a1"\n'
+        'source = "not-a-table"\n\n'
+        "[metadata]\n"
+        'lock-version = "2.1"\n'
+        'python-versions = ">=3.11,<3.13"\n'
+        'content-hash = "0000000000000000000000000000000000000000000000000000000000000000"\n'
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="no corresponding"):
+        db.extract_dependency_surface(root)
+
+
+def test_a_non_table_lock_dependencies_is_refused_not_a_raw_crash(
+    tmp_path: Path,
+) -> None:
+    """Finding 7: `dict(pkg.get("dependencies", {}) or {})` used to raise a
+    raw ValueError when `dependencies` was a non-mapping truthy value
+    (e.g. a list of strings)."""
+
+    lock = BASE_LOCK.replace(
+        'groups = ["main"]\noptional = false\nfiles = [\n'
+        '    {file = "dotmac_kernel-0.1.0a1-py3-none-any.whl", hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},\n'
+        ']\n\n[package.source]\ntype = "legacy"\nurl = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"\nreference = "forgejo"',
+        'groups = ["main"]\noptional = false\ndependencies = ["a", "b"]\nfiles = [\n'
+        '    {file = "dotmac_kernel-0.1.0a1-py3-none-any.whl", hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},\n'
+        ']\n\n[package.source]\ntype = "legacy"\nurl = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"\nreference = "forgejo"',
+    )
+    assert lock != BASE_LOCK, "the targeted replacement did not match"
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="non-table dependencies"):
+        db.extract_dependency_surface(root)
+
+
+def test_verify_run_metadata_refuses_a_non_dict_metadata(tmp_path: Path) -> None:
+    candidate_root = _candidate_root(tmp_path)
+    with pytest.raises(db.BundleVerificationError, match="must be a dict"):
+        db.verify_run_metadata(
+            ["not", "a", "dict"], _valid_policy(), candidate_root=candidate_root
+        )
+
+
+def test_verify_run_metadata_refuses_a_non_dict_policy(tmp_path: Path) -> None:
+    candidate_root = _candidate_root(tmp_path)
+    digest = _candidate_digest(candidate_root)
+    with pytest.raises(db.BundleVerificationError, match="must be a dict"):
+        db.verify_run_metadata(
+            _valid_run_metadata(digest),
+            ["not", "a", "dict"],
+            candidate_root=candidate_root,
+        )
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # 2. Bundle mechanics
 # ═══════════════════════════════════════════════════════════════════════
@@ -997,6 +1079,16 @@ def test_a_manifest_expected_member_missing_from_the_archive_is_refused(
     manifest = _manifest_for({"a.whl": b"AAAA"})
     manifest["members"]["missing.whl"] = {"sha256": "c" * 64, "size": 10}
     with pytest.raises(db.ExtractionError, match="does not contain"):
+        db.extract_verified_bundle(archive, tmp_path / "out", manifest)
+
+
+def test_a_corrupted_archive_is_refused_not_a_raw_badzipfile(tmp_path: Path) -> None:
+    """Finding 7: `zipfile.BadZipFile` used to escape uncaught."""
+
+    archive = tmp_path / "corrupt.zip"
+    archive.write_bytes(b"this is not a zip file at all")
+    manifest = _manifest_for({"a.whl": b"AAAA"})
+    with pytest.raises(db.ExtractionError, match="cannot open"):
         db.extract_verified_bundle(archive, tmp_path / "out", manifest)
 
 
