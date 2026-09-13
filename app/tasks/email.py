@@ -190,6 +190,21 @@ def run_employee_mailcow_provisioning(
                     "enabled": nextcloud_result.enabled,
                     "skipped": nextcloud_result.skipped,
                 }
+                if (
+                    nextcloud_result.user_id
+                    and settings.dotmac_sub_staff_sync_enabled
+                    and employee.dotmac_sub_access_enabled
+                ):
+                    try:
+                        from app.tasks.staff_sync import sync_employee_staff_account
+
+                        sync_employee_staff_account.apply_async(
+                            args=[str(employee_uuid), str(org_uuid)],
+                        )
+                    except Exception as exc:
+                        raise RuntimeError(
+                            "Could not enqueue Selfcare workforce provisioning"
+                        ) from exc
         return task_result
 
 

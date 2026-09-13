@@ -83,11 +83,13 @@ def mapping_engine(engine, monkeypatch):
 
 def employee(db, org_id, *, account_id=None, status=EmployeeStatus.ACTIVE):
     prime_tenant_context(db, org_id)
+    email = f"{uuid4()}@example.test"
     person = Person(
         organization_id=org_id,
         first_name="Synthetic",
         last_name="Employee",
-        email=f"{uuid4()}@example.test",
+        email=email,
+        nextcloud_user_id=email,
     )
     record = Employee(
         organization_id=org_id,
@@ -144,9 +146,15 @@ def test_inactive_ownership_never_transfers_or_mutates(mapping_engine, status):
     with Session(mapping_engine) as db:
         employee(db, org, account_id=account_id, status=EmployeeStatus.TERMINATED)
         claimant = employee(db, org, status=status)
-        client = FakeClient(existing={"id": account_id, "is_active": True})
-        with pytest.raises(staff_sync.SelfcareMappingConflict):
-            staff_sync.sync_employee(db, claimant, client=client)
+        client = FakeClient(created_account_id=account_id)
+        if status == EmployeeStatus.ACTIVE:
+            with pytest.raises(staff_sync.SelfcareMappingConflict):
+                staff_sync.sync_employee(db, claimant, client=client)
+        else:
+            assert staff_sync.sync_employee(db, claimant, client=client) == {
+                "action": "skipped",
+                "reason": "no dotmac_sub account",
+            }
         assert claimant.dotmac_sub_account_id is None
         assert claimant.dotmac_sub_staff_synced_at is None
         assert (
@@ -177,9 +185,9 @@ def test_concurrent_claim_loser_cannot_mutate_selfcare(mapping_engine, cooperati
     org, account_id = uuid4(), str(uuid4())
     with Session(mapping_engine) as setup:
         first_id = employee(setup, org).employee_id
-        second_id = employee(setup, org, status=EmployeeStatus.TERMINATED).employee_id
+        second_id = employee(setup, org).employee_id
         setup.commit()
-    client = FakeClient(existing={"id": account_id, "is_active": True})
+    client = FakeClient(created_account_id=account_id)
     pids = Queue()
 
     def contender():
@@ -200,7 +208,7 @@ def test_concurrent_claim_loser_cannot_mutate_selfcare(mapping_engine, cooperati
             staff_sync.sync_employee(
                 first,
                 owner,
-                client=FakeClient(existing={"id": account_id, "is_active": True}),
+                client=FakeClient(created_account_id=account_id),
             )
         else:
             # An independent writer bypasses both the advisory lock and check.
@@ -242,7 +250,7 @@ def test_failed_remote_sync_rolls_back_mapping_and_timestamp(
     org, account_id = uuid4(), str(uuid4())
     with Session(mapping_engine) as db:
         record = employee(db, org)
-        client = FakeClient(existing={"id": account_id, "is_active": True})
+        client = FakeClient(created_account_id=account_id)
 
         def fail_projection(*args):
             raise RuntimeError("synthetic projection failure")
