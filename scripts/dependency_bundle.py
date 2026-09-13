@@ -2027,50 +2027,108 @@ def create_bundle_manifest(
 def build_local_index(
     index_root: Path, packages: dict[str, list[tuple[str, str, Path]]]
 ) -> None:
-    """Materialise a local PEP 503 "simple" index under `index_root/simple`.
+    """Materialise a local PEP 503 "simple" index under `index_root/simple`,
+    atomically.
 
     `packages` maps a PEP-503-normalised package name to a list of
     `(filename, sha256_hex, source_path)` triples — each `source_path` is a
     file this module has ALREADY verified (via `verify_member_hashes`). This
     function does not itself trust the hash; it only copies bytes and
     records the hash fragment PEP 503 uses for its own integrity check.
+
+    Same property as `extract_verified_bundle`, applied here: the WHOLE
+    index is built in a fresh, exclusive staging directory and published
+    with one atomic rename. `index_root` must not already exist. Previously
+    this function wrote directly into `index_root`, package by package and
+    file by file — a failure partway (a malformed key, a missing source
+    file, a full disk) left an already-published package A sitting beside a
+    partially-written package B, and the root index was rebuilt from
+    whatever package directories happened to exist on disk, silently
+    trusting that stale/partial state as resolver input on a retry. There
+    is no retry-merge path now: a caller that needs to rebuild calls this
+    again against a fresh `index_root`.
     """
 
-    root_dir = index_root / "simple"
-    root_dir.mkdir(parents=True, exist_ok=True)
-    for normalised_pkg_name, files in packages.items():
-        if normalised_pkg_name != normalise_name(normalised_pkg_name):
-            raise BundleVerificationError(
-                f"package key {normalised_pkg_name!r} is not PEP-503-normalised"
+    if index_root.exists():
+        raise BundleVerificationError(
+            f"destination {index_root} already exists; build_local_index "
+            "materialises a fresh tree and refuses to merge into or "
+            "overwrite one"
+        )
+    index_root.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        staging_root = Path(
+            tempfile.mkdtemp(
+                prefix=f".{index_root.name}.staging.", dir=str(index_root.parent)
             )
-        pkg_dir = root_dir / normalised_pkg_name
-        pkg_dir.mkdir(parents=True, exist_ok=True)
-        anchors = []
-        for filename, digest_hex, source_path in sorted(files, key=lambda t: t[0]):
-            if not _SHA256_HEX.match(digest_hex):
+        )
+    except OSError as exc:
+        raise BundleVerificationError(
+            f"cannot create a staging directory beside {index_root}: {exc}"
+        ) from exc
+
+    try:
+        root_dir = staging_root / "simple"
+        root_dir.mkdir(parents=True, exist_ok=True)
+        for normalised_pkg_name, files in packages.items():
+            try:
+                canonical_name = normalise_name(normalised_pkg_name)
+            except ValueError as exc:
                 raise BundleVerificationError(
-                    f"{filename!r} carries a malformed sha256 {digest_hex!r}"
-                )
-            if not source_path.is_file():
+                    f"package key {normalised_pkg_name!r} is not a valid "
+                    f"PEP 503 name: {exc}"
+                ) from exc
+            if normalised_pkg_name != canonical_name:
                 raise BundleVerificationError(
-                    f"local index source file missing for {filename!r}: {source_path}"
+                    f"package key {normalised_pkg_name!r} is not PEP-503-normalised"
                 )
-            (pkg_dir / filename).write_bytes(source_path.read_bytes())
-            anchors.append(
-                f'<a href="{filename}#sha256={digest_hex}">{filename}</a><br/>'
+            pkg_dir = root_dir / normalised_pkg_name
+            pkg_dir.mkdir(parents=True, exist_ok=True)
+            anchors = []
+            for filename, digest_hex, source_path in sorted(files, key=lambda t: t[0]):
+                if not _SHA256_HEX.match(digest_hex):
+                    raise BundleVerificationError(
+                        f"{filename!r} carries a malformed sha256 {digest_hex!r}"
+                    )
+                if not source_path.is_file():
+                    raise BundleVerificationError(
+                        f"local index source file missing for {filename!r}: "
+                        f"{source_path}"
+                    )
+                try:
+                    (pkg_dir / filename).write_bytes(source_path.read_bytes())
+                except OSError as exc:
+                    raise BundleVerificationError(
+                        f"cannot stage {filename!r}: {exc}"
+                    ) from exc
+                anchors.append(
+                    f'<a href="{filename}#sha256={digest_hex}">{filename}</a><br/>'
+                )
+            (pkg_dir / "index.html").write_text(
+                "<!DOCTYPE html><html><body>\n"
+                + "\n".join(anchors)
+                + "\n</body></html>\n",
+                encoding="utf-8",
             )
-        (pkg_dir / "index.html").write_text(
-            "<!DOCTYPE html><html><body>\n" + "\n".join(anchors) + "\n</body></html>\n",
+        package_names = sorted(p.name for p in root_dir.iterdir() if p.is_dir())
+        root_anchors = [f'<a href="{name}/">{name}</a><br/>' for name in package_names]
+        (root_dir / "index.html").write_text(
+            "<!DOCTYPE html><html><body>\n"
+            + "\n".join(root_anchors)
+            + "\n</body></html>\n",
             encoding="utf-8",
         )
-    package_names = sorted(p.name for p in root_dir.iterdir() if p.is_dir())
-    root_anchors = [f'<a href="{name}/">{name}</a><br/>' for name in package_names]
-    (root_dir / "index.html").write_text(
-        "<!DOCTYPE html><html><body>\n"
-        + "\n".join(root_anchors)
-        + "\n</body></html>\n",
-        encoding="utf-8",
-    )
+    except BaseException:
+        shutil.rmtree(staging_root, ignore_errors=True)
+        raise
+
+    try:
+        os.rename(staging_root, index_root)
+    except OSError as exc:
+        shutil.rmtree(staging_root, ignore_errors=True)
+        raise BundleVerificationError(
+            f"cannot publish staged index to {index_root}: {exc}"
+        ) from exc
 
 
 # ── candidate-specific rebinding ──────────────────────────────────────────

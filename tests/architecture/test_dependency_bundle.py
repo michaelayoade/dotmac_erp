@@ -1048,6 +1048,84 @@ def test_member_hash_verification_refuses_a_missing_file(tmp_path: Path) -> None
         db.verify_member_hashes(dest, {"a.whl": db.sha256_hex(b"AAAA")})
 
 
+# ── item 6: build_local_index is atomic, like extract_verified_bundle ────
+
+
+def test_build_local_index_publishes_a_clean_index_atomically(tmp_path: Path) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    wheel_path = source_dir / "dotmac_kernel-0.1.0a1-py3-none-any.whl"
+    wheel_path.write_bytes(b"wheel bytes")
+    packages = {
+        "dotmac-kernel": [
+            (
+                "dotmac_kernel-0.1.0a1-py3-none-any.whl",
+                db.sha256_hex(b"wheel bytes"),
+                wheel_path,
+            )
+        ]
+    }
+    index_root = tmp_path / "index"
+    db.build_local_index(index_root, packages)
+    assert (index_root / "simple" / "index.html").is_file()
+    assert (
+        index_root
+        / "simple"
+        / "dotmac-kernel"
+        / "dotmac_kernel-0.1.0a1-py3-none-any.whl"
+    ).read_bytes() == b"wheel bytes"
+
+
+def test_build_local_index_refuses_a_pre_existing_destination(tmp_path: Path) -> None:
+    index_root = tmp_path / "index"
+    index_root.mkdir()
+    with pytest.raises(db.BundleVerificationError, match="already exists"):
+        db.build_local_index(index_root, {})
+
+
+def test_build_local_index_is_atomic_on_failure_nothing_is_published(
+    tmp_path: Path,
+) -> None:
+    """The item-6 demonstration: package A comes first (sorted before B),
+    package B's source file is missing. Before this fix, A would already be
+    published under `index_root` when the failure on B is raised. Now
+    NOTHING is published, and no stray staging directory is left behind."""
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    wheel_a = source_dir / "a_pkg-1.0-py3-none-any.whl"
+    wheel_a.write_bytes(b"A bytes")
+    missing_wheel_b = source_dir / "b_pkg-1.0-py3-none-any.whl"  # never written
+    packages = {
+        "a-pkg": [("a_pkg-1.0-py3-none-any.whl", db.sha256_hex(b"A bytes"), wheel_a)],
+        "b-pkg": [("b_pkg-1.0-py3-none-any.whl", "b" * 64, missing_wheel_b)],
+    }
+    index_root = tmp_path / "index"
+    with pytest.raises(db.BundleVerificationError, match="source file missing"):
+        db.build_local_index(index_root, packages)
+    assert not index_root.exists()
+    assert [p.name for p in source_dir.parent.iterdir() if p.name != "source"] == []
+
+
+def test_build_local_index_refuses_an_unnormalised_package_key(tmp_path: Path) -> None:
+    index_root = tmp_path / "index"
+    with pytest.raises(db.BundleVerificationError, match="not PEP-503-normalised"):
+        db.build_local_index(index_root, {"Dotmac_Kernel": []})
+    assert not index_root.exists()
+
+
+def test_build_local_index_refuses_an_invalid_pep503_key_rather_than_crashing(
+    tmp_path: Path,
+) -> None:
+    """A key that only NORMALISES to something invalid (edge separator)
+    must be refused with BundleVerificationError, not the raw ValueError
+    normalise_name raises (finding 8's owner change, applied here too)."""
+
+    index_root = tmp_path / "index"
+    with pytest.raises(db.BundleVerificationError, match="not a valid PEP 503 name"):
+        db.build_local_index(index_root, {"-dotmac-kernel-": []})
+
+
 # ── item 7: strong local run-metadata validation ─────────────────────
 
 
