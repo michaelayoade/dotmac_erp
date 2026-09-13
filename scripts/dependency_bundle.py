@@ -214,6 +214,21 @@ INDEX_USERNAME = "ci-reader"
 #: default), so this refuses only what would already be an unreviewable
 #: range if Poetry's own parser saw it (`^`, `~`, `>=`, `<`, `*`, a comma of
 #: multiple constraints, or a space).
+#:
+#: NAMED, DELIBERATE DIVERGENCE from `erp_lock._EXACT_VERSION` (finding 9),
+#: not a bug to converge: erp_lock's regex allows exactly ONE of a
+#: pre-release/post-release/dev-release suffix
+#: (`(a|b|rc|\.post|\.dev)[0-9]+`, non-stackable) because it exists to
+#: validate only the two specific, already-known `ALLOWED_MOVEMENTS`
+#: version strings in a closed, reviewed workflow. This module must
+#: recognise the full space of exact PEP 440 versions for ANY future
+#: forgejo-sourced pin, including a real PEP 440 spelling erp_lock's
+#: narrower regex refuses: a version stacking more than one suffix, e.g.
+#: `1.0a1.post1`. Three independent optional groups (pre-release, then
+#: post-release, then dev-release) is the CORRECT PEP 440 shape here; a
+#: single non-stackable alternation would silently refuse a legitimate
+#: future pin. See `test_the_version_regex_divergence_is_named_not_a_bug`
+#: for the planted proof.
 _EXACT_VERSION = re.compile(
     r"\A[0-9]+(\.[0-9]+)*((a|b|rc)[0-9]+)?(\.post[0-9]+)?(\.dev[0-9]+)?\Z"
 )
@@ -710,14 +725,37 @@ def _forgejo_source_url(poetry: dict[str, Any]) -> str:
     url = entry.get("url")
     if not isinstance(url, str):
         raise ManifestError("the forgejo source declares no url")
-    normalised = url.rstrip("/")
-    if normalised != FORGEJO_LOCK_URL:
+    # NAMED CONVERGENCE (finding 9): this used to accept the url with OR
+    # without a trailing slash (`url.rstrip("/")` before comparing).
+    # `erp_lock.manifest_problems` requires the EXACT spelling
+    # (`url != MANIFEST_INDEX_URL`, no stripping) for the identical check —
+    # a manifest source url missing its trailing slash would pass here and
+    # fail there. erp_lock's stricter, already-reviewed behaviour wins, for
+    # the same reason established for `normalise_repository_url`: refusing
+    # an unrecognised spelling is the correct property, not guessing that a
+    # near-miss spelling means the same thing.
+    if url != FORGEJO_MANIFEST_URL:
         raise ManifestError(
             f"the forgejo source url {url!r} is not the approved index "
-            f"{FORGEJO_MANIFEST_URL!r} — an alternate Forgejo URL is refused"
+            f"{FORGEJO_MANIFEST_URL!r} — an alternate spelling, including a "
+            "missing or different trailing slash, is refused rather than "
+            "guessed at"
         )
+    normalised = url.rstrip("/")
     if entry.get("priority") != "explicit":
         raise ManifestError("the forgejo source must declare priority = 'explicit'")
+    # NAMED, DELIBERATE DIVERGENCE (finding 9), not a bug to converge:
+    # `erp_lock.manifest_problems` refuses ANY second `[[tool.poetry.source]]`
+    # entry at all, because it is validating a manifest for a LIVE,
+    # credentialed Poetry resolution — an unrelated extra index could still
+    # change what that resolution does. This module never runs Poetry and
+    # holds no credential; it only needs to know whether a SECOND source
+    # could be mistaken for the private one, so it refuses only a second
+    # source that also names the forgejo host under a different name. A
+    # manifest with a second, genuinely unrelated public source is refused
+    # by `erp_lock.manifest_problems` and accepted here — see
+    # `test_an_unrelated_second_source_is_a_named_divergence_not_a_bug` for
+    # the planted proof this is intentional, not an oversight.
     for other in sources:
         if not isinstance(other, dict) or other is entry:
             continue
@@ -733,6 +771,30 @@ def _forgejo_source_url(poetry: dict[str, Any]) -> str:
 
 
 def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
+    """Every `poetry.lock` `[[package]]` entry whose source is forgejo.
+
+    KNOWN, TRACKED, NOT-CONVERGED DIVERGENCE (finding 9) from
+    `erp_lock.acquisition_plan`'s lock-side loop: that function includes a
+    lock package in its plan by checking ONLY
+    `source.get("reference") == INDEX_SOURCE_NAME` — it never checks
+    `source.get("type")` or `source.get("url")`. A lock entry with
+    `reference = "forgejo"` but a WRONG `type` or `url` would be silently
+    trusted there. This function is stricter: it requires `type`,
+    `reference`, AND `url` to all agree with the canonical forgejo shape,
+    refusing a mismatched combination outright (see the `ManifestError`
+    below). The stricter behaviour is the CORRECT one — keying on one field
+    alone is exactly the spoofable shortcut this module exists to refuse
+    elsewhere. This is NOT converged onto `erp_lock.py` in this slice: doing
+    so means tightening `acquisition_plan`, which is credentialed
+    acquisition-workflow logic this branch's bounds keep out of scope
+    (see the module docstring's "named duplication debt" section). Tracked
+    here, and proven with a planted vector, in
+    `test_lock_packages_is_stricter_than_erp_locks_acquisition_plan` —
+    treat tightening `erp_lock.acquisition_plan` to match as a decided,
+    separate, authorised change, not something to do quietly inside a
+    "converge the duplicate" pass.
+    """
+
     packages_raw = lock.get("package", [])
     if not isinstance(packages_raw, list):
         raise ManifestError("poetry.lock [[package]] must be an array")

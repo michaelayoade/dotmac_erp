@@ -2103,6 +2103,162 @@ def test_the_detector_does_not_flag_generic_cli_boilerplate_as_a_near_miss() -> 
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# 3b. Finding 9: sub-threshold pairs the body-similarity detector missed
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Each pair below was found by the adversarial review at a similarity ratio
+# far under the detector's 0.8 threshold, because the divergence is
+# semantic (different validation depth, different accepted grammar) rather
+# than textual. For each: either converged onto the demonstrably correct
+# behaviour (the manifest-source-url trailing slash), or documented and
+# PLANTED as a genuine, tracked, intentionally-not-converged difference.
+
+
+def test_a_manifest_source_url_missing_its_trailing_slash_is_refused_by_both() -> None:
+    """CONVERGED (was a bug, not a legitimate difference): dependency_bundle
+    used to accept the forgejo source url with OR without a trailing slash
+    (`.rstrip("/")` before comparing); erp_lock.manifest_problems always
+    required the exact spelling. erp_lock's stricter, already-reviewed
+    behaviour won."""
+
+    poetry = {
+        "dependencies": {"python": ">=3.11,<3.13"},
+        "source": [
+            {"name": "forgejo", "url": db.FORGEJO_LOCK_URL, "priority": "explicit"}
+        ],
+    }
+    with pytest.raises(db.ManifestError, match="approved index"):
+        db._forgejo_source_url(poetry)
+
+    manifest = {"tool": {"poetry": poetry}}
+    problems = erp_lock.manifest_problems(manifest, {})
+    assert any(erp_lock.MANIFEST_INDEX_URL in p for p in problems), (
+        "erp_lock should already refuse this spelling too"
+    )
+
+
+def test_an_unrelated_second_source_is_a_named_divergence_not_a_bug() -> None:
+    """NOT converged: erp_lock.manifest_problems refuses ANY second
+    `[[tool.poetry.source]]` because it validates a manifest for a LIVE,
+    credentialed Poetry resolution, where an unrelated extra index could
+    still change what that resolution does. dependency_bundle never runs
+    Poetry and holds no credential; it only needs to know whether a second
+    source could be MISTAKEN for the private one, so an unrelated second
+    source is accepted here. This is a deliberately narrower threat model,
+    not an oversight — planted here so a future change to either side must
+    consciously decide whether to keep disagreeing."""
+
+    poetry = {
+        "dependencies": {"python": ">=3.11,<3.13"},
+        "source": [
+            {"name": "forgejo", "url": db.FORGEJO_MANIFEST_URL, "priority": "explicit"},
+            {"name": "other-public-mirror", "url": "https://pypi.example.org/simple/"},
+        ],
+    }
+    db._forgejo_source_url(poetry)  # accepted here
+
+    manifest = {"tool": {"poetry": poetry}}
+    problems = erp_lock.manifest_problems(manifest, {})
+    assert any("unexpected" in p and "other-public-mirror" in p for p in problems), (
+        "erp_lock should refuse the unrelated second source"
+    )
+
+
+def test_the_version_regex_divergence_is_named_not_a_bug() -> None:
+    """NOT converged: erp_lock._EXACT_VERSION exists only to validate the
+    two specific, already-known ALLOWED_MOVEMENTS version strings in a
+    closed, reviewed workflow, and allows exactly ONE of a pre/post/dev
+    suffix (non-stackable). dependency_bundle._EXACT_VERSION must recognise
+    the full space of exact PEP 440 versions for ANY future forgejo pin,
+    including a real, stackable PEP 440 spelling erp_lock's narrower regex
+    refuses."""
+
+    stacked_suffix_version = "1.0a1.post1"
+    assert db._is_exact_version(stacked_suffix_version) is True
+    assert erp_lock._EXACT_VERSION.fullmatch(stacked_suffix_version) is None
+
+
+def test_lock_packages_is_stricter_than_erp_locks_acquisition_plan() -> None:
+    """NOT converged (tracked as a real, security-relevant gap in
+    erp_lock.acquisition_plan, out of scope for this branch to fix):
+    erp_lock's lock-side loop includes a package by checking ONLY
+    `source.reference == "forgejo"`, never `type` or `url`. This module's
+    _lock_packages requires all three to agree, refusing a mismatched
+    combination. A lock entry with the right `reference` but a WRONG url
+    is refused here and silently trusted there."""
+
+    lock = {
+        "package": [
+            {
+                "name": "dotmac-files",
+                "version": "0.1.0a4",
+                "source": {
+                    "type": "legacy",
+                    "reference": "forgejo",
+                    "url": erp_lock.LOCK_INDEX_URL,
+                },
+            },
+            {
+                "name": "dotmac-tax",
+                "version": "0.1.0a4",
+                "source": {
+                    "type": "legacy",
+                    "reference": "forgejo",
+                    "url": erp_lock.LOCK_INDEX_URL,
+                },
+            },
+            {
+                "name": "dotmac-kernel",
+                "version": "0.1.0a1",
+                "source": {
+                    "type": "sdist",
+                    "reference": "forgejo",
+                    "url": "https://evil.example.com/not-the-real-index",
+                },
+            },
+        ]
+    }
+    with pytest.raises(db.ManifestError, match="malformed forgejo source"):
+        db._lock_packages(lock)
+
+    manifest = {"tool": {"poetry": {"dependencies": {}}}}
+    plan = erp_lock.acquisition_plan(
+        manifest, lock, {"dotmac-files": "0.1.0a4", "dotmac-tax": "0.1.0a4"}
+    )
+    assert plan.get("dotmac-kernel") == "0.1.0a1", (
+        "erp_lock's acquisition_plan silently trusts the mismatched entry "
+        "-- this is the tracked gap, not an assertion that it should"
+    )
+
+
+# ── the live off-index policy, read from both real sources, must agree ───
+
+
+def test_the_live_off_index_policy_agrees_with_erp_locks_hardcoded_allowlist() -> None:
+    """The body-similarity detector cannot see duplicated CONSTANTS at all,
+    and the earlier off-index vector tables recreate the pin's values as
+    test-local constants rather than reading the two LIVE sources. This
+    reads both: `.github/dependency-bundle-policy.json`'s
+    `permitted_off_index_dependencies` and
+    `erp_lock.ALLOWED_OFF_INDEX_DEPENDENCIES` directly, and fails if a
+    human ever edits one without the other."""
+
+    policy = json.loads(REAL_POLICY_PATH.read_text(encoding="utf-8"))
+    policy_pins = policy["permitted_off_index_dependencies"]
+    erp_pins = erp_lock.ALLOWED_OFF_INDEX_DEPENDENCIES
+
+    assert set(policy_pins) == set(erp_pins), (
+        f"policy names {sorted(policy_pins)}, erp_lock names "
+        f"{sorted(erp_pins)} -- the two off-index allowlists have drifted"
+    )
+    for name, policy_pin in policy_pins.items():
+        erp_pin = erp_pins[name]
+        assert policy_pin["url"] == erp_pin.url, name
+        assert policy_pin["tag"] == erp_pin.tag, name
+        assert policy_pin["commit"] == erp_pin.commit, name
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # 4. dependency_normalisation: the one shared owner
 # ═══════════════════════════════════════════════════════════════════════
 
