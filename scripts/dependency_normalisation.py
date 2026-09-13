@@ -32,6 +32,26 @@ defines its own. It is deliberately tiny and dependency-free — nothing here
 should ever need to change independently of the PEP 503 spec (for names) or
 the URL spellings this repository actually has to recognise (for
 repository URLs).
+
+## `normalise_name` does not strip — an edge separator is REFUSED
+
+An earlier version of this function stripped a leading/trailing `-` after
+collapsing separator runs, to fix the divergence above (one copy stripped,
+the other did not). That was itself wrong: PEP 503 normalisation does not
+strip edge separators, and no VALID Python distribution name can start or
+end with one (the name grammar requires the first and last character to be
+alphanumeric). Stripping therefore manufactured a false equivalence between
+an INVALID name (`-dotmac-kernel`) and a valid one (`dotmac-kernel`) —
+worse than either of the two original diverging behaviours, because both
+callers agreed on an incorrect identity instead of disagreeing on the
+correct one. `normalise_name` now raises `ValueError` for a name whose
+normalised form starts or ends with `-`, and neither caller may treat that
+as "these are the same package" — each maps it to its own refusal type
+instead (see `dependency_bundle._normalise_name_for_manifest`; `erp_lock`'s
+real call sites only ever see names already shaped like valid identifiers,
+so the raise is not expected to fire there, and this module stays
+dependency-free by raising a plain `ValueError` rather than importing
+either caller's exception type).
 """
 
 from __future__ import annotations
@@ -43,16 +63,21 @@ _NAME_RUNS = re.compile(r"[-_.]+")
 
 
 def normalise_name(name: str) -> str:
-    """PEP 503 normalisation, with a leading or trailing separator stripped.
-
-    Runs of `-`, `_`, `.` collapse to one `-`, the result is lower-cased, and
-    a leading or trailing `-` is stripped. Stripping is not optional: without
-    it, whether `-dotmac-thing` and `dotmac-thing` (or `dotmac-thing-` and
-    `dotmac-thing`) compare equal would depend on which of the two formerly-
-    duplicated copies did the comparing.
+    """PEP 503 normalisation: runs of `-`, `_`, `.` collapse to one `-`,
+    lower-cased. Raises `ValueError` if the result starts or ends with `-`
+    — see this module's docstring, "`normalise_name` does not strip — an
+    edge separator is REFUSED", for why that case is a refusal rather than
+    a silent strip.
     """
 
-    return _NAME_RUNS.sub("-", name).strip("-").lower()
+    normalised = _NAME_RUNS.sub("-", name).lower()
+    if normalised.startswith("-") or normalised.endswith("-"):
+        raise ValueError(
+            f"{name!r} normalises to {normalised!r}, which starts or ends "
+            "with a separator; PEP 503 normalisation does not strip this, "
+            "and no valid distribution name can start or end with one"
+        )
+    return normalised
 
 
 def normalise_repository_url(url: str) -> str:
@@ -66,6 +91,11 @@ def normalise_repository_url(url: str) -> str:
     documented behaviour; it wins over any looser or stricter alternative,
     because "refuse an unrecognised spelling" is the property that was
     reasoned about.
+
+    A query string or fragment is PRESERVED in the normalised output, never
+    discarded: `repo.git` and `repo.git?x=1` must not compare equal, because
+    the query string is part of what actually reaches the resolver even
+    though it plays no role in this function's own equality test.
     """
 
     text = url.strip()
@@ -76,5 +106,5 @@ def normalise_repository_url(url: str) -> str:
     if path.endswith(".git"):
         path = path[: -len(".git")]
     return urllib.parse.urlunsplit(
-        (parts.scheme.lower(), parts.netloc.lower(), path, "", "")
+        (parts.scheme.lower(), parts.netloc.lower(), path, parts.query, parts.fragment)
     )

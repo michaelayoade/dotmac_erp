@@ -1609,19 +1609,41 @@ def test_erp_lock_imports_the_shared_normaliser() -> None:
 @pytest.mark.parametrize(
     "raw",
     [
-        "-dotmac-thing-",
-        "dotmac-thing-",
-        "-dotmac-thing",
-        "Dotmac_Thing.",
         "dotmac.thing",
+        "Dotmac_Thing",
+        "dotmac--thing",
+        "DOTMAC-KERNEL",
     ],
 )
 def test_both_scripts_now_agree_on_every_normalisation_vector(raw: str) -> None:
-    """The concrete divergence this fixed: before, dependency_bundle
-    stripped leading/trailing separators and erp_lock did not."""
+    """Both scripts import the IDENTICAL function object, so agreement is
+    structural; this proves it holds for names that do not carry an edge
+    separator after collapsing (see the refusal test below for the ones
+    that do)."""
 
     assert db.normalise_name(raw) == erp_lock._normalised(raw)
 
 
-def test_the_shared_normaliser_strips_leading_and_trailing_separators() -> None:
-    assert dependency_normalisation.normalise_name("-dotmac-thing-") == "dotmac-thing"
+@pytest.mark.parametrize(
+    "raw",
+    ["-dotmac-thing-", "dotmac-thing-", "-dotmac-thing", "Dotmac_Thing."],
+)
+def test_both_scripts_refuse_the_same_edge_separator_names(raw: str) -> None:
+    """PEP 503 normalisation does not strip an edge separator, and no valid
+    distribution name can carry one — an EARLIER version of this owner
+    stripped it instead, manufacturing a false equivalence between an
+    invalid name and a valid one. Both callers must refuse identically
+    (they share the one function object), not merely agree on a stripped
+    value."""
+
+    with pytest.raises(ValueError, match="starts or ends with a separator"):
+        db.normalise_name(raw)
+    with pytest.raises(ValueError, match="starts or ends with a separator"):
+        erp_lock._normalised(raw)
+
+
+def test_the_shared_normaliser_refuses_an_edge_separator_name_rather_than_stripping_it() -> (
+    None
+):
+    with pytest.raises(ValueError, match="starts or ends with a separator"):
+        dependency_normalisation.normalise_name("-dotmac-thing-")

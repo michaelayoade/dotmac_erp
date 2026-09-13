@@ -168,7 +168,7 @@ PLAN_DIGEST_DOMAIN = b"dotmac.erp-dependency-plan.v1\0"
 #: The plan document's own schema version, carried inside the hashed JSON so
 #: a future incompatible change to the document shape changes every digest
 #: rather than colliding with the old scheme.
-PLAN_SCHEMA_VERSION = 2
+PLAN_SCHEMA_VERSION = 3
 
 #: The bundle manifest's own schema version (see `create_bundle_manifest`).
 MANIFEST_SCHEMA_VERSION = 2
@@ -268,7 +268,25 @@ def _is_exact_version(value: Any) -> bool:
 
 
 def _mentions_forgejo_host(url: Any) -> bool:
-    return isinstance(url, str) and FORGEJO_HOST in url
+    """Whether `url` names the forgejo host — a PARSED, case-folded
+    hostname comparison, never a substring test. A substring test is both
+    too loose (`https://evil.example/registry.dotmac.io/x` would match) and
+    too strict in the direction that matters here: it is CASE-SENSITIVE, so
+    `https://REGISTRY.DOTMAC.IO/...` silently failed to match and was
+    treated as public/unrelated instead of private — exactly the "private
+    state omitted as public" failure this module exists to refuse.
+    `urllib.parse.urlsplit(...).hostname` is already lower-cased per its
+    own documented behaviour; `.lower()` here is defensive, not load-
+    bearing.
+    """
+
+    if not isinstance(url, str):
+        return False
+    try:
+        hostname = urllib.parse.urlsplit(url).hostname
+    except ValueError:
+        return False
+    return hostname is not None and hostname.lower() == FORGEJO_HOST.lower()
 
 
 def _bare_sha256(value: str) -> str:
@@ -282,6 +300,23 @@ def _bare_sha256(value: str) -> str:
             f"lock file hash {value!r} is not in the expected 'sha256:<64-hex>' form"
         )
     return match.group(1)
+
+
+def _normalise_name_for_manifest(name: str, *, where: str) -> str:
+    """`normalise_name`, mapped to this module's own refusal type.
+
+    `dependency_normalisation.normalise_name` raises a plain `ValueError`
+    for a name that normalises to something starting or ending with `-` —
+    it stays dependency-free rather than importing `ManifestError`. This
+    module operates on genuinely adversarial manifest/lock input, so every
+    call site converts that `ValueError` into a `ManifestError` naming
+    exactly where the invalid name was found.
+    """
+
+    try:
+        return normalise_name(name)
+    except ValueError as exc:
+        raise ManifestError(f"{where}: {exc}") from exc
 
 
 # ── dependency-surface extraction ───────────────────────────────────────
@@ -299,6 +334,12 @@ class ForgejoDependency:
     extras: tuple[str, ...]
     optional: bool
     python_constraint: str | None
+    #: The OWNING GROUP's own `optional` flag (`[tool.poetry.group.<name>]
+    #: .optional`) — distinct from this dependency's own `optional` key.
+    #: Poetry installs an entire optional group or none of it; flipping the
+    #: group's flag changes default install selection for every dependency
+    #: in it without touching a single dependency table.
+    group_optional: bool
 
 
 @dataclass(frozen=True)
@@ -326,6 +367,9 @@ class ApprovedOffIndexDependency:
     url: str
     tag: str
     resolved_commit: str
+    #: See `ForgejoDependency.group_optional` — the same owning-group flag,
+    #: tracked identically for an off-index pin.
+    group_optional: bool
 
 
 @dataclass(frozen=True)
@@ -352,6 +396,14 @@ class LockPackage:
     groups: tuple[str, ...]
     optional: bool
     python_versions: str
+    #: `[[package]].markers` — the resolver-level marker Poetry attached to
+    #: this LOCKED package (distinct from a dependency declaration's own
+    #: `markers` key), and `[package.extras]` — the extra-name to
+    #: requirement-string-list mapping Poetry recorded for this package.
+    #: Both are selection-significant: they can change which requirements
+    #: activate without moving any version or hash.
+    markers: str | None
+    extras: dict[str, list[str]]
     dependencies: dict[str, Any]
     source_type: str
     source_url: str
@@ -368,6 +420,15 @@ class DependencySurface:
     forgejo_source_url: str
     target_python: str
     target_platform: str
+    #: `poetry.lock`'s own `[metadata]` table — `lock-version` (the lock
+    #: FILE FORMAT version, e.g. "2.1") and `python-versions` (the
+    #: resolution-wide Python constraint the whole lock was solved against,
+    #: distinct from any one dependency's own constraint). Both are
+    #: selection-significant: a different lock format or a different
+    #: resolution-wide Python target can change what a fresh resolve would
+    #: produce even with every individual pin unchanged.
+    lock_format_version: str
+    lock_python_versions: str
     dependencies: tuple[ForgejoDependency, ...]
     off_index_dependencies: tuple[ApprovedOffIndexDependency, ...]
     lock_packages: tuple[LockPackage, ...]
@@ -411,8 +472,19 @@ def _refuse_unknown_dependency_surfaces(manifest: dict[str, Any]) -> None:
         )
 
 
-def _dependency_groups(poetry: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _dependency_groups(
+    poetry: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, bool]]:
+    """Returns `(groups, group_optional)`. `group_optional` carries each
+    group's OWN `[tool.poetry.group.<name>].optional` flag — Poetry
+    installs an entire optional group or none of it, so this flag is
+    selection-significant independently of any one dependency's own
+    `optional` key, and previously was accepted but never read past its
+    key-shape check.
+    """
+
     groups: dict[str, dict[str, Any]] = {"main": poetry.get("dependencies", {}) or {}}
+    group_optional: dict[str, bool] = {"main": False}
     group_table = poetry.get("group", {}) or {}
     if not isinstance(group_table, dict):
         raise ManifestError("[tool.poetry.group] must be a table")
@@ -427,12 +499,18 @@ def _dependency_groups(poetry: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 f"[tool.poetry.group.{group_name}] declares unrecognised keys "
                 f"{sorted(extra_keys)}"
             )
+        optional_value = group_body.get("optional", False)
+        if not isinstance(optional_value, bool):
+            raise ManifestError(
+                f"[tool.poetry.group.{group_name}].optional must be a boolean"
+            )
         groups[group_name] = group_body["dependencies"] or {}
-    return groups
+        group_optional[group_name] = optional_value
+    return groups, group_optional
 
 
 def _classify_forgejo_spec(
-    name: str, spec: dict[str, Any], group: str
+    name: str, spec: dict[str, Any], group: str, group_optional: bool
 ) -> ForgejoDependency:
     unexpected = set(spec) - _FORGEJO_SPEC_KEYS
     if unexpected:
@@ -462,13 +540,14 @@ def _classify_forgejo_spec(
         raise ManifestError(f"{group}.{name}: python must be a string")
     return ForgejoDependency(
         name=name,
-        normalised_name=normalise_name(name),
+        normalised_name=_normalise_name_for_manifest(name, where=f"{group}.{name}"),
         group=group,
         version=str(version),
         markers=markers,
         extras=tuple(sorted(extras_value)),
         optional=optional_value,
         python_constraint=python_constraint,
+        group_optional=group_optional,
     )
 
 
@@ -476,6 +555,7 @@ def _classify_off_index_spec(
     name: str,
     spec: Any,
     group: str,
+    group_optional: bool,
     permitted_off_index: Mapping[str, OffIndexPin],
 ) -> ApprovedOffIndexDependency:
     """A pinned off-index dependency declares EXACTLY its pinned identity —
@@ -526,11 +606,12 @@ def _classify_off_index_spec(
         )
     return ApprovedOffIndexDependency(
         name=name,
-        normalised_name=normalise_name(name),
+        normalised_name=_normalise_name_for_manifest(name, where=f"{group}.{name}"),
         group=group,
         url=pin.url,
         tag=pin.tag,
         resolved_commit=pin.commit,
+        group_optional=group_optional,
     )
 
 
@@ -538,6 +619,7 @@ def _classify_dependency(
     name: str,
     spec: Any,
     group: str,
+    group_optional: bool,
     permitted_off_index: Mapping[str, OffIndexPin],
 ) -> ForgejoDependency | ApprovedOffIndexDependency | PublicDependency:
     """Classify ONE dependency declaration into exactly one of three
@@ -561,7 +643,7 @@ def _classify_dependency(
     if isinstance(spec, list):
         for index, item in enumerate(spec):
             classified = _classify_dependency(
-                f"{name}[{index}]", item, group, permitted_off_index
+                f"{name}[{index}]", item, group, group_optional, permitted_off_index
             )
             if not isinstance(classified, PublicDependency):
                 raise ManifestError(
@@ -590,7 +672,9 @@ def _classify_dependency(
 
     off_index_keys_present = [key for key in _OFF_INDEX_KEYS if key in spec]
     if source is None and off_index_keys_present:
-        return _classify_off_index_spec(name, spec, group, permitted_off_index)
+        return _classify_off_index_spec(
+            name, spec, group, group_optional, permitted_off_index
+        )
 
     if source is None:
         return PublicDependency(name=name, group=group)
@@ -601,7 +685,7 @@ def _classify_dependency(
             f"only {FORGEJO_SOURCE_NAME!r} is a known private source"
         )
 
-    return _classify_forgejo_spec(name, spec, group)
+    return _classify_forgejo_spec(name, spec, group, group_optional)
 
 
 def _forgejo_source_url(poetry: dict[str, Any]) -> str:
@@ -650,7 +734,14 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
         raise ManifestError("poetry.lock [[package]] must be an array")
     packages: list[LockPackage] = []
     for pkg in packages_raw:
-        source = pkg.get("source") or {}
+        if not isinstance(pkg, dict):
+            raise ManifestError(
+                f"poetry.lock [[package]] entry must be a table, got a "
+                f"{type(pkg).__name__}"
+            )
+        source = pkg.get("source")
+        if not isinstance(source, dict):
+            source = {}
         looks_private = source.get("reference") == FORGEJO_SOURCE_NAME or (
             _mentions_forgejo_host(source.get("url"))
         )
@@ -691,14 +782,34 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
             raise ManifestError(
                 f"lock package {name!r} has a non-string python-versions"
             )
+        markers = pkg.get("markers")
+        if markers is not None and not isinstance(markers, str):
+            raise ManifestError(f"lock package {name!r} has a non-string markers")
+        extras_raw = pkg.get("extras", {})
+        if not isinstance(extras_raw, dict):
+            raise ManifestError(f"lock package {name!r} has a non-table extras")
+        extras: dict[str, list[str]] = {}
+        for extra_name, requirement_list in extras_raw.items():
+            if not isinstance(requirement_list, list) or not all(
+                isinstance(r, str) for r in requirement_list
+            ):
+                raise ManifestError(
+                    f"lock package {name!r} extra {extra_name!r} must be a "
+                    "list of requirement strings"
+                )
+            extras[str(extra_name)] = list(requirement_list)
         packages.append(
             LockPackage(
                 name=name,
-                normalised_name=normalise_name(name),
+                normalised_name=_normalise_name_for_manifest(
+                    name, where=f"lock package {name!r}"
+                ),
                 version=version,
                 groups=tuple(sorted(str(g) for g in groups_raw)),
                 optional=optional_value,
                 python_versions=python_versions,
+                markers=markers,
+                extras=extras,
                 dependencies=dict(pkg.get("dependencies", {}) or {}),
                 source_type=str(source["type"]),
                 source_url=str(source["url"]),
@@ -727,10 +838,14 @@ def _verify_off_index_lock_entry(
             f"approved off-index dependency {dep.name!r} must have exactly "
             f"one poetry.lock entry, found {len(matches)}"
         )
-    source = matches[0].get("source") or {}
+    source = matches[0].get("source")
+    if not isinstance(source, dict):
+        source = {}
+    declared_lock_url = normalise_repository_url(str(source.get("url", "")))
+    expected_lock_url = normalise_repository_url(dep.url)
     if (
         source.get("type") != "git"
-        or source.get("url") != dep.url
+        or declared_lock_url != expected_lock_url
         or source.get("reference") != dep.tag
         or source.get("resolved_reference") != dep.resolved_commit
     ):
@@ -810,7 +925,7 @@ def extract_dependency_surface(
     _refuse_unknown_dependency_surfaces(manifest)
     poetry = manifest["tool"]["poetry"]
     forgejo_url = _forgejo_source_url(poetry)
-    groups = _dependency_groups(poetry)
+    groups, group_optional = _dependency_groups(poetry)
 
     dependencies: list[ForgejoDependency] = []
     off_index_dependencies: list[ApprovedOffIndexDependency] = []
@@ -820,7 +935,11 @@ def extract_dependency_surface(
             raise ManifestError(f"[{group_name}].dependencies must be a table")
         for dep_name, spec in table.items():
             classified = _classify_dependency(
-                dep_name, spec, group_name, permitted_off_index
+                dep_name,
+                spec,
+                group_name,
+                group_optional[group_name],
+                permitted_off_index,
             )
             if isinstance(classified, PublicDependency):
                 continue
@@ -862,11 +981,23 @@ def extract_dependency_surface(
     if not isinstance(target_python, str) or not target_python:
         raise ManifestError("[tool.poetry.dependencies].python must be a string")
 
+    lock_metadata = lock.get("metadata")
+    if not isinstance(lock_metadata, dict):
+        raise ManifestError("poetry.lock has no [metadata] table")
+    lock_format_version = lock_metadata.get("lock-version")
+    if not isinstance(lock_format_version, str) or not lock_format_version:
+        raise ManifestError("poetry.lock [metadata].lock-version must be a string")
+    lock_python_versions = lock_metadata.get("python-versions")
+    if not isinstance(lock_python_versions, str) or not lock_python_versions:
+        raise ManifestError("poetry.lock [metadata].python-versions must be a string")
+
     return DependencySurface(
         schema_version=PLAN_SCHEMA_VERSION,
         forgejo_source_url=forgejo_url,
         target_python=target_python,
         target_platform=TARGET_PLATFORM,
+        lock_format_version=lock_format_version,
+        lock_python_versions=lock_python_versions,
         dependencies=tuple(dependencies),
         off_index_dependencies=tuple(off_index_dependencies),
         lock_packages=tuple(lock_packages),
@@ -899,10 +1030,15 @@ def build_plan_document(surface: DependencySurface) -> dict[str, Any]:
             "python": surface.target_python,
             "platform": surface.target_platform,
         },
+        "lock_metadata": {
+            "lock_format_version": surface.lock_format_version,
+            "python_versions": surface.lock_python_versions,
+        },
         "dependencies": [
             {
                 "name": dep.normalised_name,
                 "group": dep.group,
+                "group_optional": dep.group_optional,
                 "version": dep.version,
                 "markers": dep.markers,
                 "extras": list(dep.extras),
@@ -917,6 +1053,7 @@ def build_plan_document(surface: DependencySurface) -> dict[str, Any]:
             {
                 "name": dep.normalised_name,
                 "group": dep.group,
+                "group_optional": dep.group_optional,
                 "url": dep.url,
                 "tag": dep.tag,
                 "resolved_commit": dep.resolved_commit,
@@ -933,6 +1070,8 @@ def build_plan_document(surface: DependencySurface) -> dict[str, Any]:
                 "groups": list(pkg.groups),
                 "optional": pkg.optional,
                 "python_versions": pkg.python_versions,
+                "markers": pkg.markers,
+                "extras": {k: list(v) for k, v in sorted(pkg.extras.items())},
                 "dependencies": pkg.dependencies,
                 "source": {
                     "type": pkg.source_type,
@@ -956,6 +1095,24 @@ def compute_plan_digest(surface: DependencySurface) -> str:
 
     payload = PLAN_DIGEST_DOMAIN + canonical_json_bytes(build_plan_document(surface))
     return hashlib.sha256(payload).hexdigest()
+
+
+def compute_candidate_plan_digest(
+    candidate_root: Path, permitted_off_index: Mapping[str, OffIndexPin] | None = None
+) -> str:
+    """The ONE way to obtain a candidate's own plan digest: parse ITS OWN
+    checked-out `pyproject.toml`/`poetry.lock` and hash the result.
+
+    `verify_run_metadata` and `bind_bundle_to_candidate` both call this
+    rather than accepting a candidate digest as an independent parameter —
+    a bare digest string is a digest a caller chooses, which defeats the
+    entire purpose of a binding/verification check whose job is to prove
+    the candidate's OWN surface produced it. There is no other way into
+    either of those two functions' "this is the candidate's digest" input.
+    """
+
+    surface = extract_dependency_surface(candidate_root, permitted_off_index)
+    return compute_plan_digest(surface)
 
 
 # ── planned artifacts (the plan's own file/digest closure) ────────────────
@@ -1107,7 +1264,16 @@ _POSITIVE_INT_FIELDS = (
 class RunMetadata:
     """The verified-LOCALLY identity of the GitHub Actions run and artifact
     a bundle claims to come from. See this section's module-level note:
-    this is not provenance."""
+    this is not provenance.
+
+    `__post_init__` re-validates every field's own shape — a positive int
+    where an int is required, a real commit SHA, non-empty strings — so a
+    HAND-BUILT `RunMetadata` (bypassing `verify_run_metadata` entirely)
+    cannot hold an out-of-shape value either. This does not, and cannot,
+    prove the values are genuine; it only closes the gap where "any
+    hand-built `RunMetadata` is accepted" meant a malformed one could reach
+    `create_bundle_manifest` untouched.
+    """
 
     repository_full_name: str
     repository_id: int
@@ -1120,9 +1286,46 @@ class RunMetadata:
     artifact_run_id: int
     environment_name: str
 
+    def __post_init__(self) -> None:
+        for field_name in (
+            "repository_id",
+            "run_id",
+            "run_attempt",
+            "artifact_id",
+            "artifact_run_id",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+                raise BundleVerificationError(
+                    f"RunMetadata.{field_name} must be a positive integer, got {value!r}"
+                )
+        for field_name in (
+            "repository_full_name",
+            "workflow_path",
+            "artifact_name",
+            "environment_name",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value:
+                raise BundleVerificationError(
+                    f"RunMetadata.{field_name} must be a non-empty string"
+                )
+        if self.trusted_workflow_sha == _NULL_SHA:
+            raise BundleVerificationError(
+                "RunMetadata.trusted_workflow_sha is the all-zero null SHA"
+            )
+        if not _COMMIT_SHA.match(self.trusted_workflow_sha):
+            raise BundleVerificationError(
+                "RunMetadata.trusted_workflow_sha must be a 40-hex commit SHA"
+            )
+
 
 def verify_run_metadata(
-    metadata: dict[str, Any], policy: dict[str, Any], *, expected_plan_digest: str
+    metadata: dict[str, Any],
+    policy: dict[str, Any],
+    *,
+    candidate_root: Path,
+    permitted_off_index: Mapping[str, OffIndexPin] | None = None,
 ) -> RunMetadata:
     """Verify already-fetched GitHub API run/artifact metadata against
     policy — LOCAL validation only, described in this section's module-level
@@ -1134,10 +1337,21 @@ def verify_run_metadata(
     SHA; the artifact's OWN run id matching the run id claimed (so an
     artifact from a different, unrelated run cannot be attached to this
     run's identity); the exact required environment name; and an artifact
-    name matching policy's pattern for `expected_plan_digest` — the plan
-    digest the CALLER independently computed from its own candidate surface,
-    never taken from the metadata itself.
+    name matching policy's pattern for the candidate's OWN plan digest.
+
+    That digest is never accepted as a caller-supplied string: `candidate_root`
+    names the candidate's checked-out tree, and this function RECOMPUTES the
+    digest itself, via `compute_candidate_plan_digest`, exactly as
+    `bind_bundle_to_candidate` does. A caller that supplied a bare digest
+    string here could pass `metadata["artifact_name"]`'s own embedded digest
+    right back at this check and have it trivially agree with itself — the
+    module's own stated principle ("a digest a caller supplies is a digest a
+    caller chooses") applies here as much as it does to binding.
     """
+
+    expected_plan_digest = compute_candidate_plan_digest(
+        candidate_root, permitted_off_index
+    )
 
     missing = [
         field for field in _RUN_METADATA_FIELDS if metadata.get(field) in (None, "")
@@ -1153,16 +1367,15 @@ def verify_run_metadata(
             f"{policy['repository']['full_name']!r}"
         )
     for field in _POSITIVE_INT_FIELDS:
-        try:
-            value = int(metadata[field])
-        except (TypeError, ValueError) as exc:
-            raise BundleVerificationError(
-                f"run metadata field {field!r} is not integer-shaped: {exc}"
-            ) from exc
-        if isinstance(metadata[field], bool) or value <= 0:
+        value = metadata[field]
+        # `int(1.9) == 1` truncates silently -- a float, a numeric string,
+        # or a bool must be refused OUTRIGHT rather than coerced, because
+        # coercion is exactly how a wrong coordinate would slip through
+        # looking like a right one.
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise BundleVerificationError(
                 f"run metadata field {field!r} must be a positive integer, "
-                f"got {metadata[field]!r}"
+                f"got {value!r}"
             )
     if int(metadata["repository_id"]) != int(policy["repository"]["id"]):
         raise BundleVerificationError(
@@ -1195,12 +1408,6 @@ def verify_run_metadata(
         raise BundleVerificationError(
             f"run metadata environment_name {metadata['environment_name']!r} "
             f"does not match policy {policy['environment_name']!r}"
-        )
-    if not isinstance(expected_plan_digest, str) or not _SHA256_HEX.match(
-        expected_plan_digest
-    ):
-        raise BundleVerificationError(
-            "expected_plan_digest must be a 64-hex sha256 string"
         )
     expected_artifact_name = policy["artifact_name_pattern"].format(
         plan_digest=expected_plan_digest
@@ -1646,40 +1853,38 @@ def extract_verified_bundle(
 
 
 @dataclass(frozen=True)
-class AcquiredMember:
-    """One file the producer job actually downloaded and hashed, before it
-    is bound into a manifest against the plan."""
-
-    filename: str
-    sha256: str
-    size: int
-
-
 def create_bundle_manifest(
     *,
     surface: DependencySurface,
-    acquired_members: Mapping[str, AcquiredMember],
+    acquired_files: Mapping[str, Path],
+    archive_path: Path,
     run: RunMetadata,
-    archive_sha256: str,
     schema_version: int = MANIFEST_SCHEMA_VERSION,
 ) -> dict[str, Any]:
     """Build the canonical bundle manifest by COMPUTING every binding from
-    `surface` and `acquired_members` — never accepting a bare plan digest or
-    member-hash mapping as independent, uncorrelated scalars.
+    `surface` and the ACTUAL FILES on disk — never accepting a plan digest,
+    a member hash, a member size, or the archive digest as an independent,
+    caller-reported scalar.
 
-    This is what makes "plan A's digest attached to plan B's files" a
-    structural impossibility rather than something every individual check
-    happens to miss: `plan_digest` is derived from `surface` itself, and the
-    manifest requires EXACT plan-to-member closure against that SAME
-    surface's `planned_artifacts` — every planned `(filename, sha256)` must
-    be present in `acquired_members` with an agreeing digest, and every
-    acquired member must be named by the plan. There is only one surface
-    input, so there is no seam at which a second plan's identity could be
-    substituted for the files.
+    `acquired_files` maps each planned filename to the real path the
+    producer downloaded it to; this function reads every one of those
+    files and hashes/sizes them itself — it does not trust a caller's
+    report of what a file's hash or size supposedly was. `archive_path` is
+    likewise the real outer archive file; `archive_sha256` is computed from
+    it here, never accepted as a scalar. `plan_digest` is derived by
+    calling `compute_plan_digest(surface)` internally, and the manifest
+    requires EXACT plan-to-member closure against that SAME surface's
+    `planned_artifacts` — every planned filename must be present in
+    `acquired_files`, and every acquired file must be named by the plan.
+    There is only one surface input and every byte is independently
+    re-read, so there is no seam at which a second plan's identity, or an
+    unrelated archive, could be substituted for the real artifacts.
     """
 
-    if not _SHA256_HEX.match(archive_sha256):
-        raise BundleVerificationError("archive_sha256 must be a 64-hex sha256 string")
+    if schema_version != MANIFEST_SCHEMA_VERSION:
+        raise BundleVerificationError(
+            f"schema_version must be {MANIFEST_SCHEMA_VERSION}, got {schema_version!r}"
+        )
 
     planned = planned_artifacts(surface)
     if not planned:
@@ -1689,7 +1894,7 @@ def create_bundle_manifest(
         )
     planned_by_filename = {artifact.filename: artifact for artifact in planned}
     planned_names = set(planned_by_filename)
-    acquired_names = set(acquired_members)
+    acquired_names = set(acquired_files)
 
     missing = planned_names - acquired_names
     if missing:
@@ -1705,31 +1910,35 @@ def create_bundle_manifest(
 
     members: dict[str, dict[str, Any]] = {}
     for filename, planned_artifact in sorted(planned_by_filename.items()):
-        acquired = acquired_members[filename]
-        if not isinstance(acquired.sha256, str) or not _SHA256_HEX.match(
-            acquired.sha256
-        ):
+        path = acquired_files[filename]
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
             raise BundleVerificationError(
-                f"{filename!r} was acquired with a malformed digest {acquired.sha256!r}"
-            )
-        if acquired.sha256 != planned_artifact.sha256:
+                f"cannot read acquired file {filename!r} at {path}: {exc}"
+            ) from exc
+        actual_sha256 = sha256_hex(data)
+        actual_size = len(data)
+        if actual_sha256 != planned_artifact.sha256:
             raise BundleVerificationError(
-                f"{filename!r} was acquired with digest {acquired.sha256}, "
+                f"{filename!r} was acquired with digest {actual_sha256}, "
                 f"but the plan requires {planned_artifact.sha256}"
             )
-        if (
-            not isinstance(acquired.size, int)
-            or isinstance(acquired.size, bool)
-            or acquired.size <= 0
-        ):
-            raise BundleVerificationError(
-                f"{filename!r} carries a non-positive size {acquired.size!r}"
-            )
+        if actual_size <= 0:
+            raise BundleVerificationError(f"{filename!r} is empty on disk")
         members[filename] = {
-            "sha256": acquired.sha256,
-            "size": acquired.size,
+            "sha256": actual_sha256,
+            "size": actual_size,
             "package": planned_artifact.package_normalised_name,
         }
+
+    try:
+        archive_bytes = archive_path.read_bytes()
+    except OSError as exc:
+        raise BundleVerificationError(
+            f"cannot read archive {archive_path}: {exc}"
+        ) from exc
+    archive_sha256 = sha256_hex(archive_bytes)
 
     plan_digest = compute_plan_digest(surface)
     return {
@@ -1819,27 +2028,33 @@ class CandidateBinding:
 
 
 def bind_bundle_to_candidate(
-    bundle_manifest: dict[str, Any], candidate_sha: str, candidate_plan_digest: str
+    bundle_manifest: dict[str, Any],
+    candidate_sha: str,
+    candidate_root: Path,
+    permitted_off_index: Mapping[str, OffIndexPin] | None = None,
 ) -> CandidateBinding:
     """Bind a verified bundle to one candidate commit.
 
-    `candidate_plan_digest` must be independently recomputed by the caller
-    from the CANDIDATE's own checked-out `pyproject.toml`/`poetry.lock`
-    (`compute_plan_digest(extract_dependency_surface(candidate_root, ...))`)
-    — never taken as a bare string from the candidate. Refuses if the
-    candidate's digest disagrees with the bundle's: a candidate whose
-    private dependency surface does not match gets no bundle, not a
-    downgraded warning.
+    `candidate_root` names the candidate's own checked-out tree; this
+    function RECOMPUTES its plan digest itself, via
+    `compute_candidate_plan_digest` — it never accepts that digest as a
+    bare caller-supplied string. A caller that could pass any string here
+    could pass `bundle_manifest["plan_digest"]` straight back and get a
+    successful binding for ANY tree; recomputation is what makes that
+    impossible. Refuses if the candidate's digest disagrees with the
+    bundle's: a candidate whose private dependency surface does not match
+    gets no bundle, not a downgraded warning.
     """
 
     if not isinstance(candidate_sha, str) or not _COMMIT_SHA.match(candidate_sha):
         raise BundleVerificationError("candidate_sha must be a 40-hex commit SHA")
-    if not isinstance(candidate_plan_digest, str) or not _SHA256_HEX.match(
-        candidate_plan_digest
-    ):
+    if candidate_sha == _NULL_SHA:
         raise BundleVerificationError(
-            "candidate_plan_digest must be a 64-hex sha256 string"
+            "candidate_sha is the all-zero null SHA, which is never a real commit"
         )
+    candidate_plan_digest = compute_candidate_plan_digest(
+        candidate_root, permitted_off_index
+    )
     bundle_digest = bundle_manifest.get("plan_digest")
     if not isinstance(bundle_digest, str) or not _SHA256_HEX.match(bundle_digest):
         raise BundleVerificationError(
