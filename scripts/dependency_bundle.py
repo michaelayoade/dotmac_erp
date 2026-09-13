@@ -124,7 +124,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dependency_normalisation import normalise_name
+from dependency_normalisation import normalise_name, normalise_repository_url
 
 # ── errors ───────────────────────────────────────────────────────────────
 
@@ -474,10 +474,23 @@ def _classify_forgejo_spec(
 
 def _classify_off_index_spec(
     name: str,
-    spec: dict[str, Any],
+    spec: Any,
     group: str,
     permitted_off_index: Mapping[str, OffIndexPin],
 ) -> ApprovedOffIndexDependency:
+    """A pinned off-index dependency declares EXACTLY its pinned identity —
+    mirrors `erp_lock.off_index_pin_problems`'s exact predicate, including
+    its explicit non-dict guard (a crash on a malformed spec is not a
+    refusal) and its use of the one shared `normalise_repository_url`
+    (see `dependency_normalisation`'s docstring for the divergence this
+    fixes: this function used to compare `spec["git"]` to `pin.url` RAW).
+    """
+
+    if not isinstance(spec, dict):
+        raise ManifestError(
+            f"{group}.{name}: a pinned off-index dependency must be a table "
+            f"carrying `git` and `tag`, got a {type(spec).__name__}"
+        )
     pin = permitted_off_index.get(name)
     if pin is None:
         present_keys = sorted(set(spec) & set(_OFF_INDEX_KEYS))
@@ -499,10 +512,12 @@ def _classify_off_index_spec(
         raise ManifestError(
             f"{group}.{name}: pinned off-index dependency is missing {sorted(missing)}"
         )
-    if spec["git"] != pin.url:
+    declared_url = normalise_repository_url(str(spec["git"]))
+    expected_url = normalise_repository_url(pin.url)
+    if declared_url != expected_url:
         raise ManifestError(
-            f"{group}.{name}: names git url {spec['git']!r}, not the exact "
-            f"pinned {pin.url!r}"
+            f"{group}.{name}: names repository {declared_url!r} (from "
+            f"{spec['git']!r}), not the pinned {expected_url!r}"
         )
     if spec["tag"] != pin.tag:
         raise ManifestError(

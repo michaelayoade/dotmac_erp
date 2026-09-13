@@ -1,5 +1,6 @@
-"""The one owner of PEP 503 package-name normalisation in this repository's
-private-index tooling.
+"""The one owner of package-identity normalisation in this repository's
+private-index tooling: PEP 503 package NAMES, and off-index repository
+URLS.
 
 `scripts/dependency_bundle.py` and `scripts/erp_lock.py` both need to answer
 "is this the same package?" for a name that may be spelled with `-`, `_`, or
@@ -13,14 +14,30 @@ it — exactly the kind of silent disagreement a plan digest and a manifest
 guard must never have between them, since it can hide an identity mismatch
 that looks resolved on one side and unresolved on the other.
 
+The same class of bug existed one level up, for REPOSITORY identity: both
+scripts independently decide whether a manifest's off-index `git` URL is
+"the same repository" as a policy-pinned one. `erp_lock.off_index_pin_problems`
+normalised both sides through a narrow, spelling-aware comparison;
+`dependency_bundle` compared the two URL strings RAW, with no normalisation
+at all. One manifest spelling (a trailing slash, a missing `.git`, a
+different case on the scheme/host) could therefore pass one gate and fail
+the other. This was harder to catch than the name-normaliser divergence
+because it is a SEMANTIC divergence — one side accumulates a problem list,
+the other raises — not a textual one, so a body-similarity detector scores
+the two functions well below its threshold. It is exactly the kind of thing
+that needs one shared owner rather than a list entry.
+
 This is now the ONLY place this logic lives. Both scripts import it; neither
 defines its own. It is deliberately tiny and dependency-free — nothing here
-should ever need to change independently of the PEP 503 spec itself.
+should ever need to change independently of the PEP 503 spec (for names) or
+the URL spellings this repository actually has to recognise (for
+repository URLs).
 """
 
 from __future__ import annotations
 
 import re
+import urllib.parse
 
 _NAME_RUNS = re.compile(r"[-_.]+")
 
@@ -36,3 +53,28 @@ def normalise_name(name: str) -> str:
     """
 
     return _NAME_RUNS.sub("-", name).strip("-").lower()
+
+
+def normalise_repository_url(url: str) -> str:
+    """Enough normalisation to compare two spellings of one repository.
+
+    Deliberately narrow: case-folded scheme and host, a stripped trailing
+    slash and a single optional `.git` suffix. It does NOT try to equate ssh
+    and https forms or resolve redirects -- a spelling this does not
+    recognise is refused rather than guessed at, because a guess here
+    decides where the resolver reaches. This is erp_lock's original,
+    documented behaviour; it wins over any looser or stricter alternative,
+    because "refuse an unrecognised spelling" is the property that was
+    reasoned about.
+    """
+
+    text = url.strip()
+    parts = urllib.parse.urlsplit(text)
+    if parts.scheme.lower() != "https" or not parts.netloc:
+        return text
+    path = parts.path.rstrip("/")
+    if path.endswith(".git"):
+        path = path[: -len(".git")]
+    return urllib.parse.urlunsplit(
+        (parts.scheme.lower(), parts.netloc.lower(), path, "", "")
+    )
