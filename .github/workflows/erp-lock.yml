@@ -103,11 +103,6 @@ env:
   # Overridable, with a documented default, like every other environment
   # value in this repository.
   MIRROR_PORT: ${{ vars.ERP_LOCK_MIRROR_PORT || '8899' }}
-  # Poetry 2.4.1 is what `requires-poetry` in pyproject.toml and CI's own
-  # POETRY_VERSION already pin. ERP carries no hash-verified bootstrap for it
-  # (unlike Platform's `.github/bootstrap/`) — this is a plain version pin,
-  # not a hash-verified one; see the report for this gap named explicitly.
-  POETRY_VERSION: "2.4.1"
 
 jobs:
   # ── THE ONLY JOB THAT HOLDS THE CREDENTIAL WHILE FETCHING ─────────────────
@@ -308,16 +303,22 @@ jobs:
         with:
           python-version: "3.12"
 
-      # The repository-prescribed Poetry — pinned above by an explicit env
-      # value, not a hash-verified bootstrap; ERP has no `.github/bootstrap/`
-      # equivalent to Platform's today. Resolved from the workspace root,
-      # which is the TRUSTED checkout — see the header.
-      - name: Install the repository-pinned Poetry
-        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+      # This job specifically needs Poetry IMPORTABLE, not just an executable
+      # on PATH: scripts/erp_lock.py's poetry_content_hash() imports
+      # poetry.packages.locker.Locker directly, so that the content hash it
+      # writes is computed by Poetry's own algorithm rather than a second
+      # reimplementation of it. snok/install-poetry puts a `poetry` binary on
+      # PATH but does not make the `poetry` module importable from the
+      # actions/setup-python interpreter that runs this script — this is what
+      # broke run 34754807594's resolve job ("Poetry is not importable, so its
+      # content hash cannot be asked for: No module named 'poetry'"). The
+      # local composite action below installs Poetry into a job-local venv on
+      # THIS interpreter's PATH, so plain `python` here is Poetry-capable.
+      # Ported from dotmac_platform_control_plane's kernel-lock.yml, which
+      # never had this defect for exactly that reason. Resolved from the
+      # workspace root, which is the TRUSTED checkout — see the header.
+      - name: Install the repository-pinned, importable Poetry
+        uses: ./.github/actions/setup-poetry
 
       - name: Move both pins, and refuse a tree that would misdirect the credential
         env:
