@@ -9,10 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.services.nextcloud.provisioning import (
-    NextcloudIdentityConflictError,
-    NextcloudProvisioningClient,
+from app.services.nextcloud.client import (
     NextcloudProvisioningConfig,
+    NextcloudTalkClient,
 )
 
 _EXITED_STATUSES = frozenset(
@@ -22,6 +21,10 @@ _EXITED_STATUSES = frozenset(
         EmployeeStatus.RETIRED,
     }
 )
+
+
+class NextcloudIdentityConflictError(ValueError):
+    """The desired Nextcloud identity exists without an ERP binding."""
 
 
 @dataclass
@@ -42,7 +45,7 @@ class EmployeeNextcloudProvisioningService:
         db: Session,
         *,
         config: NextcloudProvisioningConfig | None = None,
-        nextcloud_client: NextcloudProvisioningClient | None = None,
+        nextcloud_client: NextcloudTalkClient | None = None,
     ) -> None:
         self.db = db
         self.config = config or NextcloudProvisioningConfig.from_settings()
@@ -129,7 +132,7 @@ class EmployeeNextcloudProvisioningService:
         result.user_id = desired_user_id
         return result
 
-    def _get_client(self) -> NextcloudProvisioningClient:
+    def _get_client(self) -> NextcloudTalkClient:
         if self._nextcloud_client is None:
-            self._nextcloud_client = NextcloudProvisioningClient(self.config)
+            self._nextcloud_client = NextcloudTalkClient(self.config)
         return self._nextcloud_client

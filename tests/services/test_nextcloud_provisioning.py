@@ -5,14 +5,14 @@ from uuid import uuid4
 import pytest
 
 from app.models.people.hr.employee import EmployeeStatus
-from app.services.nextcloud.provisioning import (
-    NextcloudIdentityConflictError,
-    NextcloudProvisioningClient,
+from app.services.nextcloud.client import (
+    NextcloudError,
     NextcloudProvisioningConfig,
-    NextcloudProvisioningError,
+    NextcloudTalkClient,
 )
 from app.services.people.hr.nextcloud_provisioning import (
     EmployeeNextcloudProvisioningService,
+    NextcloudIdentityConflictError,
 )
 
 
@@ -42,7 +42,7 @@ def _employee() -> Mock:
     return employee
 
 
-@patch("app.services.nextcloud.provisioning.httpx.Client")
+@patch("app.services.nextcloud.client.httpx.Client")
 def test_create_user_requests_nextcloud_welcome_email(
     mock_client_class: Mock,
 ) -> None:
@@ -53,7 +53,7 @@ def test_create_user_requests_nextcloud_welcome_email(
     }
     http_client = mock_client_class.return_value.__enter__.return_value
     http_client.request.return_value = response
-    client = NextcloudProvisioningClient(_config())
+    client = NextcloudTalkClient(_config())
 
     client.create_user(
         "ada@dotmac.ng",
@@ -76,15 +76,15 @@ def test_create_user_requests_nextcloud_welcome_email(
     assert request.kwargs["params"] == {"format": "json"}
     assert request.kwargs["data"] == {
         "userid": "ada@dotmac.ng",
-        "password": "",
         "email": "ada@dotmac.ng",
         "displayName": "Ada Lovelace",
         "groups[]": ["erp-employees"],
         "quota": "1 GB",
     }
+    assert "password" not in request.kwargs["data"]
 
 
-@patch("app.services.nextcloud.provisioning.httpx.Client")
+@patch("app.services.nextcloud.client.httpx.Client")
 def test_get_user_returns_none_for_ocs_not_found(mock_client_class: Mock) -> None:
     response = Mock()
     response.status_code = 404
@@ -100,12 +100,12 @@ def test_get_user_returns_none_for_ocs_not_found(mock_client_class: Mock) -> Non
     mock_client_class.return_value.__enter__.return_value.request.return_value = (
         response
     )
-    client = NextcloudProvisioningClient(_config())
+    client = NextcloudTalkClient(_config())
 
     assert client.get_user("missing@dotmac.ng") is None
 
 
-@patch("app.services.nextcloud.provisioning.httpx.Client")
+@patch("app.services.nextcloud.client.httpx.Client")
 def test_disable_user_url_encodes_its_identifier(mock_client_class: Mock) -> None:
     response = Mock()
     response.status_code = 200
@@ -114,7 +114,7 @@ def test_disable_user_url_encodes_its_identifier(mock_client_class: Mock) -> Non
     }
     http_client = mock_client_class.return_value.__enter__.return_value
     http_client.request.return_value = response
-    client = NextcloudProvisioningClient(_config())
+    client = NextcloudTalkClient(_config())
 
     client.disable_user("ada+field@dotmac.ng")
 
@@ -124,7 +124,7 @@ def test_disable_user_url_encodes_its_identifier(mock_client_class: Mock) -> Non
     )
 
 
-@patch("app.services.nextcloud.provisioning.httpx.Client")
+@patch("app.services.nextcloud.client.httpx.Client")
 def test_http_success_with_ocs_error_is_rejected(mock_client_class: Mock) -> None:
     response = Mock()
     response.status_code = 200
@@ -137,9 +137,9 @@ def test_http_success_with_ocs_error_is_rejected(mock_client_class: Mock) -> Non
     mock_client_class.return_value.__enter__.return_value.request.return_value = (
         response
     )
-    client = NextcloudProvisioningClient(_config())
+    client = NextcloudTalkClient(_config())
 
-    with pytest.raises(NextcloudProvisioningError, match="Invalid input"):
+    with pytest.raises(NextcloudError, match="Invalid input"):
         client.create_user(
             "ada@dotmac.ng",
             email="ada@dotmac.ng",

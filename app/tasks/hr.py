@@ -15,7 +15,6 @@ import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
-import httpx
 from celery import shared_task
 from sqlalchemy import extract, func, select
 
@@ -120,42 +119,6 @@ def run_employee_mailcow_offboarding(
             "skipped": result.skipped,
             "errors": result.errors,
         }
-
-
-@shared_task(
-    bind=True,
-    max_retries=5,
-    autoretry_for=(httpx.TransportError, RuntimeError),
-    retry_backoff=True,
-    retry_backoff_max=900,
-    retry_jitter=True,
-)
-def run_employee_nextcloud_provisioning(
-    self,
-    employee_id: str,
-    organization_id: str,
-) -> dict[str, Any]:
-    """Create or reconcile one forward-requested employee Nextcloud account."""
-    from app.services.people.hr.nextcloud_provisioning import (
-        EmployeeNextcloudProvisioningService,
-    )
-
-    org_uuid = uuid.UUID(organization_id)
-    employee_uuid = uuid.UUID(employee_id)
-    with session_for_org(org_uuid) as db:
-        result = EmployeeNextcloudProvisioningService(db).ensure_account(
-            org_uuid,
-            employee_uuid,
-        )
-        db.commit()
-    return {
-        "employee_id": result.employee_id,
-        "user_id": result.user_id,
-        "created": result.created,
-        "already_exists": result.already_exists,
-        "enabled": result.enabled,
-        "skipped": result.skipped,
-    }
 
 
 @shared_task

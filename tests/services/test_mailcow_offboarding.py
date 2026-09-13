@@ -14,7 +14,7 @@ from app.services.mailcow.sogo import (
     remove_forward_address,
     set_forward_to_inactive,
 )
-from app.services.nextcloud.provisioning import NextcloudProvisioningConfig
+from app.services.nextcloud.client import NextcloudProvisioningConfig
 from app.services.people.hr.offboarding import (
     EmployeeOffboardingResult,
     EmployeeOffboardingService,

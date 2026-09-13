@@ -34,9 +34,9 @@ from app.services.mailcow.sieve import (
     remove_redirect_from_sieve,
 )
 from app.services.mailcow.sogo import SogoProfileService
-from app.services.nextcloud.provisioning import (
-    NextcloudProvisioningClient,
+from app.services.nextcloud.client import (
     NextcloudProvisioningConfig,
+    NextcloudTalkClient,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class EmployeeOffboardingService:
         sogo_service: SogoProfileService | None = None,
         sogo_cleanup_client: SogoCleanupQueueClient | None = None,
         nextcloud_config: NextcloudProvisioningConfig | None = None,
-        nextcloud_client: NextcloudProvisioningClient | None = None,
+        nextcloud_client: NextcloudTalkClient | None = None,
     ) -> None:
         self.db = db
         self.config = config or get_mailcow_offboarding_config()
@@ -324,9 +324,9 @@ class EmployeeOffboardingService:
         )
         return self._mailcow_client
 
-    def _get_nextcloud_client(self) -> NextcloudProvisioningClient:
+    def _get_nextcloud_client(self) -> NextcloudTalkClient:
         if self._nextcloud_client is None:
-            self._nextcloud_client = NextcloudProvisioningClient(self.nextcloud_config)
+            self._nextcloud_client = NextcloudTalkClient(self.nextcloud_config)
         return self._nextcloud_client
 
     def _get_sieve_client(self) -> ManageSieveClient:

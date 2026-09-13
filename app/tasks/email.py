@@ -175,13 +175,21 @@ def run_employee_mailcow_provisioning(
             from app.config import settings
 
             if settings.nextcloud_provisioning_enabled:
-                from app.tasks.hr import run_employee_nextcloud_provisioning
-
-                run_employee_nextcloud_provisioning.apply_async(
-                    args=[str(employee_uuid), str(org_uuid)],
-                    countdown=5,
+                from app.services.people.hr.nextcloud_provisioning import (
+                    EmployeeNextcloudProvisioningService,
                 )
-                task_result["nextcloud_queued"] = True
+
+                nextcloud_result = EmployeeNextcloudProvisioningService(
+                    db
+                ).ensure_account(org_uuid, employee_uuid)
+                db.commit()
+                task_result["nextcloud"] = {
+                    "user_id": nextcloud_result.user_id,
+                    "created": nextcloud_result.created,
+                    "already_exists": nextcloud_result.already_exists,
+                    "enabled": nextcloud_result.enabled,
+                    "skipped": nextcloud_result.skipped,
+                }
         return task_result
 
 
