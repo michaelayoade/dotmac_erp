@@ -11,16 +11,16 @@
     {
       "id": "dependency-manifest",
       "source_path": "pyproject.toml",
-      "source_blob_sha256": "3bc2168abde809643a62ae5b4add268261add4ffa490492d65affb27f64cca0e",
+      "source_blob_sha256": "6692c1bbaa3b2bad4a150fc06d0262977bd1694e4c5c29866d8839cf3c100794",
       "selector": "whole-file.v1",
-      "extract_sha256": "3bc2168abde809643a62ae5b4add268261add4ffa490492d65affb27f64cca0e"
+      "extract_sha256": "6692c1bbaa3b2bad4a150fc06d0262977bd1694e4c5c29866d8839cf3c100794"
     },
     {
       "id": "dependency-lock",
       "source_path": "poetry.lock",
-      "source_blob_sha256": "6b5c67873390dd01e28e1a44acdd2a299ca9f8007032d7d517c34e862cbe9e74",
+      "source_blob_sha256": "9da69c652dcf8f5e9a450fc5a3d67870fda7c3ae3866e585459e81b40f5bce17",
       "selector": "whole-file.v1",
-      "extract_sha256": "6b5c67873390dd01e28e1a44acdd2a299ca9f8007032d7d517c34e862cbe9e74"
+      "extract_sha256": "9da69c652dcf8f5e9a450fc5a3d67870fda7c3ae3866e585459e81b40f5bce17"
     },
     {
       "id": "production-install",
@@ -67,9 +67,9 @@
     {
       "id": "migration-bindings",
       "source_path": "app/migration_bindings.py",
-      "source_blob_sha256": "2bfdcde1f163b30c9875561dce9847d9c12957d6e44bcd32e484665207cb0b30",
+      "source_blob_sha256": "d81086b70cbab68962334c52bd1801fb1ccfee0991fbcfc2fd98e33851832056",
       "selector": "whole-file.v1",
-      "extract_sha256": "2bfdcde1f163b30c9875561dce9847d9c12957d6e44bcd32e484665207cb0b30"
+      "extract_sha256": "d81086b70cbab68962334c52bd1801fb1ccfee0991fbcfc2fd98e33851832056"
     }
   ]
 }

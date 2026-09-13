@@ -1,4 +1,5 @@
-"""`dotmac-tax` a3 is composed for storage and contracts, but not authoritative.
+"""`dotmac-tax`, at the exact version `composition.CONTRACT_VERSION` names, is
+composed for storage and contracts, but not authoritative.
 
 C2 is one atomic fact: the exact released wheel is pinned and locked, its
 independent ``tx`` lineage is reachable at the reviewed head, ERP consumes only
@@ -34,12 +35,12 @@ RUNTIME_ENTRY_POINT_ROOTS = (
 )
 RELEASE_FILES = {
     (
-        "dotmac_tax-0.1.0a3-py3-none-any.whl",
-        "sha256:a058df0e57c808e0014da0a8e1a98a887f25d7ff2695e884e48bbf714eacb2c4",
+        "dotmac_tax-0.1.0a4-py3-none-any.whl",
+        "sha256:032908e1ca862b03ff9e649c1415bfcc067d3cd426ed1843ee4bf4693b0bd95e",
     ),
     (
-        "dotmac_tax-0.1.0a3.tar.gz",
-        "sha256:63842b89962331e1cdb3351679616f0d93e057186744f63bd04c01a4371340ca",
+        "dotmac_tax-0.1.0a4.tar.gz",
+        "sha256:def1de45e6562a09dd400af52c11077892dad70f08294c59fee2757808e8498c",
     ),
 }
 

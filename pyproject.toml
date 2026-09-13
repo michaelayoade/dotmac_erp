@@ -73,7 +73,7 @@ dotmac-ui = {version = "0.1.0a7", source = "forgejo"}
 # `tenant_scope_catalog.v1` and `module_database_roles.v1`; ERP binds both to
 # revisions it actually runs (`app/migration_bindings.py`), because kernel
 # `0001` can never run in ERP — it creates `public.tenants`, which ERP owns.
-dotmac-files = {version = "0.1.0a2", source = "forgejo"}
+dotmac-files = {version = "0.1.0a4", source = "forgejo"}
 
 # Durable import run, partition, claim and per-row outcome ownership. ERP keeps
 # customer vocabulary, validation and mutation in its own adapter; the module
@@ -95,9 +95,13 @@ dotmac-imports = {version = "0.1.0a2", source = "forgejo"}
 # deploy path. Acceptance is "exactly the expected branch heads and no
 # unintended ones", never "one global head".
 #
-# The kernel repin above (a83 -> a85) is DEMANDED by this pin, not bundled with
-# it: `dotmac-accounting 0.1.0a1` floors at `dotmac-kernel >= 0.1.0a85`, so the
-# lock cannot resolve at a83. `dotmac-files` needs no repin and stays at a2.
+# Historical: when this accounting pin was introduced, it DEMANDED a kernel
+# repin (a83 -> a85), not bundled with it, because `dotmac-accounting 0.1.0a1`
+# floors at `dotmac-kernel >= 0.1.0a85` and the lock could not resolve below
+# that floor. The kernel has since moved further for unrelated reasons — the
+# pin above is the current value, this paragraph is not. This accounting pin
+# does not move `dotmac-files`; that module's own pin, immediately above,
+# moves independently and on its own schedule.
 dotmac-accounting = {version = "0.1.0a1", source = "forgejo"}
 
 # Concurrency-safe document-series allocation and immutable allocation evidence.
@@ -117,7 +121,7 @@ dotmac-people = {version = "0.1.0a2", source = "forgejo"}
 # released `tx` lineage and public read contract only. ERP's legacy calculator
 # and filing writers remain authoritative while `TAX_COMPOSITION_ENABLED` is
 # false; policy backfill, shadow comparison and cohort cutover are later gates.
-dotmac-tax = {version = "0.1.0a3", source = "forgejo"}
+dotmac-tax = {version = "0.1.0a4", source = "forgejo"}
 
 # Private Forgejo PyPI index (Dotmac packages). Explicit priority: only
 # dependencies that name this source resolve from it; PyPI stays the default.

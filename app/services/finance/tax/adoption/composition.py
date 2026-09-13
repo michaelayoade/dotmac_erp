@@ -1,10 +1,11 @@
 """ERP's `dotmac-tax` composition declaration: installed, migrated, disabled.
 
-C2 pins the released a3 artifact and composes its independent ``tx`` lineage.
-That creates module-owned storage and lets the adapters consume the released
-public contract. It does not backfill policy, run a shadow, repoint a writer or
-move tax authority. ``TAX_COMPOSITION_ENABLED`` therefore remains false by
-default and every runtime owner remains ERP's legacy path.
+C2 pins the released artifact named by ``CONTRACT_VERSION`` and composes its
+independent ``tx`` lineage. That creates module-owned storage and lets the
+adapters consume the released public contract. It does not backfill policy,
+run a shadow, repoint a writer or move tax authority.
+``TAX_COMPOSITION_ENABLED`` therefore remains false by default and every
+runtime owner remains ERP's legacy path.
 """
 
 from __future__ import annotations
@@ -17,10 +18,12 @@ DISTRIBUTION: Final = "dotmac-tax"
 IMPORT_PACKAGE: Final = "dotmac_tax"
 MODULE_CODE: Final = "tax"
 
-#: Published contract and artifact version proved by release run 32898397980;
-#: annotated tag ``dotmac-tax-v0.1.0a3`` peels to Starter commit
-#: ``531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9``.
-CONTRACT_VERSION: Final = "0.1.0a3"
+#: Published contract and artifact version proved by release run 34711205539
+#: (conclusion success; build/publish/verify jobs all green; head_sha
+#: ``fb7fb252c6fba8e15d7c39ed18f8057057adfbab``); annotated tag
+#: ``dotmac-tax-v0.1.0a4`` peels to that same commit, which is what makes the
+#: run and the tag agree rather than merely both existing.
+CONTRACT_VERSION: Final = "0.1.0a4"
 
 #: The released lineage and exact reviewed head ERP composes.
 MIGRATION_VERSION_LOCATION: Final = "dotmac_tax.migrations:versions"
