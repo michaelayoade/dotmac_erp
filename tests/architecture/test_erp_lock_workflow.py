@@ -1714,6 +1714,15 @@ def test_the_real_erp_manifest_and_lock_satisfy_the_premise() -> None:
 UNWIRED_PROBLEMS_EXEMPTIONS: dict[str, str] = {}
 
 
+#: Both `FunctionDef` node types — `async def` is a DISTINCT AST node
+#: (`ast.AsyncFunctionDef`), not a `FunctionDef` with a flag, so a check
+#: gated on `FunctionDef` alone lets an `async def foo_problems` — dead or
+#: alive — through without ever being seen, let alone required to be
+#: reachable. Every walk that enumerates function definitions below matches
+#: both node types.
+_FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
+
+
 def _problems_function_names(source: str) -> set[str]:
     """Every function this source defines whose name ends `_problems`."""
 
@@ -1721,32 +1730,33 @@ def _problems_function_names(source: str) -> set[str]:
     return {
         node.name
         for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name.endswith("_problems")
+        if isinstance(node, _FUNCTION_DEF_TYPES) and node.name.endswith("_problems")
     }
 
 
 def _call_graph(source: str) -> dict[str, set[str]]:
     """name -> the set of names it calls, by static AST inspection.
 
-    `ast.Attribute` calls (`self.x()`, `module.x()`) are recorded by their
-    final attribute name, which is enough here: every candidate is a bare
-    module-level function, called either bare or as `erp_lock.foo(...)`.
+    Only bare `ast.Name` call targets count. An `ast.Attribute` call
+    (`self.x()`, `module.x()`) is deliberately NOT credited by its final
+    attribute name: crediting it would let an unrelated object's
+    same-named method (`foo.off_index_lock_problems()`) or a shadowing
+    local rebound to the name manufacture FALSE reachability for a real
+    validator that is not actually called. Every validator in this module
+    is in fact called as a bare name, so this loses no real edge; it can
+    only make the detector MORE willing to call something unreachable,
+    which is the safe direction to be wrong in.
     """
 
     tree = ast.parse(source, filename="erp_lock.py")
     graph: dict[str, set[str]] = {}
     for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef):
+        if not isinstance(node, _FUNCTION_DEF_TYPES):
             continue
         called: set[str] = set()
         for sub in ast.walk(node):
-            if not isinstance(sub, ast.Call):
-                continue
-            func = sub.func
-            if isinstance(func, ast.Name):
-                called.add(func.id)
-            elif isinstance(func, ast.Attribute):
-                called.add(func.attr)
+            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name):
+                called.add(sub.func.id)
         graph[node.name] = called
     return graph
 
@@ -1840,3 +1850,98 @@ def test_the_detector_does_not_flag_a_validator_that_is_actually_wired() -> None
     reachable = _reachable_from_cli(_ALL_WIRED_SOURCE)
     unreachable = _problems_function_names(_ALL_WIRED_SOURCE) - reachable
     assert unreachable == set(), unreachable
+
+
+_ASYNC_UNWIRED_SOURCE = """
+async def fake_problems(x):
+    return []
+
+def _run(args):
+    if args.command == "beta":
+        return _report("beta", beta_problems(args))
+    return 1
+
+def beta_problems(x):
+    return []
+"""
+
+
+def test_an_async_def_validator_is_seen_and_reported_unreachable() -> None:
+    """`async def fake_problems` is a distinct AST node from `FunctionDef`; the
+    detector must not let that keyword be a silent escape from the audit."""
+
+    names = _problems_function_names(_ASYNC_UNWIRED_SOURCE)
+    assert "fake_problems" in names, "the async def was never even seen"
+    reachable = _reachable_from_cli(_ASYNC_UNWIRED_SOURCE)
+    assert "fake_problems" not in reachable
+    assert "fake_problems" in (names - reachable)
+
+
+# ── a `*_problems` name must never be REBOUND anywhere in the module — a
+#    name whose binding can move is a name whose reachability the detector
+#    above cannot decide by static inspection ───────────────────────────────
+
+
+def _rebound_problems_names(source: str) -> set[str]:
+    """Every actual `*_problems` VALIDATOR name (one this source defines with
+    `def`/`async def`) that is also assigned, bound as a loop/with/
+    comprehension target, taken as a parameter, or imported under an alias
+    anywhere else in the module — its own `def` is a binding, not a
+    rebinding, and is excluded.
+
+    Scoped to names `_problems_function_names` actually returns, not to
+    every identifier that happens to end in `_problems`: a local result
+    variable such as `_run`'s own `before_problems`/`after_problems` ends in
+    that suffix without naming, shadowing, or being confusable with any
+    validator, and flagging it would be a false positive, not a finding.
+    """
+
+    validator_names = _problems_function_names(source)
+    tree = ast.parse(source, filename="erp_lock.py")
+    rebound: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Store)
+            and node.id in validator_names
+        ):
+            rebound.add(node.id)
+        elif isinstance(node, ast.arg) and node.arg in validator_names:
+            rebound.add(node.arg)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                bound = alias.asname or alias.name
+                if bound in validator_names:
+                    rebound.add(bound)
+    return rebound
+
+
+def test_no_problems_validator_name_is_ever_rebound_in_the_module() -> None:
+    source = (ROOT / "scripts" / "erp_lock.py").read_text(encoding="utf-8")
+    assert _rebound_problems_names(source) == set()
+
+
+_REBOUND_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    alpha_problems = lambda *_: []
+    return alpha_problems(args)
+"""
+
+_CLEAN_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    return alpha_problems(args)
+"""
+
+
+def test_the_rebinding_detector_names_a_planted_shadow() -> None:
+    assert _rebound_problems_names(_REBOUND_SOURCE) == {"alpha_problems"}
+
+
+def test_the_rebinding_detector_does_not_flag_a_clean_module() -> None:
+    assert _rebound_problems_names(_CLEAN_SOURCE) == set()
