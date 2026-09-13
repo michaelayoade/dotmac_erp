@@ -52,12 +52,31 @@ Five independent invariants are asserted here:
      action, whose exact version lives in the ``poetry==`` line of its
      hash-locked ``.github/bootstrap/poetry-requirements.txt`` instead of a
      workflow-level env var. Both must name the one accepted version.
-     Recognising a form is not the same as requiring one: a workflow that
-     runs Poetry through NEITHER recognised form must fail rather than be
-     silently absent from every check above — the exact way this file went
-     vacuous for ``erp-lock.yml`` the day that workflow switched installer
-     forms and nothing noticed. "Every workflow that runs Poetry" is derived
-     from the workflows themselves, not restated as a list.
+     Recognising a form is not the same as requiring one: a *workflow FILE*
+     that appears, by a literal scan of its ``run:`` text, to run Poetry
+     through NEITHER recognised form must fail rather than be silently
+     absent from every check above — the exact way this file went vacuous
+     for ``erp-lock.yml`` the day that workflow switched installer forms and
+     nothing noticed.
+
+     Read that carefully, because it is an approximation, not a proof, and
+     overclaiming it is worse than stating it plainly: the sweep is
+     PER-FILE, not per-job — a workflow file with one recognised installer
+     step already reads as "covered" even if some OTHER job in that same
+     file later runs Poetry through an unrecognised form, because the two
+     predicates below return one bool for the whole file, not one per job.
+     And the sweep only sees a LITERAL ``poetry`` command word inside a
+     ``run:`` body — Poetry reached indirectly, through ``make lint``/``make
+     format-check``, a script, a container image that already has Poetry
+     baked in, or a reusable/composite action, is invisible to it and never
+     becomes a candidate for the "must have a recognised installer" check at
+     all. ``ci.yml`` funnels most of its own Poetry use through the
+     Makefile this way; it currently passes this guard only because its six
+     ``snok/install-poetry`` steps are ALSO present in the same file, not
+     because the guard confirmed anything about the ``make`` targets
+     themselves. Both of these are UNMONITORED REGIONS of this check —
+     pre-existing in the snok-only detector this replaces, not introduced by
+     the fix — named here rather than left to read as covered.
 
 Everything below is a pure function over supplied text, with the real-file
 tests as thin callers. That is what lets the sensitivity proof at the bottom
@@ -439,16 +458,24 @@ def workflow_uses_local_poetry_action(workflow_text: str) -> bool:
 
 
 def workflow_installs_poetry(workflow_text: str) -> bool:
-    """True if this workflow contains a RECOGNISED Poetry-installing step.
+    """True if this workflow FILE contains a RECOGNISED Poetry-installing
+    step anywhere in it.
 
-    Two forms are recognised today: the third-party `snok/install-poetry`
-    action (any revision — immutability is checked separately) and this
-    repository's own local `.github/actions/setup-poetry` composite action.
-    A workflow that runs Poetry through neither is the exact gap
-    `erp-lock.yml` fell into when it switched installer forms and the
-    installer registry (keyed only on the snok form) silently stopped
-    watching it — see `workflow_runs_poetry` for the other half that closes
-    that gap by making the drop-out fail instead of disappear.
+    PER-FILE, not per-job: a `True` here means at least one job in the file
+    has a recognised installer step, not that every job that needs Poetry
+    has one. Two forms are recognised today: the third-party
+    `snok/install-poetry` action (any revision — immutability is checked
+    separately) and this repository's own local
+    `.github/actions/setup-poetry` composite action. A workflow file that
+    runs Poetry through neither is the exact gap `erp-lock.yml` fell into
+    when it switched installer forms and the installer registry (keyed only
+    on the snok form) silently stopped watching it — see `workflow_runs_poetry`
+    for the other half that closes that gap by making the drop-out fail
+    instead of disappear, and the module docstring's "Lock authority"
+    invariant for the two UNMONITORED REGIONS this file-level, literal-text
+    approximation does not see: a rogue job sharing a file with a compliant
+    one, and Poetry reached indirectly (`make`, a script, a container image,
+    a reusable/composite action) rather than by a literal `poetry` command.
     """
     if workflow_poetry_installer_versions(workflow_text):
         return True
@@ -456,18 +483,27 @@ def workflow_installs_poetry(workflow_text: str) -> bool:
 
 
 def workflow_runs_poetry(workflow_text: str) -> bool:
-    """True if this workflow executes Poetry at all: installs it, or invokes
-    the `poetry` command in a `run:` body (`poetry install`, `poetry lock`,
-    `poetry run ...`, etc — see `_POETRY_COMMAND`).
+    """True if this workflow FILE appears, by a literal scan, to execute
+    Poetry at all: installs it, or invokes the `poetry` command in a `run:`
+    body (`poetry install`, `poetry lock`, `poetry run ...`, etc — see
+    `_POETRY_COMMAND`).
 
     This is deliberately broader than `workflow_installs_poetry`: every
     workflow this returns True for is required (by
     `test_every_ci_poetry_installer_uses_the_accepted_exact_version`) to also
-    satisfy `workflow_installs_poetry`, or the test fails. A workflow that
-    runs Poetry through some unrecognised third form — the shape of failure
-    this whole module exists to catch — is exactly what this predicate is
-    for: it can be TRUE while `workflow_installs_poetry` is FALSE, and that
-    combination is the failure.
+    satisfy `workflow_installs_poetry`, or the test fails. A workflow file
+    that runs Poetry through some unrecognised third form — the shape of
+    failure this whole module exists to catch — is exactly what this
+    predicate is for: it can be TRUE while `workflow_installs_poetry` is
+    FALSE, and that combination is the failure.
+
+    It is an APPROXIMATION, not a proof of absence: it sees only a literal
+    `poetry` word in `run:` text, so Poetry invoked through `make lint`,
+    a script, a container image, or a reusable/composite action returns
+    FALSE here and is never checked at all — see the module docstring's
+    "Lock authority" invariant, which names this as one of the two
+    UNMONITORED REGIONS of this check rather than leaving it to read as
+    covered.
     """
     if workflow_installs_poetry(workflow_text):
         return True
@@ -801,11 +837,20 @@ def test_every_ci_poetry_installer_uses_the_accepted_exact_version() -> None:
             f"accepted Poetry {POETRY_VERSION}"
         )
 
-    # THE FAIL-CLOSED HALF: every workflow that runs Poetry at all — by
+    # THE FAIL-CLOSED HALF, at FILE granularity: every workflow FILE that
+    # appears, by a literal `run:`-text scan, to run Poetry at all — by
     # installing it OR by invoking the `poetry` command — must match one of
-    # the two recognised installer forms above. A workflow that runs Poetry
-    # through a THIRD, unrecognised form must fail here rather than vanish
-    # from `snok_installers` and `local_installers` unnoticed.
+    # the two recognised installer forms above SOMEWHERE in that file. A
+    # workflow file that runs Poetry through a THIRD, unrecognised form must
+    # fail here rather than vanish from `snok_installers` and
+    # `local_installers` unnoticed — the failure this test exists to catch.
+    #
+    # This is a per-FILE approximation, not a per-job proof, and it sees only
+    # a literal `poetry` command word. See the module docstring's "Lock
+    # authority" invariant for the two UNMONITORED REGIONS this does not
+    # cover: a rogue job sharing a file with an already-recognised installer
+    # step, and Poetry reached indirectly (`make`, a script, a container
+    # image, a reusable/composite action) rather than by a literal command.
     unrecognised = {
         path.name: "runs Poetry without a recognised installer step (neither "
         f"snok/install-poetry nor {LOCAL_POETRY_ACTION})"
