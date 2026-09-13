@@ -48,26 +48,43 @@ through the normal deployment process. It locks employee writes while checking
 all organizations and installing uniqueness; plan a suitable maintenance window.
 The migration requires full visibility and refuses an RLS-filtered census.
 
+## Forward workforce provisioning
+
+New employees follow one ordered relay: Mailcow mailbox, Nextcloud account,
+Selfcare account, then Selfcare-to-Nextcloud Talk mapping. This is a going-
+forward flow and performs no employee backfill. The Mailcow task enqueues
+Selfcare sync only after Nextcloud has persisted its exact user ID. Staff sync
+also refuses Selfcare creation when that binding is absent, so an independently
+queued task cannot race ahead of Nextcloud.
+
+ERP calls Selfcare's create endpoint with `existing_account_policy=reject` and
+a stable employee idempotency key. A true existing-email collision returns 409
+without mutation. If ERP loses the first success response, replay returns the
+original Selfcare UUID without changing roles or identity. ERP claims and
+flushes that UUID locally before any role, department, or Talk mapping call.
+
+The Selfcare API key requires `sub:staff_access:read`, `rbac:assign`,
+`rbac:roles:read`, `operations:service_team:membership`, and
+`communications:nextcloud_talk_staff:manage`. The last scope authorizes both mapping
+and its explicit disable command. Missing Talk scope is a permanent
+configuration error;
+temporary Selfcare or binding failures remain retryable.
+
+Do not enable `MAILCOW_PROVISIONING_ENABLED`,
+`NEXTCLOUD_PROVISIONING_ENABLED`, or `DOTMAC_SUB_STAFF_SYNC_ENABLED` until the
+corresponding ERP and Selfcare changes are deployed and the API key carries all
+five scopes. Enable the complete chain for one controlled new employee first.
+
 ## Transactions and external effects
 
-**New-account provisioning now requires administrator action.** Selfcare's
-`POST /staff-accounts` is a create-or-update operation: it can replace an
-existing account's roles before returning the account ID. A preceding GET and
-an ERP database lock cannot make that remote pair atomic. ERP therefore does
-not call that endpoint during staff sync. If lookup finds no account, sync
-raises a permanent error without remote writes or a success timestamp. An
-administrator must provision and verify the account through the normal
-Selfcare process, then retry ERP sync. Automatic provisioning can return only
-after a create-only or ownership-conditional remote contract is available.
-
 Staff sync requires a database session. A PostgreSQL transaction advisory lock
-serializes syncs within the organization, including email lookup. A row lock
+serializes syncs within the organization, including create-only admission. A row lock
 and refresh protect existing ownership and eliminate stale
 employee mappings after waiting. All assignment branches use the same ownership
 check, including inactive employees, then flush the mapping before changing
 roles, department membership, active status, or publishing access projections.
-Account IDs must be canonical UUID strings. A conflicting email lookup cannot
-override an employee's existing account identity.
+Account IDs must be canonical UUID strings. A conflicting email lookup for an
+already-bound employee cannot override its existing account identity.
 The immediate database unique constraint also arbitrates writers outside the
 sync lock protocol. A losing claim raises an explicit permanent sync error and
 never reaches those remote mutations. Locks last until the caller commits or
@@ -81,5 +98,7 @@ PostgreSQL and Selfcare do not share a transaction. A remote operation may
 succeed before a later transport error or database commit failure. Such an
 attempt remains failed locally and needs retry/reconciliation; rollback cannot
 undo a remote request. The tenant lock cannot serialize independent Selfcare
-writers. No production data or remote account status is
+writers. Stable idempotency keys and Selfcare's create-only reservation make
+account creation replay-safe; reconciliation repairs later role, department,
+and Talk mapping steps. No production data or remote account status is
 changed by the tests, which use synthetic databases and fake Selfcare clients.
