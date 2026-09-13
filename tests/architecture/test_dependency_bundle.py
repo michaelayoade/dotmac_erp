@@ -1768,6 +1768,48 @@ def test_an_artifact_name_pattern_without_the_placeholder_is_refused(
         )
 
 
+@pytest.mark.parametrize(
+    "malformed_pattern",
+    [
+        # Each of these contains the literal '{plan_digest}' substring (so
+        # it passes the first, substring-only check) but still fails to
+        # `.format(plan_digest=...)`.
+        "erp-dependency-bundle-{plan_digest}-{unexpected_field}",
+        "erp-dependency-bundle-{plan_digest}-{bad!q}",
+        "erp-dependency-bundle-{plan_digest}-{unbalanced",
+    ],
+)
+def test_an_artifact_name_pattern_that_looks_valid_but_does_not_format_is_refused(
+    malformed_pattern,
+) -> None:
+    """Finding 6: a substring check on '{plan_digest}' alone does not prove
+    `.format(plan_digest=...)` succeeds -- an extra field, a bad
+    conversion, or unbalanced braces all still contain the literal
+    substring and would previously reach verify_run_metadata's
+    `.format(...)` call as a raw KeyError/ValueError/IndexError."""
+
+    with pytest.raises(db.PolicyError, match="not a valid format string"):
+        _load_policy_with(
+            lambda raw: raw.__setitem__("artifact_name_pattern", malformed_pattern)
+        )
+
+
+@pytest.mark.parametrize("field,bad_value", [("url", 123), ("tag", None), ("url", "")])
+def test_load_permitted_off_index_dependencies_refuses_non_string_fields(
+    field, bad_value
+) -> None:
+    """Finding 6: a non-string url/tag used to pass straight through into
+    an OffIndexPin and only fail later, deep inside URL normalisation or a
+    raw string comparison, with a confusing error far from the real cause."""
+
+    policy = json.loads(REAL_POLICY_PATH.read_text(encoding="utf-8"))
+    policy["permitted_off_index_dependencies"]["dotmac-integration-client"][field] = (
+        bad_value
+    )
+    with pytest.raises(db.PolicyError, match=f"\\.{field} must be"):
+        db.load_permitted_off_index_dependencies(policy)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # 3. Duplication: shared-vector table + unlisted-duplicate detector
 # ═══════════════════════════════════════════════════════════════════════
@@ -2127,6 +2169,17 @@ def test_normalise_repository_url_does_not_erase_a_query_string() -> None:
         _OFF_INDEX_PIN_URL + "?different-input"
     )
     assert plain != with_query
+
+
+def test_normalise_repository_url_does_not_raise_on_a_malformed_authority() -> None:
+    """Finding 6: a malformed IPv6-shaped authority (unbalanced brackets)
+    makes `urllib.parse.urlsplit` itself raise ValueError. This pure
+    comparison helper must never raise -- an unrecognised spelling is
+    returned unchanged, exactly like a non-https scheme or empty netloc."""
+
+    malformed = "https://[::1/not-a-valid-authority"
+    result = dependency_normalisation.normalise_repository_url(malformed)
+    assert result == malformed
 
 
 def test_a_query_string_on_the_off_index_pin_is_refused_by_both() -> None:

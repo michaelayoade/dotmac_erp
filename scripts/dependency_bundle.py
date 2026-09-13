@@ -1001,7 +1001,19 @@ def load_permitted_off_index_dependencies(
                 f"policy permitted_off_index_dependencies.{name}.commit must "
                 "be a 40-hex commit SHA"
             )
-        result[name] = OffIndexPin(url=entry["url"], tag=entry["tag"], commit=commit)
+        url = entry["url"]
+        if not isinstance(url, str) or not url:
+            raise PolicyError(
+                f"policy permitted_off_index_dependencies.{name}.url must "
+                "be a non-empty string"
+            )
+        tag = entry["tag"]
+        if not isinstance(tag, str) or not tag:
+            raise PolicyError(
+                f"policy permitted_off_index_dependencies.{name}.tag must "
+                "be a non-empty string"
+            )
+        result[name] = OffIndexPin(url=url, tag=tag, commit=commit)
     return result
 
 
@@ -1494,6 +1506,21 @@ def load_policy(path: Path) -> dict[str, Any]:
             "policy artifact_name_pattern must be a string containing the "
             f"literal '{{plan_digest}}' placeholder, got {artifact_name_pattern!r}"
         )
+    # A substring check alone does not prove `.format(plan_digest=...)`
+    # actually succeeds: an extra field (`"{plan_digest}{other}"`), a bad
+    # conversion/format spec, or unbalanced braces all still contain the
+    # literal substring and would previously reach
+    # `verify_run_metadata`'s `.format(...)` call as a raw
+    # `KeyError`/`ValueError`/`IndexError`. Proving the format call itself
+    # succeeds, with only `plan_digest` supplied, is what actually
+    # validates the pattern.
+    try:
+        artifact_name_pattern.format(plan_digest="0" * 64)
+    except (KeyError, IndexError, ValueError) as exc:
+        raise PolicyError(
+            f"policy artifact_name_pattern {artifact_name_pattern!r} is not "
+            f"a valid format string taking only 'plan_digest': {exc}"
+        ) from exc
     return data
 
 

@@ -127,10 +127,20 @@ def normalise_repository_url(url: str) -> str:
     discarded: `repo.git` and `repo.git?x=1` must not compare equal, because
     the query string is part of what actually reaches the resolver even
     though it plays no role in this function's own equality test.
+
+    NEVER RAISES: a malformed authority (e.g. unbalanced IPv6 brackets)
+    makes `urllib.parse.urlsplit` itself raise `ValueError` — that is
+    treated exactly like any other spelling this function does not
+    recognise, and the input is returned unchanged rather than the
+    exception propagating to a caller that has no reason to expect this
+    pure comparison helper can raise.
     """
 
     text = url.strip()
-    parts = urllib.parse.urlsplit(text)
+    try:
+        parts = urllib.parse.urlsplit(text)
+    except ValueError:
+        return text
     if parts.scheme.lower() != "https" or not parts.netloc:
         return text
     path = parts.path.rstrip("/")
