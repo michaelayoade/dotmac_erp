@@ -18,8 +18,14 @@ from app.services.dotmac_sub.client import (
 
 
 class FakeClient:
-    def __init__(self, existing: dict | None = None):
+    def __init__(
+        self,
+        existing: dict | None = None,
+        *,
+        created_account_id: str = "00000000-0000-0000-0000-000000000123",
+    ):
         self.existing = existing
+        self.created_account_id = created_account_id
         self.created = []
         self.active_calls = []
         self.role_calls = []
@@ -33,7 +39,7 @@ class FakeClient:
     def create_staff_account(self, **kwargs):
         self.created.append(kwargs)
         return {
-            "id": "00000000-0000-0000-0000-000000000123",
+            "id": self.created_account_id,
             "email": kwargs["email"],
             "created": True,
         }
@@ -195,10 +201,9 @@ def test_active_employee_waits_for_nextcloud_before_selfcare_creation(db):
 
 
 def test_active_employee_with_inactive_account_projects_reactivation(db):
-    client = FakeClient(
-        existing={"id": "00000000-0000-0000-0000-000000000009", "is_active": False}
-    )
-    emp = _employee(EmployeeStatus.ACTIVE)
+    account_id = "00000000-0000-0000-0000-000000000009"
+    client = FakeClient(existing={"id": account_id, "is_active": False})
+    emp = _employee(EmployeeStatus.ACTIVE, account_id=account_id)
 
     result = staff_sync.sync_employee(db, emp, client=client)
 

@@ -78,7 +78,7 @@ def test_mailcow_task_enqueues_selfcare_only_after_nextcloud_binding(
         selfcare_task,
     )
     monkeypatch.setattr(settings, "nextcloud_provisioning_enabled", True)
-    monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", True)
+    monkeypatch.setattr(settings, "dotmac_sub_staff_sync_enabled", True, raising=False)
 
     result = email_tasks.run_employee_mailcow_provisioning.run(
         str(employee_id), str(organization_id)
