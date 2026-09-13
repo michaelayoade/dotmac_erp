@@ -6,10 +6,15 @@ the authoritative design. This note records what C1 built, what it deliberately
 did not build, and every ERP field that does not map cleanly onto the published
 `dotmac-tax` contract.
 
-Original C1 contract: `dotmac-tax 0.1.0a2`. C2 now pins released
-`dotmac-tax 0.1.0a3` (release run `32898397980`, peeled tag
-`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`) and consumes its public
-`TaxFact` and sealed `TaxDeterminationSetV1`/component/line contracts directly.
+Original C1 contract: `dotmac-tax 0.1.0a2`. C2 pins whatever version
+`app/services/finance/tax/adoption/composition.py`'s `CONTRACT_VERSION`
+currently names — that constant is the authority, moved only on its own
+release-run/peeled-tag evidence — and consumes its public `TaxFact` and
+sealed `TaxDeterminationSetV1`/component/line contracts directly. (C2 first
+pinned `dotmac-tax 0.1.0a3`, release run `32898397980`, peeled tag
+`531f7f8c37ce2fdf41ecbf2f9a7a9940264a18f9`; it has since repinned to a4,
+release run `34711205539`, peeled tag `dotmac-tax-v0.1.0a4` at
+`fb7fb252c6fba8e15d7c39ed18f8057057adfbab`.)
 The `tx` lineage is composed at `tx_0003_result_fingerprint`; runtime authority
 remains disabled.
 
