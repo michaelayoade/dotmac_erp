@@ -2025,6 +2025,97 @@ def test_both_implementations_of_off_index_lock_url_identity_agree_on_every_vect
     )
 
 
+# ── the LOCK-level off-index NAME pair (finding 5): erp_lock normalises
+#    both sides; dependency_bundle used to compare raw strings ───────────
+
+OFF_INDEX_NAME_VECTORS: list[tuple[str, bool, str]] = [
+    (_OFF_INDEX_PIN_NAME, False, "the exact pinned name is accepted"),
+    (
+        "Dotmac_Integration_Client",
+        False,
+        "mixed case and underscores normalise equal",
+    ),
+    (
+        "dotmac.integration.client",
+        False,
+        "dots normalise equal to the pinned hyphenated name",
+    ),
+    (
+        "DOTMAC-INTEGRATION-CLIENT",
+        False,
+        "uppercase normalises equal",
+    ),
+    (
+        "dotmac-integration-client-other",
+        True,
+        "a genuinely different name does not match",
+    ),
+    (
+        "dotmac-integration",
+        True,
+        "a name that is merely a prefix does not match",
+    ),
+]
+
+
+def _lock_with_off_index_name(declared_name: str) -> dict:
+    return {
+        "package": [
+            {
+                "name": declared_name,
+                "source": {
+                    "type": "git",
+                    "url": _OFF_INDEX_PIN_URL,
+                    "reference": _OFF_INDEX_PIN_TAG,
+                    "resolved_reference": _OFF_INDEX_PIN_COMMIT,
+                },
+            }
+        ]
+    }
+
+
+def _refuses_erp_lock_off_index_lock_name(declared_name: str) -> bool:
+    return bool(
+        erp_lock.off_index_lock_problems(_lock_with_off_index_name(declared_name))
+    )
+
+
+def _refuses_db_off_index_lock_name(declared_name: str) -> bool:
+    dep = db.ApprovedOffIndexDependency(
+        name=_OFF_INDEX_PIN_NAME,
+        normalised_name=db.normalise_name(_OFF_INDEX_PIN_NAME),
+        group="main",
+        url=_OFF_INDEX_PIN_URL,
+        tag=_OFF_INDEX_PIN_TAG,
+        resolved_commit=_OFF_INDEX_PIN_COMMIT,
+        group_optional=False,
+    )
+    try:
+        db._verify_off_index_lock_entry(dep, _lock_with_off_index_name(declared_name))
+    except db.DependencyBundleError:
+        return True
+    return False
+
+
+@pytest.mark.parametrize(
+    "declared_name,expect_refusal,reason",
+    OFF_INDEX_NAME_VECTORS,
+    ids=[v[2] for v in OFF_INDEX_NAME_VECTORS],
+)
+def test_both_implementations_of_off_index_lock_name_identity_agree_on_every_vector(
+    declared_name: str, expect_refusal: bool, reason: str
+) -> None:
+    db_refused = _refuses_db_off_index_lock_name(declared_name)
+    erp_lock_refused = _refuses_erp_lock_off_index_lock_name(declared_name)
+    assert db_refused == expect_refusal, f"dependency_bundle (lock name): {reason}"
+    assert erp_lock_refused == expect_refusal, f"erp_lock (lock name): {reason}"
+    assert db_refused == erp_lock_refused, (
+        f"the two implementations DISAGREED on lock name {declared_name!r} "
+        f"({reason}): dependency_bundle refused={db_refused}, "
+        f"erp_lock refused={erp_lock_refused}"
+    )
+
+
 def test_normalise_repository_url_does_not_erase_a_query_string() -> None:
     """Finding 4's second half: a query string or fragment used to be
     discarded during normalisation, so `repo.git` and `repo.git?x=1`
