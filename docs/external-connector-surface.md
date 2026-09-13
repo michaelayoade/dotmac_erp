@@ -25,12 +25,17 @@ changed the source files containing three test-only conserved symbols. Their
 fingerprints are re-declared below; no baseline or conserved finding was added
 or removed.
 
+Reviewed again on 2026-09-13 for PR #562. The ordered workforce provisioning
+relay makes `app/tasks/email.py` a connector task because it hands off to the
+Selfcare synchronization task only after Mailcow and Nextcloud succeed. The
+connector-task baseline and exact inventory increase by that one reviewed file.
+
 | Category | Baseline |
 | --- | ---: |
 | `outbound_transport` | 20 |
 | `webhook_surface` | 6 |
 | `provider_credential` | 6 |
-| `connector_task` | 11 |
+| `connector_task` | 12 |
 | `sync_checkpoint` | 17 |
 | `delivery_retry` | 4 |
 
@@ -62,11 +67,11 @@ or removed.
 `app/services/finance/settings_web.py`, `app/services/storage.py`, and
 `tests/conftest.py`.
 
-### `connector_task` — 11 files
+### `connector_task` — 12 files
 
 `app/api/dotmac_sub.py`, `app/services/finance/banking/mono_sync.py`,
 `app/services/people/hr/employees.py`, `app/tasks/dotmac_sub.py`,
-`app/tasks/exchange_rates.py`,
+`app/tasks/email.py`, `app/tasks/exchange_rates.py`,
 `app/tasks/expense.py`, `app/tasks/finance.py`, `app/tasks/hr.py`,
 `app/tasks/payments_sync.py`, `app/tasks/performance.py`, and
 `app/tasks/staff_sync.py`.
