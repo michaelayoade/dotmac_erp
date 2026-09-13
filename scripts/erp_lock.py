@@ -1097,6 +1097,16 @@ def wheel_only_problems(
 
 
 def lock_wheel_problems(lock: dict[str, Any]) -> list[str]:
+    """Refuse runtime index releases that cannot supply wheel metadata.
+
+    The lock also contains tooling-only packages and pinned off-index sources.
+    Neither is part of this runtime dependency repin: the whole-lock drift gate
+    holds those entries byte-for-byte stable, while the manifest guard checks
+    the one permitted Git dependency independently. Treating their empty or
+    sdist-only ``files`` lists as index offers would make the workflow refuse
+    its unchanged input without protecting the resolution being performed.
+    """
+
     return wheel_only_problems(
         (
             str(entry.get("name")),
@@ -1104,6 +1114,11 @@ def lock_wheel_problems(lock: dict[str, Any]) -> list[str]:
             [str(item.get("file")) for item in entry.get("files", [])],
         )
         for entry in lock.get("package", [])
+        if "main" in entry.get("groups", ["main"])
+        and (
+            not isinstance(entry.get("source"), dict)
+            or entry["source"].get("type") in {None, "legacy"}
+        )
     )
 
 
@@ -1463,23 +1478,25 @@ def build_evidence(
     }
     for name, payload in written.items():
         (out / name).write_bytes(payload)
-    if credential_proof.read_text(encoding="utf-8") != "credential scan clean\n":
+    marker = b"credential scan clean\n"
+    if credential_proof.read_text(encoding="utf-8") != marker.decode("ascii"):
         raise Refusal("credential proof is not the exact clean attestation")
-    (out / "credential-scan.ok").write_text("credential scan clean\n", encoding="utf-8")
+    (out / "credential-scan.ok").write_bytes(marker)
 
     digests = {name: sha256_hex(payload) for name, payload in written.items()}
     with (out / "poetry.lock").open("rb") as handle:
         content_hash = str(tomllib.load(handle)["metadata"]["content-hash"])
-    (out / "coordinates.txt").write_text(
-        coordinates_text(coordinates, digests, content_hash, pair_binding(digests)),
-        encoding="utf-8",
+    (out / "coordinates.txt").write_bytes(
+        coordinates_text(
+            coordinates, digests, content_hash, pair_binding(digests)
+        ).encode("utf-8")
     )
     everything = {
         path.name: sha256_hex(path.read_bytes())
         for path in out.iterdir()
         if path.is_file()
     }
-    (out / "SHA256SUMS").write_text(sha256sums(everything), encoding="utf-8")
+    (out / "SHA256SUMS").write_bytes(sha256sums(everything).encode("utf-8"))
     return []
 
 
@@ -1490,9 +1507,7 @@ def write_credential_attestation(
     if credential_sightings(paths, credential):
         raise Refusal("the credential reached the candidate or acquired bundle")
     out.mkdir(parents=True, exist_ok=True)
-    out.joinpath("credential-scan.ok").write_text(
-        "credential scan clean\n", encoding="utf-8"
-    )
+    out.joinpath("credential-scan.ok").write_bytes(b"credential scan clean\n")
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

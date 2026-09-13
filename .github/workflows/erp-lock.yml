@@ -312,7 +312,8 @@ jobs:
       # value, not a hash-verified bootstrap; ERP has no `.github/bootstrap/`
       # equivalent to Platform's today. Resolved from the workspace root,
       # which is the TRUSTED checkout — see the header.
-      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
+      - name: Install the repository-pinned Poetry
+        uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263 # v1.4.2
         with:
           version: ${{ env.POETRY_VERSION }}
           virtualenvs-create: true
@@ -386,7 +387,7 @@ jobs:
             --manifest work/pyproject.toml \
             --mirror-url "http://127.0.0.1:${MIRROR_PORT}/simple"
 
-      - name: Nothing in this resolution would have to be built
+      - name: No runtime index dependency in this resolution would have to be built
         run: |
           set -euo pipefail
           # THE GATE, and its position is the point — run BEFORE `poetry
@@ -449,7 +450,7 @@ jobs:
           python scripts/erp_lock.py wheel-dependencies \
             --lock work/poetry.lock --requires-dir /tmp/bundle/requires
 
-      - name: And nothing in the resolved lock would have to be built either
+      - name: And no runtime index dependency in the resolved lock would have to be built
         run: |
           set -euo pipefail
           python scripts/erp_lock.py wheel-only --lock work/poetry.lock

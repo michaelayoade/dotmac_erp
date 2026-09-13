@@ -632,8 +632,10 @@ def test_an_artifact_is_matched_to_its_exact_version(
 def test_the_lock_must_name_the_bytes_that_were_downloaded() -> None:
     version = TARGETS[FILES]
     names = sorted(artifact_names(FILES, version))
-    digests = {names[0]: "aa", names[1]: "bb"}
+    digests = {names[0]: "a" * 64, names[1]: "b" * 64}
     lock = _lock([_package(FILES, version, source=_INDEX_SOURCE)], "hash")
+    for item in lock["package"][0]["files"]:
+        item["hash"] = f"sha256:{digests[item['file']]}"
     assert hash_problems(lock, digests, {FILES: version}) == []
 
     swapped = json.loads(json.dumps(lock))
@@ -685,7 +687,57 @@ def test_a_fully_wheel_available_resolution_is_admitted() -> None:
     assert lock_wheel_problems(lock) == []
 
 
-def test_this_repositorys_own_lock_is_already_wheel_only() -> None:
+def test_a_tooling_only_sdist_is_outside_the_runtime_resolution() -> None:
+    lock = {
+        "package": [
+            {
+                "name": "compiler",
+                "version": "1.0",
+                "groups": ["dev"],
+                "files": [{"file": "compiler-1.0.tar.gz"}],
+            }
+        ]
+    }
+    assert lock_wheel_problems(lock) == []
+
+
+def test_an_off_index_pin_is_not_misclassified_as_an_empty_index_release() -> None:
+    lock = {
+        "package": [
+            {
+                "name": "client",
+                "version": "1.0",
+                "groups": ["main"],
+                "files": [],
+                "source": {
+                    "type": "git",
+                    "url": "https://example.test/client.git",
+                    "reference": "v1.0",
+                    "resolved_reference": "a" * 40,
+                },
+            }
+        ]
+    }
+    assert lock_wheel_problems(lock) == []
+
+
+def test_a_main_index_sdist_is_still_refused() -> None:
+    lock = {
+        "package": [
+            {
+                "name": "runtime-package",
+                "version": "1.0",
+                "groups": ["main", "dev"],
+                "files": [{"file": "runtime_package-1.0.tar.gz"}],
+            }
+        ]
+    }
+    problems = lock_wheel_problems(lock)
+    assert len(problems) == 1
+    assert problems[0].startswith("runtime-package 1.0 ")
+
+
+def test_this_repositorys_runtime_index_lock_is_already_wheel_only() -> None:
     with (ROOT / "poetry.lock").open("rb") as handle:
         lock = tomllib.load(handle)
     assert len(lock["package"]) > 20
