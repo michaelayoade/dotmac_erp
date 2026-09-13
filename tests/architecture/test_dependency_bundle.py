@@ -1479,6 +1479,98 @@ def test_both_implementations_of_off_index_url_identity_agree_on_every_vector(
     )
 
 
+# ── the LOCK-level off-index URL pair: erp_lock.off_index_lock_problems vs
+#    dependency_bundle._verify_off_index_lock_entry ─────────────────────────
+#
+# This is the pair the original convergence did NOT touch: the review found
+# it independently, at a body-similarity ratio of 0.185 (both accept the
+# same lock-URL spellings via the shared normaliser now, but erp_lock
+# accumulates a problem list against its own global ALLOWED_OFF_INDEX_
+# DEPENDENCIES while dependency_bundle raises against a caller-supplied
+# ApprovedOffIndexDependency). Reuses OFF_INDEX_URL_VECTORS -- it is the
+# same question, "does this declared repository URL identify the pinned
+# one", asked one layer down at the LOCK instead of the manifest.
+
+
+def _lock_with_off_index_url(declared_url: str) -> dict:
+    return {
+        "package": [
+            {
+                "name": _OFF_INDEX_PIN_NAME,
+                "source": {
+                    "type": "git",
+                    "url": declared_url,
+                    "reference": _OFF_INDEX_PIN_TAG,
+                    "resolved_reference": _OFF_INDEX_PIN_COMMIT,
+                },
+            }
+        ]
+    }
+
+
+def _refuses_erp_lock_off_index_lock(declared_url: str) -> bool:
+    return bool(
+        erp_lock.off_index_lock_problems(_lock_with_off_index_url(declared_url))
+    )
+
+
+def _refuses_db_off_index_lock(declared_url: str) -> bool:
+    dep = db.ApprovedOffIndexDependency(
+        name=_OFF_INDEX_PIN_NAME,
+        normalised_name=db.normalise_name(_OFF_INDEX_PIN_NAME),
+        group="main",
+        url=_OFF_INDEX_PIN_URL,
+        tag=_OFF_INDEX_PIN_TAG,
+        resolved_commit=_OFF_INDEX_PIN_COMMIT,
+        group_optional=False,
+    )
+    try:
+        db._verify_off_index_lock_entry(dep, _lock_with_off_index_url(declared_url))
+    except db.DependencyBundleError:
+        return True
+    return False
+
+
+@pytest.mark.parametrize(
+    "declared_url,expect_refusal,reason",
+    OFF_INDEX_URL_VECTORS,
+    ids=[v[2] for v in OFF_INDEX_URL_VECTORS],
+)
+def test_both_implementations_of_off_index_lock_url_identity_agree_on_every_vector(
+    declared_url: str, expect_refusal: bool, reason: str
+) -> None:
+    db_refused = _refuses_db_off_index_lock(declared_url)
+    erp_lock_refused = _refuses_erp_lock_off_index_lock(declared_url)
+    assert db_refused == expect_refusal, f"dependency_bundle (lock): {reason}"
+    assert erp_lock_refused == expect_refusal, f"erp_lock (lock): {reason}"
+    assert db_refused == erp_lock_refused, (
+        f"the two implementations DISAGREED on lock url {declared_url!r} "
+        f"({reason}): dependency_bundle refused={db_refused}, "
+        f"erp_lock refused={erp_lock_refused}"
+    )
+
+
+def test_normalise_repository_url_does_not_erase_a_query_string() -> None:
+    """Finding 4's second half: a query string or fragment used to be
+    discarded during normalisation, so `repo.git` and `repo.git?x=1`
+    compared equal even though the query string is part of what actually
+    reaches the resolver. It must now make the two compare UNEQUAL."""
+
+    plain = dependency_normalisation.normalise_repository_url(_OFF_INDEX_PIN_URL)
+    with_query = dependency_normalisation.normalise_repository_url(
+        _OFF_INDEX_PIN_URL + "?different-input"
+    )
+    assert plain != with_query
+
+
+def test_a_query_string_on_the_off_index_pin_is_refused_by_both() -> None:
+    tampered = _OFF_INDEX_PIN_URL + "?different-input"
+    assert _refuses_db_off_index(tampered) is True
+    assert _refuses_erp_lock_off_index(tampered) is True
+    assert _refuses_db_off_index_lock(tampered) is True
+    assert _refuses_erp_lock_off_index_lock(tampered) is True
+
+
 def test_dependency_bundle_imports_the_shared_repository_url_normaliser() -> None:
     assert (
         db.normalise_repository_url is dependency_normalisation.normalise_repository_url
