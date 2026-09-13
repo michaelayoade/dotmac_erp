@@ -1488,7 +1488,8 @@ def write_credential_attestation(
 ) -> None:
     """Scan while the credential is held; persist only a fixed clean fact."""
     if credential_sightings(paths, credential):
-        raise Refusal("the credential reached the acquired bundle")
+        raise Refusal("the credential reached the candidate or acquired bundle")
+    out.mkdir(parents=True, exist_ok=True)
     out.joinpath("credential-scan.ok").write_text(
         "credential scan clean\n", encoding="utf-8"
     )

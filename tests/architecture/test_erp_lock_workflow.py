@@ -76,6 +76,7 @@ from erp_lock import (  # noqa: E402
     set_content_hash,
     sha256_hex,
     sha256sums,
+    write_credential_attestation,
     transfer_problems,
     unconditional_requirement_names,
     wheel_dependency_problems,
@@ -809,6 +810,37 @@ def test_each_covered_encoding_is_found(tmp_path: Path, render: Any) -> None:
     assert credential_sightings([subject], CREDENTIAL)
 
 
+@pytest.mark.parametrize("root_name", ["candidate", "bundle"])
+def test_credential_in_either_attestation_root_is_refused(
+    tmp_path: Path, root_name: str
+) -> None:
+    candidate = tmp_path / "candidate"
+    bundle = tmp_path / "bundle"
+    candidate.mkdir()
+    bundle.mkdir()
+    (candidate if root_name == "candidate" else bundle).joinpath("payload").write_text(
+        CREDENTIAL
+    )
+    with pytest.raises(Refusal, match="candidate or acquired bundle"):
+        write_credential_attestation(
+            tmp_path / "out",
+            [
+                path
+                for path in (candidate / "payload", bundle / "payload")
+                if path.exists()
+            ],
+            CREDENTIAL,
+        )
+
+
+def test_clean_credential_attestation_writes_fixed_marker(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    payload = tmp_path / "payload"
+    payload.write_text("safe")
+    write_credential_attestation(out, [payload], CREDENTIAL)
+    assert (out / "credential-scan.ok").read_bytes() == b"credential scan clean\n"
+
+
 def test_a_near_miss_is_not_reported(tmp_path: Path) -> None:
     subject = tmp_path / "pyproject.toml"
     subject.write_text(f"{CREDENTIAL[:-1]}\n{CREDENTIAL[1:]}\nghp_unrelated\n")
@@ -855,8 +887,10 @@ def test_the_manifest_travels_with_the_lock(tmp_path: Path) -> None:
         "pyproject.toml",
         "poetry.lock",
         "coordinates.txt",
+        "credential-scan.ok",
         "SHA256SUMS",
     }
+    assert (out / "credential-scan.ok").read_bytes() == b"credential scan clean\n"
 
 
 def test_the_pair_is_verifiable_from_the_artifact_alone(tmp_path: Path) -> None:
@@ -1192,6 +1226,23 @@ def test_protected_main_is_decided_by_the_script_before_credentials() -> None:
     )
     holders = [i for i, s in enumerate(steps) if "secrets.FORGEJO_READ_TOKEN" in s]
     assert holders and decision < min(holders)
+
+
+def test_only_acquire_references_the_forgejo_credential() -> None:
+    text = WORKFLOW.read_text()
+    sections = {
+        name: re.search(
+            rf"\n  {name}:\n(.*?)(?=\n  (?:acquire|resolve|attest):|\Z)",
+            text,
+            re.S,
+        ).group(1)
+        for name in ("acquire", "resolve", "attest")
+    }
+    assert "secrets.FORGEJO_READ_TOKEN" in sections["acquire"]
+    assert all(
+        "secrets.FORGEJO_READ_TOKEN" not in sections[name]
+        for name in ("resolve", "attest")
+    )
 
 
 def test_the_ref_under_resolution_is_only_ever_read_from_work() -> None:
