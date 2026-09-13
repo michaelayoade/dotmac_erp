@@ -102,9 +102,16 @@ def test_alembic_resolves_the_reviewed_numbering_revision() -> None:
 
 
 def test_erp_selects_exactly_the_numbering_tenant_plane() -> None:
+    """Numbering's OWN selection is tenant-only.
+
+    This no longer asserts that numbering is the only module with a
+    selection in `ASSEMBLY_MODULE_PLANES` — `files` has since gained its own
+    (see `app/migration_planes.py`) — only that numbering's own entry is
+    exactly the tenant plane.
+    """
     from dotmac_numbering.manifest import module
 
-    assert ASSEMBLY_MODULE_PLANES == (EXPECTED_SELECTION,)
+    assert EXPECTED_SELECTION in ASSEMBLY_MODULE_PLANES
     assert validate_module_plane_selections((module,), ASSEMBLY_MODULE_PLANES) == (
         EXPECTED_SELECTION,
     )
