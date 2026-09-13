@@ -364,6 +364,14 @@ class MockSettings:
     dotmac_sub_webhook_secret = None
     dotmac_sub_webhook_org_resolution = "shadow"
     dotmac_sub_api_url = ""
+    # Dedicated employee Nextcloud provisioning remains disabled in tests.
+    nextcloud_provisioning_enabled = False
+    nextcloud_provisioning_server_url = ""
+    nextcloud_provisioning_username = ""
+    nextcloud_provisioning_app_password = None
+    nextcloud_provisioning_group = "erp-employees"
+    nextcloud_provisioning_quota = "1 GB"
+    nextcloud_provisioning_timeout = 20.0
 
 
 mock_config_module.settings = MockSettings()

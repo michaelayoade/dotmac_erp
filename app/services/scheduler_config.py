@@ -353,6 +353,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.staff_sync.run_staff_sync_reconcile",
             "schedule": crontab(hour=2, minute=30),
         },
+        "employee-account-provisioning-reconcile": {
+            "task": "app.tasks.hr.reconcile_employee_mailcow_provisioning",
+            "schedule": crontab(hour=2, minute=15),
+        },
         "dotmac-sub-daily-reconciliation": {
             "task": "app.tasks.dotmac_sub.run_dotmac_sub_daily_reconciliation",
             "schedule": crontab(hour=1, minute=0),  # 1 AM daily

@@ -114,7 +114,11 @@ def test_ensure_mailbox_is_idempotent() -> None:
     employee.status = EmployeeStatus.ACTIVE
     employee.personal_email = "ada.personal@example.com"
     employee.mailcow_activated_at = None
-    employee.mailcow_provisioning_requested_at = None
+    employee.mailcow_provisioning_requested_at = datetime.now(timezone.utc)
+    employee.mailcow_mailbox_provisioned_at = None
+    employee.mailcow_activation_expires_at = None
+    employee.mailcow_activation_sent_at = None
+    employee.organization_id = uuid4()
     employee.person.email = "ada@dotmac.ng"
     employee.person.name = "Ada Lovelace"
     db = Mock()
@@ -131,7 +135,27 @@ def test_ensure_mailbox_is_idempotent() -> None:
 
     assert result.already_exists
     assert not result.created
+    assert employee.mailcow_mailbox_provisioned_at is not None
     mailcow.create_mailbox.assert_not_called()
+
+
+def test_ensure_mailbox_does_not_backfill_without_forward_request() -> None:
+    employee = Mock()
+    employee.status = EmployeeStatus.ACTIVE
+    employee.mailcow_provisioning_requested_at = None
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(),
+        mailcow_client=mailcow,
+    )
+
+    result = service.ensure_mailbox(uuid4(), uuid4())
+
+    assert result.skipped == ["employee has no forward provisioning request"]
+    mailcow.get_mailbox.assert_not_called()
 
 
 def test_ensure_mailbox_creates_and_verifies() -> None:

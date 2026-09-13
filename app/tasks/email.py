@@ -163,13 +163,26 @@ def run_employee_mailcow_provisioning(
                 result.activation_token,
             )
             db.commit()
-        return {
+        task_result = {
             "employee_id": result.employee_id,
             "email": result.email,
             "created": result.created,
             "already_exists": result.already_exists,
             "skipped": result.skipped,
         }
+        employee = db.get(Employee, employee_uuid)
+        if employee and employee.mailcow_mailbox_provisioned_at is not None:
+            from app.config import settings
+
+            if settings.nextcloud_provisioning_enabled:
+                from app.tasks.hr import run_employee_nextcloud_provisioning
+
+                run_employee_nextcloud_provisioning.apply_async(
+                    args=[str(employee_uuid), str(org_uuid)],
+                    countdown=5,
+                )
+                task_result["nextcloud_queued"] = True
+        return task_result
 
 
 @shared_task(
