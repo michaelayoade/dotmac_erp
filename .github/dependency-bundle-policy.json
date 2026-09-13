@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "$comment": "Reviewed canonical policy for the verified dependency-bundle trust chain. See docs/architecture/dependency-bundle-trust.md for the full trust model. A consumer reads THIS file from the verified trusted-workflow commit (github.sha of the producer/binder workflow run, itself pinned to protected main) -- NEVER from a candidate PR checkout, which could edit this file to name itself as trusted.",
+  "repository": {
+    "full_name": "michaelayoade/dotmac_erp",
+    "id": 1141216651,
+    "id_status": "RESOLVED -- 1141216651 is the immutable numeric GitHub repository ID for michaelayoade/dotmac_erp, read from the GitHub API (`gh api repos/michaelayoade/dotmac_erp --jq .id`) on 2026-09-13. It is checked ALONGSIDE full_name, not instead of it: a full_name survives a rename or transfer while the numeric ID never does, so verifying both means a policy binding cannot be satisfied by a different repository that briefly held this name. scripts/dependency_bundle.py::load_policy() refuses this file if id is not a positive integer."
+  },
+  "forgejo_source": {
+    "name": "forgejo",
+    "url": "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+  },
+  "producer_workflow_path": ".github/workflows/dependency-bundle-produce.yml",
+  "binder_workflow_path": ".github/workflows/dependency-bundle-bind.yml",
+  "environment_name": "forgejo-registry-read-main",
+  "target": {
+    "python": ">=3.11,<3.13",
+    "platform": "linux_x86_64"
+  },
+  "artifact_name_pattern": "erp-dependency-bundle-{plan_digest}",
+  "artifact_retention_days": 14,
+  "permitted_off_index_dependencies": {
+    "dotmac-integration-client": {
+      "url": "https://github.com/michaelayoade/dotmac-integration-client.git",
+      "tag": "v0.2.0",
+      "commit": "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042",
+      "note": "The one pre-existing, legitimate off-index dependency ERP's manifest carries -- see scripts/erp_lock.py's ALLOWED_OFF_INDEX_DEPENDENCIES for the identical pin, reasoned about there. It is not resolved through the forgejo index and is exempt from the plan digest's off-index refusals by this exact name/url/tag/commit only."
+    }
+  }
+}

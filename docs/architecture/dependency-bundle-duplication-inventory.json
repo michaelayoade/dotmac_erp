@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "$comment": "The canonical, machine-readable list of every behaviour deliberately duplicated between scripts/dependency_bundle.py and scripts/erp_lock.py, and its two locations. tests/architecture/test_dependency_bundle.py enforces this file two-directionally: every entry's two symbols must resolve to a real callable in BOTH modules (a stale entry describing something already unified fails), and the set of entry ids here must be a SUBSET of a baseline hardcoded in that test -- this file may only SHRINK. A new duplicated behaviour appearing here without the test's baseline being deliberately widened in the same reviewed change fails the build.",
+  "retirement_condition": "The consumer-cutover slice adopts scripts/dependency_bundle.py as the sole implementation of every behaviour named below, deletes the corresponding duplicated code from scripts/erp_lock.py, and removes the entry from this file. When 'entries' is empty, the non-growing guard in tests/architecture/test_dependency_bundle.py stands permanently at zero and the private-index-facing security mechanics below have exactly one owner again.",
+  "entries": [
+    {
+      "id": "sha256-hex-digest",
+      "behaviour": "Compute the sha256 hex digest of a byte string, used to verify artifact and member content against a published or declared hash.",
+      "dependency_bundle_symbol": "scripts.dependency_bundle.sha256_hex",
+      "erp_lock_symbol": "scripts.erp_lock.sha256_hex"
+    },
+    {
+      "id": "approved-artifact-url",
+      "behaviour": "Resolve an index-supplied href against one approved https origin and path prefix, refusing embedded userinfo, a wrong host, a '..' traversal segment revealed literally or after one or two rounds of percent-decoding, and a literal or decoded backslash.",
+      "dependency_bundle_symbol": "scripts.dependency_bundle.approved_artifact_url",
+      "erp_lock_symbol": "scripts.erp_lock.approved_artifact_url"
+    },
+    {
+      "id": "credential-string-scan",
+      "behaviour": "Scan a set of files for the literal, percent-encoded, and base64 (plain and HTTP basic-auth) encodings of a held credential, refusing outright -- never reporting a vacuous clean scan -- when the credential is empty.",
+      "dependency_bundle_symbol": "scripts.dependency_bundle.scan_for_credential",
+      "erp_lock_symbol": "scripts.erp_lock.credential_sightings"
+    }
+  ]
+}
