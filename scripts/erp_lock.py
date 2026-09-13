@@ -51,6 +51,9 @@ and every other off-index form is refused exactly as upstream refuses it.
 * `wheel-only` — no release in the resolution may lack a usable wheel, so no
   PEP 517 build backend can run — see `kernel_lock.wheel_only_problems`'s
   reasoning, reused verbatim; the predicate is identical.
+* `off-index-lock` — every pinned off-index dependency's LOCK entry (not just
+  the manifest's declared pin) agrees with `ALLOWED_OFF_INDEX_DEPENDENCIES` on
+  name, repository, tag, and resolved commit — see `off_index_lock_problems`.
 * `verify` — the lock's hashes for BOTH moved packages are the bytes the index
   published.
 * `drift` — the whole lock outside the two moved entries must be identical;
@@ -820,9 +823,12 @@ def index_links(page: str) -> list[str]:
 
 def approved_artifact_url(href: str, page_url: str) -> str:
     """Resolve an index-supplied href, or refuse it. See
-    `kernel_lock.approved_artifact_url` for the full reasoning; the predicate
-    is identical, only the approved origin/prefix constants differ per repo
-    (here, they do not — same private index)."""
+    `kernel_lock.approved_artifact_url` for the reasoning this was adapted
+    from; the predicate here is STRICTER, not identical: it additionally
+    refuses `..` segments that only appear after percent-decoding (once or
+    twice), because `urlsplit` never decodes and a literal-only check is
+    satisfied by an encoded or double-encoded traversal segment that the
+    server itself will decode."""
 
     if not href.strip():
         raise Refusal("the index page carries an empty href")
@@ -849,6 +855,22 @@ def approved_artifact_url(href: str, page_url: str) -> str:
         )
     if ".." in parts.path.split("/"):
         raise Refusal(f"index link {href!r} still traverses after resolution")
+    decoded_once = urllib.parse.unquote(parts.path)
+    if ".." in decoded_once.split("/"):
+        raise Refusal(
+            f"index link {href!r} decodes to a `..` segment ({decoded_once!r}); "
+            "urlsplit never percent-decodes, so a literal check alone is "
+            "satisfied by an encoded traversal segment that the server will "
+            "decode when curl sends it"
+        )
+    decoded_twice = urllib.parse.unquote(decoded_once)
+    if ".." in decoded_twice.split("/"):
+        raise Refusal(
+            f"index link {href!r} decodes to a `..` segment after DOUBLE "
+            f"decoding ({decoded_twice!r}); a proxy or server in front of the "
+            "index may decode once before the application decodes again, so "
+            "single-decoding is not a sufficient premise"
+        )
     if not parts.path.startswith(ARTIFACT_PATH_PREFIX):
         raise Refusal(
             f"index link {href!r} resolves to path {parts.path!r}, which is "
@@ -1600,6 +1622,9 @@ def _build_parser() -> argparse.ArgumentParser:
     wheel_only = subcommands.add_parser("wheel-only")
     wheel_only.add_argument("--lock", type=Path, required=True)
 
+    off_index_lock = subcommands.add_parser("off-index-lock")
+    off_index_lock.add_argument("--lock", type=Path, required=True)
+
     wheel_deps = subcommands.add_parser("wheel-dependencies")
     wheel_deps.add_argument("--lock", type=Path, required=True)
     wheel_deps.add_argument("--requires-dir", type=Path, required=True)
@@ -1721,6 +1746,11 @@ def _run(args: argparse.Namespace) -> int:
         return _report(
             "the resolution is wheel-only",
             lock_wheel_problems(_load_toml(args.lock)),
+        )
+    if args.command == "off-index-lock":
+        return _report(
+            "the lock's off-index dependencies",
+            off_index_lock_problems(_load_toml(args.lock)),
         )
     if args.command == "wheel-dependencies":
         lock = _load_toml(args.lock)

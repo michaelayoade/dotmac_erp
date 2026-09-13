@@ -576,6 +576,41 @@ def test_an_index_controlled_link_that_is_not_approved_refuses(
         approved_artifact_url(href, _PAGE)
 
 
+@pytest.mark.parametrize(
+    "href",
+    [
+        # Each of these resolves to a raw path that still starts with
+        # ARTIFACT_PATH_PREFIX (so the existing prefix check alone would
+        # accept it) and carries no LITERAL `..` segment (so the existing
+        # literal check alone would accept it too) — only decoding the path
+        # reveals the traversal, which is exactly what the server does.
+        "%2e%2e/%2e%2e/dotmac_files-1.whl",
+        "%2E%2E/%2E%2E/dotmac_files-1.whl",
+        "%252e%252e/%252e%252e/dotmac_files-1.whl",
+        ".%2e/.%2e/dotmac_files-1.whl",
+    ],
+    ids=["lower-encoded", "upper-encoded", "double-encoded", "mixed-encoded"],
+)
+def test_an_encoded_traversal_segment_is_refused(href: str) -> None:
+    with pytest.raises(Refusal):
+        approved_artifact_url(href, _PAGE)
+
+
+@pytest.mark.parametrize(
+    "href",
+    [
+        "../../files/dotmac_files-1.0%2Bbuild.5.whl#sha256=ab",
+        "../../files/dotmac%7Efiles-1.whl#sha256=ab",
+    ],
+    ids=["encoded-plus-in-version", "encoded-tilde"],
+)
+def test_a_percent_encoded_href_that_is_not_traversal_is_still_accepted(
+    href: str,
+) -> None:
+    url = approved_artifact_url(href, _PAGE)
+    assert url.startswith(f"{ARTIFACT_ORIGIN}/api/packages/dotmac/pypi/files/")
+
+
 def test_a_redirect_is_refused_rather_than_followed() -> None:
     argv = curl_argv("https://registry.dotmac.io/x", Path("artifact.whl"))
     assert "-L" not in argv and "--location" not in argv
@@ -1230,6 +1265,48 @@ def test_demoting_the_gate_to_an_after_the_fact_report_is_named() -> None:
     ], problems
 
 
+def _off_index_lock_gate_problems(steps: list[str]) -> list[str]:
+    commands = [_commands(step) for step in steps]
+    gates = [i for i, c in enumerate(commands) if "erp_lock.py off-index-lock" in c]
+    resolutions = [
+        i for i, c in enumerate(commands) if re.search(r"^\s*poetry lock\b", c, re.M)
+    ]
+    problems: list[str] = []
+    if not gates:
+        problems.append("no step runs the off-index-lock gate at all")
+    if not resolutions:
+        problems.append("no step runs `poetry lock`")
+    if not gates or not resolutions:
+        return problems
+    if not any(g < min(resolutions) for g in gates):
+        problems.append(
+            "every off-index-lock check runs AFTER `poetry lock`, so an "
+            "already-wrong pin is never caught before resolution"
+        )
+    if not any(g > max(resolutions) for g in gates):
+        problems.append(
+            "nothing re-checks the resolved lock, so resolution could have "
+            "changed the off-index pin's identity unnoticed"
+        )
+    return problems
+
+
+def test_the_off_index_lock_gate_runs_before_and_after_poetry_lock() -> None:
+    assert _off_index_lock_gate_problems(_jobs()["resolve"]) == []
+
+
+def test_removing_the_off_index_lock_gate_entirely_is_named() -> None:
+    steps = [
+        s
+        for s in _jobs()["resolve"]
+        if "erp_lock.py off-index-lock" not in _commands(s)
+    ]
+    assert len(steps) == len(_jobs()["resolve"]) - 2, "the plant removed nothing"
+    assert _off_index_lock_gate_problems(steps) == [
+        "no step runs the off-index-lock gate at all"
+    ]
+
+
 def test_every_checkout_refuses_to_persist_the_token() -> None:
     checkouts = [s for s in _steps() if "actions/checkout@" in s]
     assert len(checkouts) == 5, len(checkouts)
@@ -1553,3 +1630,145 @@ def test_the_real_erp_manifest_and_lock_satisfy_the_premise() -> None:
     declared = manifest["tool"]["poetry"]["dependencies"][_CLIENT]
     assert erp_lock.off_index_pin_problems("t.d." + _CLIENT, declared, _PIN) == []
     assert erp_lock.off_index_lock_problems(lock) == []
+
+
+# ── every `*_problems` validator this module defines is reachable from the
+#    command line — a validator with a `def` and zero call sites is an
+#    unmonitored region, not a control (this is what `off_index_lock_problems`
+#    actually was, before the CLI subcommand above wired it) ────────────────
+
+#: A validator named here is DELIBERATELY defined but not reachable from any
+#: CLI subcommand. Empty after this repair: every `*_problems` function
+#: `erp_lock.py` defines is reachable from `_run`'s dispatch, directly or
+#: through another function it calls. A name may only be added here with a
+#: comment stating why it is correct for that validator to be unwired --
+#: "not yet wired" is not such a reason.
+UNWIRED_PROBLEMS_EXEMPTIONS: dict[str, str] = {}
+
+
+def _problems_function_names(source: str) -> set[str]:
+    """Every function this source defines whose name ends `_problems`."""
+
+    tree = ast.parse(source, filename="erp_lock.py")
+    return {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name.endswith("_problems")
+    }
+
+
+def _call_graph(source: str) -> dict[str, set[str]]:
+    """name -> the set of names it calls, by static AST inspection.
+
+    `ast.Attribute` calls (`self.x()`, `module.x()`) are recorded by their
+    final attribute name, which is enough here: every candidate is a bare
+    module-level function, called either bare or as `erp_lock.foo(...)`.
+    """
+
+    tree = ast.parse(source, filename="erp_lock.py")
+    graph: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        called: set[str] = set()
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Call):
+                continue
+            func = sub.func
+            if isinstance(func, ast.Name):
+                called.add(func.id)
+            elif isinstance(func, ast.Attribute):
+                called.add(func.attr)
+        graph[node.name] = called
+    return graph
+
+
+def _reachable_from_cli(source: str) -> set[str]:
+    """Every function name reachable from `_run`'s dispatch body, transitively.
+
+    `_run` IS the CLI dispatch: `_build_parser`'s subcommands only ever reach
+    a validator through a branch of `_run`, so `_run`'s call graph closure is
+    exactly "reachable from a CLI subcommand" for this module.
+    """
+
+    graph = _call_graph(source)
+    seen: set[str] = set()
+    frontier = list(graph.get("_run", set()))
+    while frontier:
+        name = frontier.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        frontier.extend(graph.get(name, set()) - seen)
+    return seen
+
+
+def test_every_problems_function_is_reachable_from_a_cli_subcommand() -> None:
+    source = (ROOT / "scripts" / "erp_lock.py").read_text(encoding="utf-8")
+    reachable = _reachable_from_cli(source)
+    unreachable = _problems_function_names(source) - reachable
+    unexempted = sorted(unreachable - set(UNWIRED_PROBLEMS_EXEMPTIONS))
+    assert not unexempted, (
+        f"{unexempted} are defined but never called from `_run`'s CLI "
+        "dispatch, directly or transitively -- either wire a subcommand to "
+        "them or add a commented exemption stating why not"
+    )
+
+
+def test_the_unwired_problems_exemption_set_names_nothing_actually_reachable() -> None:
+    """A stale exemption is the same failure mode in a new place: a name that
+    reads as a considered decision but is not actually true of the code."""
+
+    source = (ROOT / "scripts" / "erp_lock.py").read_text(encoding="utf-8")
+    reachable = _reachable_from_cli(source)
+    stale = sorted(set(UNWIRED_PROBLEMS_EXEMPTIONS) & reachable)
+    assert not stale, f"{stale} are exempted as unwired but are in fact reachable"
+
+
+def test_the_unwired_problems_exemption_set_starts_empty() -> None:
+    assert UNWIRED_PROBLEMS_EXEMPTIONS == {}
+
+
+# ── sensitivity proof for the reachability guard itself, against a synthetic
+#    module — not the real file, so this proves the DETECTOR, independent of
+#    whatever erp_lock.py currently contains ──────────────────────────────
+
+_UNWIRED_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    if args.command == "beta":
+        return _report("beta", beta_problems(args))
+    return 1
+
+def beta_problems(x):
+    return []
+"""
+
+_ALL_WIRED_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    if args.command == "alpha":
+        return _report("alpha", alpha_problems(args))
+    if args.command == "beta":
+        return _report("beta", beta_problems(args))
+    return 1
+
+def beta_problems(x):
+    return []
+"""
+
+
+def test_the_detector_names_a_planted_unwired_validator() -> None:
+    reachable = _reachable_from_cli(_UNWIRED_SOURCE)
+    unreachable = _problems_function_names(_UNWIRED_SOURCE) - reachable
+    assert unreachable == {"alpha_problems"}, unreachable
+
+
+def test_the_detector_does_not_flag_a_validator_that_is_actually_wired() -> None:
+    reachable = _reachable_from_cli(_ALL_WIRED_SOURCE)
+    unreachable = _problems_function_names(_ALL_WIRED_SOURCE) - reachable
+    assert unreachable == set(), unreachable
