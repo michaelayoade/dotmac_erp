@@ -173,6 +173,10 @@ PLAN_SCHEMA_VERSION = 3
 #: The bundle manifest's own schema version (see `create_bundle_manifest`).
 MANIFEST_SCHEMA_VERSION = 2
 
+#: `.github/dependency-bundle-policy.json`'s own schema version — checked
+#: by `load_policy`, which previously accepted ANY value here.
+POLICY_SCHEMA_VERSION = 1
+
 #: The one named Poetry source this repository's manifest declares for its
 #: private packages. See `pyproject.toml`'s `[[tool.poetry.source]]`.
 FORGEJO_SOURCE_NAME = "forgejo"
@@ -1224,6 +1228,62 @@ def load_policy(path: Path) -> dict[str, Any]:
         raise PolicyError(
             "policy forgejo_source must name "
             f"{{'name': {FORGEJO_SOURCE_NAME!r}, 'url': {FORGEJO_LOCK_URL!r}}}"
+        )
+    schema_version = data.get("schema_version")
+    if (
+        not isinstance(schema_version, int)
+        or isinstance(schema_version, bool)
+        or schema_version != POLICY_SCHEMA_VERSION
+    ):
+        raise PolicyError(
+            f"policy schema_version must be exactly {POLICY_SCHEMA_VERSION}, "
+            f"got {schema_version!r}"
+        )
+    target = data.get("target")
+    if (
+        not isinstance(target, dict)
+        or not isinstance(target.get("python"), str)
+        or not target.get("python")
+        or target.get("platform") != TARGET_PLATFORM
+    ):
+        raise PolicyError(
+            "policy target must be a table with a non-empty 'python' string "
+            f"and 'platform' == {TARGET_PLATFORM!r}"
+        )
+    retention_days = data.get("artifact_retention_days")
+    if (
+        not isinstance(retention_days, int)
+        or isinstance(retention_days, bool)
+        or retention_days <= 0
+    ):
+        raise PolicyError(
+            "policy artifact_retention_days must be a positive integer, got "
+            f"{retention_days!r}"
+        )
+    for path_field in ("producer_workflow_path", "binder_workflow_path"):
+        path_value = data.get(path_field)
+        if (
+            not isinstance(path_value, str)
+            or not path_value.startswith(".github/workflows/")
+            or not (path_value.endswith(".yml") or path_value.endswith(".yaml"))
+        ):
+            raise PolicyError(
+                f"policy {path_field} must be a string under "
+                "'.github/workflows/' ending in '.yml' or '.yaml', got "
+                f"{path_value!r}"
+            )
+    if data["producer_workflow_path"] == data["binder_workflow_path"]:
+        raise PolicyError(
+            "policy producer_workflow_path and binder_workflow_path must "
+            "name two different workflow files"
+        )
+    artifact_name_pattern = data.get("artifact_name_pattern")
+    if not isinstance(artifact_name_pattern, str) or "{plan_digest}" not in (
+        artifact_name_pattern
+    ):
+        raise PolicyError(
+            "policy artifact_name_pattern must be a string containing the "
+            f"literal '{{plan_digest}}' placeholder, got {artifact_name_pattern!r}"
         )
     return data
 

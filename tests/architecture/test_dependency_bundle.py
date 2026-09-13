@@ -1150,6 +1150,21 @@ def test_a_negative_coordinate_is_refused(field: str, tmp_path: Path) -> None:
         db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["run_id", "run_attempt", "artifact_id", "repository_id", "artifact_run_id"],
+)
+def test_a_float_coordinate_is_refused(field: str, tmp_path: Path) -> None:
+    """Previously PASSED: `int(1.9) == 1` truncates a float silently
+    instead of refusing it."""
+
+    candidate_root = _candidate_root(tmp_path)
+    metadata = _valid_run_metadata(_candidate_digest(candidate_root))
+    metadata[field] = 111.9
+    with pytest.raises(db.BundleVerificationError, match="positive integer"):
+        db.verify_run_metadata(metadata, _valid_policy(), candidate_root=candidate_root)
+
+
 def test_the_binder_workflow_path_is_refused_a_producer_is_required(
     tmp_path: Path,
 ) -> None:
@@ -1291,6 +1306,83 @@ def test_a_non_positive_or_wrongly_typed_repository_id_is_still_refused(bad_id) 
         candidate.write_text(json.dumps(raw), encoding="utf-8")
         with pytest.raises(db.PolicyError, match="positive integer"):
             db.load_policy(candidate)
+
+
+# ── policy: schema/target/retention/workflow-path/pattern validation ─────
+# (finding 5) -- previously ANY schema_version, target shape, retention
+# value, workflow-path type, or artifact_name_pattern was accepted.
+
+
+def _load_policy_with(mutate) -> None:
+    raw = json.loads(REAL_POLICY_PATH.read_text(encoding="utf-8"))
+    mutate(raw)
+    with tempfile.TemporaryDirectory() as d:
+        candidate = Path(d) / "policy.json"
+        candidate.write_text(json.dumps(raw), encoding="utf-8")
+        db.load_policy(candidate)
+
+
+def test_the_shipped_policy_still_passes_every_new_validation() -> None:
+    db.load_policy(REAL_POLICY_PATH)
+
+
+@pytest.mark.parametrize("bad_schema_version", [0, 2, "1", 1.0, None])
+def test_a_wrong_schema_version_is_refused(bad_schema_version) -> None:
+    with pytest.raises(db.PolicyError, match="schema_version"):
+        _load_policy_with(
+            lambda raw: raw.__setitem__("schema_version", bad_schema_version)
+        )
+
+
+def test_a_target_missing_python_is_refused() -> None:
+    with pytest.raises(db.PolicyError, match="target"):
+        _load_policy_with(lambda raw: raw["target"].pop("python"))
+
+
+def test_a_target_with_the_wrong_platform_is_refused() -> None:
+    with pytest.raises(db.PolicyError, match="target"):
+        _load_policy_with(
+            lambda raw: raw["target"].__setitem__("platform", "win_amd64")
+        )
+
+
+@pytest.mark.parametrize("bad_retention", [0, -1, 14.5, "14", None])
+def test_a_non_positive_or_wrongly_typed_retention_is_refused(bad_retention) -> None:
+    with pytest.raises(db.PolicyError, match="artifact_retention_days"):
+        _load_policy_with(
+            lambda raw: raw.__setitem__("artifact_retention_days", bad_retention)
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_path", ["not-under-workflows.yml", ".github/workflows/no-extension", 123, None]
+)
+def test_a_malformed_workflow_path_is_refused(bad_path) -> None:
+    with pytest.raises(db.PolicyError, match="producer_workflow_path"):
+        _load_policy_with(
+            lambda raw: raw.__setitem__("producer_workflow_path", bad_path)
+        )
+
+
+def test_identical_producer_and_binder_paths_are_refused() -> None:
+    with pytest.raises(db.PolicyError, match="two different workflow files"):
+        _load_policy_with(
+            lambda raw: raw.__setitem__(
+                "binder_workflow_path", raw["producer_workflow_path"]
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_pattern", ["erp-dependency-bundle-no-placeholder", "", 123, None]
+)
+def test_an_artifact_name_pattern_without_the_placeholder_is_refused(
+    bad_pattern,
+) -> None:
+    with pytest.raises(db.PolicyError, match="artifact_name_pattern"):
+        _load_policy_with(
+            lambda raw: raw.__setitem__("artifact_name_pattern", bad_pattern)
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
