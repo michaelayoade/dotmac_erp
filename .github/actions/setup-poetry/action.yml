@@ -102,14 +102,38 @@ runs:
         echo "::error::poetry bootstrap failed after 3 attempts — if pip reported HASH MISMATCH this is NOT a network fault; regenerate ${req} with .github/bootstrap/regenerate.sh"
         exit 1
 
-    - name: Assert Poetry resolves to the verified venv
+    - name: Assert Poetry is on PATH and importable by this job's python
       shell: bash
       run: |
         set -euo pipefail
-        want="${RUNNER_TEMP}/poetry-bootstrap/bin/poetry"
-        got="$(command -v poetry)"
-        if [ "$got" != "$want" ]; then
-          echo "::error::poetry on PATH is ${got}, not the hash-verified ${want} — a pre-existing install is shadowing the bootstrap"
+        venv="${RUNNER_TEMP}/poetry-bootstrap"
+
+        want_poetry="${venv}/bin/poetry"
+        got_poetry="$(command -v poetry)"
+        if [ "$got_poetry" != "$want_poetry" ]; then
+          echo "::error::poetry on PATH is ${got_poetry}, not the hash-verified ${want_poetry} — a pre-existing install is shadowing the bootstrap"
           exit 1
         fi
-        echo "poetry resolves to the verified venv: ${got}"
+        echo "poetry resolves to the verified venv: ${got_poetry}"
+
+        # An executable on PATH is not the property this action exists to
+        # guarantee — a caller that needs the poetry MODULE (see below) runs
+        # plain `python`, not `poetry`, so `python` itself must resolve inside
+        # this same venv or it will import nothing.
+        want_python="${venv}/bin/python"
+        got_python="$(command -v python)"
+        if [ "$got_python" != "$want_python" ]; then
+          echo "::error::python on PATH is ${got_python}, not the hash-verified ${want_python} — a caller running plain 'python' would not get a Poetry-capable interpreter, which is the exact failure mode this action exists to prevent (an executable-only Poetry install left 'poetry' on PATH but 'python' unable to import it: run 34754807594 failed with 'No module named poetry' because the lock scripts ask Poetry's own Locker for the content hash, which needs the module, not just the binary)"
+          exit 1
+        fi
+        echo "python resolves to the verified venv: ${got_python}"
+
+        # The exact submodule the lock scripts import, not just top-level
+        # `poetry` — a top-level import can succeed while a submodule is
+        # unavailable (e.g. a partial/corrupt install), which is the same
+        # class of gap as the executable-only install this action replaces.
+        if ! "$got_python" -c "import poetry.packages.locker"; then
+          echo "::error::python -c 'import poetry.packages.locker' failed — the lock scripts (scripts/erp_lock.py) ask Poetry's own Locker for the content hash instead of reimplementing it, so this exact submodule must be importable from this job's python, not merely present as a 'poetry' executable on PATH"
+          exit 1
+        fi
+        echo "poetry.packages.locker is importable from ${got_python}"
