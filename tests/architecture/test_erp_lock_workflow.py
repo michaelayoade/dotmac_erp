@@ -1734,6 +1734,32 @@ def _problems_function_names(source: str) -> set[str]:
     }
 
 
+def _own_calls(node: ast.AST) -> set[str]:
+    """Bare-name calls made directly in `node`'s own body -- NOT descending
+    into a nested function definition's body.
+
+    A call inside a nested `def` is only made if and when that nested
+    function is itself called; crediting it unconditionally to the
+    ENCLOSING function would manufacture a reachability edge that does not
+    exist statically (the enclosing function might never call the nested
+    one, or might pass it around instead of calling it). `ast.walk` over
+    the whole subtree does not distinguish these cases, so this walks by
+    hand and stops at every nested function boundary; `ast.walk(tree)` at
+    the top level still visits that nested `def` as its own node, so its
+    OWN calls are still counted -- just only credited to ITS name, not to
+    every function that happens to contain it.
+    """
+
+    found: set[str] = set()
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, _FUNCTION_DEF_TYPES):
+            continue
+        if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
+            found.add(child.func.id)
+        found |= _own_calls(child)
+    return found
+
+
 def _call_graph(source: str) -> dict[str, set[str]]:
     """name -> the set of names it calls, by static AST inspection.
 
@@ -1746,6 +1772,13 @@ def _call_graph(source: str) -> dict[str, set[str]]:
     is in fact called as a bare name, so this loses no real edge; it can
     only make the detector MORE willing to call something unreachable,
     which is the safe direction to be wrong in.
+
+    Two functions sharing one name is refused rather than silently
+    resolved by "last one wins": the call graph cannot decide which
+    definition a caller actually reaches, so reachability-by-name is not a
+    decidable question for it, and pretending it is by overwriting the
+    earlier entry could hide a real gap behind whichever definition
+    happened to be walked last.
     """
 
     tree = ast.parse(source, filename="erp_lock.py")
@@ -1753,11 +1786,13 @@ def _call_graph(source: str) -> dict[str, set[str]]:
     for node in ast.walk(tree):
         if not isinstance(node, _FUNCTION_DEF_TYPES):
             continue
-        called: set[str] = set()
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name):
-                called.add(sub.func.id)
-        graph[node.name] = called
+        if node.name in graph:
+            raise AssertionError(
+                f"two function definitions named {node.name!r} in one "
+                "module -- the call graph cannot decide which one a caller "
+                "reaches, so reachability-by-name is not decidable for it"
+            )
+        graph[node.name] = _own_calls(node)
     return graph
 
 
@@ -1885,9 +1920,19 @@ def test_an_async_def_validator_is_seen_and_reported_unreachable() -> None:
 def _rebound_problems_names(source: str) -> set[str]:
     """Every actual `*_problems` VALIDATOR name (one this source defines with
     `def`/`async def`) that is also assigned, bound as a loop/with/
-    comprehension target, taken as a parameter, or imported under an alias
+    comprehension target, taken as a parameter, caught by an `except ... as`
+    clause, declared `global`/`nonlocal`, or imported under an alias
     anywhere else in the module — its own `def` is a binding, not a
     rebinding, and is excluded.
+
+    `except X as name:` and `global`/`nonlocal name` are, deliberately on
+    Python's part, NOT `ast.Name` nodes — `ast.ExceptHandler.name` and
+    `ast.Global`/`ast.Nonlocal.names` hold plain strings, so a check that
+    only matches `ast.Name`+`Store` never sees either one, and
+    `except SomeError as off_index_lock_problems:` would rebind a real
+    validator name invisibly to this guard. Both are matched explicitly
+    here rather than by walking for `ast.Name` nodes, because there are
+    none to walk to.
 
     Scoped to names `_problems_function_names` actually returns, not to
     every identifier that happens to end in `_problems`: a local result
@@ -1913,6 +1958,16 @@ def _rebound_problems_names(source: str) -> set[str]:
                 bound = alias.asname or alias.name
                 if bound in validator_names:
                     rebound.add(bound)
+        elif (
+            isinstance(node, ast.ExceptHandler)
+            and node.name is not None
+            and node.name in validator_names
+        ):
+            rebound.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            for name in node.names:
+                if name in validator_names:
+                    rebound.add(name)
     return rebound
 
 
@@ -1945,3 +2000,83 @@ def test_the_rebinding_detector_names_a_planted_shadow() -> None:
 
 def test_the_rebinding_detector_does_not_flag_a_clean_module() -> None:
     assert _rebound_problems_names(_CLEAN_SOURCE) == set()
+
+
+_EXCEPT_REBOUND_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    try:
+        return alpha_problems(args)
+    except ValueError as alpha_problems:
+        return alpha_problems
+"""
+
+_EXCEPT_CLEAN_SOURCE = """
+def alpha_problems(x):
+    return []
+
+def _run(args):
+    try:
+        return alpha_problems(args)
+    except ValueError as exc:
+        return exc
+"""
+
+
+def test_the_rebinding_detector_names_a_planted_except_as_shadow() -> None:
+    """`except X as name:` binds through a plain string on
+    `ast.ExceptHandler.name`, not an `ast.Name` node — this is what a
+    `Name`+`Store`-only check cannot see."""
+
+    assert _rebound_problems_names(_EXCEPT_REBOUND_SOURCE) == {"alpha_problems"}
+
+
+def test_the_rebinding_detector_does_not_flag_an_unrelated_except_name() -> None:
+    """POSITIVE CONTROL: an `except ... as` clause that binds a name which is
+    not a validator must not be flagged."""
+
+    assert _rebound_problems_names(_EXCEPT_CLEAN_SOURCE) == set()
+
+
+# ── a nested `def`'s calls belong to ITS name, not to every function that
+#    happens to contain it ──────────────────────────────────────────────────
+
+_NESTED_DEF_UNCALLED_SOURCE = """
+def beta_problems(x):
+    return []
+
+def _run(args):
+    def _helper():
+        return beta_problems(args)
+    return 1
+"""
+
+_NESTED_DEF_ACTUALLY_CALLED_SOURCE = """
+def beta_problems(x):
+    return []
+
+def _run(args):
+    def _helper():
+        return beta_problems(args)
+    return _helper()
+"""
+
+
+def test_a_call_inside_an_uncalled_nested_def_is_not_credited_to_the_outer_function() -> (
+    None
+):
+    """The nested `def _helper` is never itself called, so `beta_problems`
+    -- called only from inside it -- must not be reachable through `_run`."""
+
+    reachable = _reachable_from_cli(_NESTED_DEF_UNCALLED_SOURCE)
+    assert "beta_problems" not in reachable
+
+
+def test_a_call_inside_an_actually_called_nested_def_is_still_reachable() -> None:
+    """POSITIVE CONTROL: when `_run` actually calls the nested `_helper`,
+    `beta_problems` -- reachable through `_helper` -- must still be seen."""
+
+    reachable = _reachable_from_cli(_NESTED_DEF_ACTUALLY_CALLED_SOURCE)
+    assert "beta_problems" in reachable
