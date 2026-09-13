@@ -566,6 +566,71 @@ moves `erp_lock.py` onto the shared functions here, deletes its own copies,
 and removes the corresponding entries from the inventory. When the
 inventory is empty, the non-growing guard stands permanently at zero.
 
+## Named divergences from `erp_lock.py` — deliberate, not converged
+
+A body-similarity detector (see above) only catches TEXTUAL duplication.
+An independent review found three pairs of SEMANTICALLY related checks
+between `dependency_bundle.py` and `erp_lock.py` that the detector could
+not see at all — each far below its similarity threshold — plus a
+duplicated pair of CONSTANTS the detector cannot see in any form. For each
+pair, the question was: converge on one owner, or document and prove the
+two are genuinely answering different questions. All four are covered by
+tests; none required an `erp_lock.py` change beyond what "Named
+duplication debt" above already lists.
+
+- **The exact-version regex.** `erp_lock._EXACT_VERSION` allows exactly
+  ONE non-stackable pre/post/dev suffix, because it exists only to
+  validate the two specific, already-known `ALLOWED_MOVEMENTS` version
+  strings in a closed, reviewed workflow.
+  `dependency_bundle._EXACT_VERSION` must recognise the full space of
+  exact PEP 440 versions for ANY future forgejo-sourced pin, including a
+  real, stackable spelling (e.g. `1.0a1.post1`) `erp_lock`'s narrower
+  regex refuses. NOT converged: `dependency_bundle`'s shape is the correct
+  one for its broader job. Proven in
+  `test_the_version_regex_divergence_is_named_not_a_bug`.
+- **The additional-source policy.** `erp_lock.manifest_problems` refuses
+  ANY second `[[tool.poetry.source]]` entry, because it validates a
+  manifest for a LIVE, credentialed Poetry resolution, where an unrelated
+  extra index could still change what that resolution does.
+  `dependency_bundle` never runs Poetry and holds no credential; it only
+  needs to know whether a second source could be MISTAKEN for the private
+  one, so it refuses only a second source that also names the forgejo
+  host under a different name. NOT converged: genuinely different threat
+  models. Proven in
+  `test_an_unrelated_second_source_is_a_named_divergence_not_a_bug`. (The
+  one bug found in this same pair — a manifest source URL missing its
+  trailing slash used to be ACCEPTED here and already REFUSED by
+  `erp_lock` — was NOT a legitimate difference and was converged onto
+  `erp_lock`'s stricter, exact-match behaviour; see "The plan digest"
+  above.)
+- **Lock-package source validation.** `erp_lock.acquisition_plan`'s
+  lock-side loop includes a package in its plan by checking ONLY
+  `source.reference == "forgejo"` — it never checks `source.type` or
+  `source.url`. `dependency_bundle._lock_packages` requires all three
+  fields to agree, refusing a lock entry whose `reference` matches but
+  whose `type`/`url` do not. The STRICTER behaviour is the objectively
+  correct one — keying on one field alone is exactly the spoofable
+  shortcut this module exists to refuse elsewhere — but it is NOT
+  converged onto `erp_lock.py` in this branch: doing so means tightening
+  `acquisition_plan`, which is credentialed acquisition-workflow logic
+  outside this branch's bounds (the only permitted `erp_lock.py` changes
+  are the import-only ones "Named duplication debt" lists). This is a
+  real, tracked, currently-unfixed gap in `erp_lock.py`, named explicitly
+  in `_lock_packages`' own docstring and proven with a planted vector in
+  `test_lock_packages_is_stricter_than_erp_locks_acquisition_plan` — it
+  needs an explicitly authorised follow-up change to `erp_lock.py` itself,
+  not a silent carry-forward.
+- **The off-index policy allowlist.** The body-similarity detector cannot
+  see duplicated CONSTANTS at all:
+  `.github/dependency-bundle-policy.json`'s
+  `permitted_off_index_dependencies` and
+  `erp_lock.ALLOWED_OFF_INDEX_DEPENDENCIES` name the same pin
+  (`dotmac-integration-client`, its url, tag, and commit) in two places
+  that nothing compares. A dedicated guard,
+  `test_the_live_off_index_policy_agrees_with_erp_locks_hardcoded_allowlist`,
+  reads BOTH live sources directly (not values recreated as test-local
+  constants) and fails if a human ever edits one without the other.
+
 ## Repository ID: resolved
 
 `.github/dependency-bundle-policy.json`'s `repository.id` is
