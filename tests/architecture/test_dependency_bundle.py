@@ -1226,6 +1226,139 @@ def test_both_implementations_of_approved_artifact_url_agree_on_every_vector(
     )
 
 
+# ── off-index repository-URL identity: erp_lock.off_index_pin_problems vs
+#    dependency_bundle._classify_off_index_spec, over the SAME pin ─────────
+
+_OFF_INDEX_PIN_NAME = "dotmac-integration-client"
+_OFF_INDEX_PIN_URL = "https://github.com/michaelayoade/dotmac-integration-client.git"
+_OFF_INDEX_PIN_TAG = "v0.2.0"
+_OFF_INDEX_PIN_COMMIT = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"
+
+# Each vector: (declared_git_url, expect_refusal, reason). Both
+# `erp_lock.off_index_pin_problems` and
+# `dependency_bundle._classify_off_index_spec` are driven through every
+# row, against the identical pinned identity, and must agree on
+# accept/refuse. This is the vector table for the SEMANTIC divergence a
+# body-similarity detector cannot see: one path normalised both sides of
+# the comparison, the other compared raw strings.
+OFF_INDEX_URL_VECTORS: list[tuple[str, bool, str]] = [
+    (
+        _OFF_INDEX_PIN_URL,
+        False,
+        "the exact pinned spelling is accepted",
+    ),
+    (
+        "https://github.com/michaelayoade/dotmac-integration-client",
+        False,
+        "a missing .git suffix, present only on the pin's side, normalises equal",
+    ),
+    (
+        _OFF_INDEX_PIN_URL + "/",
+        False,
+        "a trailing slash normalises equal",
+    ),
+    (
+        "HTTPS://GitHub.com/michaelayoade/dotmac-integration-client.git",
+        False,
+        "a mixed-case scheme and host normalises equal",
+    ),
+    (
+        "http://github.com/michaelayoade/dotmac-integration-client.git",
+        True,
+        "a non-https scheme is a spelling the normaliser does not recognise, "
+        "and is refused rather than guessed at",
+    ),
+    (
+        "git@github.com:michaelayoade/dotmac-integration-client.git",
+        True,
+        "an ssh-form URL is a spelling the normaliser does not recognise, "
+        "and is refused rather than guessed at",
+    ),
+    (
+        "https:///dotmac-integration-client.git",
+        True,
+        "an empty netloc is a spelling the normaliser does not recognise, "
+        "and is refused rather than guessed at",
+    ),
+]
+
+
+def _refuses_erp_lock_off_index(declared_url: str) -> bool:
+    pin = erp_lock.OffIndexPin(
+        url=_OFF_INDEX_PIN_URL, tag=_OFF_INDEX_PIN_TAG, commit=_OFF_INDEX_PIN_COMMIT
+    )
+    spec = {"git": declared_url, "tag": _OFF_INDEX_PIN_TAG}
+    problems = erp_lock.off_index_pin_problems(f"main.{_OFF_INDEX_PIN_NAME}", spec, pin)
+    return bool(problems)
+
+
+def _refuses_db_off_index(declared_url: str) -> bool:
+    pin = db.OffIndexPin(
+        url=_OFF_INDEX_PIN_URL, tag=_OFF_INDEX_PIN_TAG, commit=_OFF_INDEX_PIN_COMMIT
+    )
+    spec = {"git": declared_url, "tag": _OFF_INDEX_PIN_TAG}
+    try:
+        db._classify_off_index_spec(
+            _OFF_INDEX_PIN_NAME, spec, "main", {_OFF_INDEX_PIN_NAME: pin}
+        )
+    except db.DependencyBundleError:
+        return True
+    return False
+
+
+@pytest.mark.parametrize(
+    "declared_url,expect_refusal,reason",
+    OFF_INDEX_URL_VECTORS,
+    ids=[v[2] for v in OFF_INDEX_URL_VECTORS],
+)
+def test_both_implementations_of_off_index_url_identity_agree_on_every_vector(
+    declared_url: str, expect_refusal: bool, reason: str
+) -> None:
+    db_refused = _refuses_db_off_index(declared_url)
+    erp_lock_refused = _refuses_erp_lock_off_index(declared_url)
+    assert db_refused == expect_refusal, f"dependency_bundle: {reason}"
+    assert erp_lock_refused == expect_refusal, f"erp_lock: {reason}"
+    assert db_refused == erp_lock_refused, (
+        f"the two implementations DISAGREED on {declared_url!r} ({reason}): "
+        f"dependency_bundle refused={db_refused}, erp_lock refused={erp_lock_refused}"
+    )
+
+
+def test_dependency_bundle_imports_the_shared_repository_url_normaliser() -> None:
+    assert (
+        db.normalise_repository_url is dependency_normalisation.normalise_repository_url
+    )
+
+
+def test_erp_lock_imports_the_shared_repository_url_normaliser() -> None:
+    assert (
+        erp_lock._normalised_repository_url
+        is dependency_normalisation.normalise_repository_url
+    )
+
+
+def test_classify_off_index_spec_refuses_a_non_dict_spec_rather_than_crashing() -> None:
+    """`erp_lock.off_index_pin_problems` names a non-dict spec as a problem
+    rather than crashing. `_classify_off_index_spec` must do the same — a
+    raw TypeError/AttributeError is not a refusal."""
+
+    pin = db.OffIndexPin(
+        url=_OFF_INDEX_PIN_URL, tag=_OFF_INDEX_PIN_TAG, commit=_OFF_INDEX_PIN_COMMIT
+    )
+    with pytest.raises(db.ManifestError, match="must be a table"):
+        db._classify_off_index_spec(
+            _OFF_INDEX_PIN_NAME, 123, "main", {_OFF_INDEX_PIN_NAME: pin}
+        )
+    # erp_lock's own equivalent guard, for comparison: a named problem, not a raise.
+    erp_pin = erp_lock.OffIndexPin(
+        url=_OFF_INDEX_PIN_URL, tag=_OFF_INDEX_PIN_TAG, commit=_OFF_INDEX_PIN_COMMIT
+    )
+    problems = erp_lock.off_index_pin_problems(
+        f"main.{_OFF_INDEX_PIN_NAME}", 123, erp_pin
+    )
+    assert problems, "erp_lock's own guard should also name this a problem"
+
+
 CREDENTIAL = "s3cr3t/token value=42"
 
 CREDENTIAL_VECTORS: list[tuple[str, bool, str]] = [
