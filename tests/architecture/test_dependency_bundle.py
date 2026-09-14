@@ -1742,6 +1742,79 @@ def test_build_local_index_escapes_html_metacharacters_in_anchors(
     assert "&lt;script&gt;" in html_text
 
 
+# ── finding 7: build_local_index's exception-translation boundary must be
+# real, not merely advertised in dependency-bundle-trust.md ──────────────
+
+
+def test_build_local_index_refuses_a_non_string_package_key(tmp_path: Path) -> None:
+    """A non-string package key used to reach `normalise_name`'s regex
+    directly; `re.Pattern.match` raises a raw `TypeError` on anything that
+    is not a str/bytes-like object -- a leak straight through the
+    advertised "every function ... raises one of its DependencyBundleError
+    subclasses" boundary.
+
+    DESIGNED BREAK CONDITION: removing the explicit `isinstance` check
+    before the `normalise_name` call reintroduces the raw `TypeError`,
+    which `pytest.raises(db.BundleVerificationError)` below does not
+    catch (`TypeError` is not a `BundleVerificationError`), failing this
+    test.
+    """
+
+    index_root = tmp_path / "index"
+    with pytest.raises(db.BundleVerificationError, match="is not a string"):
+        db.build_local_index(index_root, {123: []})  # type: ignore[dict-item]
+    assert not index_root.exists()
+
+
+def test_build_local_index_refuses_an_overlong_charset_valid_package_name(
+    tmp_path: Path,
+) -> None:
+    """A package name built entirely from characters `normalise_name`
+    permits, but too LONG for the filesystem to accept as one path
+    component, is never rejected by the charset/shape checks above it --
+    only the filesystem itself refuses it, with a raw `OSError`
+    (`ENAMETOOLONG`), which must be translated rather than left to escape
+    this function.
+
+    DESIGNED BREAK CONDITION: removing the `try/except OSError` around
+    `pkg_dir.mkdir(...)` reintroduces the raw `OSError`, which
+    `pytest.raises(db.BundleVerificationError)` below does not catch.
+    """
+
+    index_root = tmp_path / "index"
+    overlong_name = "a" * 4096  # charset-valid; exceeds NAME_MAX on every
+    # filesystem this repository targets (typically 255 bytes/component)
+    with pytest.raises(
+        db.BundleVerificationError, match="cannot create package directory"
+    ):
+        db.build_local_index(index_root, {overlong_name: []})
+    assert not index_root.exists()
+
+
+def test_build_local_index_refuses_when_its_parent_directory_cannot_be_created(
+    tmp_path: Path,
+) -> None:
+    """Parent-directory creation (`index_root.parent.mkdir(...)`) sat
+    OUTSIDE the boundary that translates every other failure in this
+    function into a `DependencyBundleError` subclass -- a raw `OSError`
+    (here `NotADirectoryError`, from a path component that is actually a
+    file) used to escape straight past callers that expect only
+    `DependencyBundleError`.
+
+    DESIGNED BREAK CONDITION: removing the `try/except OSError` wrapping
+    `index_root.parent.mkdir(...)` reintroduces the raw `OSError`, which
+    `pytest.raises(db.BundleVerificationError)` below does not catch.
+    """
+
+    blocking_file = tmp_path / "not-a-directory"
+    blocking_file.write_bytes(b"this is a file, not a directory")
+    index_root = blocking_file / "nested" / "index"
+    with pytest.raises(
+        db.BundleVerificationError, match="cannot create parent directory"
+    ):
+        db.build_local_index(index_root, {})
+
+
 # ── item 7: strong local run-metadata validation ─────────────────────
 
 

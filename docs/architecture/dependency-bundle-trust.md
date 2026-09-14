@@ -440,11 +440,23 @@ library exceptions the underlying operations can raise. This was not
 always true and is now enforced at every site that touches adversarial
 input: `zipfile.BadZipFile` and `OSError` from opening or reading a ZIP
 archive (`_extract_zip_members`'s archive open and its per-member
-open/read/write loop), `OSError` from reading an extracted file
-(`verify_member_hashes`), from staging or publishing a local index
-(`build_local_index`), and from reading an acquired file or the outer
-archive (`create_bundle_manifest`) are all caught and re-raised as the
-matching `DependencyBundleError` subclass. A malformed `poetry.lock`
+open/read/write loop, and `create_bundle_manifest`'s own archive-closure
+check — see "Closure over the archive" above), `OSError` from reading an
+extracted file (`verify_member_hashes`), from reading an acquired file or
+the outer archive (`create_bundle_manifest`), and from every filesystem
+operation `build_local_index` performs while staging or publishing a
+local index — its own parent-directory creation, its staging index root,
+and each package directory — are all caught and re-raised as the matching
+`DependencyBundleError` subclass. `build_local_index` additionally refuses
+a non-string package key OUTRIGHT, before it ever reaches
+`normalise_name`'s regex: `re.Pattern.match` raises a raw `TypeError` on
+anything that is not a str/bytes-like object, which an earlier version of
+this function left uncaught, and a charset-valid but overlong package
+name (every character permitted by `normalise_name`, but the whole string
+longer than the filesystem's per-component limit) is refused via the same
+translated `OSError` path once the filesystem itself rejects it — the
+charset/shape checks alone cannot catch a length violation. A malformed
+`poetry.lock`
 `[[package]]` entry that is not itself a table, or whose `source`,
 `dependencies`, `groups`, `markers`, or `extras` field is not the shape
 expected, is refused by an explicit type check rather than left to raise a

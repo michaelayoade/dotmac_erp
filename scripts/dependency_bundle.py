@@ -2928,7 +2928,12 @@ def build_local_index(
             "materialises a fresh tree and refuses to merge into or "
             "overwrite one"
         )
-    index_root.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        index_root.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise BundleVerificationError(
+            f"cannot create parent directory for {index_root}: {exc}"
+        ) from exc
     try:
         staging_root = Path(
             tempfile.mkdtemp(
@@ -2942,8 +2947,23 @@ def build_local_index(
 
     try:
         root_dir = staging_root / "simple"
-        root_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            root_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise BundleVerificationError(
+                f"cannot create index root {root_dir}: {exc}"
+            ) from exc
         for normalised_pkg_name, files in packages.items():
+            # `normalise_name` validates a STRING's charset/shape; a
+            # non-string key (e.g. an int, a tuple) never reaches that
+            # check — `re.Pattern.match` raises a raw `TypeError` on
+            # anything that is not a str/bytes-like object, which would
+            # otherwise escape this function unTRANSLATED. Refuse the
+            # shape explicitly, before calling the normaliser at all.
+            if not isinstance(normalised_pkg_name, str):
+                raise BundleVerificationError(
+                    f"package key {normalised_pkg_name!r} is not a string"
+                )
             try:
                 canonical_name = normalise_name(normalised_pkg_name)
             except ValueError as exc:
@@ -2962,7 +2982,19 @@ def build_local_index(
                     f"package key {normalised_pkg_name!r} resolves outside "
                     "the index directory"
                 )
-            pkg_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                pkg_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                # A charset-valid but overlong name (every character
+                # permitted by `normalise_name`, but the whole string
+                # longer than the filesystem's per-component limit) is
+                # never rejected by the charset/shape checks above — only
+                # the filesystem itself refuses it, with `OSError`
+                # (`ENAMETOOLONG`), which must be translated here rather
+                # than left to escape this function raw.
+                raise BundleVerificationError(
+                    f"cannot create package directory for {normalised_pkg_name!r}: {exc}"
+                ) from exc
             anchors = []
             for filename, digest_hex, source_path in sorted(files, key=lambda t: t[0]):
                 # A caller-controlled filename must be a bare filename: no
