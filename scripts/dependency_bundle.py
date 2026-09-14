@@ -115,6 +115,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -1061,7 +1062,7 @@ def extract_dependency_surface(
     project_root: Path, permitted_off_index: Mapping[str, OffIndexPin] | None = None
 ) -> DependencySurface:
     """Parse, validate, and extract the private dependency surface from
-    `project_root`'s `pyproject.toml` + `poetry.lock`.
+    `project_root`'s CURRENT WORKING-TREE `pyproject.toml` + `poetry.lock`.
 
     `permitted_off_index` is the policy's off-index allowlist (see
     `load_permitted_off_index_dependencies`) — defaults to empty, meaning
@@ -1072,18 +1073,88 @@ def extract_dependency_surface(
     Raises `ManifestError` for every unrecognised or disagreeing shape this
     module's docstring and `docs/architecture/dependency-bundle-trust.md`
     enumerate. Never returns a partial surface on a refusal.
+
+    **This reads the WORKING TREE, not a pinned commit.** It exists for
+    local/CLI use (`_cmd_plan_digest`) and for tests that construct a bare
+    `tmp_path` project with no git repository at all. Any caller that needs
+    to bind a plan digest to a specific candidate commit identity — i.e.
+    `bind_bundle_to_candidate` and anything upstream of it — MUST use
+    `extract_dependency_surface_at_commit` instead: see that function's
+    docstring, and this module's "reading dependency bytes from a PINNED
+    COMMIT" section, for why a working-tree read beside an independently
+    read commit SHA is not a binding.
     """
 
     permitted_off_index = permitted_off_index or {}
+    poetry_toml_present = (project_root / "poetry.toml").exists()
+    manifest = _load_toml(project_root / "pyproject.toml")
+    lock = _load_toml(project_root / "poetry.lock")
+    return _build_dependency_surface(
+        manifest, lock, poetry_toml_present, permitted_off_index
+    )
 
-    if (project_root / "poetry.toml").exists():
+
+def extract_dependency_surface_at_commit(
+    repo_root: Path,
+    commit_sha: str,
+    permitted_off_index: Mapping[str, OffIndexPin] | None = None,
+) -> DependencySurface:
+    """`extract_dependency_surface`, but every byte comes from `commit_sha`'s
+    own git tree — via `_read_git_blob_at_commit`/`_git_path_exists_at_commit`
+    — never `repo_root`'s current working-tree files.
+
+    This is the ONLY correct way to compute a plan digest that will be
+    bound to `commit_sha` as a candidate identity: the digest and the SHA
+    must describe the SAME object, derived in that order (resolve the
+    commit once, read its blobs, compute the plan, then bind the identity
+    to that same commit) — not two independent observations of
+    `repo_root` that happen to be taken close together in time and are
+    hoped to agree. See `compute_candidate_plan_digest_at_commit` and
+    `bind_bundle_to_candidate`, the two callers that must use this.
+    """
+
+    permitted_off_index = permitted_off_index or {}
+    poetry_toml_present = _git_path_exists_at_commit(
+        repo_root, commit_sha, "poetry.toml"
+    )
+    manifest_bytes = _read_git_blob_at_commit(repo_root, commit_sha, "pyproject.toml")
+    lock_bytes = _read_git_blob_at_commit(repo_root, commit_sha, "poetry.lock")
+    try:
+        manifest = tomllib.loads(manifest_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ManifestError(
+            f"cannot parse pyproject.toml as TOML at commit {commit_sha}: {exc}"
+        ) from exc
+    try:
+        lock = tomllib.loads(lock_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ManifestError(
+            f"cannot parse poetry.lock as TOML at commit {commit_sha}: {exc}"
+        ) from exc
+    return _build_dependency_surface(
+        manifest, lock, poetry_toml_present, permitted_off_index
+    )
+
+
+def _build_dependency_surface(
+    manifest: dict[str, Any],
+    lock: dict[str, Any],
+    poetry_toml_present: bool,
+    permitted_off_index: Mapping[str, OffIndexPin],
+) -> DependencySurface:
+    """The parse-independent core of `extract_dependency_surface`: given
+    already-parsed `manifest`/`lock` documents (from wherever their bytes
+    came from — working tree or a pinned commit) and whether a
+    `poetry.toml` is present alongside them, validate and extract the
+    private dependency surface. Neither this function nor anything it
+    calls touches the filesystem or git."""
+
+    if poetry_toml_present:
         raise ManifestError(
             "a project-local poetry.toml is present; it can reconfigure TLS "
             "verification and credential lookup for the very resolution "
             "this module is trying to plan-digest, and is refused outright"
         )
-    manifest = _load_toml(project_root / "pyproject.toml")
-    lock = _load_toml(project_root / "poetry.lock")
     _refuse_unknown_dependency_surfaces(manifest)
     poetry = manifest["tool"]["poetry"]
     forgejo_url = _forgejo_source_url(poetry)
@@ -1277,6 +1348,29 @@ def compute_candidate_plan_digest(
     return compute_plan_digest(surface)
 
 
+def compute_candidate_plan_digest_at_commit(
+    repo_root: Path,
+    commit_sha: str,
+    permitted_off_index: Mapping[str, OffIndexPin] | None = None,
+) -> str:
+    """`compute_candidate_plan_digest`, but parsed from `commit_sha`'s own
+    git tree via `extract_dependency_surface_at_commit`, never `repo_root`'s
+    current working-tree files.
+
+    `bind_bundle_to_candidate` MUST call this, not
+    `compute_candidate_plan_digest`, and MUST pass it the exact same
+    `commit_sha` it binds the candidate identity to — see this module's
+    "reading dependency bytes from a PINNED COMMIT" section for why a
+    plan digest computed from the working tree cannot be trusted to
+    describe the same object as a commit SHA read independently.
+    """
+
+    surface = extract_dependency_surface_at_commit(
+        repo_root, commit_sha, permitted_off_index
+    )
+    return compute_plan_digest(surface)
+
+
 def _read_git_head_sha(repo_root: Path) -> str:
     """Read `repo_root`'s ACTUAL current commit SHA from its own on-disk
     git refs — no subprocess, no network, and no trust in a caller-supplied
@@ -1378,6 +1472,87 @@ def _resolve_git_head_sha(repo_root: Path) -> str:
         f"cannot resolve ref {ref_name!r} to a commit SHA under {git_dir} "
         "(no loose ref file, and no matching entry in packed-refs)"
     )
+
+
+# ── reading dependency bytes from a PINNED COMMIT, never the working tree ──
+#
+# A caller-supplied SHA beside working-tree reads is not a binding: the
+# original `extract_dependency_surface(candidate_root, ...)` parsed
+# `candidate_root`'s CURRENT on-disk `pyproject.toml`/`poetry.lock`, while
+# `bind_bundle_to_candidate` independently read `candidate_root`'s CURRENT
+# `.git` HEAD via `_read_git_head_sha`. Those are two separate observations
+# of `candidate_root`, taken as two separate filesystem operations with no
+# atomicity between them -- a dirty checkout, or a concurrent `git checkout`/
+# commit landing between the two reads, can make `candidate_sha=A` and
+# `plan_digest=B` where commit A never actually contained the bytes that
+# produced B. `extract_dependency_surface_at_commit` closes this: the commit
+# is resolved ONCE by the caller, and both files are read as that commit's
+# own tree entries -- via `git cat-file`, which reads git's OBJECT STORE,
+# never the working tree -- so the digest and the SHA describe the same
+# object by construction, not by hoping two reads landed together.
+#
+# This uses `subprocess` (unlike the rest of this module, which reads
+# `.git`'s loose refs directly to avoid a subprocess dependency for the
+# comparatively simple "what does HEAD point to" question). Reading a
+# blob's bytes correctly requires resolving git's object store, which may
+# be loose objects OR a packfile with delta-compressed entries -- there is
+# no dependency-free, correct-for-every-checkout way to do that without
+# either reimplementing zlib-inflate-plus-delta-resolution-plus-packfile-
+# indexing by hand (a large, security-sensitive undertaking to get exactly
+# right) or shelling out to the `git` binary that already implements it
+# correctly. `erp_lock.py` already establishes the precedent of invoking
+# `git`/`curl` via `subprocess.run` with a fixed argv list, `shell=False`,
+# and no interpolated shell string (see `fetch`, `curl_argv`) -- this
+# follows the identical shape: a fixed argv, `cwd=repo_root`, no shell.
+
+
+def _run_git(repo_root: Path, argv: list[str]) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(  # noqa: S603
+            ["git", *argv],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise BundleVerificationError(
+            f"cannot invoke git {argv!r} in {repo_root}: {exc}"
+        ) from exc
+
+
+def _read_git_blob_at_commit(repo_root: Path, commit_sha: str, path: str) -> bytes:
+    """The exact bytes `path` held in `commit_sha`'s tree — via git's own
+    object store, never `repo_root`'s current working-tree file of the
+    same name. Raises `ManifestError` if `commit_sha` does not have `path`
+    at all (the caller decides whether that is a refusal or an "absent" —
+    see `_git_path_exists_at_commit` for a caller that wants the latter)."""
+
+    if not _COMMIT_SHA.match(commit_sha):
+        raise BundleVerificationError(
+            f"{commit_sha!r} is not a 40-hex commit SHA; refusing to read "
+            "a blob at an unpinned or malformed commit reference"
+        )
+    completed = _run_git(repo_root, ["cat-file", "blob", f"{commit_sha}:{path}"])
+    if completed.returncode != 0:
+        raise ManifestError(
+            f"cannot read {path!r} at commit {commit_sha} from {repo_root}'s "
+            f"git object store: {completed.stderr.decode('utf-8', 'replace').strip()}"
+        )
+    return completed.stdout
+
+
+def _git_path_exists_at_commit(repo_root: Path, commit_sha: str, path: str) -> bool:
+    """Whether `commit_sha`'s tree contains `path` — via `git cat-file -e`,
+    the tree recorded in the commit OBJECT, never `repo_root`'s current
+    working-tree directory listing."""
+
+    if not _COMMIT_SHA.match(commit_sha):
+        raise BundleVerificationError(
+            f"{commit_sha!r} is not a 40-hex commit SHA; refusing to probe "
+            "an unpinned or malformed commit reference"
+        )
+    completed = _run_git(repo_root, ["cat-file", "-e", f"{commit_sha}:{path}"])
+    return completed.returncode == 0
 
 
 # ── planned artifacts (the plan's own file/digest closure) ────────────────
@@ -2535,14 +2710,24 @@ def bind_bundle_to_candidate(
     Three things this function derives or cross-checks itself, rather than
     trusting a caller's assertion of any of them:
 
-    * The candidate's plan digest — via `compute_candidate_plan_digest`,
-      parsing `candidate_root`'s own checked-out files. A caller that could
-      pass any digest string here could pass `bundle_manifest["plan_digest"]`
-      straight back and get a successful binding for ANY tree.
     * The candidate's commit SHA — via `_read_git_head_sha`, reading
       `candidate_root`'s own `.git` refs. A caller that could assert any
       SHA here could bind a real, verified bundle to an unrelated commit
       it never actually checked out.
+    * The candidate's plan digest — via
+      `compute_candidate_plan_digest_at_commit`, parsing THAT SAME
+      resolved commit's own git-tree blobs, never `candidate_root`'s
+      current working-tree files. **The commit is resolved ONCE, then the
+      digest is derived from that exact commit, then the identity is
+      bound to that exact commit — in that order.** A caller-supplied SHA
+      read beside an independent working-tree parse is not a binding: a
+      dirty checkout, or a concurrent `git checkout`/commit landing
+      between two separate reads of `candidate_root`, could otherwise
+      produce `candidate_sha=A, plan_digest=B` where commit A never
+      actually contained the bytes that produced B. Reading both the SHA
+      and the dependency bytes as properties of ONE pinned commit object
+      closes that gap by construction, not by hoping two observations
+      happen to agree.
     * That `run` — an ALREADY-VERIFIED `RunMetadata`, produced by a prior
       `verify_run_metadata` call, never re-derived here from
       `bundle_manifest`'s own raw `run` dict with a loose `int()` coercion
@@ -2558,8 +2743,8 @@ def bind_bundle_to_candidate(
     """
 
     candidate_sha = _read_git_head_sha(candidate_root)
-    candidate_plan_digest = compute_candidate_plan_digest(
-        candidate_root, permitted_off_index
+    candidate_plan_digest = compute_candidate_plan_digest_at_commit(
+        candidate_root, candidate_sha, permitted_off_index
     )
     bundle_digest = bundle_manifest.get("plan_digest")
     if not isinstance(bundle_digest, str) or not _SHA256_HEX.match(bundle_digest):

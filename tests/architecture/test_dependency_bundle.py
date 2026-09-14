@@ -27,6 +27,8 @@ import dataclasses
 import difflib
 import inspect
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import urllib.parse
@@ -1342,35 +1344,72 @@ def _valid_policy() -> dict:
     }
 
 
-#: The SHA `_write_git_head` bakes into every synthetic candidate checkout
-#: below — a fixed, known value so a test can assert
-#: `bind_bundle_to_candidate` returned exactly the SHA the candidate's own
-#: `.git/HEAD` names, not something asserted by the caller.
-_CANDIDATE_HEAD_SHA = "c" * 40
-
-
-def _write_git_head(root: Path, sha: str = _CANDIDATE_HEAD_SHA) -> None:
+def _write_fake_git_head(root: Path, sha: str) -> None:
     """A minimal, detached-HEAD-shaped `.git` directory: `.git/HEAD`
-    containing a raw 40-hex commit SHA directly, which is exactly what a
-    real detached-HEAD checkout (e.g. `actions/checkout`'s default) looks
-    like on disk. `_read_git_head_sha` reads this instead of accepting a
-    caller-asserted SHA."""
+    containing a raw 40-hex commit SHA directly, and NOTHING else -- no
+    object store, no real commit. `_read_git_head_sha` reads and refuses
+    this before anything tries to resolve `sha` as a real object, which is
+    exactly what makes this fake usable for tests of THAT refusal (e.g. the
+    null-SHA case below) and unusable for anything that goes on to read a
+    blob at the resolved commit -- `git cat-file` has no object store to
+    search here. Use `_init_real_git_repo` for a candidate a binding test
+    needs to actually read blobs from."""
 
     git_dir = root / ".git"
     git_dir.mkdir(exist_ok=True)
     (git_dir / "HEAD").write_text(sha + "\n", encoding="utf-8")
 
 
+def _run_git_fixture_command(root: Path, argv: list[str]) -> str:
+    completed = subprocess.run(  # noqa: S603
+        ["git", *argv],  # noqa: S607
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "test@example.invalid",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "test@example.invalid",
+        },
+    )
+    return completed.stdout.strip()
+
+
+def _init_real_git_repo(root: Path) -> str:
+    """Initialise `root` as an ACTUAL git repository and commit its current
+    files, returning the real resulting commit SHA.
+
+    `extract_dependency_surface_at_commit` (which `bind_bundle_to_candidate`
+    now uses) reads blobs via `git cat-file blob <sha>:<path>` -- that
+    requires a real object store, which a bare `.git/HEAD` file (see
+    `_write_fake_git_head`) does not provide. Git commit SHAs are
+    content-addressed, so a fixed placeholder like the old
+    `_CANDIDATE_HEAD_SHA = "c" * 40` cannot be engineered as a real commit's
+    identity; callers that need to assert the bound SHA must capture and
+    compare against this function's return value instead."""
+
+    _run_git_fixture_command(root, ["init", "-q"])
+    _run_git_fixture_command(root, ["add", "-A"])
+    _run_git_fixture_command(
+        root, ["commit", "-q", "-m", "test fixture commit", "--no-gpg-sign"]
+    )
+    return _run_git_fixture_command(root, ["rev-parse", "HEAD"])
+
+
 def _candidate_root(tmp_path: Path) -> Path:
-    """A real, on-disk candidate tree — `verify_run_metadata` and
-    `bind_bundle_to_candidate` now derive the candidate's plan digest (and,
-    for the latter, its commit SHA) themselves by reading this, rather
-    than accepting either as a bare caller-supplied value."""
+    """A real, on-disk candidate tree, committed as a real git repository —
+    `verify_run_metadata` derives the candidate's plan digest by reading
+    its working tree, and `bind_bundle_to_candidate` derives both its
+    commit SHA and its plan digest from this same real commit's git-tree
+    blobs, rather than accepting either as a bare caller-supplied value."""
 
     root = tmp_path / "candidate"
     root.mkdir(exist_ok=True)
     project_root = _project_root(root, BASE_PYPROJECT, BASE_LOCK)
-    _write_git_head(project_root)
+    _init_real_git_repo(project_root)
     return project_root
 
 
@@ -1565,7 +1604,7 @@ def _matching_candidate_root(tmp_path: Path, subdir: str) -> Path:
     candidate_root = _project_root(
         directory, _MATCHING_CANDIDATE_PYPROJECT, _MATCHING_CANDIDATE_LOCK
     )
-    _write_git_head(candidate_root)
+    _init_real_git_repo(candidate_root)
     return candidate_root
 
 
@@ -1584,12 +1623,82 @@ def test_binding_succeeds_when_digests_match(tmp_path: Path) -> None:
         "test fixture bug: the matching candidate must extract to the exact "
         "same surface as _manifest_test_surface()"
     )
+    expected_sha = db._read_git_head_sha(candidate_root)
     binding = db.bind_bundle_to_candidate(manifest, _run(), candidate_root)
     assert binding.bundle_run_id == 111
-    assert binding.candidate_sha == _CANDIDATE_HEAD_SHA, (
+    assert binding.candidate_sha == expected_sha, (
         "the binding must report the SHA read from the candidate's own "
-        ".git/HEAD, not an asserted value"
+        "real git commit, not an asserted value -- commit SHAs are "
+        "content-addressed, so this compares against the SAME resolver "
+        "the module itself uses, never a fixed placeholder"
     )
+
+
+def test_bind_bundle_to_candidate_reads_the_committed_blob_not_a_dirtied_working_tree(
+    tmp_path: Path,
+) -> None:
+    """The governing property of the immutable-commit redesign: a caller-
+    supplied SHA beside working-tree reads is not a binding. Plants the
+    exact defect the redesign closes -- dirty the candidate's working-tree
+    `pyproject.toml` AFTER it is committed, without committing the change
+    -- and shows `bind_bundle_to_candidate` still binds successfully using
+    the COMMITTED (matching) surface, never the dirtied one.
+
+    The near-miss half of the proof: `extract_dependency_surface` (the
+    WORKING-TREE reader) on the same, now-dirty tree RAISES outright (the
+    dirtied manifest declares a forgejo dependency the committed lock
+    never resolved) -- confirming the dirty write actually changed
+    something observable, so a version of `bind_bundle_to_candidate` that
+    read the working tree (the pre-redesign shape) would have refused this
+    exact candidate. The fact that binding still SUCCEEDS is the proof
+    that it is reading the pinned commit's blobs instead, never the
+    dirtied working-tree file of the same name."""
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_archive(tmp_path)
+    manifest = db.create_bundle_manifest(
+        surface=surface,
+        acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+        archive_path=archive_path,
+        run=_run(),
+    )
+    candidate_root = _matching_candidate_root(tmp_path, "dirtied-candidate")
+    committed_sha = db._read_git_head_sha(candidate_root)
+
+    # Dirty the working tree AFTER the commit, without committing: declare
+    # a direct forgejo dependency the committed lock never resolved.
+    (candidate_root / "pyproject.toml").write_text(
+        base_pyproject('dotmac-files = {version = "9.9.9", source = "forgejo"}\n'),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(db.ManifestError, match="no corresponding poetry.lock entry"):
+        db.extract_dependency_surface(candidate_root)
+
+    binding = db.bind_bundle_to_candidate(manifest, _run(), candidate_root)
+    assert binding.candidate_sha == committed_sha
+    assert binding.plan_digest == manifest["plan_digest"], (
+        "bind_bundle_to_candidate must derive the candidate's plan digest "
+        "from the PINNED COMMIT's blobs, not the dirtied working tree -- "
+        "it dirtied differently above and this must still match the "
+        "bundle's committed-surface digest"
+    )
+
+
+def test_extract_dependency_surface_at_commit_refuses_a_commit_missing_the_lock(
+    tmp_path: Path,
+) -> None:
+    """A commit that never tracked `poetry.lock` at all must be refused by
+    name, via `git cat-file` failing to resolve the blob -- not crash with
+    an unhandled subprocess or git error."""
+
+    root = tmp_path / "no-lock-repo"
+    root.mkdir()
+    (root / "pyproject.toml").write_text(BASE_PYPROJECT, encoding="utf-8")
+    sha = _init_real_git_repo(root)
+    with pytest.raises(db.ManifestError, match="poetry.lock"):
+        db.extract_dependency_surface_at_commit(root, sha)
 
 
 def test_binding_refuses_a_candidate_with_no_git_checkout(tmp_path: Path) -> None:
@@ -1627,7 +1736,7 @@ def test_binding_refuses_a_null_sha_head(tmp_path: Path) -> None:
     null_sha_root = tmp_path / "null-sha-candidate"
     null_sha_root.mkdir()
     _project_root(null_sha_root, BASE_PYPROJECT, BASE_LOCK)
-    _write_git_head(null_sha_root, sha="0" * 40)
+    _write_fake_git_head(null_sha_root, sha="0" * 40)
     with pytest.raises(db.BundleVerificationError, match="null SHA"):
         db.bind_bundle_to_candidate(manifest, _run(), null_sha_root)
 

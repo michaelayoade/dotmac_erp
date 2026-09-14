@@ -69,6 +69,18 @@ this document is entitled to just assert away.
   refs, never accepted as a parameter — matches too, consuming an
   ALREADY-VERIFIED `RunMetadata` (from a prior `verify_run_metadata` call)
   rather than re-deriving one from unvalidated `bundle_manifest` fields.
+  **A caller-supplied SHA beside working-tree reads is not a binding**: the
+  candidate's commit is resolved ONCE (`_read_git_head_sha`), then its
+  `pyproject.toml`/`poetry.lock` bytes are read as THAT COMMIT's own git
+  tree entries — via `extract_dependency_surface_at_commit`, which reads
+  blobs through `git cat-file`, never the working tree — and the plan
+  digest is computed from those bytes, in that order, before the identity
+  is bound. A working-tree read taken as a second, independent observation
+  of `candidate_root` (the shape this replaced) could disagree with an
+  independently-read HEAD SHA if the checkout were dirty or mutated
+  concurrently between the two reads; reading both the SHA and the
+  dependency bytes as properties of the SAME pinned commit object closes
+  that gap by construction, not by hoping two observations agree.
 
 `scripts/dependency_normalisation.py` owns PEP 503 package-name
 normalisation — the ONE place that logic lives, imported by both
