@@ -1295,11 +1295,26 @@ def test_build_local_index_escapes_html_metacharacters_in_anchors(
 ) -> None:
     """Finding 3: a caller-controlled filename reaches a resolver-facing
     HTML page; without escaping, `<`/`>`/`&`/`"` in a filename would inject
-    markup into that page."""
+    markup into that page.
+
+    The fixture carries `<`, `>`, `&`, and `"` but deliberately NO `/` --
+    a later finding-3 repair (see
+    `test_build_local_index_refuses_a_filename_containing_a_path_separator`,
+    which already independently proves the separator-refusal property)
+    makes `build_local_index` refuse any filename containing a path
+    separator before it ever reaches HTML generation. The original
+    fixture here was `'inject"><script>alert(1)</script>.whl'`, whose
+    closing `</script>` tag contains a `/`; once the separator refusal
+    landed, that fixture could no longer reach this test's assertions at
+    all -- `build_local_index` raised first, `index.html` was never
+    written, and this test died on the `build_local_index` call rather
+    than proving anything about escaping. This is the third instance on
+    this branch of a fixture that exercised its target property only
+    incidentally, so tightening a neighbouring rule silently disabled it."""
 
     source_dir = tmp_path / "source"
     source_dir.mkdir()
-    filename = 'inject"><script>alert(1)</script>.whl'
+    filename = 'inject"><script>alert(1)<script>.whl'
     wheel_path = source_dir / "wheel.whl"
     wheel_path.write_bytes(b"wheel bytes")
     index_root = tmp_path / "index"
