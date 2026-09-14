@@ -20,6 +20,12 @@
       "behaviour": "Scan a set of files for the literal, percent-encoded, and base64 (plain and HTTP basic-auth) encodings of a held credential, refusing outright -- never reporting a vacuous clean scan -- when the credential is empty.",
       "dependency_bundle_symbol": "scripts.dependency_bundle.scan_for_credential",
       "erp_lock_symbol": "scripts.erp_lock.credential_sightings"
+    },
+    {
+      "id": "credential-encodings",
+      "behaviour": "Build the dict of every encoding form (literal, percent-encoded, percent-encoded-with-plus, base64, base64 basic-auth) a held credential could appear in, refusing an empty credential. Found by the unlisted-duplicate detector added in the same change that added it here -- this entry was NOT anticipated when credential-string-scan was first listed.",
+      "dependency_bundle_symbol": "scripts.dependency_bundle.credential_encodings",
+      "erp_lock_symbol": "scripts.erp_lock.credential_encodings"
     }
   ]
 }

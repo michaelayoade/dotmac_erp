@@ -88,6 +88,8 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
+import dependency_normalisation
+
 # ── the closed allowlist of movements ───────────────────────────────────────
 
 #: The ONLY movements this workflow may perform. A version outside this table
@@ -199,26 +201,14 @@ _OFF_INDEX_PERMITTED_KEYS = frozenset({"git", "tag"})
 _RESOLVED_COMMIT = re.compile(r"\A[0-9a-f]{40}\Z")
 
 
-def _normalised_repository_url(url: str) -> str:
-    """Enough normalisation to compare two spellings of one repository.
-
-    Deliberately narrow: case-folded scheme and host, a stripped trailing slash
-    and a single optional `.git` suffix. It does NOT try to equate ssh and https
-    forms or resolve redirects -- a spelling this does not recognise is refused
-    rather than guessed at, because a guess here decides where the resolver
-    reaches.
-    """
-
-    text = url.strip()
-    parts = urllib.parse.urlsplit(text)
-    if parts.scheme.lower() != "https" or not parts.netloc:
-        return text
-    path = parts.path.rstrip("/")
-    if path.endswith(".git"):
-        path = path[: -len(".git")]
-    return urllib.parse.urlunsplit(
-        (parts.scheme.lower(), parts.netloc.lower(), path, "", "")
-    )
+#: Repository-URL normalisation has exactly one owner now —
+#: `dependency_normalisation.normalise_repository_url` (see that module's
+#: docstring for the semantic divergence this fixes: this script's version
+#: normalised both sides of an off-index pin comparison; `dependency_bundle`
+#: compared the raw strings, with no normalisation at all). This used to be
+#: a locally-defined function; it is now an import alias so every existing
+#: `_normalised_repository_url(...)` call site is unchanged.
+_normalised_repository_url = dependency_normalisation.normalise_repository_url
 
 
 def off_index_pin_problems(where: str, spec: Any, pin: OffIndexPin) -> list[str]:
@@ -395,8 +385,17 @@ def _load_toml(path: Path) -> dict[str, Any]:
         return tomllib.load(handle)
 
 
-def _normalised(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
+#: PEP 503 normalisation has exactly one owner now — `dependency_normalisation`
+#: (see that module's docstring for the divergent-hyphen-stripping bug this
+#: fixes, and its "Two forms, for two genuinely different contracts"
+#: section for why this alias points at the TOTAL, never-raising form
+#: specifically). This used to be a locally-defined function; it is now an
+#: import alias so every existing `_normalised(...)` call site is
+#: unchanged — `normalise_name_for_identity` is behaviourally IDENTICAL to
+#: what this function computed before this branch touched it
+#: (`re.sub(r"[-_.]+", "-", name).lower()`, no validation), so no call site
+#: here gains a new way to raise.
+_normalised = dependency_normalisation.normalise_name_for_identity
 
 
 # ── set-versions: move both pins, or refuse ─────────────────────────────────
