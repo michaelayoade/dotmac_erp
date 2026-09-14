@@ -20,6 +20,7 @@ EXPENSE_BASELINE_ROLES: dict[str, str] = {
     "expense_reimburser": "Reimbursement-only processing",
     "department_manager": "Department head with team approvals",
     "employee": "Standard employee self-service",
+    "technician": "Employee self-service without ERP expense UI access",
 }
 
 _ALL_EXPENSE_PERMISSION_CODES = tuple(
@@ -108,6 +109,16 @@ EXPENSE_ROLE_GRANTS: dict[str, tuple[str, ...]] = {
         "expense:claims:reject",
     ),
     "employee": (
+        "expense:access",
+        "expense:claims:read_own",
+        "expense:claims:create",
+        "expense:claims:update",
+        "expense:claims:delete",
+        "expense:claims:submit",
+        "expense:advances:read_own",
+        "expense:advances:create",
+    ),
+    "technician": (
         "expense:access",
         "expense:claims:read_own",
         "expense:claims:create",

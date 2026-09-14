@@ -34,6 +34,7 @@
                 </button>
             </form>
             {% endif %}
+            {% if not auth.is_technician %}
             <a href="/people/self/expenses?task_id={{ task.task_id }}&project_id={{ project.project_id }}"
                class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,6 +43,7 @@
                 </svg>
                 Raise Expense
             </a>
+            {% endif %}
             <a href="/projects/{{ project.project_code }}/time/new?task_id={{ task.task_id }}"
                class="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors">
                 {{ icon_svg("clock", "h-4 w-4") }}

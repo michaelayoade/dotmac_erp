@@ -19,6 +19,7 @@ from app.web.deps import (
     get_db_for_org,
     require_self_service_access,
     require_self_service_discipline_manager,
+    require_self_service_expense_ui_access,
     require_self_service_expense_approver,
     require_self_service_leave_approver,
 )
@@ -992,7 +993,7 @@ def my_payslip_detail(
 @router.get("/expenses", response_class=HTMLResponse)
 def my_expenses(
     request: Request,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_ui_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Self-service expenses page."""
@@ -1045,7 +1046,7 @@ def my_tasks(
 @router.post("/expenses/claims")
 async def create_expense_claim(
     request: Request,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_ui_access),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Create an expense claim with one or more line items."""
@@ -1198,7 +1199,7 @@ async def create_expense_claim(
 def edit_expense_claim(
     claim_id: UUID,
     request: Request,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_ui_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Edit a draft expense claim."""
@@ -1214,7 +1215,7 @@ def edit_expense_claim(
 async def update_expense_claim(
     claim_id: UUID,
     request: Request,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_ui_access),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Update items on a draft expense claim."""
@@ -1356,7 +1357,7 @@ async def update_expense_claim(
 async def submit_expense_claim(
     claim_id: UUID,
     request: Request,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_ui_access),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Submit a draft expense claim for approval."""
@@ -1375,7 +1376,7 @@ async def submit_expense_claim(
 async def delete_expense_claim(
     claim_id: UUID,
     request: Request,
-    auth: WebAuthContext = Depends(require_self_service_access),
+    auth: WebAuthContext = Depends(require_self_service_expense_ui_access),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
     """Delete a draft expense claim owned by the current employee."""

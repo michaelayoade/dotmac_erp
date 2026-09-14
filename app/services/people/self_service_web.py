@@ -161,8 +161,11 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = self._has_team_expense_approvals(
-            db, org_id, person_id, employee_id=employee_id
+        context["can_team_expenses"] = (
+            not auth.is_technician
+            and self._has_team_expense_approvals(
+                db, org_id, person_id, employee_id=employee_id
+            )
         )
         context["can_team_discipline"] = (
             auth.is_admin

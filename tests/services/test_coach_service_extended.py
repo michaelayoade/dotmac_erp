@@ -307,6 +307,10 @@ class TestAudiencesForRoles:
         assert "EMPLOYEE" in audiences
         assert len(audiences) == 1
 
+    def test_technician_keeps_employee_audience(self) -> None:
+        audiences = self._svc()._audiences_for_roles({"technician"})
+        assert audiences == {"EMPLOYEE"}
+
     def test_department_manager_sees_manager(self) -> None:
         audiences = self._svc()._audiences_for_roles({"department_manager"})
         assert "MANAGER" in audiences
