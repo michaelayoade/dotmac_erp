@@ -282,6 +282,113 @@ def test_the_approved_off_index_pin_is_accepted_and_verified(tmp_path: Path) -> 
     )
 
 
+# ── total classification over EVERY lock entry, including lock-only ones ──
+
+
+def test_an_injected_transitive_git_lock_entry_is_refused(tmp_path: Path) -> None:
+    """Plants the exact defect the closure redesign closes: a `git`-sourced
+    `[[package]]` entry with no dependency edge from ANY approved off-index
+    root -- an injected, unreachable VCS package a candidate lock could add
+    on its own. It used to hit `_lock_packages`'s unconditional `continue`
+    (it does not "look private": no forgejo reference, no forgejo host) and
+    vanish from both the refusal surface and the digest. It must now be
+    refused by name."""
+
+    injected_lock = (
+        _OFF_INDEX_LOCK
+        + """
+[[package]]
+name = "evil-transitive"
+version = "1.0"
+python-versions = ">=3.11"
+groups = ["main"]
+files = []
+
+[package.source]
+type = "git"
+url = "https://evil.example.com/evil.git"
+reference = "main"
+resolved_reference = \""""
+        + ("d" * 40)
+        + """"
+"""
+    )
+    root = _project_root(tmp_path, _OFF_INDEX_MANIFEST, injected_lock)
+    with pytest.raises(
+        db.ManifestError, match="not part of the proven transitive closure"
+    ):
+        db.extract_dependency_surface(root, _GOOD_PIN)
+
+
+def test_a_transitive_dependency_of_an_approved_off_index_root_is_admitted(
+    tmp_path: Path,
+) -> None:
+    """The near-miss half of the closure proof: a `git`-sourced lock entry
+    IS admitted, without refusal, when it is reachable from an approved
+    off-index root's own `[package.dependencies]` edge -- the exact shape
+    the injected-entry test above shows is refused when that edge is
+    absent."""
+
+    lock_with_edge = _OFF_INDEX_LOCK.replace(
+        'resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"',
+        'resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"\n\n'
+        "[package.dependencies]\n"
+        'some-transitive-lib = "^1.0"',
+    )
+    reachable_lock = (
+        lock_with_edge
+        + """
+[[package]]
+name = "some-transitive-lib"
+version = "1.0"
+python-versions = ">=3.11"
+groups = ["main"]
+files = []
+
+[package.source]
+type = "git"
+url = "https://github.com/michaelayoade/some-transitive-lib.git"
+reference = "main"
+resolved_reference = \""""
+        + ("e" * 40)
+        + """"
+"""
+    )
+    root = _project_root(tmp_path, _OFF_INDEX_MANIFEST, reachable_lock)
+    surface = db.extract_dependency_surface(root, _GOOD_PIN)
+    assert len(surface.off_index_dependencies) == 1, (
+        "the transitive closure member must be admitted silently -- it is "
+        "not itself a manifest-declared off-index dependency"
+    )
+
+
+def test_an_unsupported_lock_source_type_is_refused(tmp_path: Path) -> None:
+    """Total classification's third bucket: a lock entry whose source is
+    neither public (no source, or an ordinary non-forgejo `legacy` index),
+    forgejo, nor `git` at all -- this module has no policy for any other
+    source `type` and refuses it outright rather than silently letting it
+    through as though it were public."""
+
+    unsupported_lock = (
+        _OFF_INDEX_LOCK
+        + """
+[[package]]
+name = "local-directory-dep"
+version = "1.0"
+python-versions = ">=3.11"
+groups = ["main"]
+files = []
+
+[package.source]
+type = "directory"
+url = "../local-directory-dep"
+"""
+    )
+    root = _project_root(tmp_path, _OFF_INDEX_MANIFEST, unsupported_lock)
+    with pytest.raises(db.ManifestError, match="unsupported lock source type"):
+        db.extract_dependency_surface(root, _GOOD_PIN)
+
+
 def test_off_index_lock_commit_disagreement_is_refused(tmp_path: Path) -> None:
     wrong_lock = _OFF_INDEX_LOCK.replace(
         'resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"',

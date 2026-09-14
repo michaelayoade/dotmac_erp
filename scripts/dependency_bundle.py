@@ -1011,6 +1011,129 @@ def _verify_off_index_lock_entry(
         )
 
 
+# ── total classification over EVERY lock entry, including lock-only ones ──
+#
+# `_lock_packages` above only ever concerned itself with entries that
+# "look private" (forgejo reference or forgejo host) — everything else hit
+# an unconditional `continue` and was never classified, never refused, and
+# never moved the digest. That is a real gap: a candidate lock can add a
+# TRANSITIVE `source.type = "git"` package from an arbitrary host, name it
+# as another package's dependency edge, and neither the manifest (which
+# never declared it) nor `_lock_packages` (which only looks at forgejo
+# entries) ever sees it — a later offline resolution could still fetch and
+# build it. `_refuse_unclassifiable_lock_entries` closes this: every
+# `[[package]]` entry is classified as PUBLIC (no source, or an ordinary
+# `legacy` index source that does not name the forgejo host), the proven
+# transitive closure of an APPROVED OFF-INDEX ROOT (reachable from an
+# `ApprovedOffIndexDependency`'s own lock entry by following
+# `[package.dependencies]` edges — never merely "it looks private" or "its
+# reference matches"), or REFUSED — each refusal named independently:
+# an unsupported source `type` this module has no policy for at all, or a
+# `git`-sourced entry that is not part of any approved root's proven
+# closure (this single message covers an outright INJECTED VCS dependency,
+# a STALE one left behind after its root's dependency edge changed, and an
+# otherwise UNREACHABLE one alike — all three are the identical fact from
+# this function's point of view: a `git` source with no path back to an
+# approved root).
+
+
+def _lock_entry_source_type(pkg: dict[str, Any]) -> str | None:
+    source = pkg.get("source")
+    if not isinstance(source, dict) or not source:
+        return None
+    value = source.get("type")
+    return value if isinstance(value, str) else "<non-string-type>"
+
+
+def _off_index_transitive_closure(
+    entries_by_identity: dict[str, dict[str, Any]],
+    approved_root_identities: frozenset[str],
+) -> frozenset[str]:
+    """Every lock-entry identity reachable from an approved off-index
+    root's OWN lock entry by following `[package.dependencies]` edges,
+    including the roots themselves. A dependency edge that names a
+    normalised identity with no matching lock entry at all is simply not
+    followed further (that dangling edge is not this function's concern —
+    `extract_dependency_surface` already refuses a manifest/lock
+    disagreement for anything it directly requires)."""
+
+    closure: set[str] = set()
+    frontier: list[str] = list(approved_root_identities)
+    while frontier:
+        identity = frontier.pop()
+        if identity in closure:
+            continue
+        closure.add(identity)
+        entry = entries_by_identity.get(identity)
+        if entry is None:
+            continue
+        raw_dependencies = entry.get("dependencies", {})
+        if not isinstance(raw_dependencies, dict):
+            continue
+        for dep_name in raw_dependencies:
+            if not isinstance(dep_name, str) or not dep_name:
+                continue
+            frontier.append(normalise_name_for_identity(dep_name))
+    return frozenset(closure)
+
+
+def _refuse_unclassifiable_lock_entries(
+    lock: dict[str, Any],
+    forgejo_lock_identities: frozenset[str],
+    off_index_dependencies: tuple[ApprovedOffIndexDependency, ...],
+) -> None:
+    """Refuses every lock entry that is neither a forgejo entry (already
+    classified by `_lock_packages`), an approved off-index root (already
+    verified by `_verify_off_index_lock_entry`), a member of an approved
+    root's proven transitive closure, nor an ordinary public entry."""
+
+    packages_raw = lock.get("package", [])
+    if not isinstance(packages_raw, list):
+        return  # _lock_packages already refused this shape
+
+    entries_by_identity: dict[str, dict[str, Any]] = {}
+    for pkg in packages_raw:
+        if not isinstance(pkg, dict):
+            return  # _lock_packages already refused this shape
+        raw_name = pkg.get("name")
+        if not isinstance(raw_name, str) or not raw_name:
+            return  # _lock_packages already refused this shape
+        entries_by_identity[normalise_name_for_identity(raw_name)] = pkg
+
+    approved_root_identities = frozenset(
+        dep.normalised_name for dep in off_index_dependencies
+    )
+    closure = _off_index_transitive_closure(
+        entries_by_identity, approved_root_identities
+    )
+
+    for identity, pkg in entries_by_identity.items():
+        if identity in forgejo_lock_identities or identity in approved_root_identities:
+            continue
+        source_type = _lock_entry_source_type(pkg)
+        if source_type is None or source_type == "legacy":
+            source = pkg.get("source")
+            url = source.get("url") if isinstance(source, dict) else None
+            if not _mentions_forgejo_host(url):
+                continue  # an ordinary public entry
+        if source_type == "git":
+            if identity in closure:
+                continue  # an admitted transitive off-index dependency
+            raise ManifestError(
+                f"lock package {pkg.get('name')!r} has a git source but is "
+                "not part of the proven transitive closure of any approved "
+                "off-index dependency; refusing an injected, stale, or "
+                "otherwise unreachable VCS lock entry"
+            )
+        raise ManifestError(
+            f"lock package {pkg.get('name')!r} has an unsupported lock "
+            f"source type {source_type!r}; this module classifies every "
+            "lock entry as public, forgejo, or an approved off-index "
+            "dependency's proven closure member, and refuses anything it "
+            "cannot place in one of those, rather than silently ignoring it"
+        )
+
+
 def load_permitted_off_index_dependencies(
     policy: dict[str, Any],
 ) -> dict[str, OffIndexPin]:
@@ -1209,6 +1332,10 @@ def _build_dependency_surface(
 
     for off_index_dep in off_index_dependencies:
         _verify_off_index_lock_entry(off_index_dep, lock)
+
+    _refuse_unclassifiable_lock_entries(
+        lock, frozenset(lock_by_name), tuple(off_index_dependencies)
+    )
 
     target_python = poetry.get("dependencies", {}).get("python")
     if not isinstance(target_python, str) or not target_python:
