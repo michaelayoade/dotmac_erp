@@ -398,8 +398,18 @@ refusing a pre-existing `index_root`, refusing a package key or filename
 that is not a safe bare name (no path separators, not absolute, not
 `.`/`..` — a caller-controlled key or filename previously could escape the
 staging tree entirely, since `Path.__truediv__` REPLACES the left operand
-when the right is absolute), and HTML-escaping every filename before it
-reaches a resolver-facing anchor.
+when the right is absolute), and encoding every filename TWICE before it
+reaches a resolver-facing anchor, in two DIFFERENT ways for two DIFFERENT
+reasons: `urllib.parse.quote(filename, safe="")` first, so the `href`'s
+path segment is the correct URL encoding of the real filename (without
+it, `#`/`?` inside a filename truncate the href at the wrong point — e.g.
+`pkg#x.whl` used to request `pkg`, not the staged file — and a filename
+that already looks percent-encoded, e.g. `%2e%2e...`, was never
+re-encoded, one client-side decode away from being read back as a `..`
+traversal spelling); then `html.escape(..., quote=True)` second, so that
+already-URL-safe segment is also safe to embed in the HTML `href`
+attribute. The human-visible anchor TEXT is HTML-escaped only, since it is
+not itself a URL.
 
 ## Publication has a stated, narrow race
 

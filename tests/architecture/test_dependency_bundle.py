@@ -1742,6 +1742,88 @@ def test_build_local_index_escapes_html_metacharacters_in_anchors(
     assert "&lt;script&gt;" in html_text
 
 
+# ── finding 6: local-index filenames must be URL-quoted, not merely
+# HTML-escaped, before they reach a resolver-facing href ─────────────────
+# (`html.escape` and `urllib.parse.quote` solve two different problems: one
+# stops a filename from breaking out of the HTML attribute/text context,
+# the other stops it from being reinterpreted as part of the URL's own
+# grammar once a resolver actually requests the href.)
+
+
+def test_build_local_index_url_encodes_a_hash_character_in_the_href(
+    tmp_path: Path,
+) -> None:
+    """`html.escape` does not touch `#`, `?`, or `%` -- none of those are
+    HTML metacharacters. A filename like `pkg#x.whl` therefore used to
+    produce the RAW href `pkg#x.whl#sha256=...`; a URL fragment (`#...`)
+    is never sent to the server, so a resolver following that link would
+    request `pkg`, not the staged file `pkg#x.whl`.
+
+    DESIGNED BREAK CONDITION: if the href goes back to being built from
+    bare `html.escape(filename, ...)` instead of
+    `urllib.parse.quote(filename, safe="")`, this test fails -- the href's
+    path segment (everything before `#sha256=`) would be `pkg` instead of
+    the percent-encoded real filename.
+    """
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    filename = "pkg#x.whl"
+    wheel_path = source_dir / "wheel.whl"
+    wheel_path.write_bytes(b"wheel bytes")
+    index_root = tmp_path / "index"
+    packages = {
+        "dotmac-kernel": [(filename, db.sha256_hex(b"wheel bytes"), wheel_path)]
+    }
+    db.build_local_index(index_root, packages)
+    html_text = (index_root / "simple" / "dotmac-kernel" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    href_path_segment = html_text.split('href="', 1)[1].split("#sha256=", 1)[0]
+    assert href_path_segment == urllib.parse.quote(filename, safe=""), (
+        "the href's path segment must be the PERCENT-ENCODED real filename, "
+        "not truncated at a literal '#' inside the filename"
+    )
+    assert (index_root / "simple" / "dotmac-kernel" / filename).is_file()
+
+
+def test_build_local_index_url_encodes_a_literal_percent_in_the_href(
+    tmp_path: Path,
+) -> None:
+    """A filename that already LOOKS percent-encoded (e.g. a literal `%`,
+    `2`, `e` sequence -- distinct from an actual `..` traversal segment,
+    which is refused outright by the separator/dotdot checks above) must
+    have its own `%` characters re-encoded (`%` -> `%25`) before reaching
+    the href. Without that, a client that percent-decodes the href once
+    would read the embedded `%2e%2e` back as a literal `..` spelling,
+    resolving somewhere other than the staged file.
+
+    DESIGNED BREAK CONDITION: without quoting the filename before it
+    reaches the href, this test fails -- the raw `%2e%2e...` spelling
+    would appear un-re-encoded in the href, one decode away from a
+    traversal spelling.
+    """
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    filename = "%2e%2e-not-actually-traversal.whl"
+    wheel_path = source_dir / "wheel.whl"
+    wheel_path.write_bytes(b"wheel bytes")
+    index_root = tmp_path / "index"
+    packages = {
+        "dotmac-kernel": [(filename, db.sha256_hex(b"wheel bytes"), wheel_path)]
+    }
+    db.build_local_index(index_root, packages)
+    html_text = (index_root / "simple" / "dotmac-kernel" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "%252e%252e" in html_text, (
+        "a literal '%' in the filename must itself be percent-encoded "
+        "('%' -> '%25') in the href, not passed through raw"
+    )
+    assert f'href="{filename}' not in html_text
+
+
 # ── finding 7: build_local_index's exception-translation boundary must be
 # real, not merely advertised in dependency-bundle-trust.md ──────────────
 

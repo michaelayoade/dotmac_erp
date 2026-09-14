@@ -3029,14 +3029,38 @@ def build_local_index(
                     raise BundleVerificationError(
                         f"cannot stage {filename!r}: {exc}"
                     ) from exc
-                # Escaped before ever reaching a resolver-facing anchor: a
-                # filename is caller-controlled and this HTML is served to
-                # a real package resolver.
-                safe_filename = html.escape(filename, quote=True)
+                # `html.escape` and URL-quoting solve two DIFFERENT
+                # problems and neither substitutes for the other:
+                # `html.escape` stops a filename from breaking out of the
+                # HTML attribute/text context (e.g. a literal `"` or `<`);
+                # `urllib.parse.quote` stops it from being interpreted as
+                # part of the URL's OWN grammar once a resolver requests
+                # the href. Without quoting, `pkg#x.whl` produces the href
+                # `pkg#x.whl#sha256=...`, whose fragment (`#x.whl#sha256=`)
+                # is never sent to the server at all — the resolver
+                # requests `pkg`, not the staged file. A literal `%`
+                # (e.g. a filename spelled `%2e%2e`) is similarly passed
+                # through unescaped by `html.escape`, so an unencoded
+                # `href="%2e%2e"` could be re-decoded by a client as a
+                # traversal segment. `quote(..., safe="")` percent-encodes
+                # every reserved/non-unreserved character, including a
+                # literal `%` itself (`%` -> `%25`), which is what stops a
+                # percent-encoded spelling in the filename from being
+                # re-interpreted after one decode. The two encodings are
+                # applied in this order — URL-quote first, to get the
+                # correct URL path segment; HTML-escape second, so that
+                # segment is safe to embed in the `href` attribute — and
+                # the human-visible anchor TEXT is HTML-escaped only (it
+                # is not itself a URL), so a resolver following the link
+                # and a human reading the page both see the real name.
+                href_filename = html.escape(
+                    urllib.parse.quote(filename, safe=""), quote=True
+                )
+                safe_filename_text = html.escape(filename, quote=True)
                 safe_digest = html.escape(digest_hex, quote=True)
                 anchors.append(
-                    f'<a href="{safe_filename}#sha256={safe_digest}">'
-                    f"{safe_filename}</a><br/>"
+                    f'<a href="{href_filename}#sha256={safe_digest}">'
+                    f"{safe_filename_text}</a><br/>"
                 )
             (pkg_dir / "index.html").write_text(
                 "<!DOCTYPE html><html><body>\n"
