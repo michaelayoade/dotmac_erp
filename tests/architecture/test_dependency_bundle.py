@@ -1139,16 +1139,38 @@ def _make_zip(
     return path
 
 
+#: A FULLY shape-valid `run` record -- extract_verified_bundle now checks
+#: every one of these fields itself (the finding this closes: it used to
+#: read only `members`), so every manifest fixture below must carry a
+#: complete one, not an empty placeholder `{}`.
+_VALID_MANIFEST_RUN: dict = {
+    "repository_full_name": "michaelayoade/dotmac_erp",
+    "repository_id": 1141216651,
+    "workflow_path": ".github/workflows/dependency-bundle-produce.yml",
+    "run_id": 111,
+    "run_attempt": 1,
+    "trusted_workflow_sha": "a" * 40,
+    "artifact_id": 222,
+    "artifact_name": "erp-dependency-bundle-x",
+    "artifact_run_id": 111,
+    "environment_name": "forgejo-registry-read-main",
+}
+
+
 def _manifest_for(members: dict[str, bytes]) -> dict:
     return {
         "schema_version": 2,
         "plan_digest": "a" * 64,
         "archive_sha256": "b" * 64,
         "members": {
-            name: {"sha256": db.sha256_hex(data), "size": len(data)}
+            name: {
+                "sha256": db.sha256_hex(data),
+                "size": len(data),
+                "package": "dotmac-kernel",
+            }
             for name, data in members.items()
         },
-        "run": {},
+        "run": dict(_VALID_MANIFEST_RUN),
     }
 
 
@@ -1174,6 +1196,76 @@ def test_extraction_refuses_a_pre_existing_destination(tmp_path: Path) -> None:
     dest.mkdir()
     with pytest.raises(db.ExtractionError, match="already exists"):
         db.extract_verified_bundle(archive, dest, _manifest_for(members))
+
+
+def _mutate(manifest: dict, mutation) -> dict:  # noqa: ANN001
+    mutated = json.loads(json.dumps(manifest))
+    mutation(mutated)
+    return mutated
+
+
+@pytest.mark.parametrize(
+    "reason,mutation",
+    [
+        (
+            "wrong schema_version",
+            lambda m: m.__setitem__("schema_version", 1),
+        ),
+        (
+            "missing schema_version",
+            lambda m: m.__delitem__("schema_version"),
+        ),
+        (
+            "non-hex plan_digest",
+            lambda m: m.__setitem__("plan_digest", "not-hex"),
+        ),
+        (
+            "missing plan_digest",
+            lambda m: m.__delitem__("plan_digest"),
+        ),
+        (
+            "non-hex archive_sha256",
+            lambda m: m.__setitem__("archive_sha256", "not-hex"),
+        ),
+        (
+            "run is not a dict",
+            lambda m: m.__setitem__("run", "not-a-dict"),
+        ),
+        (
+            "run missing a required field",
+            lambda m: m["run"].__delitem__("run_id"),
+        ),
+        (
+            "run has a negative coordinate",
+            lambda m: m["run"].__setitem__("run_id", -1),
+        ),
+        (
+            "run has the null trusted_workflow_sha",
+            lambda m: m["run"].__setitem__("trusted_workflow_sha", "0" * 40),
+        ),
+        (
+            "a member is missing its package field",
+            lambda m: m["members"]["a.whl"].__delitem__("package"),
+        ),
+    ],
+)
+def test_extract_verified_bundle_refuses_every_malformed_manifest_field(
+    tmp_path: Path, reason: str, mutation
+) -> None:
+    """Sensitivity proof for the finding this closes: extract_verified_bundle
+    used to read ONLY `members`, silently ignoring `schema_version`,
+    `plan_digest`, `archive_sha256`, `run`, and each member's own
+    `package` field. Plants a defect in each, one at a time, holding
+    everything else fixed at a fully valid manifest -- see
+    test_a_clean_bundle_extracts_and_publishes_atomically for the
+    near-miss half (the same shape, unmutated, still succeeds)."""
+
+    members = {"a.whl": b"AAAA"}
+    archive = _make_zip(tmp_path, members)
+    manifest = _mutate(_manifest_for(members), mutation)
+    with pytest.raises(db.BundleVerificationError):
+        db.extract_verified_bundle(archive, tmp_path / "out", manifest)
+    assert not (tmp_path / "out").exists(), reason
 
 
 def test_extraction_is_atomic_on_failure_nothing_is_published(tmp_path: Path) -> None:
@@ -1245,16 +1337,7 @@ def test_resolved_target_aliasing_is_refused(tmp_path: Path) -> None:
     with zipfile.ZipFile(archive_path, "w") as zf:
         zf.writestr("a.whl", "AAAA")
         zf.writestr("./a.whl", "BBBB")
-    manifest = {
-        "schema_version": 2,
-        "plan_digest": "a" * 64,
-        "archive_sha256": "b" * 64,
-        "members": {
-            "a.whl": {"sha256": db.sha256_hex(b"AAAA"), "size": 4},
-            "./a.whl": {"sha256": db.sha256_hex(b"BBBB"), "size": 4},
-        },
-        "run": {},
-    }
+    manifest = _manifest_for({"a.whl": b"AAAA", "./a.whl": b"BBBB"})
     with pytest.raises(db.ExtractionError, match="SAME target path"):
         db.extract_verified_bundle(archive_path, tmp_path / "out", manifest)
 
@@ -1283,7 +1366,11 @@ def test_a_manifest_expected_member_missing_from_the_archive_is_refused(
 ) -> None:
     archive = _make_zip(tmp_path, {"a.whl": b"AAAA"})
     manifest = _manifest_for({"a.whl": b"AAAA"})
-    manifest["members"]["missing.whl"] = {"sha256": "c" * 64, "size": 10}
+    manifest["members"]["missing.whl"] = {
+        "sha256": "c" * 64,
+        "size": 10,
+        "package": "dotmac-kernel",
+    }
     with pytest.raises(db.ExtractionError, match="does not contain"):
         db.extract_verified_bundle(archive, tmp_path / "out", manifest)
 

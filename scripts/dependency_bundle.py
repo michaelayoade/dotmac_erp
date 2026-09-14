@@ -2558,6 +2558,88 @@ def verify_member_hashes(dest_dir: Path, expected_hashes: dict[str, str]) -> Non
             )
 
 
+_MANIFEST_RUN_POSITIVE_INT_FIELDS = (
+    "repository_id",
+    "run_id",
+    "run_attempt",
+    "artifact_id",
+    "artifact_run_id",
+)
+_MANIFEST_RUN_NONEMPTY_STRING_FIELDS = (
+    "repository_full_name",
+    "workflow_path",
+    "artifact_name",
+    "environment_name",
+)
+
+
+def _refuse_malformed_manifest_run(run: Any) -> None:
+    """Shape-validates a bundle manifest's OWN `run` dict — untrusted data
+    read straight off disk/network, never an already-provenanced
+    `RunMetadata`. This function never constructs a `RunMetadata` and
+    never implies verification happened; it only refuses a `run` record
+    too malformed to even be a candidate for later cross-checking (see
+    `bind_bundle_to_candidate`, which separately cross-checks a VERIFIED
+    `RunMetadata`'s `run_id`/`artifact_id` against this same dict)."""
+
+    if not isinstance(run, dict):
+        raise BundleVerificationError("bundle manifest run must be a dict")
+    for field_name in _MANIFEST_RUN_POSITIVE_INT_FIELDS:
+        value = run.get(field_name)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise BundleVerificationError(
+                f"bundle manifest run.{field_name} must be a positive "
+                f"integer, got {value!r}"
+            )
+    for field_name in _MANIFEST_RUN_NONEMPTY_STRING_FIELDS:
+        value = run.get(field_name)
+        if not isinstance(value, str) or not value:
+            raise BundleVerificationError(
+                f"bundle manifest run.{field_name} must be a non-empty string"
+            )
+    trusted_sha = run.get("trusted_workflow_sha")
+    if (
+        not isinstance(trusted_sha, str)
+        or trusted_sha == _NULL_SHA
+        or not _COMMIT_SHA.match(trusted_sha)
+    ):
+        raise BundleVerificationError(
+            "bundle manifest run.trusted_workflow_sha must be a 40-hex "
+            "commit SHA, and not the all-zero null SHA"
+        )
+
+
+def _refuse_malformed_bundle_manifest_shape(bundle_manifest: dict[str, Any]) -> None:
+    """The manifest-wide shape check `extract_verified_bundle` used to
+    skip entirely: it read ONLY `members`, silently ignoring
+    `schema_version`, `plan_digest`, `archive_sha256`, `run`, and each
+    member's own `package` field — so a manifest malformed in any of
+    those ways would still extract successfully, and the trust
+    document's "fully shape-checked" claim was false for this function.
+    Every field this function checks is refused BEFORE any extraction
+    work begins, not discovered later by whichever downstream caller
+    happens to read it (`bind_bundle_to_candidate` reads `run` too, but
+    only after extraction has already published a tree)."""
+
+    schema_version = bundle_manifest.get("schema_version")
+    if schema_version != MANIFEST_SCHEMA_VERSION:
+        raise BundleVerificationError(
+            f"bundle manifest schema_version must be {MANIFEST_SCHEMA_VERSION}, "
+            f"got {schema_version!r}"
+        )
+    plan_digest = bundle_manifest.get("plan_digest")
+    if not isinstance(plan_digest, str) or not _SHA256_HEX.match(plan_digest):
+        raise BundleVerificationError(
+            "bundle manifest plan_digest must be a 64-hex sha256 string"
+        )
+    archive_sha256 = bundle_manifest.get("archive_sha256")
+    if not isinstance(archive_sha256, str) or not _SHA256_HEX.match(archive_sha256):
+        raise BundleVerificationError(
+            "bundle manifest archive_sha256 must be a 64-hex sha256 string"
+        )
+    _refuse_malformed_manifest_run(bundle_manifest.get("run"))
+
+
 def extract_verified_bundle(
     archive_path: Path, dest_dir: Path, bundle_manifest: dict[str, Any]
 ) -> list[str]:
@@ -2596,6 +2678,7 @@ def extract_verified_bundle(
             "materialises a fresh tree and refuses to merge into or "
             "overwrite one"
         )
+    _refuse_malformed_bundle_manifest_shape(bundle_manifest)
     members = bundle_manifest.get("members")
     if not isinstance(members, dict) or not members:
         raise BundleVerificationError("bundle manifest carries no members to extract")
@@ -2609,6 +2692,8 @@ def extract_verified_bundle(
             or record["size"] <= 0
             or not isinstance(record.get("sha256"), str)
             or not _SHA256_HEX.match(record["sha256"])
+            or not isinstance(record.get("package"), str)
+            or not record.get("package")
         ):
             raise BundleVerificationError(
                 f"bundle manifest member {name!r} is malformed: {record!r}"
