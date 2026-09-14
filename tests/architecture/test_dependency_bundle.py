@@ -1339,6 +1339,62 @@ def test_extraction_refuses_a_pre_existing_destination(tmp_path: Path) -> None:
         db.extract_verified_bundle(archive, dest, _manifest_for(members))
 
 
+# ── extraction's own filesystem calls must also be translated: the
+# already-fixed inner extraction/hashing try/except never covered
+# dest_dir.parent.mkdir or tempfile.mkdtemp, which run BEFORE it ────────
+
+
+def test_extraction_refuses_when_its_parent_directory_cannot_be_created(
+    tmp_path: Path,
+) -> None:
+    """Parent-directory creation (`dest_dir.parent.mkdir(...)`) sat OUTSIDE
+    this function's translation boundary -- a raw `OSError`
+    (`NotADirectoryError`, from a path component that is actually a file)
+    used to escape straight past callers that expect only
+    `ExtractionError`/`BundleVerificationError`.
+
+    DESIGNED BREAK CONDITION: removing the try/except wrapping
+    `dest_dir.parent.mkdir(...)` reintroduces the raw `OSError`, which
+    `pytest.raises(db.ExtractionError)` below does not catch.
+    """
+
+    members = {"a.whl": b"AAAA"}
+    archive = _make_zip(tmp_path, members)
+    blocking_file = tmp_path / "not-a-directory"
+    blocking_file.write_bytes(b"this is a file, not a directory")
+    dest = blocking_file / "nested" / "out"
+    with pytest.raises(db.ExtractionError, match="cannot create parent directory"):
+        db.extract_verified_bundle(archive, dest, _manifest_for(members))
+
+
+def test_extraction_refuses_when_the_staging_directory_cannot_be_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`tempfile.mkdtemp` sat unwrapped between the (also-fixed) parent-
+    directory creation immediately above it and the try/except that
+    already protects extraction and hashing -- a raw `OSError` from
+    `mkdtemp` itself (no space, no permission, a directory raced away)
+    would have escaped this function untranslated. `dest_dir.parent`
+    genuinely exists here (unlike the test above), isolating this call
+    site from the parent-creation one.
+
+    DESIGNED BREAK CONDITION: removing the try/except around the
+    `tempfile.mkdtemp(...)` call reintroduces the raw `OSError`, which
+    `pytest.raises(db.ExtractionError)` below does not catch.
+    """
+
+    members = {"a.whl": b"AAAA"}
+    archive = _make_zip(tmp_path, members)
+    dest = tmp_path / "out"
+
+    def _raise(*args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+        raise OSError("simulated: cannot create staging directory")
+
+    monkeypatch.setattr(db.tempfile, "mkdtemp", _raise)
+    with pytest.raises(db.ExtractionError, match="cannot create a staging directory"):
+        db.extract_verified_bundle(archive, dest, _manifest_for(members))
+
+
 def _mutate(manifest: dict, mutation) -> dict:  # noqa: ANN001
     mutated = json.loads(json.dumps(manifest))
     mutation(mutated)
@@ -1895,6 +1951,102 @@ def test_build_local_index_refuses_when_its_parent_directory_cannot_be_created(
         db.BundleVerificationError, match="cannot create parent directory"
     ):
         db.build_local_index(index_root, {})
+
+
+# ── sibling sweep: build_local_index's staging-phase writes and its own
+# root listing sat inside the SAME untranslating `except BaseException:
+# cleanup; raise` block as everything above -- that block cleans up, it
+# never translates -- so a raw OSError from any of them would still have
+# escaped even after the mkdir-focused finding-7 repair above. ──────────
+
+
+def _one_package_index_fixture(tmp_path: Path) -> tuple[Path, dict]:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    wheel_path = source_dir / "wheel.whl"
+    wheel_path.write_bytes(b"wheel bytes")
+    index_root = tmp_path / "index"
+    packages = {
+        "dotmac-kernel": [("wheel.whl", db.sha256_hex(b"wheel bytes"), wheel_path)]
+    }
+    return index_root, packages
+
+
+def test_build_local_index_refuses_when_a_package_index_cannot_be_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A raw `OSError` from the per-package `index.html` write (disk full,
+    permission denied) used to escape this function untranslated -- the
+    surrounding `except BaseException:` only cleans up the staging
+    directory and re-raises WHATEVER it caught, unchanged.
+
+    DESIGNED BREAK CONDITION: removing the try/except wrapping the
+    per-package `(pkg_dir / "index.html").write_text(...)` call
+    reintroduces the raw `OSError`, which
+    `pytest.raises(db.BundleVerificationError)` below does not catch.
+    """
+
+    index_root, packages = _one_package_index_fixture(tmp_path)
+    real_write_text = db.Path.write_text
+
+    def _maybe_raise(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+        if self.parent.name == "dotmac-kernel":
+            raise OSError("simulated: cannot write package index")
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(db.Path, "write_text", _maybe_raise)
+    with pytest.raises(db.BundleVerificationError, match="cannot write package index"):
+        db.build_local_index(index_root, packages)
+
+
+def test_build_local_index_refuses_when_the_staged_root_cannot_be_listed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Listing the staged index root (`root_dir.iterdir()`, to build the
+    top-level `index.html`) sat inside the same untranslating cleanup
+    block as the write above.
+
+    DESIGNED BREAK CONDITION: removing the try/except wrapping
+    `root_dir.iterdir()` reintroduces the raw `OSError`, which
+    `pytest.raises(db.BundleVerificationError)` below does not catch.
+    """
+
+    index_root, packages = _one_package_index_fixture(tmp_path)
+
+    def _raise(self):  # noqa: ANN001, ANN202
+        raise OSError("simulated: cannot list staged index root")
+
+    monkeypatch.setattr(db.Path, "iterdir", _raise)
+    with pytest.raises(
+        db.BundleVerificationError, match="cannot list staged index root"
+    ):
+        db.build_local_index(index_root, packages)
+
+
+def test_build_local_index_refuses_when_the_root_index_cannot_be_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Writing the top-level `index.html` (the LAST write of this
+    function's staging phase, after every package is written and listed)
+    sat inside the same untranslating cleanup block too.
+
+    DESIGNED BREAK CONDITION: removing the try/except wrapping the
+    root-level `(root_dir / "index.html").write_text(...)` call
+    reintroduces the raw `OSError`, which
+    `pytest.raises(db.BundleVerificationError)` below does not catch.
+    """
+
+    index_root, packages = _one_package_index_fixture(tmp_path)
+    real_write_text = db.Path.write_text
+
+    def _maybe_raise(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+        if self.parent.name == "simple":
+            raise OSError("simulated: cannot write root index")
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(db.Path, "write_text", _maybe_raise)
+    with pytest.raises(db.BundleVerificationError, match="cannot write root index"):
+        db.build_local_index(index_root, packages)
 
 
 # ── item 7: strong local run-metadata validation ─────────────────────
@@ -3200,6 +3352,25 @@ def test_both_implementations_refuse_an_empty_credential_rather_than_scan_vacuou
         db.scan_for_credential([target], "")
     with pytest.raises(erp_lock.Refusal):
         erp_lock.credential_sightings([target], "")
+
+
+def test_scan_for_credential_refuses_when_a_target_path_cannot_be_read(
+    tmp_path: Path,
+) -> None:
+    """`scan_for_credential`'s own `path.read_text(...)` sat outside this
+    module's translation boundary -- a target path that cannot be read
+    (here, one that was simply never written) raised a raw `OSError`
+    (`FileNotFoundError`) instead of the `DependencyBundleError` every
+    other adversarial-input site in this module raises.
+
+    DESIGNED BREAK CONDITION: removing the try/except around
+    `path.read_text(...)` reintroduces the raw `OSError`, which
+    `pytest.raises(db.BundleVerificationError)` below does not catch.
+    """
+
+    missing_target = tmp_path / "never-written.txt"
+    with pytest.raises(db.BundleVerificationError, match="cannot read"):
+        db.scan_for_credential([missing_target], CREDENTIAL)
 
 
 @pytest.mark.parametrize(

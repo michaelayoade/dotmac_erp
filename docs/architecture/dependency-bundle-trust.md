@@ -453,20 +453,29 @@ archive (`_extract_zip_members`'s archive open and its per-member
 open/read/write loop, and `create_bundle_manifest`'s own archive-closure
 check — see "Closure over the archive" above), `OSError` from reading an
 extracted file (`verify_member_hashes`), from reading an acquired file or
-the outer archive (`create_bundle_manifest`), and from every filesystem
-operation `build_local_index` performs while staging or publishing a
-local index — its own parent-directory creation, its staging index root,
-and each package directory — are all caught and re-raised as the matching
-`DependencyBundleError` subclass. `build_local_index` additionally refuses
-a non-string package key OUTRIGHT, before it ever reaches
-`normalise_name`'s regex: `re.Pattern.match` raises a raw `TypeError` on
-anything that is not a str/bytes-like object, which an earlier version of
-this function left uncaught, and a charset-valid but overlong package
-name (every character permitted by `normalise_name`, but the whole string
-longer than the filesystem's per-component limit) is refused via the same
-translated `OSError` path once the filesystem itself rejects it — the
-charset/shape checks alone cannot catch a length violation. A malformed
-`poetry.lock`
+the outer archive (`create_bundle_manifest`), from `scan_for_credential`
+reading a target path, from `extract_verified_bundle`'s OWN
+parent-directory creation and staging-directory creation
+(`dest_dir.parent.mkdir` and `tempfile.mkdtemp` — the try/except
+immediately below them, around `_extract_zip_members`/
+`verify_member_hashes`, never covered these two calls that run BEFORE
+it), and from every filesystem operation
+`build_local_index` performs while staging or publishing a local index —
+its own parent-directory creation, its staging index root, each package
+directory, each package's own `index.html` write, listing the staged root
+to build the top-level `index.html`, and that top-level write itself
+(these last three sat inside a `except BaseException: cleanup; raise`
+block that cleans up but never translates) — are all caught and re-raised
+as the matching `DependencyBundleError` subclass. `build_local_index`
+additionally refuses a non-string package key OUTRIGHT, before it ever
+reaches `normalise_name`'s regex: `re.Pattern.match` raises a raw
+`TypeError` on anything that is not a str/bytes-like object, which an
+earlier version of this function left uncaught, and a charset-valid but
+overlong package name (every character permitted by `normalise_name`, but
+the whole string longer than the filesystem's per-component limit) is
+refused via the same translated `OSError` path once the filesystem itself
+rejects it — the charset/shape checks alone cannot catch a length
+violation. A malformed `poetry.lock`
 `[[package]]` entry that is not itself a table, or whose `source`,
 `dependencies`, `groups`, `markers`, or `extras` field is not the shape
 expected, is refused by an explicit type check rather than left to raise a

@@ -2312,7 +2312,12 @@ def scan_for_credential(paths: Iterable[Path], credential: str) -> list[str]:
     forms = credential_encodings(credential)
     found: list[str] = []
     for path in sorted(paths):
-        text = path.read_text(encoding="utf-8", errors="replace")
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            raise BundleVerificationError(
+                f"cannot read {path} to scan for a credential: {exc}"
+            ) from exc
         for label, form in forms.items():
             if form in text:
                 found.append(f"{path.name}: {label}")
@@ -2701,10 +2706,22 @@ def extract_verified_bundle(
         expected_sizes[name] = record["size"]
         expected_hashes[name] = record["sha256"]
 
-    dest_dir.parent.mkdir(parents=True, exist_ok=True)
-    staging_dir = Path(
-        tempfile.mkdtemp(prefix=f".{dest_dir.name}.staging.", dir=str(dest_dir.parent))
-    )
+    try:
+        dest_dir.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ExtractionError(
+            f"cannot create parent directory for {dest_dir}: {exc}"
+        ) from exc
+    try:
+        staging_dir = Path(
+            tempfile.mkdtemp(
+                prefix=f".{dest_dir.name}.staging.", dir=str(dest_dir.parent)
+            )
+        )
+    except OSError as exc:
+        raise ExtractionError(
+            f"cannot create a staging directory beside {dest_dir}: {exc}"
+        ) from exc
     try:
         extracted = _extract_zip_members(archive_path, staging_dir, expected_sizes)
         verify_member_hashes(staging_dir, expected_hashes)
@@ -3062,24 +3079,39 @@ def build_local_index(
                     f'<a href="{href_filename}#sha256={safe_digest}">'
                     f"{safe_filename_text}</a><br/>"
                 )
-            (pkg_dir / "index.html").write_text(
-                "<!DOCTYPE html><html><body>\n"
-                + "\n".join(anchors)
-                + "\n</body></html>\n",
-                encoding="utf-8",
-            )
-        package_names = sorted(p.name for p in root_dir.iterdir() if p.is_dir())
+            try:
+                (pkg_dir / "index.html").write_text(
+                    "<!DOCTYPE html><html><body>\n"
+                    + "\n".join(anchors)
+                    + "\n</body></html>\n",
+                    encoding="utf-8",
+                )
+            except OSError as exc:
+                raise BundleVerificationError(
+                    f"cannot write package index for {normalised_pkg_name!r}: {exc}"
+                ) from exc
+        try:
+            package_names = sorted(p.name for p in root_dir.iterdir() if p.is_dir())
+        except OSError as exc:
+            raise BundleVerificationError(
+                f"cannot list staged index root {root_dir}: {exc}"
+            ) from exc
         root_anchors = [
             f'<a href="{html.escape(name, quote=True)}/">'
             f"{html.escape(name, quote=True)}</a><br/>"
             for name in package_names
         ]
-        (root_dir / "index.html").write_text(
-            "<!DOCTYPE html><html><body>\n"
-            + "\n".join(root_anchors)
-            + "\n</body></html>\n",
-            encoding="utf-8",
-        )
+        try:
+            (root_dir / "index.html").write_text(
+                "<!DOCTYPE html><html><body>\n"
+                + "\n".join(root_anchors)
+                + "\n</body></html>\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise BundleVerificationError(
+                f"cannot write root index at {root_dir}: {exc}"
+            ) from exc
     except BaseException:
         shutil.rmtree(staging_root, ignore_errors=True)
         raise
