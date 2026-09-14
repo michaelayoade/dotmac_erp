@@ -320,24 +320,16 @@ resolved_reference = \""""
         db.extract_dependency_surface(root, _GOOD_PIN)
 
 
-def test_a_transitive_dependency_of_an_approved_off_index_root_is_admitted(
-    tmp_path: Path,
-) -> None:
-    """The near-miss half of the closure proof: a `git`-sourced lock entry
-    IS admitted, without refusal, when it is reachable from an approved
-    off-index root's own `[package.dependencies]` edge -- the exact shape
-    the injected-entry test above shows is refused when that edge is
-    absent."""
-
+def _reachable_transitive_lock(resolved_reference: str) -> str:
     lock_with_edge = _OFF_INDEX_LOCK.replace(
         'resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"',
         'resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"\n\n'
         "[package.dependencies]\n"
         'some-transitive-lib = "^1.0"',
     )
-    reachable_lock = (
+    return (
         lock_with_edge
-        + """
+        + f"""
 [[package]]
 name = "some-transitive-lib"
 version = "1.0"
@@ -349,16 +341,92 @@ files = []
 type = "git"
 url = "https://github.com/michaelayoade/some-transitive-lib.git"
 reference = "main"
-resolved_reference = \""""
-        + ("e" * 40)
-        + """"
+resolved_reference = "{resolved_reference}"
 """
     )
-    root = _project_root(tmp_path, _OFF_INDEX_MANIFEST, reachable_lock)
+
+
+def test_a_transitive_dependency_of_an_approved_off_index_root_is_admitted(
+    tmp_path: Path,
+) -> None:
+    """The near-miss half of the closure proof: a `git`-sourced lock entry
+    IS admitted, without refusal, when it is reachable from an approved
+    off-index root's own `[package.dependencies]` edge -- the exact shape
+    the injected-entry test above shows is refused when that edge is
+    absent. It is recorded, by its own identity, as an
+    `OffIndexTransitiveDependency` -- admission alone, with no record, is
+    the residual gap the digest-sensitivity test below closes."""
+
+    root = _project_root(
+        tmp_path, _OFF_INDEX_MANIFEST, _reachable_transitive_lock("e" * 40)
+    )
     surface = db.extract_dependency_surface(root, _GOOD_PIN)
     assert len(surface.off_index_dependencies) == 1, (
         "the transitive closure member must be admitted silently -- it is "
         "not itself a manifest-declared off-index dependency"
+    )
+    assert len(surface.off_index_transitive_dependencies) == 1
+    transitive = surface.off_index_transitive_dependencies[0]
+    assert transitive.normalised_name == "some-transitive-lib"
+    assert transitive.resolved_commit == "e" * 40
+
+
+def test_an_admitted_transitive_off_index_dependencys_identity_moves_the_digest(
+    tmp_path: Path,
+) -> None:
+    """Michael's ruling: an admitted transitive member's identity must
+    contribute to the digest exactly as an approved root's does, or two
+    different transitive off-index states could share one digest -- the
+    same semantic-collision defect the digest exists to prevent. Measured
+    before/after, holding everything else fixed: only the ADMITTED
+    transitive member's resolved commit changes."""
+
+    before_root = _project_root(
+        tmp_path / "before", _OFF_INDEX_MANIFEST, _reachable_transitive_lock("e" * 40)
+    )
+    after_root = _project_root(
+        tmp_path / "after", _OFF_INDEX_MANIFEST, _reachable_transitive_lock("f" * 40)
+    )
+    before = db.compute_plan_digest(
+        db.extract_dependency_surface(before_root, _GOOD_PIN)
+    )
+    after = db.compute_plan_digest(db.extract_dependency_surface(after_root, _GOOD_PIN))
+    assert before != after, (
+        f"an admitted transitive off-index dependency's resolved commit "
+        f"changed but the digest did not: before={before} after={after}"
+    )
+
+
+def test_an_admitted_transitive_off_index_dependency_does_not_make_the_digest_hypersensitive(
+    tmp_path: Path,
+) -> None:
+    """The other half of the sensitivity proof: adding the new
+    `off_index_transitive_dependencies` field must not make the digest
+    move for something it should not move for. `[package.dependencies]`
+    key ORDER is exactly such a case -- Poetry's own TOML writer output
+    order is not semantically significant, and `build_plan_document`
+    canonicalises it via `dict.items()`'s own deterministic (insertion)
+    order for the `dependencies` sub-mapping regardless of how many extra
+    unrelated keys the source table carries; what must NOT move the
+    digest here is which of two textually-different-but-semantically-
+    identical single-dependency edges produced the SAME admitted closure
+    member -- covered by asserting the same transitive lock built via
+    `_reachable_transitive_lock` twice, independently, produces the same
+    digest both times (no hidden nondeterminism from `frozenset`/`dict`
+    iteration order in `_off_index_transitive_closure` or
+    `_classify_and_admit_lock_entries`)."""
+
+    root_a = _project_root(
+        tmp_path / "a", _OFF_INDEX_MANIFEST, _reachable_transitive_lock("e" * 40)
+    )
+    root_b = _project_root(
+        tmp_path / "b", _OFF_INDEX_MANIFEST, _reachable_transitive_lock("e" * 40)
+    )
+    digest_a = db.compute_plan_digest(db.extract_dependency_surface(root_a, _GOOD_PIN))
+    digest_b = db.compute_plan_digest(db.extract_dependency_surface(root_b, _GOOD_PIN))
+    assert digest_a == digest_b, (
+        "the identical transitive lock shape must produce the identical "
+        f"digest deterministically: a={digest_a} b={digest_b}"
     )
 
 

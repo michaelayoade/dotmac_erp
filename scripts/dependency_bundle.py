@@ -398,6 +398,26 @@ class ApprovedOffIndexDependency:
 
 
 @dataclass(frozen=True)
+class OffIndexTransitiveDependency:
+    """One lock-only package admitted because it is a PROVEN member of an
+    approved off-index root's transitive closure (see
+    `_off_index_transitive_closure`) — never itself a manifest declaration.
+
+    Included in the plan document for the identical reason
+    `ApprovedOffIndexDependency` is: an admitted entry the digest cannot
+    distinguish is a semantic collision the digest exists to prevent — two
+    different transitive off-index states (a different resolved commit, a
+    different source URL) must never share a digest just because
+    admission only checked REACHABILITY and stopped there."""
+
+    name: str
+    normalised_name: str
+    url: str
+    reference: str
+    resolved_commit: str
+
+
+@dataclass(frozen=True)
 class PublicDependency:
     """A dependency resolved from the default (public) index. Recorded only
     so classification is provably total; it never enters the plan digest —
@@ -457,6 +477,15 @@ class DependencySurface:
     dependencies: tuple[ForgejoDependency, ...]
     off_index_dependencies: tuple[ApprovedOffIndexDependency, ...]
     lock_packages: tuple[LockPackage, ...]
+    #: Every lock-only package `_classify_and_admit_lock_entries` admits
+    #: as a PROVEN transitive member of an approved off-index root's
+    #: closure — see `OffIndexTransitiveDependency`. Defaults to `()` so
+    #: every existing direct `DependencySurface(...)` construction (tests,
+    #: and any surface with no off-index dependency at all) is unaffected;
+    #: `build_plan_document` still includes this field's key unconditionally,
+    #: an empty list included, so its PRESENCE in the hashed document never
+    #: depends on whether it happens to be empty.
+    off_index_transitive_dependencies: tuple[OffIndexTransitiveDependency, ...] = ()
 
 
 def _load_toml(path: Path) -> dict[str, Any]:
@@ -1021,7 +1050,7 @@ def _verify_off_index_lock_entry(
 # as another package's dependency edge, and neither the manifest (which
 # never declared it) nor `_lock_packages` (which only looks at forgejo
 # entries) ever sees it — a later offline resolution could still fetch and
-# build it. `_refuse_unclassifiable_lock_entries` closes this: every
+# build it. `_classify_and_admit_lock_entries` closes this: every
 # `[[package]]` entry is classified as PUBLIC (no source, or an ordinary
 # `legacy` index source that does not name the forgejo host), the proven
 # transitive closure of an APPROVED OFF-INDEX ROOT (reachable from an
@@ -1034,7 +1063,12 @@ def _verify_off_index_lock_entry(
 # a STALE one left behind after its root's dependency edge changed, and an
 # otherwise UNREACHABLE one alike — all three are the identical fact from
 # this function's point of view: a `git` source with no path back to an
-# approved root).
+# approved root. Every ADMITTED closure member's own identity (name,
+# source URL, resolved commit) also becomes part of the plan digest, via
+# `OffIndexTransitiveDependency` — admission alone, with no digest
+# sensitivity, would let two different transitive off-index states share
+# one digest, which is the same semantic-collision defect the digest
+# exists to prevent everywhere else on this surface.
 
 
 def _lock_entry_source_type(pkg: dict[str, Any]) -> str | None:
@@ -1077,27 +1111,32 @@ def _off_index_transitive_closure(
     return frozenset(closure)
 
 
-def _refuse_unclassifiable_lock_entries(
+def _classify_and_admit_lock_entries(
     lock: dict[str, Any],
     forgejo_lock_identities: frozenset[str],
     off_index_dependencies: tuple[ApprovedOffIndexDependency, ...],
-) -> None:
+) -> tuple[OffIndexTransitiveDependency, ...]:
     """Refuses every lock entry that is neither a forgejo entry (already
     classified by `_lock_packages`), an approved off-index root (already
     verified by `_verify_off_index_lock_entry`), a member of an approved
-    root's proven transitive closure, nor an ordinary public entry."""
+    root's proven transitive closure, nor an ordinary public entry.
+
+    Returns every ADMITTED transitive closure member, as
+    `OffIndexTransitiveDependency` — the caller folds these into the plan
+    digest, exactly as it does an approved root, so that two different
+    admitted transitive states can never share one digest."""
 
     packages_raw = lock.get("package", [])
     if not isinstance(packages_raw, list):
-        return  # _lock_packages already refused this shape
+        return ()  # _lock_packages already refused this shape
 
     entries_by_identity: dict[str, dict[str, Any]] = {}
     for pkg in packages_raw:
         if not isinstance(pkg, dict):
-            return  # _lock_packages already refused this shape
+            return ()  # _lock_packages already refused this shape
         raw_name = pkg.get("name")
         if not isinstance(raw_name, str) or not raw_name:
-            return  # _lock_packages already refused this shape
+            return ()  # _lock_packages already refused this shape
         entries_by_identity[normalise_name_for_identity(raw_name)] = pkg
 
     approved_root_identities = frozenset(
@@ -1107,6 +1146,7 @@ def _refuse_unclassifiable_lock_entries(
         entries_by_identity, approved_root_identities
     )
 
+    admitted: list[OffIndexTransitiveDependency] = []
     for identity, pkg in entries_by_identity.items():
         if identity in forgejo_lock_identities or identity in approved_root_identities:
             continue
@@ -1118,7 +1158,18 @@ def _refuse_unclassifiable_lock_entries(
                 continue  # an ordinary public entry
         if source_type == "git":
             if identity in closure:
-                continue  # an admitted transitive off-index dependency
+                source = pkg.get("source")
+                source = source if isinstance(source, dict) else {}
+                admitted.append(
+                    OffIndexTransitiveDependency(
+                        name=str(pkg.get("name")),
+                        normalised_name=identity,
+                        url=str(source.get("url", "")),
+                        reference=str(source.get("reference", "")),
+                        resolved_commit=str(source.get("resolved_reference", "")),
+                    )
+                )
+                continue
             raise ManifestError(
                 f"lock package {pkg.get('name')!r} has a git source but is "
                 "not part of the proven transitive closure of any approved "
@@ -1132,6 +1183,7 @@ def _refuse_unclassifiable_lock_entries(
             "dependency's proven closure member, and refuses anything it "
             "cannot place in one of those, rather than silently ignoring it"
         )
+    return tuple(admitted)
 
 
 def load_permitted_off_index_dependencies(
@@ -1333,7 +1385,7 @@ def _build_dependency_surface(
     for off_index_dep in off_index_dependencies:
         _verify_off_index_lock_entry(off_index_dep, lock)
 
-    _refuse_unclassifiable_lock_entries(
+    off_index_transitive_dependencies = _classify_and_admit_lock_entries(
         lock, frozenset(lock_by_name), tuple(off_index_dependencies)
     )
 
@@ -1361,6 +1413,7 @@ def _build_dependency_surface(
         dependencies=tuple(dependencies),
         off_index_dependencies=tuple(off_index_dependencies),
         lock_packages=tuple(lock_packages),
+        off_index_transitive_dependencies=off_index_transitive_dependencies,
     )
 
 
@@ -1421,6 +1474,18 @@ def build_plan_document(surface: DependencySurface) -> dict[str, Any]:
             for dep in sorted(
                 surface.off_index_dependencies,
                 key=lambda d: (d.group, d.normalised_name),
+            )
+        ],
+        "off_index_transitive": [
+            {
+                "name": dep.normalised_name,
+                "url": dep.url,
+                "reference": dep.reference,
+                "resolved_commit": dep.resolved_commit,
+            }
+            for dep in sorted(
+                surface.off_index_transitive_dependencies,
+                key=lambda d: d.normalised_name,
             )
         ],
         "lock_packages": [
