@@ -913,6 +913,13 @@ def test_verify_run_metadata_refuses_a_non_dict_policy(tmp_path: Path) -> None:
 
 
 def _run() -> db.RunMetadata:
+    """A test fixture standing in for an already-verified `RunMetadata` —
+    the deliberate, visible bypass `_RUN_METADATA_PROVENANCE_TOKEN`'s own
+    docstring names: reaching for this module-private sentinel by name is
+    what makes constructing one outside `verify_run_metadata` an
+    unmistakable act rather than something a caller can do by accident
+    just by matching every field's shape."""
+
     return db.RunMetadata(
         repository_full_name="michaelayoade/dotmac_erp",
         repository_id=1141216651,
@@ -924,6 +931,7 @@ def _run() -> db.RunMetadata:
         artifact_name="erp-dependency-bundle-x",
         artifact_run_id=111,
         environment_name="forgejo-registry-read-main",
+        _provenance_token=db._RUN_METADATA_PROVENANCE_TOKEN,
     )
 
 
@@ -1728,6 +1736,68 @@ def test_artifact_belonging_to_a_different_run_is_refused(tmp_path: Path) -> Non
 def test_verify_run_metadata_docstring_states_it_is_local_only() -> None:
     doc = db.verify_run_metadata.__doc__ or ""
     assert "LOCAL" in doc or "local" in doc
+
+
+def test_a_shape_valid_runmetadata_without_the_provenance_token_is_refused() -> None:
+    """The defect this closes: a `RunMetadata` used to be accepted by
+    `create_bundle_manifest`/`bind_bundle_to_candidate` as proof
+    verification ran merely because every field happened to be
+    shape-valid -- ANY caller could build one directly, without ever going
+    through `verify_run_metadata`. Every field below is exactly as valid
+    as `_run()`'s; the only thing missing is the provenance token, and
+    that alone must now be refused."""
+
+    with pytest.raises(db.BundleVerificationError, match="verify_run_metadata"):
+        db.RunMetadata(
+            repository_full_name="michaelayoade/dotmac_erp",
+            repository_id=1141216651,
+            workflow_path=".github/workflows/dependency-bundle-produce.yml",
+            run_id=111,
+            run_attempt=1,
+            trusted_workflow_sha="a" * 40,
+            artifact_id=222,
+            artifact_name="erp-dependency-bundle-x",
+            artifact_run_id=111,
+            environment_name="forgejo-registry-read-main",
+        )
+
+
+def test_a_runmetadata_with_the_wrong_provenance_token_is_refused() -> None:
+    """The near-miss: a caller-supplied object that merely LOOKS like a
+    token (any other object, including a freshly-constructed sentinel) is
+    not `_RUN_METADATA_PROVENANCE_TOKEN` by identity, and is refused
+    exactly like no token at all -- this is an identity check, not a
+    truthiness or type check a forged object could satisfy."""
+
+    with pytest.raises(db.BundleVerificationError, match="verify_run_metadata"):
+        db.RunMetadata(
+            repository_full_name="michaelayoade/dotmac_erp",
+            repository_id=1141216651,
+            workflow_path=".github/workflows/dependency-bundle-produce.yml",
+            run_id=111,
+            run_attempt=1,
+            trusted_workflow_sha="a" * 40,
+            artifact_id=222,
+            artifact_name="erp-dependency-bundle-x",
+            artifact_run_id=111,
+            environment_name="forgejo-registry-read-main",
+            _provenance_token=object(),
+        )
+
+
+def test_verify_run_metadata_itself_produces_a_provenanced_runmetadata(
+    tmp_path: Path,
+) -> None:
+    """The near-miss's other half: the REAL path, `verify_run_metadata`,
+    must still succeed -- proving the token requirement refuses a bypass
+    without refusing genuine verification."""
+
+    candidate_root = _candidate_root(tmp_path)
+    digest = _candidate_digest(candidate_root)
+    result = db.verify_run_metadata(
+        _valid_run_metadata(digest), _valid_policy(), candidate_root=candidate_root
+    )
+    assert isinstance(result, db.RunMetadata)
 
 
 # ── candidate binding ──────────────────────────────────────────────────

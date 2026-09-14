@@ -123,6 +123,7 @@ import urllib.parse
 import zipfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any
 
@@ -1963,6 +1964,28 @@ _POSITIVE_INT_FIELDS = (
 )
 
 
+#: A module-PRIVATE sentinel. `RunMetadata.__post_init__` refuses to
+#: construct an instance unless `_provenance_token` is THIS exact object —
+#: identity-compared, never a string or bool a caller could plausibly
+#: guess or re-derive. Its only two legitimate holders are
+#: `verify_run_metadata` (the sole path that has actually checked the
+#: fields against policy) and this module's own test suite, which reaches
+#: for it explicitly, by its underscore-prefixed name, to build an
+#: already-verified fixture — a deliberate, visible, documented bypass,
+#: never something a caller does by accident while merely matching every
+#: field's shape. Before this existed, `RunMetadata`'s constructor was
+#: fully public and `__post_init__` validated shape only, so "hand a
+#: shape-valid instance to `create_bundle_manifest`/`bind_bundle_to_candidate`
+#: and have it treated as proof verification ran" was possible from ANY
+#: caller — a convention ("only `verify_run_metadata` builds these"), not
+#: an enforced boundary. This does not make forgery impossible — nothing
+#: in-process can stop a caller willing to import a private name — but it
+#: does make the bypass an unmistakable, greppable act rather than an
+#: incidental one, which is the same shape as every other "a caller must
+#: go out of its way to defeat this" boundary on this branch.
+_RUN_METADATA_PROVENANCE_TOKEN = object()
+
+
 @dataclass(frozen=True)
 class RunMetadata:
     """The verified-LOCALLY identity of the GitHub Actions run and artifact
@@ -1976,6 +1999,11 @@ class RunMetadata:
     prove the values are genuine; it only closes the gap where "any
     hand-built `RunMetadata` is accepted" meant a malformed one could reach
     `create_bundle_manifest` untouched.
+
+    It ALSO refuses construction outright unless the caller supplies
+    `_provenance_token=_RUN_METADATA_PROVENANCE_TOKEN` — see that
+    sentinel's own docstring for why a shape-valid instance alone is not
+    enough to be treated as "verification ran".
     """
 
     repository_full_name: str
@@ -1988,8 +2016,16 @@ class RunMetadata:
     artifact_name: str
     artifact_run_id: int
     environment_name: str
+    _provenance_token: object = dataclass_field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        if self._provenance_token is not _RUN_METADATA_PROVENANCE_TOKEN:
+            raise BundleVerificationError(
+                "RunMetadata must be constructed by verify_run_metadata (or, "
+                "in a test, with the explicit _RUN_METADATA_PROVENANCE_TOKEN "
+                "sentinel) -- a shape-valid instance alone is not proof that "
+                "verification ran"
+            )
         for field_name in (
             "repository_id",
             "run_id",
@@ -2141,6 +2177,7 @@ def verify_run_metadata(
         artifact_name=str(metadata["artifact_name"]),
         artifact_run_id=int(metadata["artifact_run_id"]),
         environment_name=str(metadata["environment_name"]),
+        _provenance_token=_RUN_METADATA_PROVENANCE_TOKEN,
     )
 
 

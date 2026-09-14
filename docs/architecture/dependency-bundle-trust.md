@@ -457,7 +457,17 @@ re-running `load_policy`'s full schema validation — a caller is expected
 to have already called `load_policy`, and this is a guard against a
 grossly wrong-shaped argument, not a second full validation pass. A
 `RunMetadata` instance is validated once, at its own construction
-(`__post_init__`); `bind_bundle_to_candidate` additionally refuses a `run`
+(`__post_init__`), which ALSO refuses construction outright unless the
+caller supplies the module-private `_RUN_METADATA_PROVENANCE_TOKEN`
+sentinel by identity — `verify_run_metadata` is the only production path
+that holds it. Before this, `RunMetadata`'s constructor was fully public
+and `__post_init__` validated shape only, so any caller could hand a
+shape-valid instance to `create_bundle_manifest`/`bind_bundle_to_candidate`
+and have it treated as proof verification ran — a convention ("only
+`verify_run_metadata` builds these"), not an enforced boundary; the
+sentinel makes constructing one outside that path an unmistakable,
+deliberate act rather than something reachable by accident.
+`bind_bundle_to_candidate` additionally refuses a `run`
 argument that is not a `RunMetadata` instance at all, and cross-checks
 that its `run_id`/`artifact_id` actually correspond to the SAME values
 inside `bundle_manifest`'s own `run` record — refusing to mix a validly-
