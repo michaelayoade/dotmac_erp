@@ -202,6 +202,29 @@ would let two different admitted transitive states share one digest, the
 same semantic-collision defect the digest exists to prevent everywhere
 else on this surface.
 
+**"Every RAW entry" means over ENTRY POSITIONS, not over a normalised-
+identity set.** An earlier version of this classification kept a
+normalised-identity-keyed dict as the thing it enumerated: two
+`[[package]]` entries whose names normalised to the same identity
+collapsed into one dict slot, and classification only ever saw the
+survivor — the other entry was never classified, never refused, and
+never moved the digest. A `git`-sourced entry reusing a FORGEJO or an
+APPROVED OFF-INDEX ROOT's own identity was the sharpest shape: skipped by
+the admission logic as "already classified" purely because the identity
+matched, landing in neither `lock_packages` nor `off_index_transitive` —
+a candidate lock could ship an attacker-controlled VCS dependency under a
+colliding name and `compute_plan_digest` would be byte-identical to a
+clean surface. `_lock_packages` and `_classify_and_admit_lock_entries`
+each now refuse a duplicate identity themselves, by POSITION (an entry's
+index in the raw `[[package]]` array), before classifying anything — a
+position cannot collapse the way a name can.
+`_classify_and_admit_lock_entries` additionally tracks a per-position
+disposition and refuses
+outright if any position ends unclassified or is classified more than
+once, so a future classification branch that forgets to record its
+outcome fails the extraction immediately rather than silently dropping
+the entry it was supposed to classify.
+
 **Construction:**
 
 1. Parse `pyproject.toml` and `poetry.lock` with `tomllib`.
