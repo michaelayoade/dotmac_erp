@@ -613,18 +613,31 @@ def test_a_git_entry_reusing_an_approved_off_index_roots_identity_is_refused_whe
     """Point 6's vector: a `git` entry from an ARBITRARY host colliding
     with an APPROVED OFF-INDEX ROOT's identity, not a forgejo one --
     `dotmac_integration_client` normalises to the same identity as the
-    real `dotmac-integration-client` root. Before this repair, the
-    admission loop skipped ANY entry whose identity was already in
-    `approved_root_identities`, for the identical reason the forgejo-name
-    case above was wrong: identity membership alone was treated as proof
-    of which entry was the real, verified root.
+    real `dotmac-integration-client` root.
 
-    DESIGNED BREAK CONDITION: without the identity-uniqueness refusal,
-    this injected entry is silently skipped as "already classified" —
-    neither refused nor admitted — regardless of never having been
-    reached by `_verify_off_index_lock_entry`'s own commit/url/tag check,
-    because that check only ever inspects the FIRST match by raw equality
-    scan, not every entry sharing the identity.
+    UNLIKE the forgejo-identity-reuse pair above, this exact vector was
+    ALREADY refused upstream, before this repair existed:
+    `_verify_off_index_lock_entry` (which runs before
+    `_classify_and_admit_lock_entries`, and whose own `matches` list
+    comprehension normalises EVERY candidate's name via
+    `normalise_name_for_identity` and collects ALL of them, not just the
+    first) already requires `len(matches) == 1` for the approved root's
+    own identity, and raises "must have exactly one poetry.lock entry,
+    found 2" for two same-identity entries. This test does not plant a
+    previously-unguarded hole; it pins that pre-existing refusal and
+    proves the new positional classification path does not weaken it --
+    the refusal now actually observed here comes from `_lock_packages`'s
+    own duplicate-identity check, which runs earlier still and produces a
+    DIFFERENT message than `_verify_off_index_lock_entry`'s.
+
+    DESIGNED BREAK CONDITION: reverting BOTH `_lock_packages`'s and
+    `_classify_and_admit_lock_entries`'s duplicate-identity refusals still
+    leaves this refused, by `_verify_off_index_lock_entry` -- but with a
+    message that does not contain "normalise to the same identity", so
+    this test's `match=` stops hitting and it fails, proving the
+    positional repair is still the thing this test is sensitive to, even
+    though it is not the ONLY thing standing between this vector and
+    admission.
     """
 
     root = _project_root(
@@ -639,7 +652,9 @@ def test_a_git_entry_reusing_an_approved_off_index_roots_identity_is_refused_whe
 def test_a_git_entry_reusing_an_approved_off_index_roots_identity_is_refused_when_injected_after_it(
     tmp_path: Path,
 ) -> None:
-    """The opposite ordering of the test above."""
+    """The opposite ordering of the test above; see its docstring for why
+    this vector was already refused upstream and what this test actually
+    pins."""
 
     root = _project_root(
         tmp_path,
@@ -3480,46 +3495,68 @@ def test_lock_packages_runs_before_off_index_lock_verification_in_extract_depend
     None
 ):
     """Ordering proof. `_verify_off_index_lock_entry`'s `isinstance` filter
-    is safe only because `extract_dependency_surface` always calls
+    is safe only because `_build_dependency_surface` always calls
     `_lock_packages(lock)` -- which walks every `[[package]]` entry in that
     exact `lock` dict and refuses a malformed name -- BEFORE it calls
-    `_verify_off_index_lock_entry(off_index_dep, lock)` on the same `lock`.
+    `_verify_off_index_lock_entry(off_index_dep, lock)` on the same `lock`;
+    and `_classify_and_admit_lock_entries`'s own duplicate-identity check
+    is redundant-by-construction in exactly the same way, one call later.
+
+    CORRECTED TARGET: this test used to inspect `extract_dependency_surface`
+    itself, which is a thin loader that only calls `_build_dependency_surface`
+    -- it never calls `_lock_packages`, `_verify_off_index_lock_entry`, or
+    `_classify_and_admit_lock_entries` directly, so the AST walk below found
+    NONE of them there and the test's own `assert ..._call_lines` guards
+    would have failed immediately. `_build_dependency_surface` is the
+    function that actually makes these three calls, in this order, on the
+    SAME `lock` dict -- it is now the one inspected here.
 
     This is an AST inspection, not a behavioural one: with today's code,
-    both call orders would raise the SAME observable `ManifestError` for a
+    every call order would raise the SAME observable `ManifestError` for a
     malformed name, because `_lock_packages` runs unconditionally either
-    way inside `extract_dependency_surface` -- a black-box test cannot
-    distinguish the two orders. The property under test is the ORDER OF
+    way inside `_build_dependency_surface` -- a black-box test cannot
+    distinguish the orders. The property under test is the ORDER OF
     EXECUTION itself.
 
     One-line break condition: this test fails the moment
-    `extract_dependency_surface` calls `_verify_off_index_lock_entry` on
-    `lock` at or before the point it calls `_lock_packages(lock)` -- at
-    that point the isinstance filter this test's sibling proves is
-    fail-open becomes the only gate against a malformed lock package name.
+    `_build_dependency_surface` calls `_verify_off_index_lock_entry` or
+    `_classify_and_admit_lock_entries` on `lock` at or before the point it
+    calls `_lock_packages(lock)`, or calls `_classify_and_admit_lock_entries`
+    at or before `_verify_off_index_lock_entry` -- at that point the
+    redundant-by-construction filters documented in both callees become the
+    ONLY gate against a malformed or duplicate-identity lock package name,
+    and each is a silent filter, not a refusal.
     """
 
-    source = inspect.getsource(db.extract_dependency_surface)
+    source = inspect.getsource(db._build_dependency_surface)
     func_def = ast.parse(source).body[0]
     assert isinstance(func_def, ast.FunctionDef)
 
     lock_packages_call_lines: list[int] = []
     verify_off_index_call_lines: list[int] = []
+    classify_and_admit_call_lines: list[int] = []
     for node in ast.walk(func_def):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             if node.func.id == "_lock_packages":
                 lock_packages_call_lines.append(node.lineno)
             elif node.func.id == "_verify_off_index_lock_entry":
                 verify_off_index_call_lines.append(node.lineno)
+            elif node.func.id == "_classify_and_admit_lock_entries":
+                classify_and_admit_call_lines.append(node.lineno)
 
     assert lock_packages_call_lines, (
-        "extract_dependency_surface no longer calls _lock_packages directly "
+        "_build_dependency_surface no longer calls _lock_packages directly "
         "-- this test can no longer prove the ordering it exists to prove"
     )
     assert verify_off_index_call_lines, (
-        "extract_dependency_surface no longer calls "
+        "_build_dependency_surface no longer calls "
         "_verify_off_index_lock_entry directly -- this test can no longer "
         "prove the ordering it exists to prove"
+    )
+    assert classify_and_admit_call_lines, (
+        "_build_dependency_surface no longer calls "
+        "_classify_and_admit_lock_entries directly -- this test can no "
+        "longer prove the ordering it exists to prove"
     )
     assert max(lock_packages_call_lines) < min(verify_off_index_call_lines), (
         "_lock_packages must run, for the whole lock, before "
@@ -3528,6 +3565,13 @@ def test_lock_packages_runs_before_off_index_lock_verification_in_extract_depend
         "redundant-by-construction in _verify_off_index_lock_entry becomes "
         "the ONLY gate against a malformed lock package name, and it is a "
         "silent filter, not a refusal"
+    )
+    assert max(verify_off_index_call_lines) < min(classify_and_admit_call_lines), (
+        "_verify_off_index_lock_entry must run, for every approved "
+        "off-index dependency, before _classify_and_admit_lock_entries is "
+        "ever called on that same lock -- _classify_and_admit_lock_entries "
+        "carries its own independent duplicate-identity refusal precisely "
+        "because this ordering is not guaranteed by anything but this test"
     )
 
 

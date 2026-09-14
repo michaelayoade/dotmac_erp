@@ -208,16 +208,27 @@ normalised-identity-keyed dict as the thing it enumerated: two
 `[[package]]` entries whose names normalised to the same identity
 collapsed into one dict slot, and classification only ever saw the
 survivor — the other entry was never classified, never refused, and
-never moved the digest. A `git`-sourced entry reusing a FORGEJO or an
-APPROVED OFF-INDEX ROOT's own identity was the sharpest shape: skipped by
-the admission logic as "already classified" purely because the identity
-matched, landing in neither `lock_packages` nor `off_index_transitive` —
-a candidate lock could ship an attacker-controlled VCS dependency under a
-colliding name and `compute_plan_digest` would be byte-identical to a
-clean surface. `_lock_packages` and `_classify_and_admit_lock_entries`
+never moved the digest. A `git`-sourced entry reusing a FORGEJO package's
+own identity was the genuinely NEW hole: `_lock_packages` only ever
+classifies an entry that "looks private" (forgejo reference or forgejo
+host) in the first place, so an injected duplicate reusing a forgejo name
+never reached any check, was skipped by the admission logic as "already
+classified" purely because the identity matched, and landed in neither
+`lock_packages` nor `off_index_transitive` — a candidate lock could ship
+an attacker-controlled VCS dependency under a colliding forgejo name and
+`compute_plan_digest` would be byte-identical to a clean surface. The
+identical shape against an APPROVED OFF-INDEX ROOT's identity was already
+refused upstream even before this repair: `_verify_off_index_lock_entry`
+(called before lock-entry classification) normalises every candidate's
+name and requires exactly one match, so two same-identity entries there
+already raised. `_lock_packages` and `_classify_and_admit_lock_entries`
 each now refuse a duplicate identity themselves, by POSITION (an entry's
 index in the raw `[[package]]` array), before classifying anything — a
-position cannot collapse the way a name can.
+position cannot collapse the way a name can — which keeps the
+off-index-root case refused too (now via a different, earlier message)
+and, independently of that pre-existing check, closes the case that
+mattered: an entry that is not a manifest-declared off-index root at all,
+where nothing upstream would otherwise have looked for a second match.
 `_classify_and_admit_lock_entries` additionally tracks a per-position
 disposition and refuses
 outright if any position ends unclassified or is classified more than

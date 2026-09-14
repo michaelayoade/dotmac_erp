@@ -1105,10 +1105,23 @@ def _verify_off_index_lock_entry(
 # entries whose names normalised to the same identity collapsed into one
 # dict slot, and the loop below classified only the SURVIVOR — the other
 # entry was never classified, never refused, and never moved the digest,
-# exactly the gap this section exists to close, just one layer deeper (a
-# `git`-sourced entry reusing a FORGEJO or an APPROVED OFF-INDEX ROOT's
-# own identity was the sharpest shape: skipped as "already classified"
-# purely because the identity matched). `_lock_packages` and
+# exactly the gap this section exists to close, just one layer deeper. A
+# `git`-sourced entry reusing a FORGEJO package's own identity was the
+# genuinely NEW hole this closed: nothing upstream already guarded it,
+# because `_lock_packages` only ever classifies an entry that "looks
+# private" (forgejo reference or forgejo host) in the first place, so an
+# injected duplicate reusing a forgejo name never even reached a check.
+# The SAME shape against an APPROVED OFF-INDEX ROOT's identity was
+# already refused upstream even before this section's identity-uniqueness
+# check existed: `_verify_off_index_lock_entry` (called before this
+# function, in `_build_dependency_surface`) normalises every candidate's
+# name via `normalise_name_for_identity`, collects ALL matches, and
+# requires exactly one — two same-identity entries already raised there.
+# This section's own refusal still applies to that case (it now fires
+# earlier, in `_lock_packages`, with a different message) and hardens
+# `_classify_and_admit_lock_entries` as an independently callable
+# function that does not rely on that upstream check having run at all.
+# `_lock_packages` and
 # `_classify_and_admit_lock_entries` each now refuse a duplicate identity
 # themselves — by POSITION, before classifying anything — and the latter
 # additionally tracks a per-position `disposition`, refusing outright if
