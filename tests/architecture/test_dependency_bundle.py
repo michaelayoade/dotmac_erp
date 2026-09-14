@@ -25,6 +25,7 @@ import ast
 import base64
 import dataclasses
 import difflib
+import inspect
 import json
 import sys
 import tempfile
@@ -2155,6 +2156,170 @@ def test_both_implementations_of_off_index_lock_name_identity_agree_on_every_vec
         f"the two implementations DISAGREED on lock name {declared_name!r} "
         f"({reason}): dependency_bundle refused={db_refused}, "
         f"erp_lock refused={erp_lock_refused}"
+    )
+
+
+# ── fail-open lock-name filtering: _lock_packages must REFUSE, not merely
+#    not-crash-on, a missing/null/non-string/empty/charset-invalid name ────
+#
+# An isinstance(...) guard used as a list-comprehension FILTER (as
+# `_verify_off_index_lock_entry` does) silently drops a malformed entry
+# from consideration instead of refusing it -- indistinguishable from "no
+# such entry" even though the entry exists in malformed form, and the plan
+# digest would then be computed over an incomplete surface. `_lock_packages`
+# is the earlier validator that must refuse every such name outright, for
+# every [[package]] entry, before any digest is produced.
+
+_LOCK_PACKAGE_NAME_REFUSAL_VECTORS: list[tuple[object, bool, str]] = [
+    ("dotmac-kernel", False, "a normal valid name is accepted"),
+    ("", True, "an empty string name is refused, not silently accepted"),
+    (
+        "dotmac kernel!",
+        True,
+        "a charset-invalid name (space and '!') is refused",
+    ),
+    ("-dotmac-kernel", True, "a name with a leading separator is refused"),
+    (None, True, "a null name is refused"),
+    (123, True, "a non-string (int) name is refused"),
+]
+
+
+@pytest.mark.parametrize(
+    "raw_name,expect_refusal,reason",
+    _LOCK_PACKAGE_NAME_REFUSAL_VECTORS,
+    ids=[v[2] for v in _LOCK_PACKAGE_NAME_REFUSAL_VECTORS],
+)
+def test_lock_packages_refuses_every_malformed_name_before_any_digest(
+    raw_name: object, expect_refusal: bool, reason: str
+) -> None:
+    """Sensitivity proof for the fail-open fix: plants each malformed-name
+    defect in turn (empty, charset-invalid, leading-separator, null,
+    non-string) and shows `_lock_packages` names it with a `ManifestError`
+    before reaching the forgejo-source checks below it -- and plants the
+    near-miss (a normal valid name) and shows that one is NOT refused."""
+
+    lock = {
+        "package": [
+            {
+                "name": raw_name,
+                "version": "0.1.0a1",
+                "source": {
+                    "type": "legacy",
+                    "reference": db.FORGEJO_SOURCE_NAME,
+                    "url": db.FORGEJO_LOCK_URL,
+                },
+                "files": [],
+            }
+        ]
+    }
+    if expect_refusal:
+        with pytest.raises(db.ManifestError, match="name"):
+            db._lock_packages(lock)
+    else:
+        packages = db._lock_packages(lock)
+        assert [p.name for p in packages] == [raw_name], reason
+
+
+def test_verify_off_index_lock_entrys_isinstance_filter_is_redundant_by_construction() -> (
+    None
+):
+    """`_verify_off_index_lock_entry`'s `isinstance(p.get("name"), str)`
+    filter is documented as redundant-by-construction because
+    `_lock_packages` has already refused every malformed-name entry in the
+    SAME `lock` dict, earlier. This proves the premise directly: called in
+    isolation (bypassing `_lock_packages` entirely, exactly as it would run
+    if a future change broke the ordering), the filter does NOT raise for a
+    non-string-named entry -- it silently drops it, which is the fail-open
+    shape. `_lock_packages` on that identical lock DOES raise. The two
+    results together are why the ordering (proven separately below) is
+    load-bearing."""
+
+    dep = db.ApprovedOffIndexDependency(
+        name=_OFF_INDEX_PIN_NAME,
+        normalised_name=db.normalise_name(_OFF_INDEX_PIN_NAME),
+        group="main",
+        url=_OFF_INDEX_PIN_URL,
+        tag=_OFF_INDEX_PIN_TAG,
+        resolved_commit=_OFF_INDEX_PIN_COMMIT,
+        group_optional=False,
+    )
+    lock_with_non_string_name = {
+        "package": [
+            {
+                "name": 123,
+                "source": {
+                    "type": "git",
+                    "url": _OFF_INDEX_PIN_URL,
+                    "reference": _OFF_INDEX_PIN_TAG,
+                    "resolved_reference": _OFF_INDEX_PIN_COMMIT,
+                },
+            }
+        ]
+    }
+    # Called alone, without _lock_packages having run first, the filter
+    # merely reports "no match" -- it does not name or refuse the malformed
+    # entry. This is the fail-open behaviour that makes the ordering below
+    # load-bearing rather than cosmetic.
+    with pytest.raises(db.ManifestError, match="must have exactly one"):
+        db._verify_off_index_lock_entry(dep, lock_with_non_string_name)
+
+    # The SAME lock, run through the earlier validator, is refused by name.
+    with pytest.raises(db.ManifestError, match="name"):
+        db._lock_packages(lock_with_non_string_name)
+
+
+def test_lock_packages_runs_before_off_index_lock_verification_in_extract_dependency_surface() -> (
+    None
+):
+    """Ordering proof. `_verify_off_index_lock_entry`'s `isinstance` filter
+    is safe only because `extract_dependency_surface` always calls
+    `_lock_packages(lock)` -- which walks every `[[package]]` entry in that
+    exact `lock` dict and refuses a malformed name -- BEFORE it calls
+    `_verify_off_index_lock_entry(off_index_dep, lock)` on the same `lock`.
+
+    This is an AST inspection, not a behavioural one: with today's code,
+    both call orders would raise the SAME observable `ManifestError` for a
+    malformed name, because `_lock_packages` runs unconditionally either
+    way inside `extract_dependency_surface` -- a black-box test cannot
+    distinguish the two orders. The property under test is the ORDER OF
+    EXECUTION itself.
+
+    One-line break condition: this test fails the moment
+    `extract_dependency_surface` calls `_verify_off_index_lock_entry` on
+    `lock` at or before the point it calls `_lock_packages(lock)` -- at
+    that point the isinstance filter this test's sibling proves is
+    fail-open becomes the only gate against a malformed lock package name.
+    """
+
+    source = inspect.getsource(db.extract_dependency_surface)
+    func_def = ast.parse(source).body[0]
+    assert isinstance(func_def, ast.FunctionDef)
+
+    lock_packages_call_lines: list[int] = []
+    verify_off_index_call_lines: list[int] = []
+    for node in ast.walk(func_def):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "_lock_packages":
+                lock_packages_call_lines.append(node.lineno)
+            elif node.func.id == "_verify_off_index_lock_entry":
+                verify_off_index_call_lines.append(node.lineno)
+
+    assert lock_packages_call_lines, (
+        "extract_dependency_surface no longer calls _lock_packages directly "
+        "-- this test can no longer prove the ordering it exists to prove"
+    )
+    assert verify_off_index_call_lines, (
+        "extract_dependency_surface no longer calls "
+        "_verify_off_index_lock_entry directly -- this test can no longer "
+        "prove the ordering it exists to prove"
+    )
+    assert max(lock_packages_call_lines) < min(verify_off_index_call_lines), (
+        "_lock_packages must run, for the whole lock, before "
+        "_verify_off_index_lock_entry is ever called on that same lock -- "
+        "otherwise the isinstance(name, str) filter documented as "
+        "redundant-by-construction in _verify_off_index_lock_entry becomes "
+        "the ONLY gate against a malformed lock package name, and it is a "
+        "silent filter, not a refusal"
     )
 
 

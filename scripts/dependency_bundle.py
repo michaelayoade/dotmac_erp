@@ -821,6 +821,31 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
                 f"poetry.lock [[package]] entry must be a table, got a "
                 f"{type(pkg).__name__}"
             )
+        # Validate the name FIRST, for EVERY package, before the
+        # looks_private/continue branch below -- not only for entries that
+        # already look forgejo-private. A missing, null, non-string, empty,
+        # or charset-invalid name must raise HERE, before any digest is
+        # produced from this lock, because an entry that does not "look
+        # private" under this function's own narrow test can still be the
+        # exact entry `_verify_off_index_lock_entry` searches the RAW lock
+        # for by name — a fail-open `isinstance` filter there would
+        # otherwise silently exclude a malformed-name entry from that
+        # search rather than refusing it, which is precisely the "answers
+        # without being able to refuse" defect this module exists to
+        # prevent. `_normalise_name_for_manifest` covers charset and
+        # edge-separator validity; the emptiness/type check here covers
+        # what that function's own `not name` guard already refuses, named
+        # explicitly so the reader does not have to trust that a later
+        # function catches it.
+        raw_name = pkg.get("name")
+        if not isinstance(raw_name, str) or not raw_name:
+            raise ManifestError(
+                "poetry.lock [[package]] entry has a missing, null, empty, "
+                f"or non-string name: {pkg!r}"
+            )
+        _normalise_name_for_manifest(
+            raw_name, where=f"poetry.lock package {raw_name!r}"
+        )
         source = pkg.get("source")
         if not isinstance(source, dict):
             source = {}
@@ -930,6 +955,27 @@ def _verify_off_index_lock_entry(
     # `len(matches) != 1` check already turns "no match" into the correct
     # refusal.
     dep_identity = normalise_name_for_identity(dep.name)
+    # `isinstance(p.get("name"), str)` here is REDUNDANT-BY-CONSTRUCTION,
+    # not a real gate: every entry in `packages_raw` has already passed
+    # through `_lock_packages`, which raises `ManifestError` for a missing,
+    # null, non-string, empty, OR charset-invalid `name` on EVERY package
+    # in this exact `lock` dict, before `extract_dependency_surface` ever
+    # calls this function (see `_lock_packages`'s name check, and
+    # `extract_dependency_surface`, which calls `_lock_packages(lock)`
+    # strictly before `_verify_off_index_lock_entry(off_index_dep, lock)`
+    # on the same `lock`). This filter therefore can never actually drop a
+    # malformed entry today. It is kept only as defense-in-depth, and it
+    # MUST stay documented as fail-open-shaped: if that ordering is ever
+    # broken — `_verify_off_index_lock_entry` called on a `lock` that did
+    # not first pass through `_lock_packages` — this `isinstance` check
+    # reverts to being the ONLY gate, and it is a FILTER, not a refusal: it
+    # would silently drop a malformed-name entry from `matches` rather than
+    # raising, which can turn a present-but-malformed lock entry into an
+    # indistinguishable "no match" and let the plan digest be computed over
+    # an incomplete surface. `test_lock_packages_runs_before_off_index_lock_verification`
+    # proves the ordering this redundancy depends on; if that test ever
+    # fails, this comment's premise is false and this filter is load-bearing
+    # again.
     matches = [
         p
         for p in packages_raw
