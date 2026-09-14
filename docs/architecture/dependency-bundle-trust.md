@@ -1,6 +1,6 @@
 # Dependency-bundle trust chain
 
-**Status:** slice 1a, since repaired against six adversarial review findings
+**Status:** slice 1a, since repaired against seven adversarial review findings
 (the "1a repair" below) — still purely additive. Nothing in this repository
 consumes this contract yet. `scripts/dependency_bundle.py`,
 `scripts/dependency_normalisation.py`,
@@ -12,7 +12,7 @@ mechanics and canonical policy for the end state; no workflow, Dockerfile,
 (verified against the real diff, not asserted): it now imports
 `dependency_normalisation` and its `_normalised` and
 `_normalised_repository_url` names each became a one-line alias to
-`dependency_normalisation.normalise_name` /
+`dependency_normalisation.normalise_name_for_identity` /
 `.normalise_repository_url` in place of a locally-defined function (see
 "Named duplication debt" below) — its credentialed acquisition
 orchestration is otherwise untouched. A third comparison — the LOCK-level
@@ -22,7 +22,7 @@ normalisation, but entirely on the `dependency_bundle.py` side:
 comparison, so no further `erp_lock.py` change was needed there.
 
 **The 1a repair.** An adversarial cross-model review of the original slice
-found six corrections to the contract this document claims, not scope
+found seven corrections to the contract this document claims, not scope
 expansion: (1) dependency classification was not total — off-index forms
 (`git`/`path`/`file`/direct `url`) silently vanished from the digest instead
 of being refused, and `[tool.poetry.requires-plugins]` was unchecked; (2)
@@ -660,7 +660,7 @@ leading/trailing separator; `erp_lock`'s did not; the two scripts could
 therefore disagree about a package's identity. The fix is
 `scripts/dependency_normalisation.py`: the ONE owner of that semantics.
 `erp_lock.py`'s only change in this repair is importing it
-(`_normalised = dependency_normalisation.normalise_name`) in place of its
+(`_normalised = dependency_normalisation.normalise_name_for_identity`) in place of its
 own definition — its credentialed acquisition orchestration is otherwise
 untouched.
 

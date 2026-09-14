@@ -905,9 +905,7 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
                 "lock entry must resolve to a distinct package identity"
             )
         seen_identities[identity] = raw_name
-        source = pkg.get("source")
-        if not isinstance(source, dict):
-            source = {}
+        source = _validated_lock_source(pkg, raw_name)
         looks_private = source.get("reference") == FORGEJO_SOURCE_NAME or (
             _mentions_forgejo_host(source.get("url"))
         )
@@ -982,13 +980,54 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
                 markers=markers,
                 extras=extras,
                 dependencies=dict(dependencies_raw),
-                source_type=str(source["type"]),
-                source_url=str(source["url"]),
-                source_reference=str(source["reference"]),
+                source_type=source["type"],
+                source_url=source["url"],
+                source_reference=source["reference"],
                 files=tuple(sorted(files, key=lambda d: d["file"])),
             )
         )
     return packages
+
+
+def _validated_lock_source(pkg: dict[str, Any], name: str) -> dict[str, Any]:
+    """Validate the source shapes used by lock classification."""
+
+    if "source" not in pkg:
+        return {}
+    source = pkg["source"]
+    if not isinstance(source, dict):
+        raise ManifestError(
+            f"lock package {name!r} has a non-table source entry: {source!r}"
+        )
+    source_type = source.get("type")
+    if not isinstance(source_type, str):
+        raise ManifestError(
+            f"lock package {name!r} has a source with a non-string type: {source!r}"
+        )
+    required = {
+        "legacy": ("url", "reference"),
+        "git": ("url", "reference", "resolved_reference"),
+    }.get(source_type, ())
+    if source_type not in {"legacy", "git"}:
+        raise ManifestError(
+            f"lock package {name!r} has a malformed forgejo source or "
+            f"unsupported lock source type {source_type!r}"
+        )
+    for field in required:
+        if not isinstance(source.get(field), str) or not source[field]:
+            raise ManifestError(
+                f"lock package {name!r} has a malformed {source_type} source: "
+                f"missing or non-string {field}"
+            )
+    if source_type == "git" and (
+        not _COMMIT_SHA.fullmatch(source["resolved_reference"])
+        or source["resolved_reference"] == "0" * 40
+    ):
+        raise ManifestError(
+            f"lock package {name!r} has a malformed git source: "
+            "resolved_reference must be a non-null 40-hex commit"
+        )
+    return source
 
 
 def _verify_off_index_lock_entry(
@@ -1303,27 +1342,25 @@ def _classify_and_admit_lock_entries(
     admitted: list[OffIndexTransitiveDependency] = []
     for position, pkg in enumerate(packages_raw):
         identity = identities[position]
+        source = _validated_lock_source(pkg, pkg["name"])
         if identity in forgejo_lock_identities or identity in approved_root_identities:
             _record(position, "already-classified")
             continue
         source_type = _lock_entry_source_type(pkg)
         if source_type is None or source_type == "legacy":
-            source = pkg.get("source")
-            url = source.get("url") if isinstance(source, dict) else None
+            url = source.get("url")
             if not _mentions_forgejo_host(url):
                 _record(position, "public")
                 continue  # an ordinary public entry
         if source_type == "git":
             if identity in closure:
-                source = pkg.get("source")
-                source = source if isinstance(source, dict) else {}
                 admitted.append(
                     OffIndexTransitiveDependency(
-                        name=str(pkg.get("name")),
+                        name=pkg["name"],
                         normalised_name=identity,
-                        url=str(source.get("url", "")),
-                        reference=str(source.get("reference", "")),
-                        resolved_commit=str(source.get("resolved_reference", "")),
+                        url=source["url"],
+                        reference=source["reference"],
+                        resolved_commit=source["resolved_reference"],
                     )
                 )
                 _record(position, "admitted-transitive")

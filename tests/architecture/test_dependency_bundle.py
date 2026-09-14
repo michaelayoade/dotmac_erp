@@ -1164,13 +1164,7 @@ def test_a_non_table_lock_package_entry_is_refused_not_a_raw_crash(
 def test_a_non_table_lock_source_does_not_crash_and_is_still_caught(
     tmp_path: Path,
 ) -> None:
-    """A `[[package]].source` that is a scalar, not a table, used to reach
-    `source.get(...)` and raise a raw AttributeError. It no longer crashes
-    -- the package is treated as not-obviously-private (its source cannot
-    be read at all) and SKIPPED, but since the manifest still declares
-    dotmac-kernel as a forgejo dependency, the existing manifest/lock
-    cross-check catches the resulting disagreement anyway: private state
-    is not silently accepted, it surfaces one check later."""
+    """A scalar `[[package]].source` is refused before classification."""
 
     lock = (
         '[[package]]\nname = "dotmac-kernel"\nversion = "0.1.0a1"\n'
@@ -1181,8 +1175,91 @@ def test_a_non_table_lock_source_does_not_crash_and_is_still_caught(
         'content-hash = "0000000000000000000000000000000000000000000000000000000000000000"\n'
     )
     root = _project_root(tmp_path, BASE_PYPROJECT, lock)
-    with pytest.raises(db.ManifestError, match="no corresponding"):
+    with pytest.raises(db.ManifestError, match="non-table source"):
         db.extract_dependency_surface(root)
+
+
+def test_a_non_manifest_non_table_lock_source_is_refused_standalone(
+    tmp_path: Path,
+) -> None:
+    """Malformed source shape is refused even when no manifest entry names it."""
+
+    lock = BASE_LOCK + (
+        '\n[[package]]\nname = "standalone-extra"\nversion = "1.0.0"\n'
+        'source = "not-a-table"\n'
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="non-table source"):
+        db.extract_dependency_surface(root)
+
+
+def test_a_public_lock_entry_without_source_remains_admitted(tmp_path: Path) -> None:
+    """An absent source is the valid public-package shape."""
+
+    lock = BASE_LOCK + (
+        '\n[[package]]\nname = "standalone-public"\nversion = "1.0.0"\n'
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    surface = db.extract_dependency_surface(root)
+    assert "standalone-public" not in {
+        dependency.normalised_name
+        for dependency in surface.off_index_transitive_dependencies
+    }
+
+
+def test_a_standalone_legacy_source_with_a_non_string_field_is_refused(
+    tmp_path: Path,
+) -> None:
+    lock = BASE_LOCK + (
+        '\n[[package]]\nname = "standalone-legacy"\nversion = "1.0.0"\n'
+        'source = {type = "legacy", url = "https://pypi.org/simple", reference = 7}\n'
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="malformed legacy source"):
+        db.extract_dependency_surface(root)
+
+
+@pytest.mark.parametrize("field", ["url", "reference"])
+def test_a_standalone_legacy_source_with_an_empty_field_is_refused(
+    tmp_path: Path, field: str
+) -> None:
+    lock = BASE_LOCK + (
+        '\n[[package]]\nname = "standalone-legacy"\nversion = "1.0.0"\n'
+        'source = {type = "legacy", url = "https://pypi.org/simple", reference = "pypi"}\n'
+    ).replace(
+        f'{field} = "https://pypi.org/simple"'
+        if field == "url"
+        else f'{field} = "pypi"',
+        f'{field} = ""',
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="malformed legacy source"):
+        db.extract_dependency_surface(root)
+
+
+def test_a_reachable_git_source_with_a_non_string_field_is_refused(
+    tmp_path: Path,
+) -> None:
+    lock = _reachable_transitive_lock("e" * 40).replace(
+        'url = "https://github.com/michaelayoade/some-transitive-lib.git"',
+        "url = 7",
+    )
+    root = _project_root(tmp_path, _OFF_INDEX_MANIFEST, lock)
+    with pytest.raises(db.ManifestError, match="malformed git source"):
+        db.extract_dependency_surface(root, _GOOD_PIN)
+
+
+@pytest.mark.parametrize("commit", ["", "z" * 40, "0" * 40])
+def test_a_reachable_git_source_with_a_malformed_commit_is_refused(
+    tmp_path: Path, commit: str
+) -> None:
+    lock = _reachable_transitive_lock("e" * 40).replace(
+        'resolved_reference = "e' + "e" * 39 + '"',
+        f'resolved_reference = "{commit}"',
+    )
+    root = _project_root(tmp_path, _OFF_INDEX_MANIFEST, lock)
+    with pytest.raises(db.ManifestError, match="malformed git source"):
+        db.extract_dependency_surface(root, _GOOD_PIN)
 
 
 def test_a_non_table_lock_dependencies_is_refused_not_a_raw_crash(
