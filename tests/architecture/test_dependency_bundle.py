@@ -72,6 +72,7 @@ def _real_permitted_off_index() -> dict[str, db.OffIndexPin]:
 
 
 def _project_root(tmp_path: Path, pyproject_text: str, lock_text: str) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "pyproject.toml").write_text(pyproject_text, encoding="utf-8")
     (tmp_path / "poetry.lock").write_text(lock_text, encoding="utf-8")
     return tmp_path
