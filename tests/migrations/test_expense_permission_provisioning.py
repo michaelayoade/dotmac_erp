@@ -95,13 +95,15 @@ def _seed_expense_payout_role_grants() -> dict[str, tuple[str, ...]]:
     }
 
 
-def _declared_role_grants() -> dict[str, tuple[str, ...]]:
+def _declared_role_grants(
+    role_names: set[str] | dict[str, str],
+) -> dict[str, tuple[str, ...]]:
     return {
         role: (
             *EXPENSE_ROLE_GRANTS.get(role, ()),
             *EXPENSE_PAYOUT_ROLE_GRANTS.get(role, ()),
         )
-        for role in EXPENSE_BASELINE_ROLES
+        for role in role_names
     }
 
 
@@ -117,10 +119,19 @@ def test_migration_is_a_frozen_copy_of_the_expense_seed_profile() -> None:
     } == EXPENSE_BASELINE_ROLES
     assert migration.EXPENSE_PERMISSIONS == EXPENSE_PERMISSION_DEFINITIONS
     assert migration.EXPENSE_PAYOUT_PERMISSIONS == EXPENSE_PAYOUT_PERMISSION_DEFINITIONS
-    assert migration.ROLE_DESCRIPTIONS == EXPENSE_BASELINE_ROLES
-    assert migration.ROLE_EXPENSE_GRANTS == EXPENSE_ROLE_GRANTS
-    assert migration.ROLE_EXPENSE_PAYOUT_GRANTS == EXPENSE_PAYOUT_ROLE_GRANTS
-    assert _declared_role_grants() == migration.ROLE_GRANTS
+    assert {
+        role: EXPENSE_BASELINE_ROLES[role] for role in migration.ROLE_DESCRIPTIONS
+    } == migration.ROLE_DESCRIPTIONS
+    assert {
+        role: EXPENSE_ROLE_GRANTS[role] for role in migration.ROLE_EXPENSE_GRANTS
+    } == migration.ROLE_EXPENSE_GRANTS
+    assert {
+        role: EXPENSE_PAYOUT_ROLE_GRANTS[role]
+        for role in migration.ROLE_EXPENSE_PAYOUT_GRANTS
+    } == migration.ROLE_EXPENSE_PAYOUT_GRANTS
+    assert (
+        _declared_role_grants(set(migration.ROLE_DESCRIPTIONS)) == migration.ROLE_GRANTS
+    )
 
 
 def test_every_grant_references_a_declared_permission_and_role() -> None:

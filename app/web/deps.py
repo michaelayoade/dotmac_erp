@@ -700,12 +700,15 @@ def base_context(
                 "leave:applications:approve:tier3",
             ]
         )
-        can_team_expenses = "admin" in auth.roles or auth.has_any_permission(
-            [
-                "expense:claims:approve:tier1",
-                "expense:claims:approve:tier2",
-                "expense:claims:approve:tier3",
-            ]
+        can_team_expenses = not auth.is_technician and (
+            "admin" in auth.roles
+            or auth.has_any_permission(
+                [
+                    "expense:claims:approve:tier1",
+                    "expense:claims:approve:tier2",
+                    "expense:claims:approve:tier3",
+                ]
+            )
         )
 
         settings_url = "/settings"
@@ -975,7 +978,20 @@ class WebAuthContext:
     @property
     def is_admin(self) -> bool:
         """Check if user has admin role."""
-        return "admin" in self.roles
+        return self.has_role("admin")
+
+    def has_role(self, role: str) -> bool:
+        """Check a role name using the same normalization as module access."""
+        normalized = (role or "").strip().lower()
+        return bool(normalized) and any(
+            candidate and candidate.strip().lower() == normalized
+            for candidate in self.roles
+        )
+
+    @property
+    def is_technician(self) -> bool:
+        """Return whether ERP expense pages must be hidden for this user."""
+        return self.has_role("technician")
 
     @property
     def accessible_modules(self) -> list[str]:
@@ -1028,7 +1044,7 @@ class WebAuthContext:
             modules.append("projects")
         if self.is_admin or "settings:access" in scopes_set:
             modules.append("settings")
-        if self.is_admin or "expense:access" in scopes_set:
+        if not self.is_technician and (self.is_admin or "expense:access" in scopes_set):
             modules.append("expense")
         if self.is_admin or has_fixed_assets_scope:
             modules.append("fixed_assets")
@@ -2008,6 +2024,14 @@ def require_expense_access(
         ):
             ...
     """
+    # Technicians keep expense scopes for Field Service/API integrations, but
+    # may not enter the ERP expense UI (even through another additive role).
+    if auth.is_technician:
+        raise HTTPException(
+            status_code=403,
+            detail="Expense pages are unavailable for the Technician role",
+        )
+
     # Allow both expense:access and finance:access since they're related
     if not auth.has_module_access("expense") and not auth.has_module_access("finance"):
         raise HTTPException(
@@ -2031,6 +2055,18 @@ def require_self_service_access(
         raise HTTPException(
             status_code=403,
             detail="Self-service access required",
+        )
+    return auth
+
+
+def require_self_service_expense_ui_access(
+    auth: WebAuthContext = Depends(require_self_service_access),
+) -> WebAuthContext:
+    """Deny Technician-role users access to ERP self-service expense pages."""
+    if auth.is_technician:
+        raise HTTPException(
+            status_code=403,
+            detail="Expense pages are unavailable for the Technician role",
         )
     return auth
 
@@ -2215,6 +2251,7 @@ def require_self_service_expense_approver(
     auth: WebAuthContext = Depends(require_self_service_access),
 ) -> WebAuthContext:
     """Require self-service access plus expense approval permission."""
+    require_self_service_expense_ui_access(auth)
     normalized_roles = {
         str(role).strip().lower().replace(" ", "_") for role in (auth.roles or [])
     }

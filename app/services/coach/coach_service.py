@@ -385,7 +385,7 @@ class CoachService:
             audiences.add("HR")
         if "department_manager" in roles:
             audiences.add("MANAGER")
-        if "employee" in roles:
+        if roles & {"employee", "technician"}:
             audiences.add("EMPLOYEE")
         if roles & {"operations_manager", "support_agent"}:
             audiences.add("OPERATIONS")

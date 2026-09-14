@@ -259,6 +259,7 @@
             </div>
             {% endif %}
 
+            {% if not auth.is_technician %}
             {# Linked Expenses #}
             <div class="card">
                 <div class="card-header flex items-center justify-between">
@@ -294,6 +295,7 @@
                 </div>
                 {% endif %}
             </div>
+            {% endif %}
 
             {# Linked Tasks #}
             <div class="card">
