@@ -106,6 +106,29 @@ def test_get_user_returns_none_for_ocs_not_found(mock_client_class: Mock) -> Non
 
 
 @patch("app.services.nextcloud.client.httpx.Client")
+def test_get_user_returns_none_for_ocs_404_inside_http_200(
+    mock_client_class: Mock,
+) -> None:
+    response = Mock()
+    response.status_code = 200
+    response.json.return_value = {
+        "ocs": {
+            "meta": {
+                "statuscode": 404,
+                "message": "User does not exist",
+            },
+            "data": [],
+        }
+    }
+    mock_client_class.return_value.__enter__.return_value.request.return_value = (
+        response
+    )
+    client = NextcloudTalkClient(_config())
+
+    assert client.get_user("missing@dotmac.ng") is None
+
+
+@patch("app.services.nextcloud.client.httpx.Client")
 def test_disable_user_url_encodes_its_identifier(mock_client_class: Mock) -> None:
     response = Mock()
     response.status_code = 200

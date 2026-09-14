@@ -26,7 +26,9 @@ _ROOM_API = "/ocs/v2.php/apps/spreed/api/v4/room"
 _CHAT_API = "/ocs/v2.php/apps/spreed/api/v1/chat"
 _PROVISIONING_API = "/ocs/v1.php/cloud"
 _PROVISIONING_SUCCESS_STATUS_CODE = 100
-_PROVISIONING_NOT_FOUND_STATUS_CODES = frozenset({998})
+# Nextcloud releases/backends use both the conventional OCS 404 and the
+# legacy provisioning code 998 for a missing user, sometimes inside HTTP 200.
+_PROVISIONING_NOT_FOUND_STATUS_CODES = frozenset({404, 998})
 
 
 class NextcloudError(Exception):
