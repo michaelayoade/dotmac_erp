@@ -3245,13 +3245,31 @@ def test_every_inventory_entry_resolves_in_both_modules() -> None:
 
 
 def test_the_inventory_has_not_grown_past_the_baseline() -> None:
+    """The baseline is a two-directional ratchet, not a ceiling.
+
+    A retired entry must shrink `BASELINE_INVENTORY_IDS` in the SAME
+    reviewed change that removes it from the inventory — a one-directional
+    `actual_ids <= BASELINE_INVENTORY_IDS` check stayed green when an
+    entry was deleted without lowering the baseline, which let the same id
+    be reintroduced later and pass again unnoticed (the "permanently at
+    zero" retirement this ratchet is documented to enforce). DESIGNED
+    BREAK CONDITION: replacing this `==` with the old `<=` makes this test
+    pass again even though a planted deletion (removing an entry from the
+    inventory JSON without touching `BASELINE_INVENTORY_IDS`) is present —
+    that is exactly the defect this equality check exists to catch, and is
+    how a reviewer can confirm this test still names it.
+    """
+
     inventory = _load_inventory()
     actual_ids = {entry["id"] for entry in inventory["entries"]}
-    assert actual_ids <= BASELINE_INVENTORY_IDS, (
-        f"the duplication inventory grew: {actual_ids - BASELINE_INVENTORY_IDS} "
-        "is not in the baseline. A NEW duplicated behaviour must not be "
-        "added without a deliberate, reviewed widening of "
-        "BASELINE_INVENTORY_IDS in this same test file."
+    assert actual_ids == BASELINE_INVENTORY_IDS, (
+        f"the duplication inventory and BASELINE_INVENTORY_IDS disagree: "
+        f"grown by {actual_ids - BASELINE_INVENTORY_IDS}, shrunk by "
+        f"{BASELINE_INVENTORY_IDS - actual_ids}. A NEW duplicated behaviour "
+        "must not be added, and a retired one must not be removed, without "
+        "a deliberate, reviewed update to BASELINE_INVENTORY_IDS in this "
+        "same test file and same change — otherwise a retired id could be "
+        "silently reintroduced later."
     )
 
 
