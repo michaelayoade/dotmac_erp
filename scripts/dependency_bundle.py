@@ -2757,6 +2757,20 @@ def create_bundle_manifest(
     There is only one surface input and every byte is independently
     re-read, so there is no seam at which a second plan's identity, or an
     unrelated archive, could be substituted for the real artifacts.
+
+    CLOSURE OVER THE ARCHIVE, NOT JUST OVER ITS BYTES: hashing
+    `archive_path`'s own bytes proves nothing about what is INSIDE it — an
+    archive built from a stale acquisition, or an unrelated one, hashes
+    just as validly as the correct one. This function therefore also
+    opens `archive_path` as a ZIP and proves, member by member, that it
+    ACTUALLY CONTAINS every acquired file under its exact planned name,
+    with the exact size and content digest just computed from the real
+    file on disk — not merely that some archive with that filename exists
+    or that the archive's outer digest happens to be reproducible. A
+    manifest is refused, not merely produced-and-later-found-unusable, if
+    the archive cannot be opened as a ZIP, is missing a required member,
+    or disagrees with the acquired file's own size or digest on a member
+    it does contain.
     """
 
     if schema_version != MANIFEST_SCHEMA_VERSION:
@@ -2817,6 +2831,36 @@ def create_bundle_manifest(
             f"cannot read archive {archive_path}: {exc}"
         ) from exc
     archive_sha256 = sha256_hex(archive_bytes)
+
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            archive_names = set(archive.namelist())
+            for filename, record in members.items():
+                if filename not in archive_names:
+                    raise BundleVerificationError(
+                        f"archive {archive_path} does not contain acquired "
+                        f"member {filename!r}; a bundle manifest must not "
+                        "claim closure over a file the archive lacks"
+                    )
+                info = archive.getinfo(filename)
+                if info.file_size != record["size"]:
+                    raise BundleVerificationError(
+                        f"archive member {filename!r} declares size "
+                        f"{info.file_size}, but the acquired file on disk "
+                        f"was {record['size']} bytes"
+                    )
+                member_sha256 = sha256_hex(archive.read(filename))
+                if member_sha256 != record["sha256"]:
+                    raise BundleVerificationError(
+                        f"archive member {filename!r} content digest "
+                        f"{member_sha256} does not match the acquired "
+                        f"file's digest {record['sha256']}"
+                    )
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise BundleVerificationError(
+            f"cannot open {archive_path} as a ZIP archive to verify it "
+            f"contains the acquired files: {exc}"
+        ) from exc
 
     plan_digest = compute_plan_digest(surface)
     return {

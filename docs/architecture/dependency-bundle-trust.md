@@ -287,6 +287,21 @@ second plan's identity, or an unrelated archive, could be substituted for
 the real artifacts — this is what closes the "plan A's digest attached to
 plan B's files" gap the original schema had (proven in
 `test_mixing_one_plans_digest_with_a_different_plans_files_is_refused`).
+Closure is checked over the ARCHIVE ITSELF, not only over
+`archive_path`'s outer bytes: `create_bundle_manifest` opens the archive
+as a ZIP and proves, member by member, that it actually CONTAINS every
+acquired file under its exact planned name, with the exact size and
+content digest just computed from the real file on disk. Hashing the
+archive's own bytes alone would prove nothing about what is inside it — an
+archive built from a stale or unrelated acquisition hashes just as validly
+as the correct one — so a manifest is refused outright, not merely
+produced-and-later-found-unusable at extraction time, if the archive
+cannot be opened as a ZIP, is missing a required member, or disagrees with
+the acquired file's own size or digest on a member it does contain
+(`test_create_bundle_manifest_refuses_a_non_zip_archive`,
+`test_create_bundle_manifest_refuses_an_archive_missing_an_acquired_member`,
+`test_create_bundle_manifest_refuses_an_archive_member_size_mismatch`,
+`test_create_bundle_manifest_refuses_an_archive_member_content_mismatch`).
 
 Every field is independently required, but `create_bundle_manifest` and
 `verify_run_metadata` do NOT check the same fields — neither of them takes

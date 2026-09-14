@@ -983,14 +983,36 @@ def _write_wheel(tmp_path: Path, content: bytes = _MANIFEST_TEST_WHEEL_BYTES) ->
     return _write_bytes(tmp_path, _MANIFEST_TEST_WHEEL_NAME, content)
 
 
-def _write_archive(tmp_path: Path, name: str = "bundle.zip") -> Path:
-    return _write_bytes(tmp_path, name, b"pretend outer archive bytes")
+def _write_archive(
+    tmp_path: Path, acquired: dict[str, Path], name: str = "bundle.zip"
+) -> Path:
+    """Build a GENUINE ZIP archive containing every `acquired` file under
+    its real member name and real bytes.
+
+    This replaces an earlier fixture that wrote non-ZIP "pretend outer
+    archive bytes" and expected `create_bundle_manifest` to accept it --
+    which it always did, because construction only hashed the archive's
+    own bytes and never opened it to check what was inside (finding 5).
+    That made the archive-closure property unreachable by every test using
+    the old fixture: a real bug there could never have made any of them
+    fail. Building a real archive here is what makes the closure check
+    below actually exercised by the existing "happy path" tests, and see
+    `test_create_bundle_manifest_refuses_a_non_zip_archive` and its
+    neighbours below for the fixtures that plant the specific archive/
+    acquired-file mismatches the check must refuse.
+    """
+
+    path = tmp_path / name
+    with zipfile.ZipFile(path, "w") as archive:
+        for member_name, source_path in acquired.items():
+            archive.writestr(member_name, source_path.read_bytes())
+    return path
 
 
 def test_create_bundle_manifest_computes_plan_digest_and_sizes(tmp_path: Path) -> None:
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
@@ -1008,7 +1030,7 @@ def test_create_bundle_manifest_refuses_when_a_planned_file_was_not_acquired(
     tmp_path: Path,
 ) -> None:
     surface = _manifest_test_surface()
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {})
     with pytest.raises(db.BundleVerificationError, match="not acquired"):
         db.create_bundle_manifest(
             surface=surface, acquired_files={}, archive_path=archive_path, run=_run()
@@ -1020,12 +1042,12 @@ def test_create_bundle_manifest_refuses_an_unaccounted_for_acquired_member(
 ) -> None:
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
     extra_path = _write_bytes(tmp_path, "extra-unplanned-file.whl", b"extra")
     acquired = {
         _MANIFEST_TEST_WHEEL_NAME: wheel_path,
         "extra-unplanned-file.whl": extra_path,
     }
+    archive_path = _write_archive(tmp_path, acquired)
     with pytest.raises(db.BundleVerificationError, match="does not name them"):
         db.create_bundle_manifest(
             surface=surface,
@@ -1042,7 +1064,7 @@ def test_create_bundle_manifest_refuses_a_digest_mismatch_between_plan_and_acqui
     wrong_path = _write_wheel(
         tmp_path, content=b"the wrong bytes, not what the plan requires"
     )
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wrong_path})
     with pytest.raises(db.BundleVerificationError, match="but the plan requires"):
         db.create_bundle_manifest(
             surface=surface,
@@ -1072,11 +1094,11 @@ def test_mixing_one_plans_digest_with_a_different_plans_files_is_refused(
     wheel_b_path = _write_bytes(
         tmp_path, _SECOND_MANIFEST_TEST_WHEEL_NAME, _SECOND_MANIFEST_TEST_WHEEL_BYTES
     )
-    archive_path = _write_archive(tmp_path)
     acquired_a = {
         _MANIFEST_TEST_WHEEL_NAME: wheel_a_path,
         _SECOND_MANIFEST_TEST_WHEEL_NAME: wheel_b_path,
     }
+    archive_path = _write_archive(tmp_path, acquired_a)
 
     # correct pairing succeeds
     manifest = db.create_bundle_manifest(
@@ -1092,6 +1114,125 @@ def test_mixing_one_plans_digest_with_a_different_plans_files_is_refused(
         db.create_bundle_manifest(
             surface=surface_b,
             acquired_files=acquired_a,
+            archive_path=archive_path,
+            run=_run(),
+        )
+
+
+# ── finding 5: construction-time closure must cover the ARCHIVE ──────────
+# (previously `create_bundle_manifest` only hashed `archive_path`'s own
+# bytes; it never checked the archive actually CONTAINED the acquired
+# files with matching names, sizes, and digests -- and the fixture used
+# throughout this file passed non-ZIP "pretend outer archive bytes", so
+# this property was never reachable by any existing test.)
+
+
+def test_create_bundle_manifest_refuses_a_non_zip_archive(tmp_path: Path) -> None:
+    """The exact historic fixture bug this finding traces to: every test
+    above used to write non-ZIP "pretend outer archive bytes" and
+    `create_bundle_manifest` accepted them, because construction only
+    hashed the outer bytes and never opened the archive to see what, if
+    anything, was inside. That is now refused outright.
+
+    DESIGNED BREAK CONDITION: if `create_bundle_manifest` is reverted to
+    hash `archive_path` without opening it as a ZIP, this test fails --
+    the manifest would be produced instead of refused, exactly reproducing
+    the fixture-masked gap finding 5 named.
+    """
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = _write_bytes(tmp_path, "bundle.zip", b"pretend outer archive bytes")
+    with pytest.raises(db.BundleVerificationError, match="ZIP archive"):
+        db.create_bundle_manifest(
+            surface=surface,
+            acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+            archive_path=archive_path,
+            run=_run(),
+        )
+
+
+def test_create_bundle_manifest_refuses_an_archive_missing_an_acquired_member(
+    tmp_path: Path,
+) -> None:
+    """A genuine ZIP that simply does not contain the acquired file at all
+    must be refused -- pairing a real archive with an unrelated file set is
+    exactly the "unusable supposedly closed artifact" finding 5 describes.
+
+    DESIGNED BREAK CONDITION: if the archive-membership check is removed
+    (construction goes back to trusting `archive_path`'s outer digest
+    alone), this test fails, because a manifest naming a member the
+    archive does not contain would be produced instead of refused.
+    """
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("unrelated-file.txt", b"nothing to do with the plan")
+    with pytest.raises(db.BundleVerificationError, match="does not contain"):
+        db.create_bundle_manifest(
+            surface=surface,
+            acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+            archive_path=archive_path,
+            run=_run(),
+        )
+
+
+def test_create_bundle_manifest_refuses_an_archive_member_size_mismatch(
+    tmp_path: Path,
+) -> None:
+    """A member present under the RIGHT name but the WRONG size -- the
+    archive names the acquired file but does not actually carry the same
+    bytes that were read and hashed from disk.
+
+    DESIGNED BREAK CONDITION: without the per-member size cross-check,
+    this test fails, because an archive whose member disagrees in size
+    with the acquired file would still be accepted.
+    """
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    archive_path = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            _MANIFEST_TEST_WHEEL_NAME, _MANIFEST_TEST_WHEEL_BYTES + b"more"
+        )
+    with pytest.raises(db.BundleVerificationError, match="declares size"):
+        db.create_bundle_manifest(
+            surface=surface,
+            acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
+            archive_path=archive_path,
+            run=_run(),
+        )
+
+
+def test_create_bundle_manifest_refuses_an_archive_member_content_mismatch(
+    tmp_path: Path,
+) -> None:
+    """A member present under the right name and the SAME size, but
+    different CONTENT -- the size cross-check alone would not catch this;
+    only a content-digest comparison does.
+
+    DESIGNED BREAK CONDITION: without the per-member content-digest
+    cross-check (as opposed to only the size check above), this test
+    fails, because same-size-but-different-content archive bytes would
+    still be accepted and paired with the acquired file's real digest in
+    the manifest.
+    """
+
+    surface = _manifest_test_surface()
+    wheel_path = _write_wheel(tmp_path)
+    same_size_different_bytes = bytes((b + 1) % 256 for b in _MANIFEST_TEST_WHEEL_BYTES)
+    assert len(same_size_different_bytes) == len(_MANIFEST_TEST_WHEEL_BYTES)
+    assert same_size_different_bytes != _MANIFEST_TEST_WHEEL_BYTES
+    archive_path = tmp_path / "bundle.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr(_MANIFEST_TEST_WHEEL_NAME, same_size_different_bytes)
+    with pytest.raises(db.BundleVerificationError, match="content digest"):
+        db.create_bundle_manifest(
+            surface=surface,
+            acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
             archive_path=archive_path,
             run=_run(),
         )
@@ -1893,7 +2034,7 @@ def test_verify_run_metadata_itself_produces_a_provenanced_runmetadata(
 def test_binding_refuses_a_digest_mismatch(tmp_path: Path) -> None:
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
@@ -1943,7 +2084,7 @@ def _matching_candidate_root(tmp_path: Path, subdir: str) -> Path:
 def test_binding_succeeds_when_digests_match(tmp_path: Path) -> None:
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
@@ -1988,7 +2129,7 @@ def test_bind_bundle_to_candidate_reads_the_committed_blob_not_a_dirtied_working
 
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
@@ -2041,7 +2182,7 @@ def test_binding_refuses_a_candidate_with_no_git_checkout(tmp_path: Path) -> Non
 
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
@@ -2058,7 +2199,7 @@ def test_binding_refuses_a_candidate_with_no_git_checkout(tmp_path: Path) -> Non
 def test_binding_refuses_a_null_sha_head(tmp_path: Path) -> None:
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
@@ -2083,7 +2224,7 @@ def test_binding_refuses_a_raw_dict_in_place_of_runmetadata(tmp_path: Path) -> N
 
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
@@ -2104,7 +2245,7 @@ def test_binding_refuses_a_runmetadata_for_an_unrelated_run(tmp_path: Path) -> N
 
     surface = _manifest_test_surface()
     wheel_path = _write_wheel(tmp_path)
-    archive_path = _write_archive(tmp_path)
+    archive_path = _write_archive(tmp_path, {_MANIFEST_TEST_WHEEL_NAME: wheel_path})
     manifest = db.create_bundle_manifest(
         surface=surface,
         acquired_files={_MANIFEST_TEST_WHEEL_NAME: wheel_path},
