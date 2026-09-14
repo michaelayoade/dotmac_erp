@@ -171,6 +171,37 @@ and included in the plan document under `"off_index"` — an off-index
 addition, or a change to which commit an existing off-index pin resolves
 to, always moves the digest.
 
+**Lock-entry classification is likewise total, but over a different set:
+every RAW `poetry.lock` `[[package]]` entry, not only a manifest
+dependency declaration.** `_lock_packages` classifies a lock entry as
+"private" only when its own reference or source URL names the forgejo
+host — everything else used to hit an unconditional `continue` and was
+never classified, never refused, and never moved the digest, which meant
+a candidate lock could add a TRANSITIVE `git`-sourced package from an
+arbitrary host, name it as another package's dependency edge, and have
+neither the manifest (which never declared it) nor `_lock_packages`
+(which only looks at forgejo entries) ever see it. `_classify_and_admit_lock_entries`
+closes that: every `[[package]]` entry resolves to exactly one of PUBLIC
+(no source, or an ordinary registry source that does not name the
+forgejo host), an already-classified forgejo entry, an approved
+off-index root's own entry, a PROVEN member of an approved off-index
+root's transitive closure (reachable from the root's own lock entry by
+following `[package.dependencies]` edges — never merely "it looks
+private" or "its reference matches"), or REFUSED with `ManifestError`: a
+`git`-sourced entry that is not part of any approved root's proven
+closure is refused as an injected, stale, or otherwise unreachable VCS
+lock entry (one message covers all three, since they are the identical
+fact from this function's point of view — a `git` source with no path
+back to an approved root); a lock entry whose source `type` this module
+has no policy for at all is refused as an unsupported lock source type.
+Every ADMITTED transitive-closure member's own identity (name, source
+URL, reference, resolved commit) is returned as an
+`OffIndexTransitiveDependency` and folded into the plan document under
+`"off_index_transitive"` — admission alone, with no digest sensitivity,
+would let two different admitted transitive states share one digest, the
+same semantic-collision defect the digest exists to prevent everywhere
+else on this surface.
+
 **Construction:**
 
 1. Parse `pyproject.toml` and `poetry.lock` with `tomllib`.
@@ -204,9 +235,11 @@ to, always moves the digest.
    `source.reference == "forgejo"` — direct OR transitive — including its
    normalised name, version, groups, `optional`, `python-versions`,
    `markers`, `extras`, dependencies, full source record, and every `(file,
-   hash)` pair; the lock's own `[metadata].lock-version` and
-   `.python-versions`; and the schema/policy version plus target Python
-   constraint and platform.
+   hash)` pair; every entry `_classify_and_admit_lock_entries` ADMITS as a
+   proven transitive-closure member of an approved off-index root — its
+   name, source url, reference, and resolved commit; the lock's own
+   `[metadata].lock-version` and `.python-versions`; and the schema/policy
+   version plus target Python constraint and platform.
 4. Serialise as canonical UTF-8 JSON: `json.dumps(doc, sort_keys=True,
    separators=(",", ":"))` plus a trailing newline.
 5. Hash: `SHA256(b"dotmac.erp-dependency-plan.v1\0" + canonical_json_bytes)`.
@@ -217,9 +250,13 @@ group assignment, a group's own `optional` flag, a marker, an extra, a
 dependency's own `optional` key, a per-dependency `python` constraint, a
 lock package's `python-versions`/`markers`/`extras`, a wheel/sdist
 filename, a published hash, the lock's own format version or
-resolution-wide Python constraint, or an approved off-index dependency's
-pinned URL/tag/commit. Every one of these is proven by a dedicated
-before/after mutation test in `tests/architecture/test_dependency_bundle.py`.
+resolution-wide Python constraint, an approved off-index dependency's
+pinned URL/tag/commit, or an ADMITTED off-index transitive-closure
+member's presence, url, reference, or resolved commit — the
+`"off_index_transitive"` key `_classify_and_admit_lock_entries` populates
+so that two different admitted transitive states can never share one
+digest. Every one of these is proven by a dedicated before/after mutation
+test in `tests/architecture/test_dependency_bundle.py`.
 
 **What does not:** TOML comments, whitespace, or key order; the
 application's own `[tool.poetry].version`; and any public (non-forgejo,
