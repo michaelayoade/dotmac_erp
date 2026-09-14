@@ -430,6 +430,310 @@ def test_an_admitted_transitive_off_index_dependency_does_not_make_the_digest_hy
     )
 
 
+# ── the enumeration invariant: classification is total over IDENTITIES,
+# not merely over raw entries -- a normalised name keying a collection is
+# sound for COMPARISON and unsound for ENUMERATION, and this whole block
+# proves the specific place that distinction was crossed. ─────────────────
+
+
+def _evil_git_package(
+    name: str, resolved_reference: str, *, host: str = "evil.example.com"
+) -> str:
+    return f"""
+[[package]]
+name = "{name}"
+version = "1.0"
+python-versions = ">=3.11"
+groups = ["main"]
+files = []
+
+[package.source]
+type = "git"
+url = "https://{host}/evil.git"
+reference = "main"
+resolved_reference = "{resolved_reference}"
+"""
+
+
+def test_a_duplicate_lock_identity_pair_is_refused_hyphen_spelling_first(
+    tmp_path: Path,
+) -> None:
+    """The last-wins collapse this closes: two `[[package]]` entries whose
+    names normalise to the SAME identity (`evil-transitive` /
+    `evil_transitive`) -- neither forgejo, neither an approved off-index
+    root -- used to collapse into one `entries_by_identity` dict slot,
+    silently dropping whichever entry lost the collision from
+    classification entirely. Both spelling orders are planted (this test
+    and its sibling below) because the defect was ORDER-DEPENDENT
+    (last-wins): a fix that only refuses one order would pass a test that
+    only plants that order.
+
+    DESIGNED BREAK CONDITION: reverting the identity-uniqueness check in
+    `_lock_packages` (or its own independent twin in
+    `_classify_and_admit_lock_entries`) makes this raise nothing -- one of
+    the two entries silently vanishes from classification instead.
+    """
+
+    lock = (
+        BASE_LOCK
+        + _evil_git_package("evil-transitive", "d" * 40)
+        + _evil_git_package("evil_transitive", "e" * 40)
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="normalise to the same identity"):
+        db.extract_dependency_surface(root)
+
+
+def test_a_duplicate_lock_identity_pair_is_refused_underscore_spelling_first(
+    tmp_path: Path,
+) -> None:
+    """The opposite ordering of the test above -- see its docstring for
+    why both orders are planted independently rather than sharing one."""
+
+    lock = (
+        BASE_LOCK
+        + _evil_git_package("evil_transitive", "e" * 40)
+        + _evil_git_package("evil-transitive", "d" * 40)
+    )
+    root = _project_root(tmp_path, BASE_PYPROJECT, lock)
+    with pytest.raises(db.ManifestError, match="normalise to the same identity"):
+        db.extract_dependency_surface(root)
+
+
+def _lock_with_injected_forgejo_reuse(*, injected_first: bool) -> str:
+    dotmac_kernel_entry = """
+[[package]]
+name = "dotmac-kernel"
+version = "0.1.0a1"
+python-versions = ">=3.11"
+groups = ["main"]
+optional = false
+files = [
+    {file = "dotmac_kernel-0.1.0a1-py3-none-any.whl", hash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+]
+
+[package.source]
+type = "legacy"
+url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"
+reference = "forgejo"
+"""
+    injected_entry = _evil_git_package("dotmac_kernel", "f" * 40)
+    requests_entry = """
+[[package]]
+name = "requests"
+version = "2.31.0"
+python-versions = ">=3.8"
+groups = ["main"]
+files = []
+
+[package.source]
+type = "legacy"
+url = "https://pypi.org/simple"
+reference = "pypi"
+"""
+    metadata = """
+[metadata]
+lock-version = "2.1"
+python-versions = ">=3.11,<3.13"
+content-hash = "0000000000000000000000000000000000000000000000000000000000000000"
+"""
+    ordered = (
+        [requests_entry, injected_entry, dotmac_kernel_entry]
+        if injected_first
+        else [requests_entry, dotmac_kernel_entry, injected_entry]
+    )
+    return "".join(ordered) + metadata
+
+
+def test_a_git_entry_reusing_the_forgejo_identity_is_refused_when_injected_before_it(
+    tmp_path: Path,
+) -> None:
+    """The sharper shape of the same defect: a `git`-sourced entry from an
+    ARBITRARY host, reusing the real forgejo package's own identity
+    (`dotmac_kernel` normalises to the same identity as `dotmac-kernel`).
+    Before this repair, the admission loop skipped ANY entry whose
+    identity was already in `forgejo_lock_identities` as "already
+    classified" -- identity membership alone was wrongly treated as proof
+    that the entry currently being looked at was the real forgejo one.
+
+    DESIGNED BREAK CONDITION: without the identity-uniqueness refusal,
+    this injected entry is silently skipped as "already classified" —
+    neither refused nor admitted — and `compute_plan_digest` would be
+    unaffected by its presence.
+    """
+
+    root = _project_root(
+        tmp_path,
+        BASE_PYPROJECT,
+        _lock_with_injected_forgejo_reuse(injected_first=True),
+    )
+    with pytest.raises(db.ManifestError, match="normalise to the same identity"):
+        db.extract_dependency_surface(root)
+
+
+def test_a_git_entry_reusing_the_forgejo_identity_is_refused_when_injected_after_it(
+    tmp_path: Path,
+) -> None:
+    """The opposite ordering of the test above."""
+
+    root = _project_root(
+        tmp_path,
+        BASE_PYPROJECT,
+        _lock_with_injected_forgejo_reuse(injected_first=False),
+    )
+    with pytest.raises(db.ManifestError, match="normalise to the same identity"):
+        db.extract_dependency_surface(root)
+
+
+def _lock_with_injected_off_index_root_reuse(*, injected_first: bool) -> str:
+    root_entry = """
+[[package]]
+name = "dotmac-integration-client"
+version = "0.2.0"
+python-versions = ">=3.11"
+groups = ["main"]
+files = []
+
+[package.source]
+type = "git"
+url = "https://github.com/michaelayoade/dotmac-integration-client.git"
+reference = "v0.2.0"
+resolved_reference = "a4fe55f4ed704c556c4d1e3cc728ec4ef0dd8042"
+"""
+    injected_entry = _evil_git_package("dotmac_integration_client", "c" * 40)
+    parts = (
+        [injected_entry, root_entry] if injected_first else [root_entry, injected_entry]
+    )
+    return BASE_LOCK + "".join(parts)
+
+
+def test_a_git_entry_reusing_an_approved_off_index_roots_identity_is_refused_when_injected_before_it(
+    tmp_path: Path,
+) -> None:
+    """Point 6's vector: a `git` entry from an ARBITRARY host colliding
+    with an APPROVED OFF-INDEX ROOT's identity, not a forgejo one --
+    `dotmac_integration_client` normalises to the same identity as the
+    real `dotmac-integration-client` root. Before this repair, the
+    admission loop skipped ANY entry whose identity was already in
+    `approved_root_identities`, for the identical reason the forgejo-name
+    case above was wrong: identity membership alone was treated as proof
+    of which entry was the real, verified root.
+
+    DESIGNED BREAK CONDITION: without the identity-uniqueness refusal,
+    this injected entry is silently skipped as "already classified" —
+    neither refused nor admitted — regardless of never having been
+    reached by `_verify_off_index_lock_entry`'s own commit/url/tag check,
+    because that check only ever inspects the FIRST match by raw equality
+    scan, not every entry sharing the identity.
+    """
+
+    root = _project_root(
+        tmp_path,
+        _OFF_INDEX_MANIFEST,
+        _lock_with_injected_off_index_root_reuse(injected_first=True),
+    )
+    with pytest.raises(db.ManifestError, match="normalise to the same identity"):
+        db.extract_dependency_surface(root, _GOOD_PIN)
+
+
+def test_a_git_entry_reusing_an_approved_off_index_roots_identity_is_refused_when_injected_after_it(
+    tmp_path: Path,
+) -> None:
+    """The opposite ordering of the test above."""
+
+    root = _project_root(
+        tmp_path,
+        _OFF_INDEX_MANIFEST,
+        _lock_with_injected_off_index_root_reuse(injected_first=False),
+    )
+    with pytest.raises(db.ManifestError, match="normalise to the same identity"):
+        db.extract_dependency_surface(root, _GOOD_PIN)
+
+
+def test_the_classification_loop_accounts_for_every_outcome_type(
+    tmp_path: Path,
+) -> None:
+    """The positional conservation invariant's CLEAN-TREE half: a lock
+    exercising every outcome bucket in one pass -- an ordinary public
+    entry (`requests`), an already-classified forgejo entry
+    (`dotmac-kernel`), an already-classified approved off-index root
+    (`dotmac-integration-client`), and an admitted transitive member
+    (`some-transitive-lib`) -- must extract successfully without tripping
+    `_classify_and_admit_lock_entries`'s internal `disposition`
+    accounting (every position must land in exactly one bucket; none may
+    stay `None`, none may be recorded twice). This proves the accounting
+    does not FALSELY fire on legitimate, fully-classified input.
+
+    The 'fires on a genuinely missing or duplicated disposition' half is a
+    DESIGN CLAIM, not an executed test: today's classification loop has
+    no code path that reaches the bottom of an iteration without
+    recording exactly one outcome via `_record` or aborting the function
+    outright via `raise` -- every branch is already exhaustive by
+    construction, which is precisely what the positional check exists to
+    keep true for a change that has not been written yet. Tried, as a
+    design check, against this exact implementation: a plausible new
+    branch for an unhandled `source_type` (e.g. `"hg"`) that appends to
+    `admitted` and `continue`s without calling `_record` trips the
+    trailing `unclassified` check immediately, because `disposition[i]`
+    stays `None`; a branch that calls `_record` and then falls through to
+    another `_record` call for the same position (a forgotten `continue`)
+    trips `_record`'s own already-set check immediately. Neither escapes
+    unnoticed.
+    """
+
+    root = _project_root(
+        tmp_path, _OFF_INDEX_MANIFEST, _reachable_transitive_lock("e" * 40)
+    )
+    surface = db.extract_dependency_surface(root, _GOOD_PIN)
+    assert len(surface.off_index_transitive_dependencies) == 1
+
+
+def test_classify_and_admit_lock_entries_refuses_a_duplicate_identity_even_when_called_directly(
+    tmp_path: Path,
+) -> None:
+    """Defense-in-depth proof: `_classify_and_admit_lock_entries` refuses
+    a duplicate identity ITSELF, not merely because `_lock_packages`
+    already refused it upstream. Calls the function directly with a hand-
+    built `lock` dict that never passed through `_lock_packages` at all,
+    so this cannot be satisfied by the upstream refusal -- only the
+    function's own `first_seen_at` check can catch it here.
+
+    DESIGNED BREAK CONDITION: removing `_classify_and_admit_lock_entries`'s
+    own duplicate-identity check (while leaving `_lock_packages`'s intact)
+    would not change this test's normal `extract_dependency_surface`
+    callers at all -- they would still be refused upstream -- but this
+    DIRECT call would then raise nothing, silently returning a tuple that
+    accounts for only one of the two same-identity entries.
+    """
+
+    lock = {
+        "package": [
+            {
+                "name": "evil-transitive",
+                "version": "1.0",
+                "source": {
+                    "type": "git",
+                    "url": "https://evil.example.com/evil.git",
+                    "reference": "main",
+                    "resolved_reference": "d" * 40,
+                },
+            },
+            {
+                "name": "evil_transitive",
+                "version": "1.0",
+                "source": {
+                    "type": "git",
+                    "url": "https://evil.example.com/evil.git",
+                    "reference": "main",
+                    "resolved_reference": "e" * 40,
+                },
+            },
+        ]
+    }
+    with pytest.raises(db.ManifestError, match="normalise to the same identity"):
+        db._classify_and_admit_lock_entries(lock, frozenset(), ())
+
+
 def test_an_unsupported_lock_source_type_is_refused(tmp_path: Path) -> None:
     """Total classification's third bucket: a lock entry whose source is
     neither public (no source, or an ordinary non-forgejo `legacy` index),

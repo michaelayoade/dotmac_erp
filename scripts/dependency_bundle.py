@@ -846,6 +846,7 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
     if not isinstance(packages_raw, list):
         raise ManifestError("poetry.lock [[package]] must be an array")
     packages: list[LockPackage] = []
+    seen_identities: dict[str, str] = {}
     for pkg in packages_raw:
         if not isinstance(pkg, dict):
             raise ManifestError(
@@ -874,9 +875,36 @@ def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
                 "poetry.lock [[package]] entry has a missing, null, empty, "
                 f"or non-string name: {pkg!r}"
             )
-        _normalise_name_for_manifest(
+        identity = _normalise_name_for_manifest(
             raw_name, where=f"poetry.lock package {raw_name!r}"
         )
+        # TOTAL over IDENTITIES, not merely over raw entries: two
+        # `[[package]]` entries whose names normalise to the same identity
+        # (`evil-transitive` / `evil_transitive` / `Evil.Transitive`) must
+        # be refused HERE, for every entry regardless of whether it "looks
+        # private" — before this check existed, a downstream identity-keyed
+        # dict (`_classify_and_admit_lock_entries`'s `entries_by_identity`,
+        # and this module's own `lock_by_name` in `_build_dependency_surface`)
+        # would silently collapse the pair, dropping one entry from
+        # classification entirely. A `git`-sourced duplicate reusing a
+        # FORGEJO package's identity is the sharper case: it would be
+        # skipped by `_classify_and_admit_lock_entries`'s admission loop as
+        # "already classified" (identity membership alone was treated as
+        # proof), landing in neither `lock_packages` nor
+        # `off_index_transitive`, so `compute_plan_digest` would be
+        # byte-identical to a clean surface while an attacker-controlled
+        # VCS dependency shipped. Refusing any duplicate identity here,
+        # unconditionally and before classification, closes both shapes at
+        # the one place every lock entry is already required to pass
+        # through.
+        if identity in seen_identities:
+            raise ManifestError(
+                f"poetry.lock contains two [[package]] entries whose names "
+                f"normalise to the same identity {identity!r}: "
+                f"{seen_identities[identity]!r} and {raw_name!r}; every "
+                "lock entry must resolve to a distinct package identity"
+            )
+        seen_identities[identity] = raw_name
         source = pkg.get("source")
         if not isinstance(source, dict):
             source = {}
@@ -1070,6 +1098,23 @@ def _verify_off_index_lock_entry(
 # sensitivity, would let two different transitive off-index states share
 # one digest, which is the same semantic-collision defect the digest
 # exists to prevent everywhere else on this surface.
+#
+# "Total" here means over ENTRY POSITIONS, not over a normalised-identity
+# set. An earlier version of this classification kept a normalised-
+# identity-keyed dict as the thing it enumerated: two `[[package]]`
+# entries whose names normalised to the same identity collapsed into one
+# dict slot, and the loop below classified only the SURVIVOR — the other
+# entry was never classified, never refused, and never moved the digest,
+# exactly the gap this section exists to close, just one layer deeper (a
+# `git`-sourced entry reusing a FORGEJO or an APPROVED OFF-INDEX ROOT's
+# own identity was the sharpest shape: skipped as "already classified"
+# purely because the identity matched). `_lock_packages` and
+# `_classify_and_admit_lock_entries` each now refuse a duplicate identity
+# themselves — by POSITION, before classifying anything — and the latter
+# additionally tracks a per-position `disposition`, refusing outright if
+# any position ends unclassified or classified twice. A set of names is
+# exactly the structure that can silently absorb a collision; a position
+# cannot.
 
 
 def _lock_entry_source_type(pkg: dict[str, Any]) -> str | None:
@@ -1090,7 +1135,18 @@ def _off_index_transitive_closure(
     normalised identity with no matching lock entry at all is simply not
     followed further (that dangling edge is not this function's concern —
     `extract_dependency_surface` already refuses a manifest/lock
-    disagreement for anything it directly requires)."""
+    disagreement for anything it directly requires).
+
+    SOUNDNESS DEPENDS ON `entries_by_identity` HAVING NO COLLISION: this
+    function trusts `entries_by_identity.get(identity)` to name THE lock
+    entry for that identity. Its caller, `_classify_and_admit_lock_entries`,
+    builds that dict in a pass that refuses a second entry at any identity
+    already present, so by the time this function runs, at most one entry
+    can ever answer for a given identity — if that refusal were removed,
+    this function would silently walk edges from whichever of two
+    same-identity entries a dict comprehension happened to keep, which is
+    exactly the wrong kind of ambiguity for a closure that gates admission
+    of an attacker-influenceable dependency."""
 
     closure: set[str] = set()
     frontier: list[str] = list(approved_root_identities)
@@ -1122,6 +1178,47 @@ def _classify_and_admit_lock_entries(
     verified by `_verify_off_index_lock_entry`), a member of an approved
     root's proven transitive closure, nor an ordinary public entry.
 
+    THE INVARIANT: `raw entries = admitted entries ⊎ explicitly refused
+    entries` — a DISJOINT UNION, expressed over ENTRY POSITIONS (each
+    entry's index in `packages_raw`), never over a normalised-name set. A
+    set of names is exactly the structure that can deduplicate — keying a
+    collection by a normalised name is sound for COMPARISON (a mis-shaped
+    or colliding name becomes a refusal or a non-match — fail-closed) and
+    unsound for ENUMERATION (a second entry at the same key silently
+    overwrites the first, so an invariant expressed over the resulting
+    name SET would report "conservation holds" while an entry vanished).
+    A position cannot collapse: two different positions are two positions
+    no matter what their names normalise to. `disposition` below is
+    indexed by position, one slot per raw entry, and three shapes are
+    each refused with `ManifestError`: a duplicate normalised identity
+    among the raw entries (checked first, by position, before any entry
+    is classified); a position that ends UNCLASSIFIED (`disposition[i]`
+    still `None` after the loop — a future classification branch that
+    forgets to record its outcome trips this immediately); and a position
+    classified MULTIPLE TIMES (`_record` refuses overwriting an
+    already-set slot — a future branch that both records and falls
+    through to another branch trips this immediately too). `admitted`
+    (the returned tuple) and every other classification are counted
+    against `disposition`, never against each other, so double-admission
+    or double-refusal of the same position cannot hide as "conservation
+    holds" either.
+
+    This is not a stylistic preference over the equivalent name-set
+    version: the two concrete attacks this closes were both cases where a
+    normalised-name-keyed dict silently ABSORBED a collision — two
+    `[[package]]` entries neither of which is forgejo/approved (the later
+    one used to replace the earlier in a dict before classification ever
+    saw it), and a `git`-sourced entry reusing a FORGEJO or an APPROVED
+    OFF-INDEX ROOT's identity (skipped by the admission logic as "already
+    classified" purely because the identity matched — identity membership
+    alone was wrongly treated as proof that THIS `pkg` was the one already
+    classified). Both landed in neither `lock_packages` nor
+    `off_index_transitive`, so `compute_plan_digest` was byte-identical to
+    a clean surface while shipping an attacker-controlled VCS dependency.
+    An invariant re-expressed over the same kind of name-keyed set would
+    have been vulnerable to the identical class of silent absorption; a
+    positional disjoint union cannot be.
+
     Returns every ADMITTED transitive closure member, as
     `OffIndexTransitiveDependency` — the caller folds these into the plan
     digest, exactly as it does an approved root, so that two different
@@ -1131,14 +1228,43 @@ def _classify_and_admit_lock_entries(
     if not isinstance(packages_raw, list):
         return ()  # _lock_packages already refused this shape
 
-    entries_by_identity: dict[str, dict[str, Any]] = {}
+    # One identity per POSITION, built by a single pass over the raw list
+    # -- `identities[i]` is `packages_raw[i]`'s identity. This list is
+    # 1:1 with `packages_raw` by construction; it can never collapse two
+    # positions into one, unlike a dict keyed by the identity itself.
+    identities: list[str] = []
     for pkg in packages_raw:
         if not isinstance(pkg, dict):
             return ()  # _lock_packages already refused this shape
         raw_name = pkg.get("name")
         if not isinstance(raw_name, str) or not raw_name:
             return ()  # _lock_packages already refused this shape
-        entries_by_identity[normalise_name_for_identity(raw_name)] = pkg
+        identities.append(normalise_name_for_identity(raw_name))
+
+    # Duplicate-identity refusal, BY POSITION: `first_seen_at` is a side
+    # table used only to answer "has this identity already been seen, and
+    # at which position" -- a comparison contract, never enumerated for
+    # classification. The refusal fires the moment a SECOND position
+    # reports an identity already claimed by an earlier position, before
+    # any entry -- including the first one at that identity -- is
+    # classified.
+    first_seen_at: dict[str, int] = {}
+    for position, identity in enumerate(identities):
+        if identity in first_seen_at:
+            earlier = packages_raw[first_seen_at[identity]].get("name")
+            raise ManifestError(
+                f"poetry.lock contains two [[package]] entries whose names "
+                f"normalise to the same identity {identity!r}: {earlier!r} "
+                f"(position {first_seen_at[identity]}) and "
+                f"{packages_raw[position].get('name')!r} (position "
+                f"{position}); every lock entry must resolve to a distinct "
+                "package identity"
+            )
+        first_seen_at[identity] = position
+
+    # Safe now: `identities` is proven position-unique, so this dict is a
+    # true 1:1 identity->entry lookup, never a collapse of two entries.
+    entries_by_identity = dict(zip(identities, packages_raw, strict=True))
 
     approved_root_identities = frozenset(
         dep.normalised_name for dep in off_index_dependencies
@@ -1147,15 +1273,32 @@ def _classify_and_admit_lock_entries(
         entries_by_identity, approved_root_identities
     )
 
+    disposition: list[str | None] = [None] * len(packages_raw)
+
+    def _record(position: int, outcome: str) -> None:
+        if disposition[position] is not None:
+            raise ManifestError(
+                "conservation invariant violated: poetry.lock [[package]] "
+                f"position {position} "
+                f"({packages_raw[position].get('name')!r}) was classified "
+                f"twice: {disposition[position]!r} then {outcome!r} -- fix "
+                "the classification branch that double-recorded it, not "
+                "this check"
+            )
+        disposition[position] = outcome
+
     admitted: list[OffIndexTransitiveDependency] = []
-    for identity, pkg in entries_by_identity.items():
+    for position, pkg in enumerate(packages_raw):
+        identity = identities[position]
         if identity in forgejo_lock_identities or identity in approved_root_identities:
+            _record(position, "already-classified")
             continue
         source_type = _lock_entry_source_type(pkg)
         if source_type is None or source_type == "legacy":
             source = pkg.get("source")
             url = source.get("url") if isinstance(source, dict) else None
             if not _mentions_forgejo_host(url):
+                _record(position, "public")
                 continue  # an ordinary public entry
         if source_type == "git":
             if identity in closure:
@@ -1170,6 +1313,7 @@ def _classify_and_admit_lock_entries(
                         resolved_commit=str(source.get("resolved_reference", "")),
                     )
                 )
+                _record(position, "admitted-transitive")
                 continue
             raise ManifestError(
                 f"lock package {pkg.get('name')!r} has a git source but is "
@@ -1183,6 +1327,15 @@ def _classify_and_admit_lock_entries(
             "lock entry as public, forgejo, or an approved off-index "
             "dependency's proven closure member, and refuses anything it "
             "cannot place in one of those, rather than silently ignoring it"
+        )
+
+    unclassified = [i for i, outcome in enumerate(disposition) if outcome is None]
+    if unclassified:
+        raise ManifestError(
+            "conservation invariant violated: poetry.lock [[package]] "
+            f"position(s) {unclassified} reached no classification outcome "
+            "at all -- fix the classification branch that skipped them, "
+            "not this check"
         )
     return tuple(admitted)
 
