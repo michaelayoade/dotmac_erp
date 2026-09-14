@@ -620,6 +620,22 @@ duplication debt" above already lists.
   `test_lock_packages_is_stricter_than_erp_locks_acquisition_plan` — it
   needs an explicitly authorised follow-up change to `erp_lock.py` itself,
   not a silent carry-forward.
+
+  **This is retirement-coupled debt, not a permanent specification of the
+  weaker behaviour**, and the test above is a TWO-DIRECTIONAL RATCHET: it
+  fails if the asymmetry widens (either side's check changes in a way that
+  moves either of its assertions) exactly as much as if the asymmetry
+  disappears (`acquisition_plan` is tightened to also require `type` and
+  `url`, so it would then refuse the same malformed `dotmac-kernel` vector
+  the test currently asserts it silently accepts). A future authorised
+  change that tightens `acquisition_plan` MUST make this test fail — that
+  failure is the signal to delete the test's debt-tracking assertion, this
+  paragraph, and the "NOT converged" language in `_lock_packages`'s
+  docstring together, in the same change. Tightening `acquisition_plan`
+  while leaving this test green (by loosening or deleting it first, or by
+  updating it quietly) would let the gap close without record; a test that
+  stays red until the corresponding documentation catches up is the
+  correct outcome, not a build failure to route around.
 - **The off-index policy allowlist.** The body-similarity detector cannot
   see duplicated CONSTANTS at all:
   `.github/dependency-bundle-policy.json`'s

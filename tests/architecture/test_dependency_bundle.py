@@ -2716,13 +2716,39 @@ def test_the_version_regex_divergence_is_named_not_a_bug() -> None:
 
 
 def test_lock_packages_is_stricter_than_erp_locks_acquisition_plan() -> None:
-    """NOT converged (tracked as a real, security-relevant gap in
+    """TWO-DIRECTIONAL RATCHET, not a permanent specification of the WEAKER
+    behaviour.
+
+    NOT converged (tracked as a real, security-relevant gap in
     erp_lock.acquisition_plan, out of scope for this branch to fix):
     erp_lock's lock-side loop includes a package by checking ONLY
     `source.reference == "forgejo"`, never `type` or `url`. This module's
     _lock_packages requires all three to agree, refusing a mismatched
     combination. A lock entry with the right `reference` but a WRONG url
-    is refused here and silently trusted there."""
+    is refused here and silently trusted there.
+
+    This test must fail in BOTH directions, not just one:
+
+    - If the asymmetry WIDENS (`_lock_packages` gets even stricter, or
+      `acquisition_plan` gets even looser, in a way that changes either
+      assertion below), this test fails and says so.
+    - If the asymmetry DISAPPEARS (an authorised, in-scope change tightens
+      `erp_lock.acquisition_plan` to also require `type` and `url` to
+      agree), the second assertion below fails, because a converged
+      `acquisition_plan` would then refuse the same malformed
+      `dotmac-kernel` entry instead of silently including it at
+      `"0.1.0a1"`. That failure is CORRECT and expected: convergence must
+      be done in the same change that deletes this test's debt-tracking
+      assertion (and this docstring's "NOT converged" paragraph, and the
+      matching entry in
+      `docs/architecture/dependency-bundle-trust.md`'s "Named divergences
+      from erp_lock.py" section) — never by quietly loosening or removing
+      this test first and leaving the debt undocumented, and never by
+      leaving this test red because the gap was closed by hand elsewhere.
+      A tightened `acquisition_plan` that leaves this test passing
+      unchanged would mean the test stopped proving anything; it must
+      break instead, on purpose, as the signal to finish the retirement.
+    """
 
     lock = {
         "package": [
