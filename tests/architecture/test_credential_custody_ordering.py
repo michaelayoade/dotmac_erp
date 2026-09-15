@@ -147,18 +147,26 @@ _NESTED_CONTROL_START = re.compile(
 def is_refusal_gate(step: Mapping[str, object]) -> bool:
     """Recognise ONE narrow shell shape: a simple outer
     ``if [ -z "$VAR" ]; then ... fi`` whose body is a direct, unconditional
-    ``exit`` and plain statements only.
+    ``exit`` and plain statements only, with NO alternative branch on that
+    same outer conditional.
 
     This is NOT general shell control-flow analysis, and does not attempt to
     determine whether an ``exit`` is actually reachable. It recognises one
     known-good shape and fails closed -- returns False, i.e. "not a proven
-    refusal gate" -- on every shape it does not understand, including a
-    nested `if`, `for`, `while`, `until`, `case`, `select`, or a
-    function-definition body anywhere inside the outer block, even where
-    that nested construct happens to be provably unreachable (e.g. `while
-    false; do exit 1; done`). An honest narrow recogniser that refuses
-    unfamiliar shapes is preferred over a broad one that is wrong about
-    them.
+    refusal gate" -- on every shape it does not understand, including:
+
+    * a nested `if`, `for`, `while`, `until`, `case`, `select`, or a
+      function-definition body anywhere inside the outer block, even where
+      that nested construct happens to be provably unreachable (e.g. `while
+      false; do exit 1; done`);
+    * an `else` or `elif` on the OUTER conditional itself -- an alternative
+      branch means the exit is conditioned on something other than the
+      credential's absence, and `exit 1` sitting in an `else` fires when the
+      credential IS present and does nothing when it is absent: the exact
+      inversion of a credential-absence refusal, not a variant of one.
+
+    An honest narrow recogniser that refuses unfamiliar or ambiguous shapes
+    is preferred over a broad one that is wrong about them.
     """
     var = credential_env_var(step)
     if var is None:
@@ -168,6 +176,7 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
     for match in re.finditer(pattern, body):
         depth = 1
         nested_control = False
+        outer_alternative = False
         clause_lines: list[str] = []
         for line in body[match.end() :].splitlines():
             stripped = line.strip()
@@ -175,6 +184,18 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
                 nested_control = True
                 if re.match(r"if\b", stripped):
                     depth += 1
+            elif depth == 1 and (
+                stripped == "else"
+                or stripped.startswith("else;")
+                or re.match(r"elif\b", stripped)
+            ):
+                # An `else`/`elif` at the SAME depth as the gate's own `if`
+                # is an alternative branch on the gate itself. One that
+                # belongs to a nested `if` instead sits at depth >= 2 (the
+                # nested `if` above already incremented depth) and is
+                # already disqualified via `nested_control`, so it never
+                # reaches this branch.
+                outer_alternative = True
             elif stripped == "fi" or stripped.startswith("fi;"):
                 depth -= 1
                 if depth == 0:
@@ -184,6 +205,7 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
         if (
             depth == 0
             and not nested_control
+            and not outer_alternative
             and re.search(r"^\s*exit\s+[1-9]\b", clause, re.M)
         ):
             return True
@@ -431,3 +453,60 @@ def test_nested_shell_control_flow_is_not_a_proven_refusal_gate(
         "run": shell_body,
     }
     assert not is_refusal_gate(step)
+
+
+def test_outer_else_inverts_the_refusal_and_is_rejected() -> None:
+    """`exit 1` sits in the outer `if`'s ELSE branch, not its `then`
+    branch. By DESIGN that fires the instant the credential IS present
+    and does nothing when it is absent -- the exact inversion of a
+    credential-absence refusal, not a variant of one. Design break
+    condition: `outer_alternative` is set the moment an `else` is seen at
+    the SAME depth as the gate's own `if`; remove that check and the
+    `exit 1`'s mere lexical presence inside the outer `if...fi` block is
+    again enough to pass, regardless of which branch it is actually in.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'if [ -z "$ALIAS" ]; then\n  echo present\nelse\n  exit 1\nfi',
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_outer_elif_inverts_the_refusal_and_is_rejected() -> None:
+    """Same inversion, the `elif` syntactic path rather than `else`: the
+    `exit 1` sits in a second, alternative branch of the outer
+    conditional. Design break condition: an `elif` at the SAME depth as
+    the gate's own `if` sets `outer_alternative` exactly like `else`
+    does -- a gate with any alternative branch at all is refused,
+    independent of which branch happens to hold the exit. This is a
+    distinct syntactic path from `else` (a different token, a different
+    regex branch) and is deliberately proven separately rather than
+    folded into one parametrized case with it.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": (
+            'if [ -z "$ALIAS" ]; then\n'
+            "  echo present\n"
+            'elif [ -n "$ALIAS" ]; then\n'
+            "  exit 1\n"
+            "fi"
+        ),
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_direct_exit_with_no_alternative_branch_is_the_positive_control() -> None:
+    """The positive control the two inversion tests above depend on: a
+    plain outer empty-check with ONE direct, unconditional exit and no
+    alternative branch is exactly the narrow shape the recogniser exists
+    to accept. Without this control, a recogniser that always returns
+    False would also pass the two tests above for the wrong reason -- a
+    guard that refuses everything is as useless as one that accepts
+    everything.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\nfi',
+    }
+    assert is_refusal_gate(step)
