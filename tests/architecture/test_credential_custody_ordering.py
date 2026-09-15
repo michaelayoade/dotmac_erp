@@ -1,402 +1,331 @@
-"""`.github/workflows/erp-lock.yml`'s credential custody is CHECKED, not
-merely true.
+"""Check `erp-lock.yml` credential custody from resolved YAML.
 
-`secrets.FORGEJO_READ_TOKEN` is held only inside the `acquire` job. That
-safety rests today on four properties that are EMERGENT -- true of the file
-as written, asserted nowhere -- so a later edit could remove any one of them
-silently:
-
-1. the credential is bound at STEP level only, never at job level (a
-   job-level `env:` would put it in every step's environment, including
-   steps that have no business holding it);
-2. only `acquire` ever references it -- `resolve` and `attest` do not;
-3. the one step that refuses an EMPTY credential precedes every OTHER step
-   that references the credential -- located by its BEHAVIOUR (it tests the
-   variable for emptiness and exits non-zero), never by its step name, since
-   a name is cosmetic and can be renamed or moved independently of the
-   behaviour it currently sits next to;
-4. that gate genuinely refuses -- a step that only MENTIONS the variable is
-   not a gate.
-
-Each check is proven against a MUTATED copy of the real workflow that
-breaks exactly the property it names, because a check that only ever ran
-against the clean file would pass for any number of wrong reasons.
-
-PyYAML is not a declared dependency of this repository (absent from
-`pyproject.toml`; it appears in `poetry.lock` only as a transitive
-dependency of unrelated packages), so this module follows the same
-hand-rolled indentation walk already established next to it in
-`test_erp_lock_workflow.py`'s `_jobs()`/`_needs()`, rather than adding a
-YAML dependency for one file.
+PyYAML is an explicit development dependency.  `safe_load` resolves aliases,
+so anchors cannot disguise a job-level credential. Its one GitHub-specific
+YAML 1.1 mismatch -- coercing the top-level `on` key to ``True`` -- is repaired
+explicitly before the string-keyed workflow is inspected. Raw text rejects
+every secret-context expression except the one exact secret this workflow is
+allowed to hold.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "erp-lock.yml"
-
-CREDENTIAL_SECRET = "secrets.FORGEJO_READ_TOKEN"
-
-# ── parsing ──────────────────────────────────────────────────────────────
-
-_JOB_HEADER = re.compile(r"^  ([A-Za-z][\w-]*):\s*$")
-
-
-def parse_jobs(text: str) -> dict[str, list[str]]:
-    """job name -> every line belonging to that job's own body, from the
-    `jobs:` block to the next job header or end of file."""
-
-    lines = text.splitlines()
-    start = lines.index("jobs:")
-    jobs: dict[str, list[str]] = {}
-    current: str | None = None
-    for line in lines[start + 1 :]:
-        header = _JOB_HEADER.match(line)
-        if header:
-            current = header.group(1)
-            jobs[current] = []
-            continue
-        if current is None:
-            continue
-        jobs[current].append(line)
-    return jobs
+CREDENTIAL_REFERENCE = re.compile(
+    r"secrets\s*(?:\.\s*FORGEJO_READ_TOKEN|\[\s*(?:'FORGEJO_READ_TOKEN'|"
+    r'"FORGEJO_READ_TOKEN")\s*\])'
+)
+SECRET_CONTEXT_REFERENCE = re.compile(r"\bsecrets\b")
 
 
-def job_level_env_lines(body: list[str]) -> list[str]:
-    """The job's OWN `env:` mapping, declared directly under the job at
-    4-space indent -- distinct from a step's `env:`, which sits nested
-    under a step at 8-space indent and is never returned here."""
-
-    lines: list[str] = []
-    in_env = False
-    for line in body:
-        if re.match(r"^    env:\s*$", line):
-            in_env = True
-            lines.append(line)
-            continue
-        if in_env:
-            if line.strip() == "" or line.startswith("      "):
-                lines.append(line)
-                continue
-            in_env = False
-    return lines
+def _mapping(value: object, context: str) -> Mapping[str, object]:
+    if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
+        raise AssertionError(f"{context} must be a string-keyed YAML mapping")
+    return value
 
 
-def split_steps(body: list[str]) -> list[str]:
-    """Every step in a job's body as its own text block -- steps are the
-    `      - ...` list items under `    steps:`. Mirrors the convention
-    already established by `test_erp_lock_workflow.py`'s `_jobs()`."""
-
-    steps: list[list[str]] = []
-    in_steps = False
-    for line in body:
-        if line == "    steps:":
-            in_steps = True
-            continue
-        if not in_steps:
-            continue
-        if line.startswith("      - "):
-            steps.append([line])
-        elif steps:
-            steps[-1].append(line)
-    return ["\n".join(step) for step in steps]
+def has_credential_reference(text: str) -> bool:
+    return CREDENTIAL_REFERENCE.search(text) is not None
 
 
-def commands_of(step: str) -> str:
-    """A step's script with comment-only lines stripped -- a comment can
-    say anything without making a behavioural check pass or fail for the
-    wrong reason."""
-
-    return "\n".join(
-        line for line in step.splitlines() if not line.strip().startswith("#")
+def _has_unsupported_secret_reference(text: str) -> bool:
+    return (
+        SECRET_CONTEXT_REFERENCE.search(CREDENTIAL_REFERENCE.sub("", text)) is not None
     )
 
 
-def step_name(step: str) -> str:
-    match = re.search(r"^      - name: (.+)$", step, re.M)
-    return match.group(1).strip() if match else "<unnamed step>"
+def _load_workflow(text: str) -> Mapping[str, object]:
+    loaded = yaml.safe_load(text)
+    if isinstance(loaded, Mapping) and True in loaded:
+        if "on" in loaded:
+            raise AssertionError("workflow declares both `on` and YAML boolean `true`")
+        loaded = dict(loaded)
+        loaded["on"] = loaded.pop(True)
+    return _mapping(loaded, "workflow")
 
 
-# ── assertion 1: no job-level credential environment exists ────────────────
+def parse_jobs(text: str) -> dict[str, Mapping[str, object]]:
+    """Load jobs after aliases resolve; other secret syntax fails closed."""
+
+    if _has_unsupported_secret_reference(text):
+        raise AssertionError(
+            "only the literal FORGEJO_READ_TOKEN secret reference is supported"
+        )
+    workflow = _load_workflow(text)
+    jobs = _mapping(workflow.get("jobs"), "workflow jobs")
+    return {name: _mapping(body, f"{name} job") for name, body in jobs.items()}
 
 
-def job_level_credential_violations(jobs: dict[str, list[str]]) -> list[str]:
-    """Job names whose OWN `env:` mapping (not any step's) binds the
-    credential secret. Empty when the property holds."""
+def _contains_credential(value: object) -> bool:
+    if isinstance(value, str):
+        return has_credential_reference(value)
+    if isinstance(value, Mapping):
+        return any(_contains_credential(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_credential(item) for item in value)
+    return False
 
+
+def job_level_env_values(body: Mapping[str, object]) -> Mapping[str, object]:
+    return _mapping(body.get("env", {}), "job env")
+
+
+def split_steps(body: Mapping[str, object]) -> list[Mapping[str, object]]:
+    steps = body.get("steps", [])
+    if not isinstance(steps, list):
+        raise AssertionError("job steps must be a YAML sequence")
+    return [_mapping(step, "step") for step in steps]
+
+
+def job_level_credential_violations(
+    jobs: Mapping[str, Mapping[str, object]],
+) -> list[str]:
     return [
         name
         for name, body in jobs.items()
-        if any(CREDENTIAL_SECRET in line for line in job_level_env_lines(body))
+        if _contains_credential(job_level_env_values(body))
     ]
 
 
-# ── assertion 2: every reference is inside `acquire` ────────────────────────
+def jobs_referencing_credential(jobs: Mapping[str, Mapping[str, object]]) -> set[str]:
+    return {name for name, body in jobs.items() if _contains_credential(body)}
 
 
-def jobs_referencing_credential(jobs: dict[str, list[str]]) -> set[str]:
-    return {
-        name
-        for name, body in jobs.items()
-        if any(CREDENTIAL_SECRET in line for line in body)
-    }
+def credential_references_outside_steps(text: str) -> list[str]:
+    """Name resolved workflow/job credential uses that are not in a step."""
+
+    if _has_unsupported_secret_reference(text):
+        return ["workflow uses an unsupported secret-context reference"]
+    workflow = _load_workflow(text)
+    jobs = parse_jobs(text)
+    problems = []
+    if _contains_credential(
+        {key: value for key, value in workflow.items() if key != "jobs"}
+    ):
+        problems.append("workflow references the credential outside any job")
+    for name, body in jobs.items():
+        if _contains_credential(
+            {key: value for key, value in body.items() if key != "steps"}
+        ):
+            problems.append(f"{name} job references the credential outside a step")
+    return problems
 
 
-# ── locating the refusal gate by BEHAVIOUR, never by step name ─────────────
+def credential_env_var(step: Mapping[str, object]) -> str | None:
+    for name, value in _mapping(step.get("env", {}), "step env").items():
+        if isinstance(value, str) and has_credential_reference(value):
+            return name
+    return None
 
 
-def credential_env_var(step: str) -> str | None:
-    """The variable name a step binds `secrets.FORGEJO_READ_TOKEN` to in
-    its OWN `env:`, or `None` if this step does not hold the credential."""
+def commands_of(step: Mapping[str, object]) -> str:
+    return "\n".join(
+        line
+        for line in str(step.get("run", "")).splitlines()
+        if not line.strip().startswith("#")
+    )
 
-    match = re.search(r"(\w+):\s*\$\{\{\s*secrets\.FORGEJO_READ_TOKEN\s*\}\}", step)
-    return match.group(1) if match else None
+
+def step_name(step: Mapping[str, object]) -> str:
+    return str(step.get("name", "<unnamed step>"))
 
 
-def is_refusal_gate(step: str) -> bool:
-    """True only if this step tests its OWN credential-bound variable for
-    emptiness and exits NON-ZERO inside that same conditional. A step that
-    merely mentions the variable -- or tests it without ever refusing --
-    does not qualify. This is a behavioural test: it never looks at the
-    step's `name:`."""
-
+def is_refusal_gate(step: Mapping[str, object]) -> bool:
     var = credential_env_var(step)
     if var is None:
         return False
-    body = commands_of(step)
     pattern = rf'if \[ -z "\$\{{?{re.escape(var)}(?::-[^}}]*)?\}}?"\s*\];?\s*then'
+    body = commands_of(step)
     for match in re.finditer(pattern, body):
-        remainder = body[match.end() :]
-        close = remainder.find("fi")
-        clause = remainder[: close if close != -1 else None]
-        if re.search(r"\bexit\s+[1-9]", clause):
+        depth = 1
+        nested_control = False
+        clause_lines: list[str] = []
+        for line in body[match.end() :].splitlines():
+            stripped = line.strip()
+            if re.match(r"if\b", stripped):
+                nested_control = True
+                depth += 1
+            elif stripped == "fi" or stripped.startswith("fi;"):
+                depth -= 1
+                if depth == 0:
+                    break
+            clause_lines.append(line)
+        clause = "\n".join(clause_lines)
+        if (
+            depth == 0
+            and not nested_control
+            and re.search(r"^\s*exit\s+[1-9]\b", clause, re.M)
+        ):
             return True
     return False
 
 
-def gate_indices(steps: list[str]) -> list[int]:
-    return [i for i, step in enumerate(steps) if is_refusal_gate(step)]
+def gate_indices(steps: list[Mapping[str, object]]) -> list[int]:
+    return [index for index, step in enumerate(steps) if is_refusal_gate(step)]
 
 
-def credential_step_indices(steps: list[str]) -> list[int]:
-    return [i for i, step in enumerate(steps) if CREDENTIAL_SECRET in step]
+def credential_step_indices(steps: list[Mapping[str, object]]) -> list[int]:
+    return [index for index, step in enumerate(steps) if _contains_credential(step)]
 
 
-# ── assertion 3: the gate precedes every other credential-using step ───────
-
-
-def ordering_problems(steps: list[str]) -> list[str]:
-    """Empty if the earliest refusal gate precedes every OTHER
-    credential-referencing step in `steps`; otherwise one message per step
-    left unprotected, naming that step."""
-
+def ordering_problems(steps: list[Mapping[str, object]]) -> list[str]:
     gates = gate_indices(steps)
-    credentialed = credential_step_indices(steps)
     if not gates:
         return ["no step in this job tests the credential for emptiness and refuses"]
-    if not credentialed:
-        return ["no step in this job references the credential at all"]
     gate = min(gates)
-    problems = []
-    for i in credentialed:
-        if i < gate:
-            problems.append(
-                f"{step_name(steps[i])!r} references the credential at "
-                f"position {i}, before the refusal gate at position {gate} "
-                "-- it is not covered by the empty-credential refusal"
-            )
-    return problems
-
-
-# ── assertion 4: the gate actually refuses ──────────────────────────────────
-
-
-def gate_refusal_problems(steps: list[str]) -> list[str]:
-    if not gate_indices(steps):
-        return [
-            "no step tests the credential for emptiness and exits non-zero "
-            "-- a step that only mentions the variable is not a gate"
-        ]
-    return []
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# non-vacuity: the real workflow, as it stands today
-# ═══════════════════════════════════════════════════════════════════════════
-
-
-def test_the_workflow_parses_into_the_three_expected_jobs() -> None:
-    jobs = parse_jobs(WORKFLOW.read_text())
-    assert set(jobs) == {"acquire", "resolve", "attest"}, sorted(jobs)
-    for name, body in jobs.items():
-        assert split_steps(body), name
-
-
-def test_no_job_level_credential_environment_exists() -> None:
-    jobs = parse_jobs(WORKFLOW.read_text())
-    assert job_level_credential_violations(jobs) == []
-
-
-def test_every_reference_to_the_credential_is_inside_acquire() -> None:
-    jobs = parse_jobs(WORKFLOW.read_text())
-    assert jobs_referencing_credential(jobs) == {"acquire"}
-
-
-def test_the_gate_is_located_by_behaviour_and_is_the_expected_step() -> None:
-    """Confirms the behavioural locator finds exactly one gate in the real
-    file, and (only as a cross-check, not as the locating mechanism) that
-    it is the step the brief names -- proving the behavioural search is not
-    accidentally finding nothing or something else."""
-
-    steps = split_steps(parse_jobs(WORKFLOW.read_text())["acquire"])
-    gates = gate_indices(steps)
-    assert len(gates) == 1, gates
-    assert "There is a credential to resolve with" in steps[gates[0]]
-
-
-def test_a_credentialed_step_that_never_refuses_is_not_mistaken_for_the_gate() -> None:
-    """NON-VACUITY the other way: `acquire` has other steps that reference
-    the credential without an emptiness test (the download and the
-    bundle/attestation scan steps) -- none of them must be found as a
-    gate."""
-
-    steps = split_steps(parse_jobs(WORKFLOW.read_text())["acquire"])
-    non_gate_credentialed = [
-        i for i in credential_step_indices(steps) if not is_refusal_gate(steps[i])
+    return [
+        f"{step_name(step)!r} references the credential before the refusal gate"
+        for index, step in enumerate(steps)
+        if index < gate and _contains_credential(step)
     ]
-    assert len(non_gate_credentialed) >= 2, non_gate_credentialed
 
 
-def test_the_gate_precedes_every_other_credential_using_step() -> None:
-    steps = split_steps(parse_jobs(WORKFLOW.read_text())["acquire"])
+def gate_refusal_problems(steps: list[Mapping[str, object]]) -> list[str]:
+    return [] if gate_indices(steps) else ["no credential step refuses emptiness"]
+
+
+def _acquire_steps() -> list[Mapping[str, object]]:
+    return split_steps(parse_jobs(WORKFLOW.read_text())["acquire"])
+
+
+def _post_steps_env(env_key: str) -> str:
+    text = WORKFLOW.read_text()
+    result = text.replace(
+        "  resolve:\n",
+        f"    {env_key}:\n"
+        "      LEAKED_TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}\n"
+        "  resolve:\n",
+    )
+    assert result != text
+    return result
+
+
+def test_real_workflow_keeps_credential_inside_acquire_steps() -> None:
+    text = WORKFLOW.read_text()
+    jobs = parse_jobs(text)
+    assert set(jobs) == {"acquire", "resolve", "attest"}
+    assert all(split_steps(body) for body in jobs.values())
+    assert job_level_credential_violations(jobs) == []
+    assert jobs_referencing_credential(jobs) == {"acquire"}
+    assert credential_references_outside_steps(text) == []
+
+
+@pytest.mark.parametrize("env_key", ["env", "'env'", '"env"'])
+def test_plain_or_quoted_post_steps_env_is_named(env_key: str) -> None:
+    text = _post_steps_env(env_key)
+    assert job_level_credential_violations(parse_jobs(text)) == ["acquire"]
+    assert any(
+        "acquire job" in item for item in credential_references_outside_steps(text)
+    )
+
+
+def test_acquire_anchor_reused_as_resolve_job_env_is_named() -> None:
+    text = """jobs:
+  acquire:
+    env: &credential
+      TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}
+    steps: []
+  resolve:
+    env: *credential
+    steps: []
+  attest:
+    steps: []
+"""
+    jobs = parse_jobs(text)
+    assert job_level_credential_violations(jobs) == ["acquire", "resolve"]
+    assert any(
+        "resolve job" in item for item in credential_references_outside_steps(text)
+    )
+
+
+def test_dynamic_secret_indexing_fails_closed() -> None:
+    text = """jobs:
+  acquire:
+    env:
+      TOKEN: ${{ secrets[github.event.inputs.secret_name] }}
+    steps: []
+"""
+    with pytest.raises(AssertionError, match=r"only the literal"):
+        parse_jobs(text)
+    assert credential_references_outside_steps(text) == [
+        "workflow uses an unsupported secret-context reference"
+    ]
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["${{ toJSON(secrets) }}", "${{ secrets.SOME_OTHER_SECRET }}"],
+)
+def test_any_other_secret_context_reference_fails_closed(expression: str) -> None:
+    text = f"""jobs:
+  acquire:
+    env:
+      TOKEN: {expression}
+    steps: []
+"""
+    with pytest.raises(AssertionError, match=r"only the literal"):
+        parse_jobs(text)
+
+
+def test_literal_bracket_reference_outside_acquire_is_named() -> None:
+    text = WORKFLOW.read_text().replace(
+        "  resolve:\n",
+        "  resolve:\n    env:\n      SNEAKY: ${{ secrets['FORGEJO_READ_TOKEN'] }}\n",
+    )
+    assert "resolve" in jobs_referencing_credential(parse_jobs(text))
+    assert any(
+        "resolve job" in item for item in credential_references_outside_steps(text)
+    )
+
+
+def test_gate_is_behavioural_and_precedes_credentialed_steps() -> None:
+    steps = _acquire_steps()
+    gates = gate_indices(steps)
+    assert len(gates) == 1
+    assert "There is a credential to resolve with" in step_name(steps[gates[0]])
     assert ordering_problems(steps) == []
-
-
-def test_the_gate_actually_refuses() -> None:
-    steps = split_steps(parse_jobs(WORKFLOW.read_text())["acquire"])
     assert gate_refusal_problems(steps) == []
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# SENSITIVITY: each assertion proven against a planted defect it must name
-# ═══════════════════════════════════════════════════════════════════════════
-
-
-def test_a_credentialed_step_moved_above_the_gate_is_named() -> None:
-    """PLANT for assertion 3. Swap the gate with the credentialed step that
-    immediately follows it in the real file ("Download the closed bundle
-    from the private index"), so that step now runs BEFORE the refusal --
-    exactly the drift the brief warns about."""
-
-    steps = split_steps(parse_jobs(WORKFLOW.read_text())["acquire"])
+def test_credentialed_step_before_gate_is_named() -> None:
+    steps = _acquire_steps()
     gate = gate_indices(steps)[0]
-    credentialed = credential_step_indices(steps)
-    victim = next(i for i in credentialed if i == gate + 1)
-    mutated = list(steps)
+    victim = next(
+        index for index in credential_step_indices(steps) if index == gate + 1
+    )
+    mutated = [*steps]
     mutated[gate], mutated[victim] = mutated[victim], mutated[gate]
-
-    problems = ordering_problems(mutated)
-    assert problems, "moving a credentialed step above the gate was not caught"
-    assert any("Download the closed bundle" in p for p in problems), problems
-
-
-def test_the_credential_lifted_to_job_level_env_is_named() -> None:
-    """PLANT for assertion 1. Insert a job-level `env:` binding the
-    credential into `acquire`, directly under the job and before its
-    `steps:` key -- exactly the shape that would leak the credential into
-    every step's environment."""
-
-    jobs = parse_jobs(WORKFLOW.read_text())
-    body = list(jobs["acquire"])
-    steps_index = body.index("    steps:")
-    mutated_body = (
-        body[:steps_index]
-        + ["    env:", "      FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}"]
-        + body[steps_index:]
+    assert any(
+        "Download the closed bundle" in item for item in ordering_problems(mutated)
     )
-    mutated_jobs = dict(jobs)
-    mutated_jobs["acquire"] = mutated_body
-
-    violations = job_level_credential_violations(mutated_jobs)
-    assert violations == ["acquire"], violations
 
 
-def test_a_clean_job_level_env_with_no_credential_is_not_flagged() -> None:
-    """NEAR-MISS for assertion 1. A job-level `env:` that binds something
-    OTHER than the credential (like the workflow's own `MIRROR_PORT`
-    pattern) must not be flagged -- the rule is about the credential
-    specifically, not about job-level `env:` existing at all."""
-
-    jobs = parse_jobs(WORKFLOW.read_text())
-    body = list(jobs["acquire"])
-    steps_index = body.index("    steps:")
-    mutated_body = (
-        body[:steps_index]
-        + ["    env:", "      SOME_OTHER_VALUE: 'harmless'"]
-        + body[steps_index:]
-    )
-    mutated_jobs = dict(jobs)
-    mutated_jobs["acquire"] = mutated_body
-
-    assert job_level_credential_violations(mutated_jobs) == []
-
-
-@pytest.mark.parametrize("job_name", ["resolve", "attest"])
-def test_a_credential_reference_added_outside_acquire_is_named(job_name: str) -> None:
-    """PLANT for assertion 2. Add one line referencing the credential into
-    `resolve` or `attest`'s body -- neither job may ever reference it."""
-
-    jobs = parse_jobs(WORKFLOW.read_text())
-    mutated_jobs = dict(jobs)
-    mutated_jobs[job_name] = [
-        *jobs[job_name],
-        "      SNEAKY: ${{ secrets.FORGEJO_READ_TOKEN }}",
-    ]
-
-    referencing = jobs_referencing_credential(mutated_jobs)
-    assert referencing == {"acquire", job_name}, referencing
-
-
-def test_removing_the_gates_refusal_body_is_named() -> None:
-    """PLANT for assertion 4. Keep the gate step's name and its `env:`
-    binding exactly as they are, but strip the part of its script that
-    actually refuses (`exit 1`) -- a step that still MENTIONS the variable
-    but no longer refuses on emptiness must stop being recognised as a
-    gate."""
-
-    steps = split_steps(parse_jobs(WORKFLOW.read_text())["acquire"])
+def test_unexpected_alias_and_defanged_gate_fail() -> None:
+    steps = _acquire_steps()
     gate = gate_indices(steps)[0]
-    assert is_refusal_gate(steps[gate])  # sanity: it is the gate before mutation
-
-    defanged = steps[gate].replace("exit 1", "echo 'no longer refuses'")
-    assert not is_refusal_gate(defanged), "the plant left the gate intact"
-
-    mutated = list(steps)
-    mutated[gate] = defanged
-    problems = gate_refusal_problems(mutated)
-    assert problems, "a defanged gate was not caught"
-    assert "no step tests the credential for emptiness" in problems[0]
-
-
-def test_a_step_that_only_mentions_the_variable_is_not_treated_as_a_gate() -> None:
-    """NEAR-MISS for assertion 4, constructed directly: a synthetic step
-    that references the credential and even contains an unrelated `exit 1`
-    elsewhere in its script, but never tests the variable for emptiness,
-    must not be recognised as a gate."""
-
-    fake_step = (
-        "      - name: Looks similar but refuses nothing\n"
-        "        env:\n"
-        "          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}\n"
-        "        run: |\n"
-        '          echo "the credential is $FORGEJO_CREDENTIAL"\n'
-        "          if [ \"$SOME_OTHER_CHECK\" = 'bad' ]; then\n"
-        "            exit 1\n"
-        "          fi\n"
+    synthetic = {
+        "name": "Synthetic preflight with an unexpected alias",
+        "env": {"UNEXPECTED_ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": "echo preflight",
+    }
+    assert credential_env_var(synthetic) == "UNEXPECTED_ALIAS"
+    assert any(
+        "Synthetic preflight" in item
+        for item in ordering_problems([*steps[:gate], synthetic, *steps[gate:]])
     )
-    assert not is_refusal_gate(fake_step)
+    defanged = dict(steps[gate])
+    defanged["run"] = commands_of(steps[gate]).replace("exit 1", "echo no-refusal")
+    assert gate_refusal_problems([*steps[:gate], defanged, *steps[gate + 1 :]])
+    nested = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'if [ -z "$ALIAS" ]; then\n  if false; then\n    exit 1\n  fi\nfi',
+    }
+    assert not is_refusal_gate(nested)
