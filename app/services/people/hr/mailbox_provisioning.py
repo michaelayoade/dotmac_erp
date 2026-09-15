@@ -208,7 +208,6 @@ def activate_employee_mailbox(token: str, new_password: str) -> tuple[str, datet
     with session_for_org(organization_id) as db:
         employee = db.scalar(
             select(Employee)
-            .options(joinedload(Employee.person))
             .where(
                 Employee.organization_id == organization_id,
                 Employee.mailcow_activation_token_hash == token_hash,

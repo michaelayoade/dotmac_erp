@@ -78,6 +78,7 @@ from app.services.people.hr.employment_types import (
     EmploymentTypeView,
 )
 from app.services.people.hr.org_resolver import OrgResolver
+from app.services.people.hr.provisioning_monitor import stage_rows
 from app.services.people.hr.offboarding import (
     queue_employee_mailcow_offboarding,
     should_offboard_status,
@@ -2687,6 +2688,9 @@ class HRWebService:
             "assigned_assets": assigned_assets,
             "can_view_assigned_assets": can_view_assigned_assets,
             "can_manage_final_payroll": self._can_manage_final_payroll(auth),
+            "provisioning_stages": stage_rows(employee),
+            "provisioning_has_failure": employee.workforce_provisioning_status
+            == "failed",
         }
 
     def employee_detail_response(

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.nextcloud.client import (
@@ -58,7 +58,6 @@ class EmployeeNextcloudProvisioningService:
     ) -> EmployeeNextcloudProvisioningResult:
         employee = self.db.scalar(
             select(Employee)
-            .options(joinedload(Employee.person))
             .where(
                 Employee.organization_id == organization_id,
                 Employee.employee_id == employee_id,

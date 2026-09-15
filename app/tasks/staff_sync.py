@@ -37,15 +37,34 @@ def sync_employee_staff_account(
     if org_id is None:
         return {"success": False, "error": "No valid organization ID"}
 
+    from app.services.people.hr.provisioning_monitor import record_stage
+
     try:
         with session_for_org(org_id) as db:
             employee = db.get(Employee, UUID(employee_id))
             if not employee:
                 return {"success": False, "error": "Employee not found"}
+            record_stage(employee, "selfcare", "running")
+            record_stage(employee, "talk", "running")
+            db.commit()
             result = staff_sync.sync_employee(
                 db,
                 employee,
                 allow_active_access_revocation=allow_active_access_revocation,
+            )
+            record_stage(
+                employee,
+                "selfcare",
+                "completed"
+                if getattr(employee, "dotmac_sub_account_id", None)
+                else "skipped",
+            )
+            record_stage(
+                employee,
+                "talk",
+                "completed"
+                if getattr(employee, "dotmac_sub_staff_synced_at", None)
+                else "skipped",
             )
             db.commit()
             logger.info(
@@ -53,11 +72,31 @@ def sync_employee_staff_account(
             )
             return {"success": True, **result}
     except DotmacSubPermanentSyncError as e:
+        with session_for_org(org_id) as db:
+            employee = db.get(Employee, UUID(employee_id))
+            if employee:
+                if getattr(employee, "dotmac_sub_account_id", None):
+                    record_stage(employee, "selfcare", "completed")
+                    record_stage(employee, "talk", "failed", error=e)
+                else:
+                    record_stage(employee, "selfcare", "failed", error=e)
+                    record_stage(employee, "talk", "blocked")
+                db.commit()
         logger.error(
             "Staff sync failed permanently for employee %s: %s", employee_id, e
         )
         return {"success": False, "retryable": False, "error": str(e)}
     except Exception as e:  # noqa: BLE001 — retry transport/API failures
+        with session_for_org(org_id) as db:
+            employee = db.get(Employee, UUID(employee_id))
+            if employee:
+                if getattr(employee, "dotmac_sub_account_id", None):
+                    record_stage(employee, "selfcare", "completed")
+                    record_stage(employee, "talk", "failed", error=e)
+                else:
+                    record_stage(employee, "selfcare", "failed", error=e)
+                    record_stage(employee, "talk", "blocked")
+                db.commit()
         logger.warning("Staff sync retry for employee %s: %s", employee_id, e)
         raise self.retry(exc=e)
 
