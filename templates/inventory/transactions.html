@@ -4,7 +4,7 @@
 {% block page_title %}Inventory Transactions{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6" hx-swap="outerHTML">
     {% set tx_error = request.query_params.get('error') %}
     {% if tx_error %}
     {% set tx_error_messages = {

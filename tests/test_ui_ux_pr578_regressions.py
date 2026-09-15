@@ -97,6 +97,7 @@ def test_inventory_filters_always_have_a_real_swap_target(filtered):
         transaction_type="RECEIPT" if filtered else "",
         total_count=0,
     )
+    assert 'hx-swap="outerHTML"' in html
     assert parsed.ids.count("results-container") == 1
     assert parsed.targets
     assert all(target[1:] in parsed.ids for target in parsed.targets)
