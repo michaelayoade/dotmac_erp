@@ -46,9 +46,10 @@ def test_query_tenant_constrains_source_and_both_joins(db, scope):
     sql = str(compiled)
     assert "kpi.organization_id =" in sql
     assert "employee.organization_id =" in sql
+    assert "people.organization_id =" in sql
     assert "department.organization_id =" in sql
     assert "employee.department_id IN" in sql
-    assert list(compiled.params.values()).count(scope.organization_id) == 3
+    assert list(compiled.params.values()).count(scope.organization_id) == 4
     assert date(2026, 9, 1) in compiled.params.values()
     assert date(2026, 9, 30) in compiled.params.values()
 
@@ -199,6 +200,9 @@ def test_dashboard_does_not_invent_missing_actuals_or_average_mixed_units(db, sc
         "at_risk": 2,
         "overdue": 3,
         "reported": 13,
+        "on_track": 0,
+        "below_target": 1,
+        "missing": 13,
         "latest_record_update": None,
     }
     db.execute.side_effect = [
@@ -207,13 +211,31 @@ def test_dashboard_does_not_invent_missing_actuals_or_average_mixed_units(db, sc
         MagicMock(
             **{
                 "mappings.return_value.all.return_value": [
-                    {"actual_value": None},
-                    {"actual_value": Decimal("0")},
+                    {
+                        "actual_value": None,
+                        "target_value": Decimal("20"),
+                        "lower_is_better": False,
+                        "status": "ACTIVE",
+                        "period_end": date(2026, 9, 30),
+                        "employee_name": "Test",
+                        "employee_code": "EMP1",
+                    },
+                    {
+                        "actual_value": Decimal("0"),
+                        "target_value": Decimal("20"),
+                        "lower_is_better": False,
+                        "status": "ACTIVE",
+                        "period_end": date(2026, 9, 30),
+                        "employee_name": "Test",
+                        "employee_code": "EMP1",
+                    },
                 ]
             }
         ),
     ]
-    result = KPIDashboardService(db).dashboard(
+    service = KPIDashboardService(db)
+    service._employee_review = MagicMock(return_value={})
+    result = service.dashboard(
         scope,
         DashboardConfig(),
         page=999,

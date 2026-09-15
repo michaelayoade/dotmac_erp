@@ -63,7 +63,7 @@ def _fix_patched_types():
     in the change that found it: it alters the type state of every existing
     integration test, which is a separate decision with its own blast radius.
     """
-    from sqlalchemy import Text  # noqa: E402
+    from tests.postgresql_types import native_postgresql_type
 
     previous_uuid_type = _pg_dialect.UUID
     previous_jsonb_type = getattr(_pg_dialect, "JSONB", None)
@@ -71,14 +71,6 @@ def _fix_patched_types():
     # Step 1: restore module-level attributes
     _pg_dialect.UUID = _REAL_UUID  # type: ignore[misc]
     _pg_dialect.JSONB = _REAL_JSONB  # type: ignore[misc]
-
-    # Capture the PatchedJSONB class before we lose reference to it.
-    # PatchedJSONB is a direct subclass of Text (not TypeDecorator).
-    _PatchedJSONB: type | None = None
-    for sub in Text.__subclasses__():
-        if sub.__name__ == "PatchedJSONB":
-            _PatchedJSONB = sub
-            break
 
     # Step 2: fix already-constructed model columns
     from app.db import Base  # noqa: E402
@@ -91,17 +83,9 @@ def _fix_patched_types():
 
     for table in Base.metadata.tables.values():
         for col in table.columns:
-            col_type = col.type
-            # Detect PatchedUUID: has .impl (TypeDecorator) + .as_uuid attr
-            if (
-                hasattr(col_type, "impl")
-                and hasattr(col_type, "as_uuid")
-                and hasattr(col_type.impl, "length")
-            ):
-                col.type = _REAL_UUID(as_uuid=True)
-            # Detect PatchedJSONB: is an instance of the Text subclass
-            elif _PatchedJSONB is not None and isinstance(col_type, _PatchedJSONB):
-                col.type = _REAL_JSONB()
+            # Repair both direct stand-ins and JSON().with_variant(JSONB, ...).
+            # Keep each original type intact so teardown restores the unit suite.
+            col.type = native_postgresql_type(col.type)
 
     def _restore() -> None:
         _pg_dialect.UUID = previous_uuid_type  # type: ignore[misc]

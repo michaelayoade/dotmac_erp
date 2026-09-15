@@ -441,6 +441,7 @@ def create_kpi(
         period_end=payload.period_end,
         target_value=payload.target_value,
         unit_of_measure=payload.unit_of_measure,
+        lower_is_better=payload.lower_is_better,
         threshold_value=payload.threshold_value,
         stretch_value=payload.stretch_value,
         weightage=payload.weightage,

@@ -136,6 +136,10 @@ class DashboardConfig:
     statuses: tuple[str, ...] = DEFAULT_STATUSES
     widgets: tuple[str, ...] = DEFAULT_WIDGETS
     search: str = ""
+    employee_search: str = ""
+    cohort: str = "due"
+    attention: str = "all"
+    show_charts: bool = True
 
     @classmethod
     def parse(cls, payload: Mapping[str, Any]) -> DashboardConfig:
@@ -147,6 +151,10 @@ class DashboardConfig:
             "statuses",
             "widgets",
             "search",
+            "employee_search",
+            "cohort",
+            "attention",
+            "show_charts",
         }
         if set(payload) - permitted:
             raise DashboardValidationError("Unsupported dashboard configuration field.")
@@ -181,6 +189,23 @@ class DashboardConfig:
             raise DashboardValidationError(
                 "KPI search must be no longer than 100 characters."
             )
+        employee_search = payload.get("employee_search", "")
+        if not isinstance(employee_search, str) or len(employee_search) > 100:
+            raise DashboardValidationError(
+                "Employee search must be no longer than 100 characters."
+            )
+        cohort = payload.get("cohort", "due")
+        if not isinstance(cohort, str) or cohort not in {"due", "active", "overdue"}:
+            raise DashboardValidationError("Choose a valid KPI date scope.")
+        attention = payload.get("attention", "all")
+        if not isinstance(attention, str) or attention not in {
+            "all",
+            "needs_attention",
+        }:
+            raise DashboardValidationError("Choose a valid employee review filter.")
+        show_charts = payload.get("show_charts", True)
+        if not isinstance(show_charts, bool):
+            raise DashboardValidationError("Choose whether to show charts.")
         start_date = end_date = ""
         if period == "custom":
             start = _date(payload.get("start_date"), "start")
@@ -195,6 +220,10 @@ class DashboardConfig:
             statuses=statuses,
             widgets=widgets,
             search=search.strip(),
+            employee_search=employee_search.strip(),
+            cohort=cohort,
+            attention=attention,
+            show_charts=show_charts,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -206,6 +235,10 @@ class DashboardConfig:
             "statuses": list(self.statuses),
             "widgets": list(self.widgets),
             "search": self.search,
+            "employee_search": self.employee_search,
+            "cohort": self.cohort,
+            "attention": self.attention,
+            "show_charts": self.show_charts,
         }
 
     def window(self, today: date) -> tuple[date, date]:

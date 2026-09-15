@@ -44,8 +44,18 @@ def _read_configuration(values) -> DashboardConfig:
             if explicit or "widget" in values
             else list(DEFAULT_WIDGETS),
             "search": values.get("search", ""),
+            "employee_search": values.get("employee_search", ""),
+            "cohort": values.get("cohort", "due"),
+            "attention": values.get("attention", "all"),
+            "show_charts": _chart_setting(values.get("show_charts", "1")),
         }
     )
+
+
+def _chart_setting(value: Any) -> bool:
+    if not isinstance(value, str) or value not in ("0", "1"):
+        raise DashboardValidationError("Choose whether to show charts.")
+    return value == "1"
 
 
 def _identifier(value: Any) -> str:
@@ -64,6 +74,10 @@ def _pairs(config: DashboardConfig) -> list[tuple[str, str]]:
         ("start_date", config.start_date),
         ("end_date", config.end_date),
         ("search", config.search),
+        ("employee_search", config.employee_search),
+        ("cohort", config.cohort),
+        ("attention", config.attention),
+        ("show_charts", "1" if config.show_charts else "0"),
         *(("department_id", value) for value in config.department_ids),
         *(("status", value) for value in config.statuses),
         *(("widget", value) for value in config.widgets),
@@ -98,6 +112,7 @@ class KPIDashboardWebService:
         db: Session,
         *,
         page: int = 1,
+        employee_page: int = 1,
     ) -> HTMLResponse:
         service = KPIDashboardService(db)
         try:
@@ -114,7 +129,9 @@ class KPIDashboardWebService:
                 )
             else:
                 config = _read_configuration(request.query_params)
-            data = service.dashboard(scope, config, page=page)
+            data = service.dashboard(
+                scope, config, page=page, employee_page=employee_page
+            )
             saved_views = service.list_views(scope)
         except (
             DashboardValidationError,
@@ -128,7 +145,10 @@ class KPIDashboardWebService:
         navigation_pairs = pairs + ([("view_id", selected_id)] if selected_id else [])
 
         def page_url(number: int) -> str:
-            return f"{DASHBOARD_URL}?{urlencode(navigation_pairs + [('page', str(number))])}"
+            return f"{DASHBOARD_URL}?{urlencode(navigation_pairs + [('page', str(number)), ('employee_page', str(data['employee_page']))])}"
+
+        def employee_page_url(number: int) -> str:
+            return f"{DASHBOARD_URL}?{urlencode(navigation_pairs + [('employee_page', str(number)), ('page', str(data['page']))])}"
 
         cards = []
         for key in config.widgets:
@@ -164,6 +184,12 @@ class KPIDashboardWebService:
                 else None,
                 "next_page_url": page_url(data["page"] + 1)
                 if data["page"] < data["total_pages"]
+                else None,
+                "previous_employee_url": employee_page_url(data["employee_page"] - 1)
+                if data["employee_page"] > 1
+                else None,
+                "next_employee_url": employee_page_url(data["employee_page"] + 1)
+                if data["employee_page"] < data["employee_total_pages"]
                 else None,
                 "can_save_view": not auth.leave_write_restricted,
                 "can_manage_kpis": scope.organization_wide

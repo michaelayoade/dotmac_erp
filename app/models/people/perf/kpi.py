@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    Boolean,
     Date,
     Enum,
     ForeignKey,
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin
+from app.models.people.perf.kpi_measurement import achievement, lower_is_better
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
@@ -138,6 +140,9 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
         comment="Exceptional performance value",
     )
 
+    # NULL preserves the legacy support-tag/default direction until reviewed.
+    lower_is_better: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
     # Actual
     actual_value: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
@@ -188,21 +193,20 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
     kra: Mapped[Optional["KRA"]] = relationship("KRA")
 
     @property
+    def effective_lower_is_better(self) -> bool:
+        return lower_is_better(
+            self.lower_is_better, self.kpi_name, self.description, self.notes
+        )
+
+    @property
     def is_achieved(self) -> bool:
-        """Check if KPI is achieved."""
-        if self.actual_value is None or self.target_value is None:
-            return False
-        return self.actual_value >= self.target_value
+        score = self.calculate_achievement()
+        return score is not None and score >= 100
 
     def calculate_achievement(self) -> Decimal | None:
-        """Calculate achievement percentage."""
-        if (
-            self.actual_value is None
-            or self.target_value is None
-            or self.target_value == 0
-        ):
-            return None
-        return (self.actual_value / self.target_value) * 100
+        return achievement(
+            self.actual_value, self.target_value, lower=self.effective_lower_is_better
+        )
 
     def __repr__(self) -> str:
         return f"<KPI {self.kpi_name} for {self.employee_id}>"

@@ -86,15 +86,14 @@ def _add_org_filter(orm_execute_state) -> None:
 
     # Inject the org filter via with_loader_criteria. include_aliases=True
     # ensures the filter applies even when the model is referenced via an
-    # alias (e.g., joinedload subqueries). Capture org_id by value, not by
-    # reference, so each query gets the org_id current at execute time.
-    def _filter(cls, _org_id=org_id):  # type: ignore[no-untyped-def]
-        return cls.organization_id == _org_id
-
+    # alias (e.g., joinedload subqueries). The concrete class is already
+    # known, so bind the current tenant directly using that class's column
+    # type. A callable default argument can pin the lambda cache to the first
+    # tenant; a shared closure can also reuse another model's bind type.
     orm_execute_state.statement = orm_execute_state.statement.options(
         with_loader_criteria(
             target_class,
-            _filter,
+            target_class.organization_id == org_id,
             include_aliases=True,
         )
     )

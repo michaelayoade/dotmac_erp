@@ -390,7 +390,7 @@ owner_material = "MIGRATION_DATABASE_URL"
 # Tax, and People. The architecture gate queries Alembic's composed graph
 # directly; this is not a source-text approximation.
 expected_heads = [
-    "20260915_workforce_monitor",
+    "20260915_merge_workforce_kpi",
     "fi_0002_selectable_planes",
     "im_0001_import_runs",
     "ac_0001_accounting",

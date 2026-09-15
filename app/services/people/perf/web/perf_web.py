@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
 from app.models.people.perf.appraisal import Appraisal
+from app.models.people.perf.kpi_measurement import parse_direction
 from app.models.people.perf.pip import PerformanceImprovementPlan
 from app.models.people.perf.pms_enums import CommitteeDecision
 from app.services.common import PaginationParams, coerce_uuid
@@ -2041,6 +2042,7 @@ class PerfWebService:
                 period_start=period_start,
                 period_end=period_end,
                 target_value=target_value,
+                lower_is_better=parse_direction(_get_form_str(form_data, "direction")),
                 unit_of_measure=_get_form_str(form_data, "unit_of_measure") or None,
                 threshold_value=parse_decimal(
                     _get_form_str(form_data, "threshold_value") or None
@@ -2204,6 +2206,7 @@ class PerfWebService:
                 target_value=parse_decimal(
                     _get_form_str(form_data, "target_value") or None
                 ),
+                lower_is_better=parse_direction(_get_form_str(form_data, "direction")),
                 unit_of_measure=_get_form_str(form_data, "unit_of_measure") or None,
                 threshold_value=parse_decimal(
                     _get_form_str(form_data, "threshold_value") or None
