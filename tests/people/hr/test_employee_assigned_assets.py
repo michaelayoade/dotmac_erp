@@ -50,6 +50,8 @@ def _employee(org_id, person_id):
         grade_id=None,
         employment_type_id=None,
         expense_approver_id=None,
+        workforce_provisioning_status=None,
+        workforce_provisioning_state={},
     )
 
 

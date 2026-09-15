@@ -304,3 +304,25 @@ def test_bound_identity_already_in_group_is_a_noop() -> None:
     assert not result.enabled
     nextcloud.enable_user.assert_not_called()
     nextcloud.add_user_to_group.assert_not_called()
+
+
+def test_nextcloud_lock_does_not_eager_join_person() -> None:
+    employee = _employee()
+    employee.person.nextcloud_user_id = "ada@dotmac.ng"
+    db = Mock()
+    db.scalar.return_value = employee
+    nextcloud = Mock()
+    nextcloud.get_user.return_value = {
+        "email": "ada@dotmac.ng",
+        "enabled": True,
+        "groups": ["erp-employees"],
+    }
+    service = EmployeeNextcloudProvisioningService(
+        db, config=_config(), nextcloud_client=nextcloud
+    )
+
+    service.ensure_account(employee.organization_id, employee.employee_id)
+
+    statement = db.scalar.call_args.args[0]
+    assert not statement._with_options
+    assert statement._for_update_arg is not None
