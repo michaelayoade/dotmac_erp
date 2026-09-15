@@ -1,0 +1,231 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import stats_card, status_badge, empty_state, icon_svg %}
+
+{% block page_title %}KPI Dashboard{% endblock %}
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb" class="text-sm text-slate-500 dark:text-slate-400">
+    <ol class="flex flex-wrap items-center gap-2">
+        <li><a href="/people" class="hover:text-violet-600">People</a></li>
+        <li aria-hidden="true">{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li><a href="/people/perf" class="hover:text-violet-600">Performance</a></li>
+        <li aria-hidden="true">{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li aria-current="page" class="font-medium text-slate-900 dark:text-white">KPI Dashboard</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% macro number(value) -%}
+    {% if value is none %}—{% elif value < 0 %}({{ '{:,.2f}'.format(value | abs) }}){% else %}{{ '{:,.2f}'.format(value) }}{% endif %}
+{%- endmacro %}
+
+{% block content %}
+<div id="kpi-workspace" class="space-y-6">
+    <section class="card p-6" aria-labelledby="kpi-heading">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 id="kpi-heading" class="font-display text-xl font-semibold text-slate-900 dark:text-white">Department KPI overview</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Choose departments, reporting dates and summary cards. Save your preferred combinations as personal views.</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Access: {{ 'all departments in your organization' if organization_wide else 'only the active departments you head' }}. Saved views are private to your account.</p>
+            </div>
+            {% if can_manage_kpis %}<a class="btn btn-secondary" href="/people/perf/goals">Manage Goals &amp; KPIs</a>{% endif %}
+        </div>
+        <form method="get" action="{{ dashboard_url }}" class="mt-5 flex flex-wrap items-end gap-3">
+            <div>
+                <label for="saved-kpi-view" class="form-label">Open a saved view</label>
+                <select name="view_id" id="saved-kpi-view" class="form-select">
+                    <option value="">Default overview</option>
+                    {% for view in saved_views %}
+                    <option value="{{ view.id }}" {% if selected_view_id == view.id %}selected{% endif %}>{{ view.name }}</option>
+                    {% else %}
+                    <option disabled>No saved views yet</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary">Open view</button>
+            <a href="{{ dashboard_url }}" class="btn btn-secondary">Reset filters</a>
+        </form>
+    </section>
+
+    <form method="get" action="{{ dashboard_url }}" class="card p-6 space-y-5" aria-label="Dashboard filters"
+          hx-get="{{ dashboard_url }}" hx-target="#kpi-workspace" hx-select="#kpi-workspace" hx-swap="outerHTML" hx-push-url="true">
+        <input type="hidden" name="configured" value="1">
+        {% if selected_view_id %}<input type="hidden" name="view_id" value="{{ selected_view_id }}">{% endif %}
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+                <label for="kpi-period" class="form-label">Reporting period</label>
+                <select name="period" id="kpi-period" class="form-select">
+                    {% for key, label in period_options.items() %}
+                    <option value="{{ key }}" {% if config.period == key %}selected{% endif %}>{{ label }}</option>
+                    {% else %}<option disabled>No reporting periods available</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="kpi-start" class="form-label">Custom start date</label>
+                <input type="date" id="kpi-start" name="start_date" value="{{ config.start_date }}" class="form-input" aria-describedby="custom-dates-help">
+            </div>
+            <div>
+                <label for="kpi-end" class="form-label">Custom end date</label>
+                <input type="date" id="kpi-end" name="end_date" value="{{ config.end_date }}" class="form-input" aria-describedby="custom-dates-help">
+            </div>
+            <div>
+                <label for="kpi-search" class="form-label">KPI name</label>
+                <input type="search" id="kpi-search" name="search" maxlength="100" value="{{ config.search }}" class="form-input" placeholder="Search recorded KPIs">
+            </div>
+        </div>
+        <p id="custom-dates-help" class="text-xs text-slate-500 dark:text-slate-400">Dates apply only when Custom dates is selected. Maximum range: 366 days. KPIs are included by their period end date.</p>
+        <fieldset>
+            <legend class="form-label">Departments</legend>
+            <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">Select one or several. Leave all unchecked to include every department you are authorized to view.</p>
+            <div class="flex flex-wrap gap-x-5 gap-y-3">
+                {% for department in departments %}
+                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input type="checkbox" name="department_id" value="{{ department.id }}" {% if department.id in config.department_ids %}checked{% endif %}>
+                    {{ department.name }}{% if not department.active %} (inactive){% endif %}
+                </label>
+                {% else %}<p class="text-sm text-slate-500 dark:text-slate-400">No departments configured. Organization-wide results may still contain unassigned KPI owners.</p>{% endfor %}
+            </div>
+        </fieldset>
+        <details>
+            <summary class="cursor-pointer text-sm font-medium text-violet-700 dark:text-violet-300">Customize statuses and summary cards</summary>
+            <fieldset class="mt-4">
+                <legend class="form-label">Recorded KPI statuses</legend>
+                <div class="flex flex-wrap gap-x-5 gap-y-3">
+                    {% for status in status_options %}
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                        <input type="checkbox" name="status" value="{{ status }}" {% if status in config.statuses %}checked{% endif %}>
+                        {{ status | replace('_', ' ') | title }}
+                    </label>
+                    {% else %}<p>No statuses available.</p>{% endfor %}
+                </div>
+            </fieldset>
+            <fieldset class="mt-4">
+                <legend class="form-label">Card order</legend>
+                <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">Choose each card at most once. Leave a slot hidden to reduce the dashboard. Keep at least one card and one status.</p>
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {% for selected in widget_slots %}
+                    <div>
+                        <label for="kpi-widget-{{ loop.index }}" class="form-label">Position {{ loop.index }}</label>
+                        <select name="widget" id="kpi-widget-{{ loop.index }}" class="form-select">
+                            <option value="" {% if not selected %}selected{% endif %}>Hidden</option>
+                            {% for key, definition in widget_options.items() %}
+                            <option value="{{ key }}" {% if selected == key %}selected{% endif %}>{{ definition[0] }}</option>
+                            {% else %}<option disabled>No cards available</option>{% endfor %}
+                        </select>
+                    </div>
+                    {% else %}<p>No card positions available.</p>{% endfor %}
+                </div>
+            </fieldset>
+        </details>
+        <button type="submit" class="btn btn-primary">Apply filters and layout</button>
+    </form>
+
+    {% if can_save_view %}
+    <section class="card p-5" aria-label="Save dashboard view">
+        <form method="post" action="{{ dashboard_url }}/views" class="flex flex-wrap items-end gap-3">
+            {{ request.state.csrf_form | safe }}
+            {% for key, value in configuration_pairs %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% else %}{% endfor %}
+            {% if selected_view_id %}<input type="hidden" name="view_id" value="{{ selected_view_id }}">{% endif %}
+            <div>
+                <label for="kpi-view-name" class="form-label">Personal view name</label>
+                <input type="text" id="kpi-view-name" name="name" value="{{ selected_view_name }}" required maxlength="80" class="form-input" placeholder="For example: Engineering monthly review">
+            </div>
+            <button type="submit" name="save_mode" value="new" class="btn btn-secondary">Save as new view</button>
+            {% if selected_view_id %}<button type="submit" name="save_mode" value="update" class="btn btn-primary">Update this view</button>{% endif %}
+        </form>
+        <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Apply changes above before saving. Up to 10 views per person; relative periods advance automatically. Saving a view never changes KPI targets or actuals.</p>
+        {% if selected_view_id %}
+        <form method="post" action="{{ dashboard_url }}/views/{{ selected_view_id }}/delete" class="mt-4">
+            {{ request.state.csrf_form | safe }}
+            <button type="submit" class="btn btn-danger-outline">Delete this saved view</button>
+        </form>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    <div id="results-container" class="space-y-6" aria-live="polite">
+        <div class="text-sm text-slate-600 dark:text-slate-300">
+            <p><strong>Period-end cohort:</strong> {{ period_start.strftime('%d %b %Y') }} – {{ period_end.strftime('%d %b %Y') }}.</p>
+            <p class="mt-1 text-xs">Source: existing Goals &amp; KPIs records, including any existing metric syncs. Department attribution uses the employee's current department. These are current records, not historical snapshots or a combined employee performance score.</p>
+            <p class="mt-1 text-xs">Read at {{ queried_at.strftime('%d %b %Y %H:%M %Z') }}. Deadline checks use {{ organization_timezone }} ({{ business_date.isoformat() }}). A recent page read does not mean every actual has been updated recently.</p>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {% for card in cards %}
+            {{ stats_card(card.label, card.value, icon="chart", color=card.color, subtitle=card.subtitle) }}
+            {% else %}{{ empty_state("No summary cards selected", "Choose at least one summary card above.") }}{% endfor %}
+        </div>
+
+        <section class="card overflow-hidden" aria-labelledby="kpi-departments-heading">
+            <div class="p-5">
+                <h3 id="kpi-departments-heading" class="font-display text-lg font-semibold text-slate-900 dark:text-white">Department comparison</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Counts reflect the selected statuses. Actuals recorded measures data completeness, not achievement. Departments without matching KPI records are omitted.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">KPI counts and reporting coverage by current department</caption>
+                    <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"><tr>
+                        <th scope="col" class="px-5 py-3 text-left">Department</th>
+                        <th scope="col" class="px-5 py-3 text-right">Tracked</th>
+                        <th scope="col" class="px-5 py-3 text-right">Recorded achieved</th>
+                        <th scope="col" class="px-5 py-3 text-right">At risk / missed</th>
+                        <th scope="col" class="px-5 py-3 text-right">Overdue open</th>
+                        <th scope="col" class="px-5 py-3 text-right">Actuals recorded</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
+                        {% for row in department_rows %}<tr>
+                            <th scope="row" class="px-5 py-3 text-left font-medium">{{ row.department_name if row.department_name else 'Unassigned' }}</th>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.tracked }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.achieved }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.at_risk }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.overdue }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.coverage|string + '%' if row.coverage is not none else '—' }}</td>
+                        </tr>{% else %}<tr><td colspan="6">{{ empty_state("No matching department results", "Adjust the dates or statuses, or record KPIs through the existing Goals & KPIs workflow.") }}</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card overflow-hidden" aria-labelledby="kpi-records-heading">
+            <div class="p-5"><h3 id="kpi-records-heading" class="font-display text-lg font-semibold text-slate-900 dark:text-white">Underlying KPI records</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Targets and actuals retain their own units. Missing actuals are shown as —, not zero. Recorded status is not recalculated by this dashboard.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">Recorded KPI targets, actuals, status and last record change</caption>
+                    <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"><tr>
+                        <th scope="col" class="px-5 py-3 text-left">KPI / owner</th>
+                        <th scope="col" class="px-5 py-3 text-left">Department</th>
+                        <th scope="col" class="px-5 py-3 text-left">Period ends</th>
+                        <th scope="col" class="px-5 py-3 text-right">Target</th>
+                        <th scope="col" class="px-5 py-3 text-right">Actual</th>
+                        <th scope="col" class="px-5 py-3 text-left">Unit</th>
+                        <th scope="col" class="px-5 py-3 text-left">Recorded status</th>
+                        <th scope="col" class="px-5 py-3 text-left">Record changed</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
+                        {% for kpi in kpis %}<tr>
+                            <td class="px-5 py-3">
+                                {% if can_manage_kpis %}<a class="font-medium text-violet-700 dark:text-violet-300" href="/people/perf/goals/{{ kpi.kpi_id }}">{{ kpi.kpi_name }}</a>{% else %}<span class="font-medium">{{ kpi.kpi_name }}</span>{% endif %}
+                                <div class="mt-1 text-xs font-mono text-slate-500 dark:text-slate-400">{{ kpi.employee_code }}</div>
+                            </td>
+                            <td class="px-5 py-3">{{ kpi.department_name if kpi.department_name else 'Unassigned' }}</td>
+                            <td class="px-5 py-3 whitespace-nowrap">{{ kpi.period_end.strftime('%d %b %Y') }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ number(kpi.target_value) }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ number(kpi.actual_value) }}</td>
+                            <td class="px-5 py-3">{{ kpi.unit_of_measure if kpi.unit_of_measure else '—' }}</td>
+                            <td class="px-5 py-3">{{ status_badge(kpi.status.value, size="sm") }}</td>
+                            <td class="px-5 py-3 whitespace-nowrap">{{ kpi.record_updated_at.strftime('%d %b %Y') if kpi.record_updated_at else '—' }}</td>
+                        </tr>{% else %}<tr><td colspan="8">{{ empty_state("No KPIs match this view", "Select another reporting period or ask the KPI owner to create the required records.") }}</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <nav aria-label="KPI record pages" class="flex flex-wrap items-center justify-between gap-3 p-5">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Page {{ page }} of {{ total_pages }} · {{ summary.tracked }} records</p>
+                <div class="flex gap-2">
+                    {% if previous_page_url %}<a class="btn btn-secondary" href="{{ previous_page_url }}" rel="prev">Previous</a>{% endif %}
+                    {% if next_page_url %}<a class="btn btn-secondary" href="{{ next_page_url }}" rel="next">Next</a>{% endif %}
+                </div>
+            </nav>
+        </section>
+    </div>
+</div>
+{% endblock %}

@@ -22,6 +22,7 @@ from app.web.people.attendance import router as attendance_router
 from app.web.people.dashboard import router as dashboard_router
 from app.web.people.hr import router as hr_router
 from app.web.people.import_export import router as import_router
+from app.web.people.kpi_dashboard import router as kpi_dashboard_router
 from app.web.people.leave import router as leave_router
 from app.web.people.payroll import router as payroll_router
 from app.web.people.perf import router as perf_router
@@ -68,6 +69,7 @@ router.include_router(training_router)
 # Weekly reports are mounted separately because they are available in every
 # performance mode; appraisal/PMS policy guards remain on their own routers.
 router.include_router(weekly_meeting_reports_router)
+router.include_router(kpi_dashboard_router)
 router.include_router(perf_router)
 
 # Self-service routes
