@@ -2266,9 +2266,7 @@ class HRWebService:
         rejoining_date = self._parse_date(date_of_rejoining)
 
         if rejoining_date:
-            svc.rehire_employee(
-                employee_id, rejoining_date, notes=notes or None
-            )
+            svc.rehire_employee(employee_id, rejoining_date, notes=notes or None)
             db.commit()
             return RedirectResponse(
                 url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
@@ -3059,7 +3057,6 @@ class HRWebService:
         managers = (
             EmployeeService(db, org_id)
             .list_employees(
-                EmployeeFilters(status=EmployeeStatus.ACTIVE),
                 EmployeeFilters(status=EmployeeStatus.ACTIVE),
                 PaginationParams(limit=DROPDOWN_LIMIT),
                 eager_load=True,
