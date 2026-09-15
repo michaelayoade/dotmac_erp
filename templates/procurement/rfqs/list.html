@@ -187,6 +187,9 @@
             {% if filter_method %}
             <input type="hidden" name="method" value="{{ filter_method }}">
             {% endif %}
+            {% if search %}
+            <input type="hidden" name="search" value="{{ search }}">
+            {% endif %}
             <div class="flex items-center justify-end gap-2">
                 <button type="button" class="btn btn-secondary" @click="exportOpen = false">Cancel</button>
                 <button type="submit" class="btn btn-primary">Export</button>

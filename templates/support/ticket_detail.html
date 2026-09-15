@@ -29,8 +29,8 @@
         {# Confirmation Modal #}
         <div x-show="showConfirm" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
             <div class="fixed inset-0 bg-slate-900/50" @click="showConfirm = false"></div>
-            <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-                <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Archive Ticket?</h3>
+            <div role="dialog" aria-modal="true" aria-labelledby="archive-ticket-title" x-trap="showConfirm" @keydown.escape.window="showConfirm = false" class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+                <h3 id="archive-ticket-title" class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Archive Ticket?</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
                     This will move the ticket to the archive. You can restore it later from the archived tickets list.
                 </p>
@@ -57,8 +57,8 @@
         </button>
         <div x-show="showDelete" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
             <div class="fixed inset-0 bg-slate-900/50" @click="showDelete = false"></div>
-            <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-                <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Delete Ticket?</h3>
+            <div role="dialog" aria-modal="true" aria-labelledby="delete-ticket-title" x-trap="showDelete" @keydown.escape.window="showDelete = false" class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+                <h3 id="delete-ticket-title" class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Delete Ticket?</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
                     This will permanently delete the ticket and its attachments. This action cannot be undone.
                 </p>

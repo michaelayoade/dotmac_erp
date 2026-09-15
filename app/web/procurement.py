@@ -1747,12 +1747,15 @@ def evaluation_list(
     request: Request,
     status: str | None = None,
     search: str | None = None,
+    page: int | None = Query(None, ge=1),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db_for_org),
 ):
     """List bid evaluations."""
+    if page is not None:
+        offset = (page - 1) * limit
     context = base_context(request, auth, "Bid Evaluations", "proc_evaluations", db=db)
     web_service = ProcurementWebService(db)
     context.update(
@@ -1804,6 +1807,7 @@ def contract_list(
     request: Request,
     status: str | None = None,
     search: str | None = None,
+    page: int | None = Query(None, ge=1),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     success: str | None = None,
@@ -1812,6 +1816,8 @@ def contract_list(
     db: Session = Depends(get_db_for_org),
 ):
     """List contracts."""
+    if page is not None:
+        offset = (page - 1) * limit
     context = base_context(request, auth, "Contracts", "procurement", db=db)
     web_service = ProcurementWebService(db)
     context.update(

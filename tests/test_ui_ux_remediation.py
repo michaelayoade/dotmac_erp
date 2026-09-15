@@ -79,6 +79,26 @@ def test_expense_claim_detail_covers_known_redirect_outcomes() -> None:
         assert f'"{error}"' in template
 
 
+def test_expense_claim_pagination_preserves_offset_deep_links() -> None:
+    routes = (APP / "web" / "finance" / "exp.py").read_text(encoding="utf-8")
+    assert "page: int | None = Query(None, ge=1)" in routes
+    assert "if page is not None:" in routes
+    assert "offset = (page - 1) * limit" in routes
+    assert "offset: int = Query(0, ge=0)" in routes
+
+
+def test_expense_claim_action_permissions_agree_across_layers() -> None:
+    routes = (APP / "web" / "finance" / "exp.py").read_text(encoding="utf-8")
+    service = (APP / "services" / "expense" / "web_claims.py").read_text(
+        encoding="utf-8"
+    )
+    detail = (TEMPLATES / "expense" / "claim_detail.html").read_text(encoding="utf-8")
+    assert "require_any_web_permission" in routes
+    assert '"expense:claims:submit"' in service
+    assert '"expense:claims:reject"' in service
+    assert "can_submit" in detail and "can_approve" in detail and "can_reject" in detail
+
+
 def test_procurement_dashboard_uses_total_pending_requisition_count() -> None:
     source = (
         APP / "services" / "procurement" / "web" / "procurement_web.py"
@@ -87,6 +107,16 @@ def test_procurement_dashboard_uses_total_pending_requisition_count() -> None:
     assert "pending_reqs, pending_req_count = req_service.list_requisitions" in source
     assert '"pending_req_count": pending_req_count' in source
     assert '"pending_req_count": len(pending_reqs)' not in source
+
+
+def test_procurement_dashboard_builds_org_scoped_vendor_metrics() -> None:
+    source = (
+        APP / "services" / "procurement" / "web" / "procurement_web.py"
+    ).read_text(encoding="utf-8")
+    assert '"vendor_count": vendor_count' in source
+    assert '"prequalified_count": prequalified_count' in source
+    assert '"pending_evaluation_count": pending_evaluation_count' in source
+    assert "VendorPrequalification.organization_id == org_id" in source
 
 
 def test_procurement_requisition_list_uses_shared_pagination_and_alpine_modals() -> (
@@ -128,6 +158,43 @@ def test_procurement_rfq_list_uses_shared_pagination_and_alpine_modals() -> None
     assert 'x-trap="exportOpen"' in template
     assert "offset={{ offset" not in template
     assert "Previous</a>" not in template
+
+
+def test_procurement_exports_preserve_search() -> None:
+    for name in ["requisitions/list.html", "rfqs/list.html"]:
+        template = (TEMPLATES / "procurement" / name).read_text(encoding="utf-8")
+        assert '<input type="hidden" name="search" value="{{ search }}">' in template
+
+
+def test_inventory_transactions_expose_existing_filters_and_pagination() -> None:
+    template = (TEMPLATES / "inventory" / "transactions.html").read_text(
+        encoding="utf-8"
+    )
+    assert "compact_filters(" in template
+    assert 'filter_select_field("transaction_type"' in template
+    assert "pagination(" in template
+    assert 'filters={"transaction_type": transaction_type}' in template
+
+
+def test_ap_payment_detail_renders_success_feedback() -> None:
+    service = (
+        APP / "services" / "finance" / "ap" / "web" / "payment_web.py"
+    ).read_text(encoding="utf-8")
+    template = (TEMPLATES / "finance" / "ap" / "payment_detail.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'context["success"] = request.query_params.get("success")' in service
+    assert "success_banner(success)" in template
+
+
+def test_support_detail_modals_use_accessible_dialog_pattern() -> None:
+    template = (TEMPLATES / "support" / "ticket_detail.html").read_text(
+        encoding="utf-8"
+    )
+    assert template.count('role="dialog"') >= 2
+    assert template.count('aria-modal="true"') >= 2
+    assert 'x-trap="showConfirm"' in template
+    assert 'x-trap="showDelete"' in template
 
 
 def test_inventory_item_actions_are_permission_flagged() -> None:

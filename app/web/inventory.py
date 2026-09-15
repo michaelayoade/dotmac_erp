@@ -482,6 +482,7 @@ def list_transactions(
     transaction_type: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db_for_org),
+    limit: int = Query(default=50, ge=1, le=200),
 ):
     """Inventory transactions list page."""
     return inv_web_service.list_transactions_response(
@@ -491,6 +492,7 @@ def list_transactions(
         transaction_type,
         page,
         db,
+        limit=limit,
     )
 
 

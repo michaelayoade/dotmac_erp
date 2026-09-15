@@ -671,9 +671,12 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             can_approve = AuthorizationService.check_any_permission(
                 db, auth.person_id, approve_perms, org_id
             )
-        can_submit = (
-            auth.is_admin or can_approve
-        ) and claim.status == ExpenseClaimStatus.DRAFT
+        can_submit = auth.is_admin
+        if not can_submit and auth.person_id:
+            can_submit = AuthorizationService.check_permission(
+                db, auth.person_id, "expense:claims:submit", org_id
+            )
+        can_submit = can_submit and claim.status == ExpenseClaimStatus.DRAFT
         can_reject = auth.is_admin
         if not can_reject and auth.person_id:
             can_reject = AuthorizationService.check_permission(
@@ -977,16 +980,7 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
 
     @staticmethod
     def submit_claim_response(claim_id: str, auth, db) -> RedirectResponse:
-        if not (
-            auth.is_admin
-            or auth.has_any_permission(
-                [
-                    "expense:claims:approve:tier1",
-                    "expense:claims:approve:tier2",
-                    "expense:claims:approve:tier3",
-                ]
-            )
-        ):
+        if not auth.has_permission("expense:claims:submit"):
             return RedirectResponse(
                 "/expense/claims/list?error=permission", status_code=302
             )
@@ -1164,13 +1158,7 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
     def reject_claim_response(
         claim_id: str, reason: str | None, auth, db
     ) -> RedirectResponse:
-        if not auth.has_any_permission(
-            [
-                "expense:claims:approve:tier1",
-                "expense:claims:approve:tier2",
-                "expense:claims:approve:tier3",
-            ]
-        ):
+        if not auth.has_permission("expense:claims:reject"):
             return RedirectResponse(
                 "/expense/claims/list?error=permission", status_code=302
             )

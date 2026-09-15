@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, status_badge, icon_svg %}
+{% from "components/macros.html" import empty_state, status_badge, success_banner, icon_svg %}
 
 {% block page_title %}AP Payment{% endblock %}
 
@@ -72,6 +72,9 @@
 {% endblock %}
 
 {% block content %}
+{% if success %}
+{{ success_banner(success) }}
+{% endif %}
 {% if error %}
 <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
     <div class="flex items-center gap-3">

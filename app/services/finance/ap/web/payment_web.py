@@ -735,6 +735,8 @@ class PaymentWebService:
                 payment_id,
             )
         )
+        context["success"] = request.query_params.get("success")
+        context["error"] = request.query_params.get("error")
         return templates.TemplateResponse(
             request, "finance/ap/payment_detail.html", context
         )
