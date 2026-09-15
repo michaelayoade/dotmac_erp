@@ -186,7 +186,12 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
 
     with no `else`/`elif`, no heredoc, no compound statement, no function,
     no loop, no nested condition, no `&`, and no packed `;` commands
-    anywhere in the body. This is a POSITIVE grammar, not a denylist of
+    anywhere in the body. A blank line ANYWHERE in the body -- immediately
+    after `then`, between two `echo` lines, or before the final `exit` --
+    is tolerated: it is whitespace, not a statement, and a deliberate
+    grammar decision rather than an oversight, scoped to lines that are
+    empty after stripping so it can never absorb a line that carries any
+    other content. This is a POSITIVE grammar, not a denylist of
     known-bad shapes: every body statement must match `_ECHO_LITERAL` or be
     the single trailing `_EXIT_STATEMENT`, so an unrecognised construct
     fails by not matching either shape, not by being enumerated as
@@ -220,6 +225,13 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
         closed = False
         for line in body[match.end() :].splitlines():
             stripped = line.strip()
+            if stripped == "":
+                # Blank -- whitespace, not a statement. Tolerated anywhere
+                # in the body (immediately after `then`, between two
+                # echoes, or before `exit`/`fi`): a blank line carries no
+                # shell meaning at all, so it is neither a disqualifying
+                # statement nor a candidate for the final `exit`.
+                continue
             if stripped == "fi":
                 closed = True
                 break
@@ -694,6 +706,31 @@ def test_the_real_gates_exact_shape_is_accepted() -> None:
             'read-token#value;"\n'
             '  echo "::error::this workflow consumes the projection, it does not'
             ' fetch it."\n'
+            "  exit 1\n"
+            "fi"
+        ),
+    }
+    assert is_refusal_gate(step)
+
+
+def test_blank_lines_between_statements_are_tolerated() -> None:
+    """A deliberate grammar decision, not an oversight: a blank line
+    carries no shell meaning at all, so an author leaving one between two
+    diagnostics, or between the diagnostics and the final exit, must not
+    disqualify an otherwise-conforming gate. Design break condition:
+    blank-line tolerance is scoped to lines that are empty AFTER
+    stripping -- it can never absorb a line carrying real content, so
+    widening this check beyond truly-empty lines is what would risk
+    swallowing something that should have disqualified the body.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": (
+            'if [ -z "$ALIAS" ]; then\n'
+            '  echo "first"\n'
+            "\n"
+            '  echo "second"\n'
+            "\n"
             "  exit 1\n"
             "fi"
         ),
