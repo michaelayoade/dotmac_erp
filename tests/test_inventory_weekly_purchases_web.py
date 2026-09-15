@@ -14,13 +14,22 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.testclient import TestClient
-from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader, StrictUndefined
+from jinja2 import (
+    ChoiceLoader,
+    DictLoader,
+    Environment,
+    FileSystemLoader,
+    StrictUndefined,
+)
 
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceStatus,
     SupplierInvoiceType,
 )
-from app.services.inventory.weekly_purchases import PurchaseFilters, format_report_number
+from app.services.inventory.weekly_purchases import (
+    PurchaseFilters,
+    format_report_number,
+)
 from app.services.inventory.weekly_purchases_web import WeeklyPurchasesWebService
 from app.web.deps import get_db_for_org, require_inventory_access
 from app.web.inventory_weekly_purchases import router
@@ -92,7 +101,9 @@ def test_empty_csv_has_headers_and_oversize_export_is_not_partial():
         ws.service.export_rows.return_value = []
         response = ws.export_response(auth(), {})
         assert len(list(csv.reader(StringIO(response.body.decode("utf-8-sig"))))) == 1
-        ws.service.export_rows.side_effect = ValueError("This export exceeds 50,000 lines.")
+        ws.service.export_rows.side_effect = ValueError(
+            "This export exceeds 50,000 lines."
+        )
         with pytest.raises(HTTPException) as exc:
             ws.export_response(auth(), {})
         assert exc.value.status_code == 400
@@ -128,7 +139,9 @@ def report_context(ws, *, finance=False, invoice_permission=False, rows=None):
         "total_pages": 1,
     }
     ws.service.options.return_value = {
-        "suppliers": [], "warehouses": [], "categories": []
+        "suppliers": [],
+        "warehouses": [],
+        "categories": [],
     }
     request = Mock()
     user = auth(finance=finance, invoice_permission=invoice_permission)
@@ -149,7 +162,10 @@ def test_page_navigation_and_export_keep_filters_and_invoice_access():
     context = report_context(WeeklyPurchasesWebService(Mock()), finance=True)
     assert context["can_view_invoice"] is False
     for name in (
-        "previous_week_url", "current_week_url", "export_url", "next_page_url"
+        "previous_week_url",
+        "current_week_url",
+        "export_url",
+        "next_page_url",
     ):
         assert parse_qs(urlparse(context[name]).query)["search"] == ["cable & fibre"]
     assert context["next_week_url"] is None
@@ -202,7 +218,9 @@ def test_both_http_endpoints_use_permissions_and_tenant_db_dependency():
     app.dependency_overrides[permission] = lambda: user
     app.dependency_overrides[require_inventory_access] = lambda: user
     app.dependency_overrides[get_db_for_org] = lambda: db
-    with patch("app.web.inventory_weekly_purchases.WeeklyPurchasesWebService") as factory:
+    with patch(
+        "app.web.inventory_weekly_purchases.WeeklyPurchasesWebService"
+    ) as factory:
         factory.return_value.report_response.return_value = HTMLResponse("page")
         factory.return_value.export_response.return_value = HTMLResponse("csv")
         with TestClient(app) as client:
@@ -219,10 +237,16 @@ def test_both_http_endpoints_use_permissions_and_tenant_db_dependency():
                 "category": None,
                 "search": "cable",
             }
-            assert client.get("/inventory/reports/weekly-purchases?page=0").status_code == 422
-            assert client.get(
-                "/inventory/reports/weekly-purchases?search=" + "x" * 101
-            ).status_code == 422
+            assert (
+                client.get("/inventory/reports/weekly-purchases?page=0").status_code
+                == 422
+            )
+            assert (
+                client.get(
+                    "/inventory/reports/weekly-purchases?search=" + "x" * 101
+                ).status_code
+                == 422
+            )
 
             def forbidden():
                 raise HTTPException(status_code=403)
@@ -230,7 +254,10 @@ def test_both_http_endpoints_use_permissions_and_tenant_db_dependency():
             for dependency in (permission, require_inventory_access):
                 app.dependency_overrides[dependency] = forbidden
                 for suffix in ("", "/export"):
-                    assert client.get(
-                        f"/inventory/reports/weekly-purchases{suffix}"
-                    ).status_code == 403
+                    assert (
+                        client.get(
+                            f"/inventory/reports/weekly-purchases{suffix}"
+                        ).status_code
+                        == 403
+                    )
                 app.dependency_overrides[dependency] = lambda: user
