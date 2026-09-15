@@ -1,0 +1,185 @@
+name: Prepare verified ERP release pin
+on:
+  push:
+    branches: [ci/erp-release-pin-6e7f8d23]
+    paths: [.github/workflows/prepare-erp-release-pin.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: prepare-erp-release-pin-6e7f8d23
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: product
+    env:
+      DATABASE_URL: sqlite:///./test.db
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1
+          path: product
+          fetch-depth: 0
+      - name: Verify the successful protected-main publication and download its evidence
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const crypto = require('crypto');
+            const runId = 35027538831;
+            const artifactId = 10420533786;
+            const source = '6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1';
+            const expectedZipHash = '992373fe00766b53faaf3382a1410563722efb125d3ccf619273b6bb00a6a771';
+            const repo = context.repo;
+            const {data: run} = await github.rest.actions.getWorkflowRun({...repo, run_id: runId});
+            if (run.event !== 'push' || run.head_branch !== 'main' || run.head_sha !== source || run.status !== 'completed' || run.conclusion !== 'success') {
+              throw new Error('The selected source does not have a successful main publication');
+            }
+            const {data: artifact} = await github.rest.actions.getArtifact({...repo, artifact_id: artifactId});
+            if (artifact.expired || artifact.name !== `image-release-${source}` || artifact.workflow_run.id !== runId || artifact.workflow_run.head_sha !== source || artifact.digest !== `sha256:${expectedZipHash}`) {
+              throw new Error('Publication artifact identity mismatch');
+            }
+            const response = await github.rest.actions.downloadArtifact({...repo, artifact_id: artifactId, archive_format: 'zip'});
+            const bytes = Buffer.from(response.data);
+            if (crypto.createHash('sha256').update(bytes).digest('hex') !== expectedZipHash) {
+              throw new Error('Publication archive digest mismatch');
+            }
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'erp-image-release.zip'), bytes);
+            fs.mkdirSync(path.join(process.env.RUNNER_TEMP, 'erp-pin-validation'), {recursive: true});
+            fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'erp-pin-validation', 'publication.json'), JSON.stringify({run_id: runId, artifact_id: artifactId, source_revision: source, artifact_digest: artifact.digest, conclusion: run.conclusion}, null, 2) + '\n');
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Bind descriptor and regression expectations to the verified evidence
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1
+          test "$(git rev-parse HEAD^{tree})" = 4bb0f0f80563ac5dca0c873bd672ab3eeb905eaa
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import tomllib
+          import zipfile
+
+          source = '6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1'
+          digest = 'sha256:decbe6ae00d017f0ac8f9b263128c4613c5d48160fac6c6081cd5b377be35ba0'
+          reference = 'ghcr.io/michaelayoade/dotmac_erp@' + digest
+          with zipfile.ZipFile(Path(os.environ['RUNNER_TEMP']) / 'erp-image-release.zip') as archive:
+              assert archive.namelist() == ['image-release.json']
+              raw = archive.read('image-release.json')
+          evidence = json.loads(raw)
+          manifest_digest = 'sha256:' + hashlib.sha256(Path('deploy/product-manifest.json').read_bytes()).hexdigest()
+          expected = {'digest': digest, 'git_sha': source, 'manifest_digest': manifest_digest, 'reference': reference, 'schema': 'dotmac.image-release.v2'}
+          assert evidence == expected
+          assert raw == (json.dumps(expected, separators=(',', ':'), sort_keys=True) + '\n').encode()
+          descriptor = Path('deploy/product.toml')
+          old = tomllib.loads(descriptor.read_text())['image']
+          assert old['source_revision'] == '983dbf1634bc3af8bfb276c5521ceed6742d7e06'
+          assert old['reference'] == 'ghcr.io/michaelayoade/dotmac_erp@sha256:38f88505f443a8cf832100c40b28df1e1e7e447e06e8482d50751b66432a12d2'
+          replacements = {old['source_revision']: source, old['reference'].split('@')[1]: digest}
+          for filename in ['deploy/product.toml', 'tests/architecture/test_deployment_descriptor.py']:
+              path = Path(filename)
+              text = path.read_text()
+              for before, after in replacements.items():
+                  assert text.count(before) == 1, (filename, before)
+                  text = text.replace(before, after)
+              path.write_text(text)
+          evidence_path = Path('deploy/releases/2026-09-15-6e7f8d23.image-release.json')
+          assert not evidence_path.exists()
+          evidence_path.parent.mkdir(parents=True, exist_ok=True)
+          evidence_path.write_bytes(raw)
+          test_path = Path('tests/architecture/test_deployment_descriptor.py')
+          text = test_path.read_text()
+          text = text.replace('from pathlib import Path\n', 'import json\nfrom pathlib import Path\n', 1)
+          marker = 'def test_no_role_holds_the_migration_owner_material() -> None:\n'
+          assert text.count(marker) == 1
+          new_test = '''def test_descriptor_matches_committed_publication_evidence() -> None:
+              """Preserve the published digest/source/assembly binding when selecting a release."""
+              evidence_path = (
+                  REPO_ROOT / "deploy/releases/2026-09-15-6e7f8d23.image-release.json"
+              )
+              raw = evidence_path.read_text(encoding="utf-8")
+              evidence = json.loads(raw)
+              spec = _load()
+              assert evidence == {
+                  "schema": "dotmac.image-release.v2",
+                  "digest": IMAGE_DIGEST,
+                  "git_sha": IMAGE_SOURCE_REVISION,
+                  "manifest_digest": product_manifest_digest(),
+                  "reference": f"{IMAGE_REPOSITORY}@{IMAGE_DIGEST}",
+              }
+              assert evidence["git_sha"] == spec.source_revision
+              assert evidence["reference"] == spec.image
+              assert evidence["manifest_digest"] == spec.manifest_digest
+              assert raw == json.dumps(evidence, separators=(",", ":"), sort_keys=True) + "\\n"
+
+
+          '''
+          text = text.replace(marker, new_test + marker)
+          test_path.write_text(text)
+          PY
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Install the repository-locked toolchain
+        env:
+          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: poetry install --no-interaction
+      - name: Generate and verify deployment assets using the pinned facility
+        run: |
+          set -euo pipefail
+          poetry run dotmac-deploy -f deploy/product.toml validate
+          poetry run dotmac-deploy -f deploy/product.toml render --thresholds deploy/alerts/thresholds.json -o deploy/rendered
+          poetry run dotmac-deploy -f deploy/product.toml render --thresholds deploy/alerts/thresholds.json --check -o deploy/rendered
+          poetry run ruff format tests/architecture/test_deployment_descriptor.py
+          make lint
+          make format-check
+          test "$(scripts/resolve_deploy_image.sh --compose deploy/rendered/docker-compose.yml)" = 'ghcr.io/michaelayoade/dotmac_erp@sha256:decbe6ae00d017f0ac8f9b263128c4613c5d48160fac6c6081cd5b377be35ba0'
+          python scripts/static_tree_digest.py static --expect sha256:e462e28182181f93c339234c261bcb9c5095e87ed988f596857d9b3d445e3734
+      - name: Test image authority, release identity, migration separation and static integrity
+        run: |
+          poetry run pytest -q --tb=short --timeout=60 -o addopts='' \
+            --junitxml="$RUNNER_TEMP/erp-pin-validation/tests.xml" \
+            tests/architecture/test_deployment_descriptor.py \
+            tests/architecture/test_deploy_image_gate.py \
+            tests/architecture/test_deployment_release_prerequisites.py \
+            tests/architecture/test_migration_credential_not_on_runtime_services.py \
+            tests/architecture/test_static_is_image_only.py
+      - name: Publish only the validated pin commit; do not deploy or merge
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1
+          git add deploy/product.toml deploy/rendered deploy/releases/2026-09-15-6e7f8d23.image-release.json tests/architecture/test_deployment_descriptor.py
+          python - <<'PY'
+          import subprocess
+          allowed = {'deploy/product.toml', 'deploy/rendered/docker-compose.yml', 'deploy/rendered/nginx/erp.dotmac.io.conf', 'deploy/rendered/otel-collector.yaml', 'deploy/releases/2026-09-15-6e7f8d23.image-release.json', 'tests/architecture/test_deployment_descriptor.py'}
+          changed = set(subprocess.check_output(['git', 'diff', '--cached', '--name-only'], text=True).splitlines())
+          assert changed == allowed, (changed, allowed)
+          PY
+          git diff --cached --check
+          test -z "$(git diff --name-only)"
+          git config user.name 'Dotmac CI'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(deploy): pin the verified ERP 6e7f8d23 application image'
+          git push origin HEAD:refs/heads/deploy/pin-erp-6e7f8d23
+          git show -s --format=fuller HEAD > "$RUNNER_TEMP/erp-pin-validation/commit.txt"
+          git diff HEAD^ HEAD > "$RUNNER_TEMP/erp-pin-validation/final.patch"
+          printf 'Validated pin commit: %s\n' "$(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: erp-release-pin-validation
+          path: ${{ runner.temp }}/erp-pin-validation/
+          retention-days: 7
