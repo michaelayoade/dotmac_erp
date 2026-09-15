@@ -1,0 +1,44 @@
+name: Collect KPI test failure evidence
+on:
+  push:
+    branches: [feature/people-kpi-dashboard-insights]
+    paths: [.github/workflows/kpi-test-log-collection.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1f493cd6ba0d2290dc234fcc1664af4869fa04dc
+          persist-credentials: false
+      - name: Download exact failed test log
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/kpi-test-evidence
+          gh api repos/michaelayoade/dotmac_erp/actions/jobs/104425999331/logs > /tmp/kpi-test-evidence/Tests.log
+          git rev-parse HEAD > /tmp/kpi-test-evidence/source-sha.txt
+          git archive --format=tar.gz HEAD > /tmp/kpi-test-evidence/source.tar.gz
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          root = Path('/tmp/kpi-test-evidence')
+          text = root.joinpath('Tests.log').read_text(encoding='utf-8-sig')
+          clean = re.sub(r'^\d{4}-\d{2}-\d{2}T\S+ ', '', text, flags=re.M)
+          clean = re.sub(r'\x1b\[[0-9;]*m', '', clean)
+          lines = clean.splitlines()
+          summary = '\n'.join(line for line in lines if line.startswith(('FAILED ', 'ERROR ')) or 'short test summary' in line or re.search(r'\d+ failed,', line))
+          root.joinpath('failure-summary.txt').write_text(summary, encoding='utf-8')
+          print(summary)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kpi-test-evidence-34981516832
+          path: /tmp/kpi-test-evidence/
+          retention-days: 3
+          if-no-files-found: error
