@@ -231,7 +231,7 @@ class HRWebService:
         """Return parsed POST form data, ignoring template-only CSRF HTML."""
         form = getattr(request.state, "csrf_form", None)
         if form is None or isinstance(form, str):
-            form = await request.form()
+            return await request.form()
         return form
 
     @staticmethod
@@ -2266,7 +2266,9 @@ class HRWebService:
         rejoining_date = self._parse_date(date_of_rejoining)
 
         if rejoining_date:
-            svc.rehire_employee(employee_id, rejoining_date, notes=notes or None)
+            svc.rehire_employee(
+                employee_id, rejoining_date, notes=notes or None
+            )
             db.commit()
             return RedirectResponse(
                 url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
@@ -2396,7 +2398,9 @@ class HRWebService:
         eligible_for_final_payroll = parse_bool(
             self._form_str(form, "eligible_for_final_payroll")
         )
-        cutoff_date = self._parse_date(self._form_str(form, "final_payroll_cutoff_date"))
+        cutoff_date = self._parse_date(
+            self._form_str(form, "final_payroll_cutoff_date")
+        )
 
         if eligible_for_final_payroll and cutoff_date is None:
             cutoff_date = employee.date_of_leaving
@@ -3055,6 +3059,7 @@ class HRWebService:
         managers = (
             EmployeeService(db, org_id)
             .list_employees(
+                EmployeeFilters(status=EmployeeStatus.ACTIVE),
                 EmployeeFilters(status=EmployeeStatus.ACTIVE),
                 PaginationParams(limit=DROPDOWN_LIMIT),
                 eager_load=True,
