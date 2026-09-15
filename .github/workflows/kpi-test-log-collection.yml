@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/kpi-test-evidence
-          gh api repos/michaelayoade/dotmac_erp/actions/jobs/104425999331/logs > /tmp/kpi-test-evidence/Tests.log
+          gh api --allow-escape-sequences repos/michaelayoade/dotmac_erp/actions/jobs/104425999331/logs > /tmp/kpi-test-evidence/Tests.log
           git rev-parse HEAD > /tmp/kpi-test-evidence/source-sha.txt
           git archive --format=tar.gz HEAD > /tmp/kpi-test-evidence/source.tar.gz
           python3 - <<'PY'
