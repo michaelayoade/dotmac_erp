@@ -21,9 +21,15 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "erp-lock.yml"
 CREDENTIAL_REFERENCE = re.compile(
     r"secrets\s*(?:\.\s*FORGEJO_READ_TOKEN(?![A-Za-z0-9_])|\[\s*(?:'FORGEJO_READ_TOKEN'|"
-    r'"FORGEJO_READ_TOKEN")\s*\])'
+    r'"FORGEJO_READ_TOKEN")\s*\])',
+    re.IGNORECASE,
 )
-SECRET_CONTEXT_REFERENCE = re.compile(r"\bsecrets\b")
+# GitHub Actions expression contexts and secret names are both
+# case-insensitive on reference (https://docs.github.com/en/actions/reference/
+# security/secrets): `${{ Secrets.FORGEJO_READ_TOKEN }}` names the exact same
+# secret as `${{ secrets.FORGEJO_READ_TOKEN }}`. Both patterns above therefore
+# normalise casing rather than trusting the spelling on the page.
+SECRET_CONTEXT_REFERENCE = re.compile(r"\bsecrets\b", re.IGNORECASE)
 
 
 def _mapping(value: object, context: str) -> Mapping[str, object]:
@@ -138,76 +144,87 @@ def step_name(step: Mapping[str, object]) -> str:
     return str(step.get("name", "<unnamed step>"))
 
 
-_NESTED_CONTROL_START = re.compile(
-    r"^(?:if|for|while|until|case|select)\b"
-    r"|^(?:function\s+)?[\w.-]+\s*\(\)\s*\{?\s*$"
-)
+# A single plain diagnostic line: `echo` followed by exactly ONE quoted
+# literal argument and nothing else. `$`, backticks and backslashes are
+# excluded from INSIDE the quotes -- those are how a "diagnostic string"
+# would smuggle expansion, command substitution or an escaped quote that
+# extends past where it looks like the string ends. Everything else inside
+# the quotes (including `;` and `#`) is DATA, never syntax, because the
+# regex treats the quoted span as one opaque unit rather than scanning its
+# characters for shell meaning. Nothing is permitted after the closing
+# quote except trailing whitespace -- no `;`, `&`, `|`, `>`, `<`.
+_ECHO_LITERAL = re.compile(r"""^echo\s+(?:"[^"$`\\]*"|'[^'$`\\]*')\s*$""")
+
+# The one exit shape the grammar accepts: `exit` then a non-zero integer
+# (leading digit 1-9, so `exit 0` never matches) and nothing else on the
+# line -- no trailing `&` (backgrounding), no trailing `;` (a packed next
+# command), no pipe or redirection.
+_EXIT_STATEMENT = re.compile(r"^exit\s+[1-9][0-9]*\s*$")
+
+
+def _parses_as_refusal_body(statements: list[str]) -> bool:
+    """Accept ONLY: zero or more `_ECHO_LITERAL` lines, then exactly one
+    `_EXIT_STATEMENT` line, with that exit LAST -- no statement of any
+    other shape anywhere, and nothing after the exit.
+    """
+    if not statements:
+        return False
+    *echoes, last = statements
+    return bool(_EXIT_STATEMENT.match(last)) and all(
+        _ECHO_LITERAL.match(line) for line in echoes
+    )
 
 
 def is_refusal_gate(step: Mapping[str, object]) -> bool:
-    """Recognise ONE narrow shell shape: a simple outer
-    ``if [ -z "$VAR" ]; then ... fi`` whose body is a direct, unconditional
-    ``exit`` and plain statements only, with NO alternative branch on that
-    same outer conditional.
+    """Recognise ONE narrow, positively-specified shell grammar:
 
-    This is NOT general shell control-flow analysis, and does not attempt to
-    determine whether an ``exit`` is actually reachable. It recognises one
-    known-good shape and fails closed -- returns False, i.e. "not a proven
-    refusal gate" -- on every shape it does not understand, including:
+        if [ -z "$VAR" ]; then
+          echo "literal"     # zero or more of these
+          ...
+          exit N             # exactly one, N != 0, nothing after it
+        fi
 
-    * a nested `if`, `for`, `while`, `until`, `case`, `select`, or a
-      function-definition body anywhere inside the outer block, even where
-      that nested construct happens to be provably unreachable (e.g. `while
-      false; do exit 1; done`);
-    * an `else` or `elif` on the OUTER conditional itself -- an alternative
-      branch means the exit is conditioned on something other than the
-      credential's absence, and `exit 1` sitting in an `else` fires when the
-      credential IS present and does nothing when it is absent: the exact
-      inversion of a credential-absence refusal, not a variant of one.
+    with no `else`/`elif`, no heredoc, no compound statement, no function,
+    no loop, no nested condition, no `&`, and no packed `;` commands
+    anywhere in the body. This is a POSITIVE grammar, not a denylist of
+    known-bad shapes: every body statement must match `_ECHO_LITERAL` or be
+    the single trailing `_EXIT_STATEMENT`, so an unrecognised construct
+    fails by not matching either shape, not by being enumerated as
+    forbidden. That is a deliberate response to how this recogniser broke
+    before -- `exit 0` before a real `exit 1`, an `exit 1` inside a heredoc
+    body (payload text a shell never executes), and a backgrounded
+    `exit 1 &` (the parent step continues past it) all read, line by line,
+    as "a bare `exit 1` statement is present somewhere in the block" to a
+    scanner that only checked for absence of specific bad shapes. A
+    positive grammar makes each of those fail on its own terms: `exit 0`
+    is not an echo, a heredoc terminator is not `exit N`, and `exit 1 &`
+    does not match `_EXIT_STATEMENT` at all. Reachability stops being a
+    question the scanner has to keep guessing at.
 
-    An honest narrow recogniser that refuses unfamiliar or ambiguous shapes
-    is preferred over a broad one that is wrong about them.
+    This is NOT general shell control-flow analysis, and it refuses every
+    shape it does not parse, including legitimate ones -- an honest narrow
+    recogniser that is wrong about nothing beats a broad one that is wrong
+    about something. It also proves nothing about the surrounding job or
+    repository: this is defence in depth over a step's own shell text, not
+    a substitute for GitHub-enforced credential custody (an environment
+    protection rule on the secret itself is a known, separate, later
+    closure step -- its absence here is not this guard's gap to close).
     """
     var = credential_env_var(step)
     if var is None:
         return False
-    pattern = rf'if \[ -z "\$\{{?{re.escape(var)}(?::-[^}}]*)?\}}?"\s*\];?\s*then'
+    header = rf'if \[ -z "\$\{{?{re.escape(var)}(?::-[^}}]*)?\}}?"\s*\];?\s*then'
     body = commands_of(step)
-    for match in re.finditer(pattern, body):
-        depth = 1
-        nested_control = False
-        outer_alternative = False
-        clause_lines: list[str] = []
+    for match in re.finditer(header, body):
+        statements: list[str] = []
+        closed = False
         for line in body[match.end() :].splitlines():
             stripped = line.strip()
-            if _NESTED_CONTROL_START.match(stripped):
-                nested_control = True
-                if re.match(r"if\b", stripped):
-                    depth += 1
-            elif depth == 1 and (
-                stripped == "else"
-                or stripped.startswith("else;")
-                or re.match(r"elif\b", stripped)
-            ):
-                # An `else`/`elif` at the SAME depth as the gate's own `if`
-                # is an alternative branch on the gate itself. One that
-                # belongs to a nested `if` instead sits at depth >= 2 (the
-                # nested `if` above already incremented depth) and is
-                # already disqualified via `nested_control`, so it never
-                # reaches this branch.
-                outer_alternative = True
-            elif stripped == "fi" or stripped.startswith("fi;"):
-                depth -= 1
-                if depth == 0:
-                    break
-            clause_lines.append(line)
-        clause = "\n".join(clause_lines)
-        if (
-            depth == 0
-            and not nested_control
-            and not outer_alternative
-            and re.search(r"^\s*exit\s+[1-9]\b", clause, re.M)
-        ):
+            if stripped == "fi":
+                closed = True
+                break
+            statements.append(stripped)
+        if closed and _parses_as_refusal_body(statements):
             return True
     return False
 
@@ -353,6 +370,42 @@ def test_similarly_named_secret_is_not_the_one_allowed_reference(suffix: str) ->
         parse_jobs(text)
 
 
+def test_case_insensitive_reference_to_the_allowed_secret_is_recognised() -> None:
+    """GitHub resolves the `secrets` context and a secret's name
+    case-insensitively on reference, so `${{ Secrets.FORGEJO_READ_TOKEN }}`
+    and `${{ SECRETS.forgejo_read_token }}` name the exact same secret as
+    the canonical spelling. Design break condition: without `re.IGNORECASE`
+    on `CREDENTIAL_REFERENCE`, a differently-cased reference to the
+    ALLOWED secret would not be recognised as that reference at all --
+    which would make `credential_env_var`/`_contains_credential` blind to
+    a real credential use, not merely picky about spelling.
+    """
+    assert has_credential_reference("${{ Secrets.FORGEJO_READ_TOKEN }}")
+    assert has_credential_reference("${{ SECRETS.forgejo_read_token }}")
+
+
+def test_mixed_case_suffixed_secret_still_fails_closed() -> None:
+    """Layers the case-insensitivity gap on top of the identifier-boundary
+    bypass: `${{ Secrets.FORGEJO_READ_TOKEN_V2 }}` differs from the
+    allowed secret both in casing and in the trailing `_V2`. Design break
+    condition: this is caught by the SAME right-hand identifier boundary
+    that closes the plain-lowercase suffix bypass, now applied
+    case-insensitively; without `re.IGNORECASE` on BOTH
+    `CREDENTIAL_REFERENCE` and `SECRET_CONTEXT_REFERENCE`, a case-sensitive
+    backstop cannot see a differently-cased `Secrets` context reference
+    either, so this exact combination would bypass both checks at once.
+    """
+    assert not has_credential_reference("${{ Secrets.FORGEJO_READ_TOKEN_V2 }}")
+    text = """jobs:
+  acquire:
+    env:
+      TOKEN: ${{ Secrets.FORGEJO_READ_TOKEN_V2 }}
+    steps: []
+"""
+    with pytest.raises(AssertionError, match=r"only the literal"):
+        parse_jobs(text)
+
+
 def test_gate_is_behavioural_and_precedes_credentialed_steps() -> None:
     steps = _acquire_steps()
     gates = gate_indices(steps)
@@ -460,10 +513,12 @@ def test_outer_else_inverts_the_refusal_and_is_rejected() -> None:
     branch. By DESIGN that fires the instant the credential IS present
     and does nothing when it is absent -- the exact inversion of a
     credential-absence refusal, not a variant of one. Design break
-    condition: `outer_alternative` is set the moment an `else` is seen at
-    the SAME depth as the gate's own `if`; remove that check and the
-    `exit 1`'s mere lexical presence inside the outer `if...fi` block is
-    again enough to pass, regardless of which branch it is actually in.
+    condition: the grammar's statement list for this body is `["echo
+    present", "else", "exit 1"]`; `"else"` matches neither `_ECHO_LITERAL`
+    nor `_EXIT_STATEMENT`, so the whole body fails to parse as a refusal
+    regardless of which branch actually holds the exit -- the grammar
+    rejects it for containing an unrecognised statement, not because it
+    specifically knows what `else` means.
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
@@ -475,13 +530,14 @@ def test_outer_else_inverts_the_refusal_and_is_rejected() -> None:
 def test_outer_elif_inverts_the_refusal_and_is_rejected() -> None:
     """Same inversion, the `elif` syntactic path rather than `else`: the
     `exit 1` sits in a second, alternative branch of the outer
-    conditional. Design break condition: an `elif` at the SAME depth as
-    the gate's own `if` sets `outer_alternative` exactly like `else`
-    does -- a gate with any alternative branch at all is refused,
-    independent of which branch happens to hold the exit. This is a
-    distinct syntactic path from `else` (a different token, a different
-    regex branch) and is deliberately proven separately rather than
-    folded into one parametrized case with it.
+    conditional. Design break condition: the `elif [ -n "$ALIAS" ]; then`
+    line matches neither `_ECHO_LITERAL` nor `_EXIT_STATEMENT`, so it
+    disqualifies the body exactly like `else` does above -- a gate with
+    any alternative branch at all is refused, independent of which branch
+    happens to hold the exit. This is a distinct syntactic path from
+    `else` (a different token, a different line shape) and is
+    deliberately proven separately rather than folded into one
+    parametrized case with it.
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
@@ -508,5 +564,138 @@ def test_direct_exit_with_no_alternative_branch_is_the_positive_control() -> Non
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\nfi',
+    }
+    assert is_refusal_gate(step)
+
+
+def test_exit_zero_before_exit_one_is_rejected() -> None:
+    """`exit 0` is an ordinary shell statement that, run first, exits the
+    step SUCCESSFULLY before the `exit 1` after it is ever reached -- no
+    shell trickery is involved, just two ordinary statements in sequence.
+    Design break condition: the grammar's statement list is `["exit 0",
+    "exit 1"]`; `"exit 0"` matches neither `_ECHO_LITERAL` (it is not an
+    `echo`) nor is it the trailing statement, so its mere presence before
+    the real exit disqualifies the whole body regardless of what the
+    final line says.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'if [ -z "$ALIAS" ]; then\n  exit 0\n  exit 1\nfi',
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_heredoc_payload_exit_is_rejected() -> None:
+    """`exit 1` here is HEREDOC PAYLOAD: text piped to `cat` as input and
+    printed, never executed as a command. Design break condition: the
+    grammar's designated final statement is whatever line sits
+    immediately before the closing `fi` -- for a real heredoc that is
+    always the terminator line (`EOF`), not the payload text inside it.
+    `"EOF"` does not match `_EXIT_STATEMENT`, so the body is rejected
+    without the recogniser needing to understand heredoc syntax at all;
+    it never has to decide that the middle line is "just data".
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": "if [ -z \"$ALIAS\" ]; then\n  cat <<'EOF'\nexit 1\nEOF\nfi",
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_backgrounded_exit_is_rejected() -> None:
+    """`exit 1 &` forks the exit into a background subshell; the parent
+    step continues running past the `if` block regardless of what that
+    subshell later returns. Design break condition: `_EXIT_STATEMENT` is
+    anchored immediately after the exit code with only trailing
+    whitespace permitted before end of line -- a trailing `&` means the
+    line never matches `_EXIT_STATEMENT` at all, so it can never be
+    accepted as the grammar's final statement.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'if [ -z "$ALIAS" ]; then\n  exit 1 &\nfi',
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_statement_after_the_exit_is_rejected() -> None:
+    """Michael's grammar requires the final exit to have NO statements
+    after it. Design break condition: `_parses_as_refusal_body` only ever
+    checks the LAST statement against `_EXIT_STATEMENT`; a further
+    diagnostic line after a genuine `exit 1` makes that trailing line, not
+    the real exit, the one checked -- so it fails the exit grammar.
+    Loosening this "last statement only" rule to search for an exit
+    ANYWHERE in the body is precisely what would let a statement placed
+    after the exit -- reachable or not -- go unnoticed.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\n  echo "still here"\nfi',
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_echo_literal_excludes_expansion_and_substitution() -> None:
+    """Design break condition: `_ECHO_LITERAL` excludes `$`, backticks and
+    backslashes from INSIDE the quoted argument. Loosening that exclusion
+    is exactly what would let a `$(...)`- or backtick-substitution-bearing
+    `echo` argument pass as a "plain diagnostic literal", when it is
+    really an executable substitution wearing a diagnostic's clothes.
+    """
+    assert not _ECHO_LITERAL.match('echo "$(rm -rf /)"')
+    assert not _ECHO_LITERAL.match('echo "`whoami`"')
+
+
+def test_echo_literal_excludes_packed_commands() -> None:
+    """Design break condition: `_ECHO_LITERAL` anchors immediately after
+    the closing quote, permitting only trailing whitespace before end of
+    line. An unquoted `;` after the quote packs a second command onto the
+    same physical line; allowing anything after the quote is exactly what
+    would let an attacker smuggle an unchecked second statement past a
+    scanner that only inspects the echoed literal itself.
+    """
+    assert not _ECHO_LITERAL.match('echo "safe"; rm -rf /')
+
+
+def test_quoted_semicolon_and_hash_are_data_not_syntax() -> None:
+    """The real gate's second diagnostic line is exactly
+    `echo "::error::Its owner is OpenBao secret/dotmac/forgejo/read-token#value;"`
+    -- a `;` and a `#` sit INSIDE the double-quoted literal, as DATA, not
+    a command separator or a comment starter. Design break condition: a
+    naive unquoted-`;`-split or comment-strip check would see the `;` as a
+    packed second command or the `#` as a truncation point and reject this
+    exact real-workflow line; `_ECHO_LITERAL` instead matches the whole
+    quoted span as one opaque literal and only excludes `$`, backticks and
+    backslashes from inside it -- `;` and `#` are simply not in that
+    exclusion set.
+    """
+    line = (
+        'echo "::error::Its owner is OpenBao secret/dotmac/forgejo/read-token#value;"'
+    )
+    assert _ECHO_LITERAL.match(line)
+
+
+def test_the_real_gates_exact_shape_is_accepted() -> None:
+    """The exact shape of the real workflow's gate, reproduced as a
+    synthetic step so this test does not depend on reading the file from
+    disk: three plain diagnostic `echo "..."` lines (the second one
+    carrying a literal `;` and `#` inside its quotes, per the test above)
+    followed by exactly one final `exit 1`, with nothing else. This is the
+    positive control every negative plant in this module depends on --
+    without it, a grammar that always returns False would also pass every
+    negative test above for the wrong reason.
+    """
+    step = {
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": (
+            'if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then\n'
+            '  echo "::error::FORGEJO_READ_TOKEN is unset or empty in this repository."\n'
+            '  echo "::error::Its owner is OpenBao secret/dotmac/forgejo/'
+            'read-token#value;"\n'
+            '  echo "::error::this workflow consumes the projection, it does not'
+            ' fetch it."\n'
+            "  exit 1\n"
+            "fi"
+        ),
     }
     assert is_refusal_gate(step)
