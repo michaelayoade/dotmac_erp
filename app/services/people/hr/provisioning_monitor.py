@@ -118,7 +118,7 @@ def list_provisioning_employees(
         stmt = stmt.where(
             or_(
                 Employee.employee_code.ilike(term),
-                Person.name.ilike(term),
+                Person.name_expr().ilike(term),
                 Person.email.ilike(term),
             )
         )

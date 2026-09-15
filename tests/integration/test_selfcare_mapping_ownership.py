@@ -61,6 +61,10 @@ def mapping_engine(engine, monkeypatch):
                 table.foreign_keys.clear()
                 for column in table.columns:
                     column.foreign_keys.clear()
+                if source is Employee.__table__:
+                    from sqlalchemy.dialects.postgresql import JSONB
+
+                    table.c.workforce_provisioning_state.type = JSONB()
                 table.create(connection)
         monkeypatch.setattr(
             settings, "dotmac_sub_staff_sync_enabled", True, raising=False
