@@ -1,0 +1,102 @@
+name: Assemble independent KPI insights branch
+on:
+  push:
+    branches: [feature/people-kpi-dashboard-insights]
+permissions:
+  contents: write
+jobs:
+  assemble:
+    if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/feature/people-kpi-dashboard-insights' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash --noprofile --norc -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify and apply exact reviewed patch
+        run: |
+          test "$(git rev-parse HEAD^)" = 'b449c4d82fdb6c19d2c9e26eab8ef85ba50528ed'
+          python3 - <<'PY'
+          import gzip, hashlib, pathlib, subprocess
+          chunks = sorted(pathlib.Path('.kpi-build').glob('patch-*.gzpart'))
+          assert len(chunks) == 7
+          data = gzip.decompress(b''.join(path.read_bytes() for path in chunks))
+          assert hashlib.sha256(data).hexdigest() == 'b675c719c47604aebfe3876d89b3b3da2c17e700688b4d9b1ff89daf4582f5f0'
+          pathlib.Path('/tmp/kpi-insights.patch').write_bytes(data)
+          subprocess.run(['git', 'apply', '--check', '/tmp/kpi-insights.patch'], check=True)
+          subprocess.run(['git', 'apply', '/tmp/kpi-insights.patch'], check=True)
+          PY
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+      - name: Rebuild locked stylesheet and run chart lifecycle tests
+        run: |
+          npm ci --ignore-scripts --silent
+          npm run build:css
+          node --test tests/js/test_kpi_dashboard_charts.cjs
+          python3 - <<'PY'
+          import json, pathlib, runpy
+          script = runpy.run_path('scripts/static_tree_digest.py')
+          entries = script['_manifest_from_directory'](pathlib.Path('static'))
+          path = pathlib.Path('deploy/static-tree-digest.json')
+          record = json.loads(path.read_text())
+          record['tree_digest'] = script['tree_digest'](entries)
+          record['file_count'] = len(entries)
+          path.write_text(json.dumps(record, indent=2) + '\n')
+          print('Rebuilt static identity:', record['tree_digest'], 'files:', len(entries))
+          PY
+      - name: Validate source and remove one-time assembly files
+        run: |
+          python3 -m pip install --disable-pip-version-check 'ruff==0.15.0'
+          python3 -m ruff check app/ tests/ alembic/versions/20260915_kpi_measurement_direction.py
+          python3 -m ruff format --check app/ tests/ alembic/versions/20260915_kpi_measurement_direction.py
+          python3 - <<'PY'
+          import pathlib, subprocess
+          expected = '''alembic/versions/20260915_kpi_measurement_direction.py
+          app/api/people/perf.py
+          app/models/people/perf/kpi.py
+          app/models/people/perf/kpi_measurement.py
+          app/schemas/people/perf.py
+          app/services/people/perf/kpi_dashboard_contract.py
+          app/services/people/perf/kpi_dashboard_service.py
+          app/services/people/perf/perf_service.py
+          app/services/people/perf/web/kpi_dashboard_web.py
+          app/services/people/perf/web/perf_web.py
+          app/web/people/kpi_dashboard.py
+          docs/designs/PEOPLE_KPI_DASHBOARD.md
+          static/js/people-kpi-dashboard.js
+          templates/people/perf/kpi_dashboard.html
+          templates/people/perf/kpi_form.html
+          tests/js/test_kpi_dashboard_charts.cjs
+          tests/people/perf/test_kpi_dashboard_records.py
+          tests/unit/test_kpi_dashboard_insights.py
+          tests/unit/test_kpi_dashboard_service.py
+          tests/unit/test_kpi_measurement.py
+          static/css/app.css
+          deploy/static-tree-digest.json'''.splitlines()
+          temporary = ['.github/workflows/kpi-insights-assemble.yml'] + [str(p) for p in pathlib.Path('.kpi-build').glob('patch-*.gzpart')]
+          for name in temporary:
+              pathlib.Path(name).unlink()
+          subprocess.run(['git', 'add', '--', *expected, *temporary], check=True)
+          changed = set(subprocess.check_output(['git', 'diff', '--cached', '--name-only'], text=True).splitlines())
+          assert changed <= set(expected + temporary), changed - set(expected + temporary)
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          print('Validated final changed files:', len(changed))
+          PY
+      - name: Commit only to the requested feature branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$GITHUB_REF" = 'refs/heads/feature/people-kpi-dashboard-insights'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(people): add employee KPI insights and consistent measurement rules' -m 'Apply reviewed source patch, regenerate locked assets and remove temporary assembly files. Includes the additive measurement direction migration. No merge or deployment.'
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin HEAD:refs/heads/feature/people-kpi-dashboard-insights
+          git rev-parse HEAD
