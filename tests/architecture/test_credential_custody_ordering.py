@@ -175,29 +175,61 @@ def _parses_as_refusal_body(statements: list[str]) -> bool:
     )
 
 
+# The only non-blank shape admitted BEFORE the `if` header: a `set`
+# invocation whose tokens are each a dash-prefixed short-option cluster
+# (`-euo`) or a bare option-argument word (`pipefail`), nothing else.
+# There is deliberately no `$`, backtick or other symbol anywhere in the
+# allowed token shapes, so a preamble line that embeds a shell expansion
+# (e.g. `set -x ${VAR}`) fails this pattern on its own, independent of the
+# unconditional credential-reference check applied alongside it.
+_PREAMBLE_SET_LINE = re.compile(r"^set(?:\s+(?:-[A-Za-z]+|[A-Za-z]+))*\s*$")
+
+
+def _preamble_is_admissible(text: str, var: str) -> bool:
+    """The text before the matched `if` header must be side-effect-free:
+    only blank lines and `set -...` option lines, per Michael's
+    specification, and NO reference to the credential's own shell
+    variable anywhere in it, checked unconditionally ahead of the shape
+    check -- a credential reference in the preamble disqualifies the step
+    regardless of what else that line looks like.
+    """
+    reference = re.compile(rf"\$\{{?{re.escape(var)}\b")
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "":
+            continue
+        if reference.search(stripped):
+            return False
+        if not _PREAMBLE_SET_LINE.match(stripped):
+            return False
+    return True
+
+
 def is_refusal_gate(step: Mapping[str, object]) -> bool:
     """Recognise ONE narrow, positively-specified shell grammar:
 
+        set -euo pipefail  # optional, side-effect-free preamble only
         if [ -z "$VAR" ]; then
           echo "literal"     # zero or more of these
           ...
           exit N             # exactly one, N != 0, nothing after it
         fi
+        echo "..."           # anything at all, freely permitted
 
     with no `else`/`elif`, no heredoc, no compound statement, no function,
     no loop, no nested condition, no `&`, and no packed `;` commands
-    anywhere in the body. A blank line ANYWHERE in the body -- immediately
-    after `then`, between two `echo` lines, or before the final `exit` --
-    is tolerated: it is whitespace, not a statement, and a deliberate
-    grammar decision rather than an oversight, scoped to lines that are
-    empty after stripping so it can never absorb a line that carries any
-    other content. This is a POSITIVE grammar, not a denylist of
-    known-bad shapes: every body statement must match `_ECHO_LITERAL` or be
-    the single trailing `_EXIT_STATEMENT`, so an unrecognised construct
-    fails by not matching either shape, not by being enumerated as
-    forbidden. That is a deliberate response to how this recogniser broke
-    before -- `exit 0` before a real `exit 1`, an `exit 1` inside a heredoc
-    body (payload text a shell never executes), and a backgrounded
+    anywhere in the `if` body. A blank line ANYWHERE in the body --
+    immediately after `then`, between two `echo` lines, or before the
+    final `exit` -- is tolerated: it is whitespace, not a statement, and a
+    deliberate grammar decision rather than an oversight, scoped to lines
+    that are empty after stripping so it can never absorb a line that
+    carries any other content. This is a POSITIVE grammar, not a denylist
+    of known-bad shapes: every body statement must match `_ECHO_LITERAL`
+    or be the single trailing `_EXIT_STATEMENT`, so an unrecognised
+    construct fails by not matching either shape, not by being enumerated
+    as forbidden. That is a deliberate response to how this recogniser
+    broke before -- `exit 0` before a real `exit 1`, an `exit 1` inside a
+    heredoc body (payload text a shell never executes), and a backgrounded
     `exit 1 &` (the parent step continues past it) all read, line by line,
     as "a bare `exit 1` statement is present somewhere in the block" to a
     scanner that only checked for absence of specific bad shapes. A
@@ -206,14 +238,33 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
     does not match `_EXIT_STATEMENT` at all. Reachability stops being a
     question the scanner has to keep guessing at.
 
+    THE TEXT BEFORE THE HEADER is exactly as dangerous as the body is
+    strict about, and for a distinct reason: a step whose script USES the
+    credential and only THEN checks it for emptiness (e.g. a `curl` call
+    immediately followed by this exact `if` block, fused into one step)
+    would otherwise be credited as a compliant absence gate while the
+    credential had already crossed the network. `is_refusal_gate` treats
+    a step as ONE ATOMIC unit -- `gate_indices`/`ordering_problems` only
+    reason about ordering BETWEEN steps, by index -- so ordering WITHIN a
+    single step's own script is exactly what this preamble rule exists to
+    enforce; nothing else in this module checks it. The rule: everything
+    before the header must be blank lines or `set -...` option lines
+    (`_PREAMBLE_SET_LINE`), and no line before the header may reference
+    the credential's own shell variable at all, checked unconditionally.
+    The asymmetry is deliberate and stays: text AFTER the closing `fi` is
+    NOT restricted -- the real gate ends with a diagnostic `echo` that
+    runs only once the gate has already passed, and that is exactly what
+    a passed gate is allowed to do next.
+
     This is NOT general shell control-flow analysis, and it refuses every
     shape it does not parse, including legitimate ones -- an honest narrow
     recogniser that is wrong about nothing beats a broad one that is wrong
     about something. It also proves nothing about the surrounding job or
     repository: this is defence in depth over a step's own shell text, not
-    a substitute for GitHub-enforced credential custody (an environment
-    protection rule on the secret itself is a known, separate, later
-    closure step -- its absence here is not this guard's gap to close).
+    a substitute for GitHub-enforced credential custody (a protected
+    environment gating the secret itself is still required and is a
+    known, separate closure step -- its absence here is not this guard's
+    gap to close).
     """
     var = credential_env_var(step)
     if var is None:
@@ -221,6 +272,8 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
     header = rf'if \[ -z "\$\{{?{re.escape(var)}(?::-[^}}]*)?\}}?"\s*\];?\s*then'
     body = commands_of(step)
     for match in re.finditer(header, body):
+        if not _preamble_is_admissible(body[: match.start()], var):
+            continue
         statements: list[str] = []
         closed = False
         for line in body[match.end() :].splitlines():
@@ -242,6 +295,12 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
 
 
 def gate_indices(steps: list[Mapping[str, object]]) -> list[int]:
+    """The indices of steps `is_refusal_gate` recognises. Each step is
+    judged as one atomic unit; this function and `ordering_problems`
+    below reason only about ordering BETWEEN steps by index -- ordering
+    WITHIN a single step's own script is `is_refusal_gate`'s own preamble
+    rule, not this function's concern.
+    """
     return [index for index, step in enumerate(steps) if is_refusal_gate(step)]
 
 
@@ -250,6 +309,17 @@ def credential_step_indices(steps: list[Mapping[str, object]]) -> list[int]:
 
 
 def ordering_problems(steps: list[Mapping[str, object]]) -> list[str]:
+    """Name every step that references the credential at an index before
+    the earliest recognised gate. A step is treated as ATOMIC here: the
+    filter is `index < gate`, so the gate step's own index is excluded by
+    construction and a step can never be named as a violation of itself.
+    That is safe only because `is_refusal_gate` independently refuses to
+    credit a step whose own script uses the credential before its `if`
+    check -- if it did not, a step could use-then-check the credential
+    fused into one script and be credited as its own compliant gate,
+    invisible to this index-based check. Ordering WITHIN a step is
+    `is_refusal_gate`'s job; this function only orders BETWEEN steps.
+    """
     gates = gate_indices(steps)
     if not gates:
         return ["no step in this job tests the credential for emptiness and refuses"]
@@ -736,3 +806,101 @@ def test_blank_lines_between_statements_are_tolerated() -> None:
         ),
     }
     assert is_refusal_gate(step)
+
+
+def test_fused_use_then_check_step_is_not_credited_as_a_gate() -> None:
+    """A single step that USES the credential (the `curl` line) and only
+    THEN checks it for emptiness is not a compliant absence gate: the
+    credential has already crossed the network by the time the check
+    runs. Design break condition: `${FORGEJO_CREDENTIAL}` appears in the
+    PREAMBLE -- the text before the matched `if` header -- and
+    `_preamble_is_admissible` refuses any credential reference there
+    unconditionally, before the preamble's shape is even considered;
+    removing that check (or narrowing it to only look at the body after
+    the header, as the recogniser used to) is exactly what let a fused
+    use-then-check step be credited as its own gate.
+    """
+    step = {
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": (
+            'curl -H "Authorization: Bearer ${FORGEJO_CREDENTIAL}" '
+            "https://registry/ -o /tmp/out\n"
+            'if [ -z "${FORGEJO_CREDENTIAL}" ]; then\n'
+            '  echo "::error::missing"\n'
+            "  exit 1\n"
+            "fi"
+        ),
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_fused_use_then_check_step_is_named_by_ordering_problems() -> None:
+    """The other half of the same defect: even with `is_refusal_gate`
+    correctly refusing the fused step above, `ordering_problems` still
+    needs to actually flag it rather than silently passing a job that
+    holds no recognised gate at all. Design break condition: with the
+    fused step no longer credited as a gate, it is an ordinary
+    credentialed step sitting before the real gate at a later index, so
+    `ordering_problems`'s `index < gate` filter -- which used to exclude
+    a gate step from being named as a violation of ITSELF -- now applies
+    to it like any other credentialed step and names it directly.
+    """
+    fused = {
+        "name": "Download and check",
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": (
+            'curl -H "Authorization: Bearer ${FORGEJO_CREDENTIAL}" '
+            "https://registry/ -o /tmp/out\n"
+            'if [ -z "${FORGEJO_CREDENTIAL}" ]; then\n'
+            '  echo "::error::missing"\n'
+            "  exit 1\n"
+            "fi"
+        ),
+    }
+    real_gate = {
+        "name": "There is a credential to resolve with",
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": (
+            'if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then\n'
+            '  echo "::error::missing"\n'
+            "  exit 1\n"
+            "fi"
+        ),
+    }
+    assert any(
+        "Download and check" in item for item in ordering_problems([fused, real_gate])
+    )
+
+
+def test_preamble_set_option_line_is_admitted() -> None:
+    """The positive control for the preamble rule itself: `set -euo
+    pipefail` immediately before the `if` header is exactly the real
+    gate's own shape, and must still be admitted -- it is side-effect-free
+    and references no credential. Design break condition: if
+    `_PREAMBLE_SET_LINE` stopped matching this exact line, or the
+    preamble check were tightened to reject any preamble at all, the real
+    workflow's own gate would break; the rule must accommodate this shape
+    on its own terms, not by being loosened to fit it after the fact.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'set -euo pipefail\nif [ -z "$ALIAS" ]; then\n  exit 1\nfi',
+    }
+    assert is_refusal_gate(step)
+
+
+def test_preamble_credential_use_is_rejected_even_as_a_set_line_lookalike() -> None:
+    """A preamble line that tries to smuggle a credential expansion inside
+    something shaped like a `set` invocation. Design break condition:
+    `_PREAMBLE_SET_LINE`'s token shapes are `-[A-Za-z]+` or `[A-Za-z]+`
+    only -- neither alternative can match a token containing `$`, `{` or
+    `}` -- so `set -x ${ALIAS}` fails the preamble shape check on its own;
+    the unconditional credential-reference check in
+    `_preamble_is_admissible` catches the same line independently, so
+    removing either check alone still leaves the other standing.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": 'set -x ${ALIAS}\nif [ -z "$ALIAS" ]; then\n  exit 1\nfi',
+    }
+    assert not is_refusal_gate(step)
