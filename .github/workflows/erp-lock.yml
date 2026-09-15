@@ -223,6 +223,7 @@ jobs:
       - name: There is a credential to resolve with
         env:
           FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+        shell: /bin/bash -p --noprofile --norc -eo pipefail {0}
         run: |
           set -euo pipefail
           # Deliberately AFTER the manifest guard: no step holds the
