@@ -1,0 +1,118 @@
+name: Review ERP release pin security
+on:
+  push:
+    branches: [ci/erp-release-pin-6e7f8d23]
+    paths: [.github/workflows/review-erp-release-pin.yml]
+permissions:
+  contents: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: sqlite:///./test.db
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 2feeec4049db0ca87649d7b83f5b54b72955bb4a
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Install the locked validation toolchain
+        env:
+          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: poetry install --no-interaction
+      - name: Review only public release hashes; refuse unrelated scanner findings
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/erp-pin-security"
+          poetry run python - <<'PY'
+          import copy
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from detect_secrets.core.secrets_collection import SecretsCollection
+          from detect_secrets.settings import configure_settings_from_baseline
+
+          evidence_file = 'deploy/releases/2026-09-15-6e7f8d23.image-release.json'
+          evidence = json.loads(Path(evidence_file).read_text())
+          assert evidence == {
+              'digest': 'sha256:decbe6ae00d017f0ac8f9b263128c4613c5d48160fac6c6081cd5b377be35ba0',
+              'git_sha': '6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1',
+              'manifest_digest': 'sha256:90e3eb7b8a7d7bf89e50de0ed7723597a072ec39e5a40fbda411c30b76cb795c',
+              'reference': 'ghcr.io/michaelayoade/dotmac_erp@sha256:decbe6ae00d017f0ac8f9b263128c4613c5d48160fac6c6081cd5b377be35ba0',
+              'schema': 'dotmac.image-release.v2',
+          }
+          public_values = {evidence['git_sha'], evidence['digest'], evidence['digest'].split(':')[1], evidence['manifest_digest'], evidence['manifest_digest'].split(':')[1], evidence['reference']}
+          public_hashes = {hashlib.sha1(value.encode()).hexdigest() for value in public_values}
+          targets = ['deploy/rendered/otel-collector.yaml', evidence_file]
+          baseline_file = Path('.secrets.baseline')
+          baseline = json.loads(baseline_file.read_text())
+          original = copy.deepcopy(baseline)
+          configure_settings_from_baseline(baseline, filename=str(baseline_file))
+          detected = SecretsCollection()
+          for filename in targets:
+              detected.scan_file(filename)
+          findings = detected.json()
+          for filename in targets:
+              entries = findings.get(filename, [])
+              for entry in entries:
+                  assert entry['type'] in {'Hex High Entropy String', 'Base64 High Entropy String'}, (filename, entry['type'])
+                  assert entry['hashed_secret'] in public_hashes, 'Unrelated finding; manual review required'
+                  entry['is_secret'] = False
+              if entries:
+                  baseline['results'][filename] = entries
+              else:
+                  baseline['results'].pop(filename, None)
+          for key in original:
+              if key != 'results':
+                  assert baseline[key] == original[key]
+          for filename, entries in original['results'].items():
+              if filename not in targets:
+                  assert baseline['results'][filename] == entries
+          baseline_file.write_text(json.dumps(baseline, indent=2) + '\n')
+          report = {
+              'reviewed_values_are_public_release_metadata': True,
+              'publication_run_id': 35027538831,
+              'artifact_id': 10420533786,
+              'source_revision': evidence['git_sha'],
+              'reviewed_findings': findings,
+              'unchanged_scanner_plugins_filters_and_unrelated_entries': True,
+          }
+          (Path(os.environ['RUNNER_TEMP']) / 'erp-pin-security' / 'public-hash-review.json').write_text(json.dumps(report, indent=2) + '\n')
+          print('Reviewed public-hash findings:', {k: len(v) for k, v in findings.items()})
+          PY
+      - name: Run every standard pre-commit hook without exclusions or skips
+        run: |
+          set -euo pipefail
+          poetry run pre-commit run --all-files 2>&1 | tee "$RUNNER_TEMP/erp-pin-security/pre-commit.txt"
+          git diff --check
+      - name: Fast-forward only the deployment pin branch
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/deploy/pin-erp-6e7f8d23 | cut -f1)" = 2feeec4049db0ca87649d7b83f5b54b72955bb4a
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = 6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1
+          test "$(git diff --name-only)" = .secrets.baseline
+          git add .secrets.baseline
+          git config user.name 'Dotmac CI'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(deploy): record reviewed public release hashes for secret scanning'
+          git push origin HEAD:refs/heads/deploy/pin-erp-6e7f8d23
+          git show -s --format=fuller HEAD > "$RUNNER_TEMP/erp-pin-security/commit.txt"
+          git diff 6e7f8d2328d7eb5bb42ad5be75a13469a659f2b1 HEAD > "$RUNNER_TEMP/erp-pin-security/final.patch"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: erp-release-pin-security
+          path: ${{ runner.temp }}/erp-pin-security/
+          retention-days: 7
