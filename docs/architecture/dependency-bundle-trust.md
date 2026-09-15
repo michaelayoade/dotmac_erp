@@ -149,6 +149,13 @@ candidate-reachable dispatch surface to it at all. (`dotmac_vendor_control_plane
 `kernel-lock.yml`, by contrast, additionally credentials its `attest` job —
 that repository is not this one and is out of scope here.)
 
+The credential-absence gate runs only under privileged Bash with profiles
+disabled (`-p --noprofile --norc`), so Bash startup files and inherited shell
+state cannot redirect its execution before refusal. The architecture test
+does not treat lexical searches for `GITHUB_ENV` in preceding scripts as
+proof of safety: arbitrary shell text remains outside that detector's scope
+and must be covered by this execution boundary or the trusted producer.
+
 ## The plan digest
 
 The plan digest is the value everything else is checked against. It is

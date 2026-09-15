@@ -19,6 +19,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "erp-lock.yml"
+REQUIRED_GATE_SHELL = "/bin/bash -p --noprofile --norc -eo pipefail {0}"
+ALLOWED_SECRET_EXPRESSION = "${{ secrets.FORGEJO_READ_TOKEN }}"
 CREDENTIAL_REFERENCE = re.compile(
     r"secrets\s*(?:\.\s*FORGEJO_READ_TOKEN(?![A-Za-z0-9_])|\[\s*(?:'FORGEJO_READ_TOKEN'|"
     r'"FORGEJO_READ_TOKEN")\s*\])',
@@ -67,7 +69,32 @@ def parse_jobs(text: str) -> dict[str, Mapping[str, object]]:
         )
     workflow = _load_workflow(text)
     jobs = _mapping(workflow.get("jobs"), "workflow jobs")
-    return {name: _mapping(body, f"{name} job") for name, body in jobs.items()}
+    workflow_defaults = workflow.get("defaults", {})
+    workflow_run = (
+        workflow_defaults.get("run", {})
+        if isinstance(workflow_defaults, Mapping)
+        else {}
+    )
+    workflow_shell = isinstance(workflow_run, Mapping) and "shell" in workflow_run
+    workflow_env = workflow.get("env", {})
+    workflow_dangerous_env = _has_dangerous_shell_env(workflow_env)
+    result = {}
+    for name, raw_body in jobs.items():
+        body = _mapping(raw_body, f"{name} job")
+        job_defaults = body.get("defaults", {})
+        job_run = (
+            job_defaults.get("run", {}) if isinstance(job_defaults, Mapping) else {}
+        )
+        job_shell = isinstance(job_run, Mapping) and "shell" in job_run
+        job_continue = body.get("continue-on-error")
+        job_continue_unsafe = job_continue not in (None, False, "false")
+        unsafe_context = (
+            workflow_shell or job_shell or workflow_dangerous_env or job_continue_unsafe
+        )
+        result[name] = (
+            {**body, "__unsafe_gate_context": True} if unsafe_context else body
+        )
+    return result
 
 
 def _contains_credential(value: object) -> bool:
@@ -80,6 +107,12 @@ def _contains_credential(value: object) -> bool:
     return False
 
 
+def _has_dangerous_shell_env(value: object) -> bool:
+    return isinstance(value, Mapping) and any(
+        str(key).upper() in {"BASH_ENV", "SHELLOPTS"} for key in value
+    )
+
+
 def job_level_env_values(body: Mapping[str, object]) -> Mapping[str, object]:
     return _mapping(body.get("env", {}), "job env")
 
@@ -88,7 +121,27 @@ def split_steps(body: Mapping[str, object]) -> list[Mapping[str, object]]:
     steps = body.get("steps", [])
     if not isinstance(steps, list):
         raise AssertionError("job steps must be a YAML sequence")
-    return [_mapping(step, "step") for step in steps]
+    job_env_unsafe = _has_dangerous_shell_env(body.get("env", {}))
+    job_defaults = body.get("defaults", {})
+    run_defaults = (
+        job_defaults.get("run", {}) if isinstance(job_defaults, Mapping) else {}
+    )
+    job_shell_unsafe = isinstance(run_defaults, Mapping) and "shell" in run_defaults
+    job_continue = body.get("continue-on-error")
+    job_continue_unsafe = job_continue not in (None, False, "false")
+    context_unsafe = (
+        job_env_unsafe
+        or job_shell_unsafe
+        or job_continue_unsafe
+        or bool(body.get("__unsafe_gate_context"))
+    )
+    return [
+        {
+            **_mapping(step, "step"),
+            **({"__unsafe_gate_context": True} if context_unsafe else {}),
+        }
+        for step in steps
+    ]
 
 
 def job_level_credential_violations(
@@ -144,6 +197,19 @@ def step_name(step: Mapping[str, object]) -> str:
     return str(step.get("name", "<unnamed step>"))
 
 
+def _step_metadata_is_safe(step: Mapping[str, object]) -> bool:
+    """Only the default GitHub step execution path may be a gate."""
+    if "if" in step or step.get("__unsafe_gate_context"):
+        return False
+    if "continue-on-error" in step:
+        value = step["continue-on-error"]
+        if value is not False and value != "false":
+            return False
+    return step.get("shell") == REQUIRED_GATE_SHELL and not _has_dangerous_shell_env(
+        step.get("env", {})
+    )
+
+
 # A single plain diagnostic line: `echo` followed by exactly ONE quoted
 # literal argument and nothing else. `$`, backticks and backslashes are
 # excluded from INSIDE the quotes -- those are how a "diagnostic string"
@@ -175,19 +241,18 @@ def _parses_as_refusal_body(statements: list[str]) -> bool:
     )
 
 
-# The only non-blank shape admitted BEFORE the `if` header: a `set`
-# invocation whose tokens are each a dash-prefixed short-option cluster
-# (`-euo`) or a bare option-argument word (`pipefail`), nothing else.
-# There is deliberately no `$`, backtick or other symbol anywhere in the
-# allowed token shapes, so a preamble line that embeds a shell expansion
-# (e.g. `set -x ${VAR}`) fails this pattern on its own, independent of the
-# unconditional credential-reference check applied alongside it.
-_PREAMBLE_SET_LINE = re.compile(r"^set(?:\s+(?:-[A-Za-z]+|[A-Za-z]+))*\s*$")
+# The only non-blank shape admitted BEFORE the `if` header is the one
+# side-effect-free preamble used by the real workflow. Keep this an exact
+# positive allowlist: bare `set` prints shell variables, `-x`/`xtrace` can
+# print expanded credential values, and `-n`/`noexec` prevents the refusal
+# from running. Whitespace between the three literal tokens is normalized,
+# but no other spelling or option is admitted.
+_PREAMBLE_SET_LINE = re.compile(r"^set\s+-euo\s+pipefail\s*$")
 
 
 def _preamble_is_admissible(text: str, var: str) -> bool:
     """The text before the matched `if` header must be side-effect-free:
-    only blank lines and `set -...` option lines, per Michael's
+    only blank lines and the exact `set -euo pipefail` line, per Michael's
     specification, and NO reference to the credential's own shell
     variable anywhere in it, checked unconditionally ahead of the shape
     check -- a credential reference in the preamble disqualifies the step
@@ -248,7 +313,8 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
     reason about ordering BETWEEN steps, by index -- so ordering WITHIN a
     single step's own script is exactly what this preamble rule exists to
     enforce; nothing else in this module checks it. The rule: everything
-    before the header must be blank lines or `set -...` option lines
+    before the header must be blank lines or the exact `set -euo pipefail`
+    option line
     (`_PREAMBLE_SET_LINE`), and no line before the header may reference
     the credential's own shell variable at all, checked unconditionally.
     The asymmetry is deliberate and stays: text AFTER the closing `fi` is
@@ -266,10 +332,18 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
     known, separate closure step -- its absence here is not this guard's
     gap to close).
     """
+    if not _step_metadata_is_safe(step):
+        return False
     var = credential_env_var(step)
     if var is None:
         return False
-    header = rf'if \[ -z "\$\{{?{re.escape(var)}(?::-[^}}]*)?\}}?"\s*\];?\s*then'
+    env = step.get("env", {})
+    if not isinstance(env, Mapping) or env.get(var) != ALLOWED_SECRET_EXPRESSION:
+        return False
+    variable = (
+        rf"(?:\${re.escape(var)}|\$\{{{re.escape(var)}\}}|\$\{{{re.escape(var)}:-\}})"
+    )
+    header = rf'if \[ -z "{variable}"\s*\];?\s*then'
     body = commands_of(step)
     for match in re.finditer(header, body):
         if not _preamble_is_admissible(body[: match.start()], var):
@@ -324,11 +398,15 @@ def ordering_problems(steps: list[Mapping[str, object]]) -> list[str]:
     if not gates:
         return ["no step in this job tests the credential for emptiness and refuses"]
     gate = min(gates)
-    return [
-        f"{step_name(step)!r} references the credential before the refusal gate"
-        for index, step in enumerate(steps)
-        if index < gate and _contains_credential(step)
-    ]
+    problems = []
+    for index, step in enumerate(steps):
+        if index >= gate:
+            continue
+        if _contains_credential(step):
+            problems.append(
+                f"{step_name(step)!r} references the credential before the refusal gate"
+            )
+    return problems
 
 
 def gate_refusal_problems(steps: list[Mapping[str, object]]) -> list[str]:
@@ -528,6 +606,7 @@ def test_unexpected_alias_and_defanged_gate_fail() -> None:
     assert gate_refusal_problems([*steps[:gate], defanged, *steps[gate + 1 :]])
     nested = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  if false; then\n    exit 1\n  fi\nfi',
     }
     assert not is_refusal_gate(nested)
@@ -585,6 +664,7 @@ def test_nested_shell_control_flow_is_not_a_proven_refusal_gate(
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": shell_body,
     }
     assert not is_refusal_gate(step)
@@ -604,6 +684,7 @@ def test_outer_else_inverts_the_refusal_and_is_rejected() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  echo present\nelse\n  exit 1\nfi',
     }
     assert not is_refusal_gate(step)
@@ -623,6 +704,7 @@ def test_outer_elif_inverts_the_refusal_and_is_rejected() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "$ALIAS" ]; then\n'
             "  echo present\n"
@@ -645,9 +727,32 @@ def test_direct_exit_with_no_alternative_branch_is_the_positive_control() -> Non
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\nfi',
     }
     assert is_refusal_gate(step)
+
+
+def test_nonempty_parameter_expansion_is_not_an_empty_check() -> None:
+    """A non-empty `:-present` fallback makes the condition false when the
+    credential is missing, so it cannot serve as a refusal gate.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
+        "run": 'if [ -z "${ALIAS:-present}" ]; then\n  exit 1\nfi',
+    }
+    assert not is_refusal_gate(step)
+
+
+def test_unbraced_fallback_suffix_is_not_an_empty_check() -> None:
+    """The `:-` fallback is valid only inside the braced parameter form."""
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
+        "run": 'if [ -z "$ALIAS:-" ]; then\n  exit 1\nfi',
+    }
+    assert not is_refusal_gate(step)
 
 
 def test_exit_zero_before_exit_one_is_rejected() -> None:
@@ -662,6 +767,7 @@ def test_exit_zero_before_exit_one_is_rejected() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 0\n  exit 1\nfi',
     }
     assert not is_refusal_gate(step)
@@ -679,6 +785,7 @@ def test_heredoc_payload_exit_is_rejected() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": "if [ -z \"$ALIAS\" ]; then\n  cat <<'EOF'\nexit 1\nEOF\nfi",
     }
     assert not is_refusal_gate(step)
@@ -695,6 +802,7 @@ def test_backgrounded_exit_is_rejected() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1 &\nfi',
     }
     assert not is_refusal_gate(step)
@@ -712,6 +820,7 @@ def test_statement_after_the_exit_is_rejected() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\n  echo "still here"\nfi',
     }
     assert not is_refusal_gate(step)
@@ -769,6 +878,7 @@ def test_the_real_gates_exact_shape_is_accepted() -> None:
     """
     step = {
         "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then\n'
             '  echo "::error::FORGEJO_READ_TOKEN is unset or empty in this repository."\n'
@@ -795,6 +905,7 @@ def test_blank_lines_between_statements_are_tolerated() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "$ALIAS" ]; then\n'
             '  echo "first"\n'
@@ -822,6 +933,7 @@ def test_fused_use_then_check_step_is_not_credited_as_a_gate() -> None:
     """
     step = {
         "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": (
             'curl -H "Authorization: Bearer ${FORGEJO_CREDENTIAL}" '
             "https://registry/ -o /tmp/out\n"
@@ -848,6 +960,7 @@ def test_fused_use_then_check_step_is_named_by_ordering_problems() -> None:
     fused = {
         "name": "Download and check",
         "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": (
             'curl -H "Authorization: Bearer ${FORGEJO_CREDENTIAL}" '
             "https://registry/ -o /tmp/out\n"
@@ -860,6 +973,7 @@ def test_fused_use_then_check_step_is_named_by_ordering_problems() -> None:
     real_gate = {
         "name": "There is a credential to resolve with",
         "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then\n'
             '  echo "::error::missing"\n'
@@ -867,6 +981,7 @@ def test_fused_use_then_check_step_is_named_by_ordering_problems() -> None:
             "fi"
         ),
     }
+    assert is_refusal_gate(real_gate)
     assert any(
         "Download and check" in item for item in ordering_problems([fused, real_gate])
     )
@@ -884,23 +999,129 @@ def test_preamble_set_option_line_is_admitted() -> None:
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
         "run": 'set -euo pipefail\nif [ -z "$ALIAS" ]; then\n  exit 1\nfi',
     }
     assert is_refusal_gate(step)
 
 
-def test_preamble_credential_use_is_rejected_even_as_a_set_line_lookalike() -> None:
-    """A preamble line that tries to smuggle a credential expansion inside
-    something shaped like a `set` invocation. Design break condition:
-    `_PREAMBLE_SET_LINE`'s token shapes are `-[A-Za-z]+` or `[A-Za-z]+`
-    only -- neither alternative can match a token containing `$`, `{` or
-    `}` -- so `set -x ${ALIAS}` fails the preamble shape check on its own;
-    the unconditional credential-reference check in
-    `_preamble_is_admissible` catches the same line independently, so
-    removing either check alone still leaves the other standing.
+@pytest.mark.parametrize(
+    "preamble",
+    [
+        pytest.param("set", id="bare-set"),
+        pytest.param("set -x", id="short-xtrace"),
+        pytest.param("set -o xtrace", id="long-xtrace"),
+        pytest.param("set -n", id="short-noexec"),
+        pytest.param("set -o noexec", id="long-noexec"),
+    ],
+)
+def test_preamble_refuses_variable_display_tracing_and_noexec(
+    preamble: str,
+) -> None:
+    """Only the real workflow's errexit/pipefail preamble is admissible.
+
+    Bare `set` displays shell variables, tracing can print expanded
+    credentials, and noexec prevents the refusal from executing. Design
+    break condition: removing the exact positive allowlist and restoring a
+    broad token-shape grammar makes each of these plants pass as a gate.
     """
     step = {
         "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
-        "run": 'set -x ${ALIAS}\nif [ -z "$ALIAS" ]; then\n  exit 1\nfi',
+        "shell": REQUIRED_GATE_SHELL,
+        "run": f'{preamble}\nif [ -z "$ALIAS" ]; then\n  exit 1\nfi',
     }
     assert not is_refusal_gate(step)
+
+
+def test_real_workflow_gate_with_exact_preamble_is_admitted() -> None:
+    """The actual acquire workflow remains the positive control for the
+    narrowed preamble rule, including its exact `set -euo pipefail` line.
+    """
+    gate = next(
+        step
+        for step in _acquire_steps()
+        if step_name(step) == "There is a credential to resolve with"
+    )
+    assert "set -euo pipefail" in commands_of(gate)
+    assert is_refusal_gate(gate)
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        pytest.param({"if": "always()"}, id="step-if"),
+        pytest.param({"continue-on-error": True}, id="continue-on-error"),
+        pytest.param({"continue-on-error": "true"}, id="string-continue-on-error"),
+        pytest.param({"shell": "bash"}, id="custom-shell"),
+        pytest.param({"env": {"BASH_ENV": "setup.sh"}}, id="bash-env"),
+        pytest.param({"env": {"SHELLOPTS": "xtrace"}}, id="shellopts"),
+    ],
+)
+def test_gate_refuses_untrusted_step_metadata(metadata: Mapping[str, object]) -> None:
+    metadata_env = _mapping(metadata.get("env", {}), "metadata env")
+    baseline = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "shell": REQUIRED_GATE_SHELL,
+        "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\nfi',
+    }
+    assert is_refusal_gate(baseline)
+    step = {
+        **baseline,
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}", **metadata_env},
+        **{key: value for key, value in metadata.items() if key != "env"},
+    }
+    assert credential_env_var(step) == "ALIAS"
+    assert not is_refusal_gate(step)
+
+
+def test_gate_requires_exact_secret_expression() -> None:
+    baseline = {
+        "env": {"ALIAS": ALLOWED_SECRET_EXPRESSION},
+        "shell": REQUIRED_GATE_SHELL,
+        "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\nfi',
+    }
+    assert is_refusal_gate(baseline)
+    for expression in (
+        "${{ Secrets.FORGEJO_READ_TOKEN }}",
+        "${{ secrets.FORGEJO_READ_TOKEN || 'present' }}",
+    ):
+        mutated = {**baseline, "env": {"ALIAS": expression}}
+        assert credential_env_var(mutated) == "ALIAS"
+        assert not is_refusal_gate(mutated)
+
+
+def test_gate_refuses_inherited_shell_and_environment_defaults() -> None:
+    text = WORKFLOW.read_text()
+    anchor = "jobs:\n"
+    assert text.count(anchor) == 1
+    text = text.replace(anchor, "defaults:\n  run:\n    shell: bash\njobs:\n", 1)
+    assert text != WORKFLOW.read_text()
+    jobs = parse_jobs(text)
+    assert gate_refusal_problems(split_steps(jobs["acquire"]))
+
+    text = WORKFLOW.read_text()
+    anchor = "  acquire:\n"
+    assert text.count(anchor) == 1
+    text = text.replace(
+        anchor, "  acquire:\n    defaults:\n      run:\n        shell: bash\n", 1
+    )
+    assert text != WORKFLOW.read_text()
+    jobs = parse_jobs(text)
+    assert gate_refusal_problems(split_steps(jobs["acquire"]))
+
+    text = WORKFLOW.read_text()
+    anchor = "env:\n  # The loopback port the acquired bundle is served on during resolution.\n"
+    assert text.count(anchor) == 1
+    text = text.replace(anchor, anchor + "  BASH_ENV: setup.sh\n", 1)
+    assert text != WORKFLOW.read_text()
+    jobs = parse_jobs(text)
+    assert gate_refusal_problems(split_steps(jobs["acquire"]))
+
+    text = WORKFLOW.read_text()
+    anchor = "  acquire:\n    runs-on: ubuntu-latest\n"
+    assert text.count(anchor) == 1
+    text = text.replace(anchor, anchor + "    continue-on-error: true\n", 1)
+    assert text != WORKFLOW.read_text()
+    jobs = parse_jobs(text)
+    assert jobs["acquire"].get("continue-on-error") is True
+    assert gate_refusal_problems(split_steps(jobs["acquire"]))
