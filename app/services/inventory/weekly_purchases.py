@@ -161,8 +161,12 @@ class WeeklyPurchasesService:
         signed_amount = case(
             (is_credit, -func.abs(line.line_amount)), else_=line.line_amount
         )
-        signed_tax = case((is_credit, -func.abs(line.tax_amount)), else_=line.tax_amount)
-        warehouse_id = func.coalesce(line.receipt_warehouse_id, GoodsReceipt.warehouse_id)
+        signed_tax = case(
+            (is_credit, -func.abs(line.tax_amount)), else_=line.tax_amount
+        )
+        warehouse_id = func.coalesce(
+            line.receipt_warehouse_id, GoodsReceipt.warehouse_id
+        )
         posted = or_(
             invoice.status.in_(SupplierInvoiceStatus.gl_impacting()),
             and_(
@@ -201,7 +205,10 @@ class WeeklyPurchasesService:
             .join(invoice, line.invoice_id == invoice.invoice_id)
             .join(
                 Item,
-                and_(Item.item_id == line.item_id, Item.organization_id == organization_id),
+                and_(
+                    Item.item_id == line.item_id,
+                    Item.organization_id == organization_id,
+                ),
             )
             .join(
                 Supplier,
@@ -281,7 +288,9 @@ class WeeklyPurchasesService:
             self.db.execute(
                 select(
                     func.count().label("line_count"),
-                    func.count(func.distinct(source.c.invoice_id)).label("document_count"),
+                    func.count(func.distinct(source.c.invoice_id)).label(
+                        "document_count"
+                    ),
                     func.count(func.distinct(source.c.item_id)).label("item_count"),
                     func.count(func.distinct(source.c.supplier_id)).label(
                         "supplier_count"
@@ -359,7 +368,9 @@ class WeeklyPurchasesService:
                 .mappings()
                 .all()
             )
-            choices[name] = [{"id": str(row["id"]), "label": row["label"]} for row in rows]
+            choices[name] = [
+                {"id": str(row["id"]), "label": row["label"]} for row in rows
+            ]
         return choices
 
     def export_rows(self, organization_id: UUID, filters: PurchaseFilters) -> list[Any]:
