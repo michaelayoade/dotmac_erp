@@ -20,7 +20,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "erp-lock.yml"
 CREDENTIAL_REFERENCE = re.compile(
-    r"secrets\s*(?:\.\s*FORGEJO_READ_TOKEN|\[\s*(?:'FORGEJO_READ_TOKEN'|"
+    r"secrets\s*(?:\.\s*FORGEJO_READ_TOKEN(?![A-Za-z0-9_])|\[\s*(?:'FORGEJO_READ_TOKEN'|"
     r'"FORGEJO_READ_TOKEN")\s*\])'
 )
 SECRET_CONTEXT_REFERENCE = re.compile(r"\bsecrets\b")
@@ -138,7 +138,28 @@ def step_name(step: Mapping[str, object]) -> str:
     return str(step.get("name", "<unnamed step>"))
 
 
+_NESTED_CONTROL_START = re.compile(
+    r"^(?:if|for|while|until|case|select)\b"
+    r"|^(?:function\s+)?[\w.-]+\s*\(\)\s*\{?\s*$"
+)
+
+
 def is_refusal_gate(step: Mapping[str, object]) -> bool:
+    """Recognise ONE narrow shell shape: a simple outer
+    ``if [ -z "$VAR" ]; then ... fi`` whose body is a direct, unconditional
+    ``exit`` and plain statements only.
+
+    This is NOT general shell control-flow analysis, and does not attempt to
+    determine whether an ``exit`` is actually reachable. It recognises one
+    known-good shape and fails closed -- returns False, i.e. "not a proven
+    refusal gate" -- on every shape it does not understand, including a
+    nested `if`, `for`, `while`, `until`, `case`, `select`, or a
+    function-definition body anywhere inside the outer block, even where
+    that nested construct happens to be provably unreachable (e.g. `while
+    false; do exit 1; done`). An honest narrow recogniser that refuses
+    unfamiliar shapes is preferred over a broad one that is wrong about
+    them.
+    """
     var = credential_env_var(step)
     if var is None:
         return False
@@ -150,9 +171,10 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
         clause_lines: list[str] = []
         for line in body[match.end() :].splitlines():
             stripped = line.strip()
-            if re.match(r"if\b", stripped):
+            if _NESTED_CONTROL_START.match(stripped):
                 nested_control = True
-                depth += 1
+                if re.match(r"if\b", stripped):
+                    depth += 1
             elif stripped == "fi" or stripped.startswith("fi;"):
                 depth -= 1
                 if depth == 0:
@@ -286,6 +308,29 @@ def test_literal_bracket_reference_outside_acquire_is_named() -> None:
     )
 
 
+@pytest.mark.parametrize("suffix", ["_V2", "_STAGING"])
+def test_similarly_named_secret_is_not_the_one_allowed_reference(suffix: str) -> None:
+    """`secrets.FORGEJO_READ_TOKEN_V2` and `secrets.FORGEJO_READ_TOKEN_STAGING`
+    name a DIFFERENT secret than the one this workflow is allowed to hold.
+    Design break condition: the dot branch's right-hand identifier boundary
+    (`(?![A-Za-z0-9_])`) is what refuses these -- delete that lookahead and
+    the pattern matches the `FORGEJO_READ_TOKEN` prefix of the longer name,
+    silently treating an unrelated secret as the allowed one. The bracket
+    branch never needed this fix: `]` is already a boundary the identifier
+    cannot extend past.
+    """
+    name = f"FORGEJO_READ_TOKEN{suffix}"
+    assert not has_credential_reference(f"${{{{ secrets.{name} }}}}")
+    text = f"""jobs:
+  acquire:
+    env:
+      TOKEN: ${{{{ secrets.{name} }}}}
+    steps: []
+"""
+    with pytest.raises(AssertionError, match=r"only the literal"):
+        parse_jobs(text)
+
+
 def test_gate_is_behavioural_and_precedes_credentialed_steps() -> None:
     steps = _acquire_steps()
     gates = gate_indices(steps)
@@ -329,3 +374,60 @@ def test_unexpected_alias_and_defanged_gate_fail() -> None:
         "run": 'if [ -z "$ALIAS" ]; then\n  if false; then\n    exit 1\n  fi\nfi',
     }
     assert not is_refusal_gate(nested)
+
+
+@pytest.mark.parametrize(
+    "shell_body",
+    [
+        pytest.param(
+            'if [ -z "$ALIAS" ]; then\n  while false; do\n    exit 1\n  done\nfi',
+            id="while-loop-body-never-entered",
+        ),
+        pytest.param(
+            'if [ -z "$ALIAS" ]; then\n  for x in; do\n    exit 1\n  done\nfi',
+            id="for-loop-over-an-empty-list",
+        ),
+        pytest.param(
+            'if [ -z "$ALIAS" ]; then\n  until true; do\n    exit 1\n  done\nfi',
+            id="until-loop-body-never-entered",
+        ),
+        pytest.param(
+            'if [ -z "$ALIAS" ]; then\n'
+            "  case $ALIAS in\n"
+            "    never)\n"
+            "      exit 1\n"
+            "      ;;\n"
+            "  esac\n"
+            "fi",
+            id="case-with-no-matching-branch",
+        ),
+        pytest.param(
+            'if [ -z "$ALIAS" ]; then\n  unreachable() {\n    exit 1\n  }\nfi',
+            id="function-defined-but-never-called",
+        ),
+    ],
+)
+def test_nested_shell_control_flow_is_not_a_proven_refusal_gate(
+    shell_body: str,
+) -> None:
+    """Each shape lexically contains `exit 1` inside the outer empty-check,
+    but by DESIGN the shell never reaches that `exit`: a `while false`/
+    `until true` loop body never runs, a `for` over an empty list iterates
+    zero times, the `case` has no branch matching `$ALIAS`, and the
+    function is merely DEFINED, not called. `is_refusal_gate` must fail
+    closed on every one of them -- returning False -- because it recognises
+    exactly one narrow known-good shape (a plain outer empty-check with an
+    unconditional exit and no nested construct) and these are not that
+    shape; it does not evaluate whether the exit is reachable, and must not
+    be read as having done so.
+
+    This exercises the SHELL shape the detector parses, not the detector's
+    own Python scanning loop -- perturbing the Python loop's bookkeeping
+    is a different property from supplying an unreachable shell construct,
+    and this plant is the latter.
+    """
+    step = {
+        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "run": shell_body,
+    }
+    assert not is_refusal_gate(step)
