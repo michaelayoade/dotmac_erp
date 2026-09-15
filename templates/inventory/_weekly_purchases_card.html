@@ -1,0 +1,14 @@
+{% from "components/macros.html" import icon_svg %}
+{% if auth and auth.has_permission("inventory:stock:read") %}
+<a href="/inventory/reports/weekly-purchases" class="card p-5 hover:border-amber-300 dark:hover:border-amber-700 transition-colors group">
+    <div class="flex items-start gap-4">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/50 transition-colors">
+            {{ icon_svg("calendar", "h-6 w-6") }}
+        </div>
+        <div>
+            <h3 class="font-semibold text-slate-900 dark:text-white">Weekly Purchases</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Posted stock-item purchases and supplier credits by week</p>
+        </div>
+    </div>
+</a>
+{% endif %}

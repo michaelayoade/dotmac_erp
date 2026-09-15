@@ -108,6 +108,7 @@ from app.web.fixed_assets import router as fixed_assets_web_router
 from app.web.fleet import router as fleet_web_router
 from app.web.help import router as help_web_router
 from app.web.inventory import router as inventory_web_router
+from app.web.inventory_weekly_purchases import router as weekly_purchases_web_router
 from app.web.notifications import router as notifications_web_router
 from app.web.onboarding_portal import router as onboarding_portal_router
 from app.web.payroll_alias import router as payroll_alias_web_router
@@ -834,6 +835,7 @@ if is_module_enabled("inventory"):
         dependencies=[Depends(require_tenant_auth)],
     )
     app.include_router(inventory_web_router)
+    app.include_router(weekly_purchases_web_router)
 
 # ---------------------------------------------------------------------------
 # Procurement module
