@@ -68,11 +68,15 @@ def test_assigned_branch_is_selectable_without_changing_export_defaults():
         re.DOTALL,
     )
     assert field_loop is not None
-    rendered = Environment(autoescape=True).from_string(field_loop.group()).render(
-        employee_export_fields=[
-            {"key": key, "label": label} for key, (label, _) in fields.items()
-        ],
-        default_employee_export_fields=HRWebService.DEFAULT_EMPLOYEE_EXPORT_FIELDS,
+    rendered = (
+        Environment(autoescape=True)
+        .from_string(field_loop.group())
+        .render(
+            employee_export_fields=[
+                {"key": key, "label": label} for key, (label, _) in fields.items()
+            ],
+            default_employee_export_fields=HRWebService.DEFAULT_EMPLOYEE_EXPORT_FIELDS,
+        )
     )
     checkbox = re.search(r'<input[^>]*value="assigned_branch"[^>]*>', rendered)
     assert checkbox is not None
@@ -80,7 +84,9 @@ def test_assigned_branch_is_selectable_without_changing_export_defaults():
     assert "Assigned Branch" in rendered
 
 
-def test_assigned_branch_export_matches_employees_and_preserves_field_order(monkeypatch):
+def test_assigned_branch_export_matches_employees_and_preserves_field_order(
+    monkeypatch,
+):
     abuja_id, lagos_id, missing_id = uuid4(), uuid4(), uuid4()
     employees = [
         SimpleNamespace(employee_code="EMP-001", assigned_location_id=lagos_id),
@@ -133,9 +139,7 @@ def test_assigned_branch_export_uses_existing_csv_safety(
     rows, _, _ = _export(
         monkeypatch,
         employees=[SimpleNamespace(assigned_location_id=location_id)],
-        locations=[
-            SimpleNamespace(location_id=location_id, location_name=branch_name)
-        ],
+        locations=[SimpleNamespace(location_id=location_id, location_name=branch_name)],
     )
     assert rows == [["Assigned Branch"], [expected]]
 
