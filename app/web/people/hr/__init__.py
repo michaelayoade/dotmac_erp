@@ -36,6 +36,7 @@ from .locations import router as locations_router
 from .onboarding_admin import router as onboarding_admin_router
 from .organization import router as organization_router
 from .positions import router as positions_router
+from .provisioning import router as provisioning_router
 from .skills import router as skills_router
 
 # Main HR router that includes all sub-routers
@@ -56,6 +57,7 @@ def hr_index(
 
 # Include all sub-routers
 router.include_router(employees_router)
+router.include_router(provisioning_router)
 router.include_router(lifecycle_router)
 router.include_router(organization_router)
 router.include_router(positions_router)

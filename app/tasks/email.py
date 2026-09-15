@@ -117,6 +117,21 @@ def classify_email_error(exc: Exception) -> type[Exception]:
     return TransientEmailError
 
 
+def _record_workforce_stage(
+    organization_id: str, employee_id: str, stage: str, status: str, error=None
+) -> None:
+    """Persist a task outcome in a fresh transaction, including after rollback."""
+    from app.models.people.hr.employee import Employee
+    from app.services.people.hr.provisioning_monitor import record_stage
+
+    org_uuid = uuid.UUID(organization_id)
+    with session_for_org(org_uuid) as db:
+        employee = db.get(Employee, uuid.UUID(employee_id))
+        if employee:
+            record_stage(employee, stage, status, error=error)
+            db.commit()
+
+
 @shared_task(
     name="app.tasks.hr.run_employee_mailcow_provisioning",
     bind=True,
@@ -127,85 +142,177 @@ def classify_email_error(exc: Exception) -> type[Exception]:
     retry_jitter=True,
 )
 def run_employee_mailcow_provisioning(
-    self,
-    employee_id: str,
-    organization_id: str,
+    self, employee_id: str, organization_id: str
 ) -> dict[str, Any]:
-    """Create an employee work mailbox and deliver its activation link."""
+    """Create the mailbox, then start independent activation and cloud relays."""
+    from app.config import settings
+    from app.services.people.hr.mailbox_provisioning import (
+        EmployeeMailboxProvisioningService,
+    )
+
+    _record_workforce_stage(organization_id, employee_id, "mailcow", "running")
+    org_uuid = uuid.UUID(organization_id)
+    employee_uuid = uuid.UUID(employee_id)
+    try:
+        with session_for_org(org_uuid) as db:
+            result = EmployeeMailboxProvisioningService(db).ensure_mailbox(
+                org_uuid, employee_uuid
+            )
+            db.commit()
+    except Exception as exc:
+        _record_workforce_stage(organization_id, employee_id, "mailcow", "failed", exc)
+        raise
+
+    mailbox_ready = bool(result.email and (result.created or result.already_exists))
+    _record_workforce_stage(
+        organization_id,
+        employee_id,
+        "mailcow",
+        "completed" if mailbox_ready else "skipped",
+    )
+    if mailbox_ready:
+        _record_workforce_stage(
+            organization_id, employee_id, "activation_email", "pending"
+        )
+        send_employee_mailbox_activation.apply_async(
+            args=[employee_id, organization_id]
+        )
+        if settings.nextcloud_provisioning_enabled:
+            _record_workforce_stage(
+                organization_id, employee_id, "nextcloud", "pending"
+            )
+            run_employee_nextcloud_provisioning.apply_async(
+                args=[employee_id, organization_id]
+            )
+    return {
+        "employee_id": result.employee_id,
+        "email": result.email,
+        "created": result.created,
+        "already_exists": result.already_exists,
+        "skipped": result.skipped,
+    }
+
+
+@shared_task(
+    name="app.tasks.hr.send_employee_mailbox_activation",
+    bind=True,
+    max_retries=5,
+    autoretry_for=(RuntimeError,),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+)
+def send_employee_mailbox_activation(
+    self, employee_id: str, organization_id: str
+) -> dict[str, Any]:
+    """Issue and send activation independently of downstream provisioning."""
     from app.models.people.hr.employee import Employee
     from app.services.email import send_mailbox_activation_email
     from app.services.people.hr.mailbox_provisioning import (
         EmployeeMailboxProvisioningService,
     )
 
+    _record_workforce_stage(organization_id, employee_id, "activation_email", "running")
     org_uuid = uuid.UUID(organization_id)
     employee_uuid = uuid.UUID(employee_id)
-    with session_for_org(org_uuid) as db:
-        provisioning_service = EmployeeMailboxProvisioningService(db)
-        result = provisioning_service.ensure_mailbox(org_uuid, employee_uuid)
-        db.commit()
-        if result.activation_token:
-            employee = db.get(Employee, employee_uuid)
-            try:
-                send_mailbox_activation_email(
-                    db,
-                    result.personal_email or "",
-                    result.email or "",
-                    result.activation_token,
-                    employee.person.name if employee and employee.person else None,
-                    org_uuid,
-                    raise_on_error=True,
+    try:
+        with session_for_org(org_uuid) as db:
+            service = EmployeeMailboxProvisioningService(db)
+            result = service.ensure_mailbox(org_uuid, employee_uuid)
+            db.commit()
+            if not result.activation_token:
+                employee = db.get(Employee, employee_uuid)
+                status = (
+                    "completed"
+                    if employee and employee.mailcow_activation_sent_at
+                    else "skipped"
                 )
-            except Exception as exc:
-                raise RuntimeError("Could not send mailbox activation email") from exc
-            provisioning_service.mark_activation_sent(
-                employee_uuid,
+                _record_workforce_stage(
+                    organization_id, employee_id, "activation_email", status
+                )
+                return {"employee_id": employee_id, "status": status}
+            employee = db.get(Employee, employee_uuid)
+            send_mailbox_activation_email(
+                db,
+                result.personal_email or "",
+                result.email or "",
                 result.activation_token,
+                employee.person.name if employee and employee.person else None,
+                org_uuid,
+                raise_on_error=True,
+            )
+            service.mark_activation_sent(employee_uuid, result.activation_token)
+            db.commit()
+    except Exception as exc:
+        _record_workforce_stage(
+            organization_id, employee_id, "activation_email", "failed", exc
+        )
+        raise RuntimeError("Could not send mailbox activation email") from exc
+    _record_workforce_stage(
+        organization_id, employee_id, "activation_email", "completed"
+    )
+    return {"employee_id": employee_id, "status": "completed"}
+
+
+@shared_task(
+    name="app.tasks.hr.run_employee_nextcloud_provisioning",
+    bind=True,
+    max_retries=5,
+    autoretry_for=(httpx.TransportError, RuntimeError),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+)
+def run_employee_nextcloud_provisioning(
+    self, employee_id: str, organization_id: str
+) -> dict[str, Any]:
+    """Provision Nextcloud independently, then continue to Selfcare and Talk."""
+    from app.config import settings
+    from app.models.people.hr.employee import Employee
+    from app.services.people.hr.nextcloud_provisioning import (
+        EmployeeNextcloudProvisioningService,
+    )
+
+    _record_workforce_stage(organization_id, employee_id, "nextcloud", "running")
+    org_uuid = uuid.UUID(organization_id)
+    employee_uuid = uuid.UUID(employee_id)
+    try:
+        with session_for_org(org_uuid) as db:
+            employee = db.get(Employee, employee_uuid)
+            if not employee:
+                return {"success": False, "error": "Employee not found"}
+            result = EmployeeNextcloudProvisioningService(db).ensure_account(
+                org_uuid, employee_uuid
             )
             db.commit()
-        task_result: dict[str, Any] = {
-            "employee_id": result.employee_id,
-            "email": result.email,
-            "created": result.created,
-            "already_exists": result.already_exists,
-            "skipped": result.skipped,
-        }
-        employee = db.get(Employee, employee_uuid)
-        if employee and employee.mailcow_mailbox_provisioned_at is not None:
-            from app.config import settings
+            should_sync = bool(
+                result.user_id
+                and settings.dotmac_sub_staff_sync_enabled
+                and employee.dotmac_sub_access_enabled
+            )
+    except Exception as exc:
+        _record_workforce_stage(
+            organization_id, employee_id, "nextcloud", "failed", exc
+        )
+        raise
+    _record_workforce_stage(
+        organization_id,
+        employee_id,
+        "nextcloud",
+        "completed" if result.user_id else "skipped",
+    )
+    if should_sync:
+        from app.tasks.staff_sync import sync_employee_staff_account
 
-            if settings.nextcloud_provisioning_enabled:
-                from app.services.people.hr.nextcloud_provisioning import (
-                    EmployeeNextcloudProvisioningService,
-                )
-
-                nextcloud_result = EmployeeNextcloudProvisioningService(
-                    db
-                ).ensure_account(org_uuid, employee_uuid)
-                db.commit()
-                task_result["nextcloud"] = {
-                    "user_id": nextcloud_result.user_id,
-                    "created": nextcloud_result.created,
-                    "already_exists": nextcloud_result.already_exists,
-                    "enabled": nextcloud_result.enabled,
-                    "skipped": nextcloud_result.skipped,
-                }
-                if (
-                    nextcloud_result.user_id
-                    and settings.dotmac_sub_staff_sync_enabled
-                    and employee.dotmac_sub_access_enabled
-                ):
-                    try:
-                        from app.tasks.staff_sync import sync_employee_staff_account
-
-                        sync_employee_staff_account.apply_async(
-                            args=[str(employee_uuid), str(org_uuid)],
-                        )
-                    except Exception as exc:
-                        raise RuntimeError(
-                            "Could not enqueue Selfcare workforce provisioning"
-                        ) from exc
-        return task_result
+        sync_employee_staff_account.apply_async(args=[employee_id, organization_id])
+    return {
+        "employee_id": employee_id,
+        "user_id": result.user_id,
+        "created": result.created,
+        "already_exists": result.already_exists,
+        "enabled": result.enabled,
+        "skipped": result.skipped,
+    }
 
 
 @shared_task(

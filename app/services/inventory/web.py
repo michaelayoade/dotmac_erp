@@ -857,7 +857,7 @@ class InventoryWebService:
         return {
             "transactions": transactions_view,
             "transaction_types": [t.value for t in TransactionType],
-            "search": search,
+            "search": search or "",
             "transaction_type": transaction_type,
             "page": page,
             "limit": limit,
@@ -1277,6 +1277,7 @@ class InventoryWebService:
         transaction_type: str | None,
         page: int,
         db: Session,
+        limit: int = 50,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Inventory Transactions", "transactions")
         context.update(
@@ -1286,6 +1287,7 @@ class InventoryWebService:
                 search=search,
                 transaction_type=transaction_type,
                 page=page,
+                limit=limit,
             )
         )
         return templates.TemplateResponse(

@@ -1,4 +1,7 @@
-from datetime import datetime, timezone
+from contextlib import contextmanager
+import sys
+from types import ModuleType
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
@@ -10,6 +13,7 @@ from app.services.mailcow.client import MailcowClient, MailcowClientError
 from app.services.mailcow.config import MailcowProvisioningConfig
 from app.services.people.hr.mailbox_provisioning import (
     EmployeeMailboxProvisioningService,
+    activate_employee_mailbox,
     hash_mailbox_activation_token,
 )
 
@@ -234,3 +238,45 @@ def test_ensure_mailbox_skips_exited_employee() -> None:
 
     assert result.skipped == ["employee is no longer provisionable"]
     mailcow.get_mailbox.assert_not_called()
+
+
+def test_activation_locks_only_employee_row(monkeypatch) -> None:
+    organization_id = uuid4()
+    token = f"{organization_id}.secret"
+    employee = Mock()
+    employee.mailcow_activation_expires_at = datetime.now(timezone.utc) + timedelta(
+        hours=1
+    )
+    employee.mailcow_activated_at = None
+    employee.person.email = "ada@dotmac.ng"
+    db = Mock()
+    db.scalar.return_value = employee
+
+    @contextmanager
+    def session_for_org(_organization_id):
+        yield db
+
+    session_module = ModuleType("app.db.session_context")
+    session_module.session_for_org = session_for_org
+    auth_flow_module = ModuleType("app.schemas.auth_flow")
+    auth_flow_module.validate_password_strength = lambda _password: None
+    monkeypatch.setitem(sys.modules, "app.db.session_context", session_module)
+    monkeypatch.setitem(sys.modules, "app.schemas.auth_flow", auth_flow_module)
+    monkeypatch.setattr(
+        "app.services.people.hr.mailbox_provisioning.get_mailcow_provisioning_config",
+        lambda: _config(),
+    )
+    client = Mock()
+    monkeypatch.setattr(
+        "app.services.people.hr.mailbox_provisioning.MailcowClient",
+        lambda **_kwargs: client,
+    )
+
+    activate_employee_mailbox(token, "Strong-password-123!")
+
+    statement = db.scalar.call_args.args[0]
+    assert not statement._with_options
+    assert statement._for_update_arg is not None
+    client.update_mailbox_password.assert_called_once_with(
+        "ada@dotmac.ng", "Strong-password-123!", active=True
+    )

@@ -161,6 +161,17 @@
                 </div>
 
                 <div>
+                    <label for="direction" class="form-label">Measurement direction</label>
+                    {% set direction = form_data.get('direction', '') if form_data else ('lower' if kpi and kpi.lower_is_better is sameas true else ('higher' if kpi and kpi.lower_is_better is sameas false else '')) %}
+                    <select id="direction" name="direction" class="form-select">
+                        <option value="" {% if direction == '' %}selected{% endif %}>Legacy default / recognised support metric</option>
+                        <option value="higher" {% if direction == 'higher' %}selected{% endif %}>Higher is better</option>
+                        <option value="lower" {% if direction == 'lower' %}selected{% endif %}>Lower is better</option>
+                    </select>
+                    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Choose explicitly for measures such as response time or error counts. The legacy default recognises supported ticket metrics; other legacy KPIs use higher-is-better. Missing measurements are not zero results.</p>
+                </div>
+
+                <div>
                     <label for="weightage" class="form-label">Weightage (%)</label>
                     <input aria-label="10" type="number" name="weightage" id="weightage" step="0.01" min="0" max="100"
                         value="{{ kpi.weightage if kpi else form_data.weightage | default('0', true) }}"

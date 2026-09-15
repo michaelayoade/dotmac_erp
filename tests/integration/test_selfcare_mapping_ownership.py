@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 import os
 import time
+from types import SimpleNamespace
 from uuid import uuid4
 
 from alembic.migration import MigrationContext
@@ -22,7 +23,6 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.db.session_context import prime_tenant_context
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person
@@ -62,11 +62,15 @@ def mapping_engine(engine, monkeypatch):
                 for column in table.columns:
                     column.foreign_keys.clear()
                 table.create(connection)
+        # Settings is frozen; scope a replacement to the service under test.
+        # This also works when the unit suite supplies its MockSettings shim.
         monkeypatch.setattr(
-            settings, "dotmac_sub_staff_sync_enabled", True, raising=False
-        )
-        monkeypatch.setattr(
-            settings, "dotmac_sub_staff_default_role", "staff", raising=False
+            staff_sync,
+            "settings",
+            SimpleNamespace(
+                dotmac_sub_staff_sync_enabled=True,
+                dotmac_sub_staff_default_role="staff",
+            ),
         )
         monkeypatch.setattr(
             staff_sync, "_refresh_staff_access_projection", lambda *a: None
@@ -310,4 +314,33 @@ def test_migration_refuses_legacy_duplicates_and_preserves_rows(mapping_engine):
                 "WHERE organization_id = :org AND employee_id = :employee"
             ),
             {"org": org, "employee": second_id, "account": account_id},
+        )
+
+
+def test_workforce_state_round_trips_through_the_real_employee_mapper(mapping_engine):
+    """DDL-only repair must not hide a patched ORM JSONB bind processor."""
+    state = {
+        "mailcow": {"status": "succeeded", "attempts": 1},
+        "nextcloud": {"status": "failed", "error": "Synthetic retry"},
+    }
+    with Session(mapping_engine) as db:
+        org_id = uuid4()
+        record = employee(db, org_id)
+        record.workforce_provisioning_state = state
+        record_id = record.employee_id
+        db.commit()
+    with Session(mapping_engine) as db:
+        prime_tenant_context(db, org_id)
+        loaded = db.get(Employee, record_id)
+        assert loaded is not None
+        assert loaded.workforce_provisioning_state == state
+        assert (
+            db.scalar(
+                sa.text(
+                    "SELECT jsonb_typeof(workforce_provisioning_state) "
+                    "FROM hr.employee WHERE employee_id = :employee_id"
+                ),
+                {"employee_id": record_id},
+            )
+            == "object"
         )

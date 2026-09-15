@@ -230,6 +230,19 @@ class Employee(Base, AuditMixin, ERPNextSyncMixin, VersionMixin):
         DateTime(timezone=True),
         nullable=True,
     )
+    workforce_provisioning_status: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+        comment="Aggregate state of ERP-owned employee account provisioning",
+    )
+    workforce_provisioning_state: Mapped[dict] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'"),
+        comment="Latest status, attempts, timestamps, and safe error per provisioning stage",
+    )
     dotmac_sub_account_id: Mapped[str | None] = mapped_column(
         String(36),
         nullable=True,

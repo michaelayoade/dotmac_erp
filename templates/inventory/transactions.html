@@ -56,6 +56,7 @@
     {{ filter_select_field("transaction_type", "Type", transaction_type, transaction_types, filter_attrs, "All Types", true) }}
     {% endcall %}
 
+    <div id="results-container">
     {% if transactions or search or transaction_type %}
     <div class="card">
         <div class="table-container">
@@ -111,5 +112,6 @@
         {{ empty_state('No transactions yet', 'Inventory transactions will appear here.', 'document') }}
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

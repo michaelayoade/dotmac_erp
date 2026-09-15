@@ -1,0 +1,21 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import icon_svg %}
+{% block page_title %}Provisioning Monitor{% endblock %}
+{% block breadcrumbs %}<nav class="text-sm text-slate-500 dark:text-slate-400"><a href="/people/hr" class="hover:text-violet-600">Human Resources</a><span class="mx-2">/</span><span class="text-slate-900 dark:text-white">Provisioning Monitor</span></nav>{% endblock %}
+{% block content %}
+<div class="space-y-6">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div><h2 class="text-xl font-semibold text-slate-900 dark:text-white">Account provisioning</h2><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Mailbox, activation delivery, Nextcloud, Selfcare, and Talk outcomes for forward-created employees.</p></div>
+  </div>
+  <form method="get" class="card grid gap-3 p-4 sm:grid-cols-[1fr_12rem_auto]">
+    <label><span class="sr-only">Search</span><input class="form-input w-full" type="search" name="search" value="{{ search }}" placeholder="Search name, code, or work email"></label>
+    <label><span class="sr-only">Status</span><select class="form-select w-full" name="status"><option value="">All statuses</option>{% for value in ['failed','in_progress','completed','pending'] %}<option value="{{ value }}" {{ 'selected' if status == value }}>{{ value | replace('_',' ') | title }}</option>{% endfor %}</select></label>
+    <button class="btn btn-primary" type="submit">Filter</button>
+  </form>
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto"><table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700"><thead class="bg-slate-50 dark:bg-slate-800"><tr><th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Employee</th>{% for label in ['Mailcow','Activation email','Nextcloud','Selfcare','Talk'] %}<th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{{ label }}</th>{% endfor %}</tr></thead><tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+    {% for row in rows %}<tr class="align-top"><td class="px-4 py-4"><a class="font-medium text-violet-600 hover:text-violet-700" href="/people/hr/employees/{{ row.employee.employee_id }}#account-provisioning">{{ row.person.name }}</a><div class="text-xs text-slate-500">{{ row.employee.employee_code }} · {{ row.person.email or 'No work email' }}</div></td>{% for stage in row.stages %}<td class="px-4 py-4"><span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {% if stage.status == 'completed' %}bg-emerald-100 text-emerald-700{% elif stage.status == 'failed' %}bg-red-100 text-red-700{% elif stage.status in ['running','pending','retry_scheduled'] %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-600{% endif %}">{{ stage.status | replace('_',' ') | title }}</span>{% if stage.error %}<p class="mt-2 max-w-xs text-xs text-red-600">{{ stage.error }}</p>{% endif %}</td>{% endfor %}</tr>{% else %}<tr><td colspan="6" class="px-6 py-12 text-center text-sm text-slate-500">No forward provisioning records match these filters.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+{% endblock %}
