@@ -1,0 +1,197 @@
+{% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import icon_svg, empty_state, status_badge %}
+
+{% block page_title %}Weekly Purchases{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory" class="hover:text-emerald-600 dark:hover:text-emerald-400">Inventory</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li><a href="/inventory/reports" class="hover:text-emerald-600 dark:hover:text-emerald-400">Reports</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li class="font-medium text-slate-900 dark:text-white" aria-current="page">Weekly Purchases</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div id="purchase-report" class="space-y-6">
+    <section class="card p-5" aria-labelledby="purchase-period-heading">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 id="purchase-period-heading" class="text-xl font-semibold text-slate-900 dark:text-white">
+                    {{ purchase_week.start.strftime('%d %b %Y') }} – {{ purchase_week.end.strftime('%d %b %Y') }}
+                </h2>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    {% if purchase_week.is_current %}Week to date, through {{ purchase_week.through.strftime('%d %b %Y') }}.{% else %}Completed reporting week.{% endif %}
+                    Monday–Sunday · Africa/Lagos
+                </p>
+            </div>
+            <a href="{{ export_url }}" class="btn btn-secondary">
+                {{ icon_svg("download", "h-4 w-4 mr-2") }} Export CSV
+            </a>
+        </div>
+        <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
+            Posted supplier-invoice lines for stocked items, grouped by invoice date. Purchases include debit notes;
+            supplier credits are deducted separately. This is a billed-purchases report, not a payment or goods-received report.
+        </p>
+        <nav class="mt-4 flex flex-wrap items-center gap-2" aria-label="Reporting week">
+            {% if previous_week_url %}<a href="{{ previous_week_url }}" class="btn btn-secondary">Previous week</a>{% endif %}
+            <a href="{{ current_week_url }}" class="btn btn-secondary">This week</a>
+            {% if next_week_url %}<a href="{{ next_week_url }}" class="btn btn-secondary">Next week</a>{% endif %}
+        </nav>
+    </section>
+
+    <form id="purchase-report-filters" method="get" action="/inventory/reports/weekly-purchases"
+          hx-get="/inventory/reports/weekly-purchases" hx-target="#purchase-report"
+          hx-select="#purchase-report" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace"
+          hx-trigger="submit, change, input changed delay:300ms from:#purchase-search"
+          class="card grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div>
+            <label for="purchase-week" class="form-label">Week containing</label>
+            <input id="purchase-week" name="week_start" type="date" required class="form-input"
+                   min="1900-01-01" max="{{ purchase_week.today.isoformat() }}" value="{{ purchase_filters.week_start }}">
+        </div>
+        <div>
+            <label for="purchase-supplier" class="form-label">Supplier</label>
+            <select id="purchase-supplier" name="supplier" class="form-select">
+                <option value="">All suppliers</option>
+                {% for option in suppliers %}
+                <option value="{{ option.id }}" {% if purchase_filters.get('supplier') == option.id %}selected{% endif %}>{{ option.label }}</option>
+                {% else %}<option disabled>No suppliers this week</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="purchase-warehouse" class="form-label">Receipt warehouse</label>
+            <select id="purchase-warehouse" name="warehouse" class="form-select">
+                <option value="">All, including unspecified</option>
+                {% for option in warehouses %}
+                <option value="{{ option.id }}" {% if purchase_filters.get('warehouse') == option.id %}selected{% endif %}>{{ option.label }}</option>
+                {% else %}<option disabled>No assigned warehouses this week</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="purchase-category" class="form-label">Item category</label>
+            <select id="purchase-category" name="category" class="form-select">
+                <option value="">All categories</option>
+                {% for option in categories %}
+                <option value="{{ option.id }}" {% if purchase_filters.get('category') == option.id %}selected{% endif %}>{{ option.label }}</option>
+                {% else %}<option disabled>No categories this week</option>{% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="purchase-search" class="form-label">Search</label>
+            <input id="purchase-search" name="search" type="search" maxlength="100" class="form-input"
+                   placeholder="Item, supplier, or invoice number" value="{{ purchase_filters.get('search', '') }}">
+        </div>
+        <div class="flex items-end gap-2">
+            <button type="submit" class="btn btn-primary">Apply filters</button>
+            <a href="{{ reset_url }}" class="btn btn-secondary">Clear filters</a>
+        </div>
+    </form>
+
+    <div id="results-container" class="space-y-6" aria-live="polite">
+        <section class="card overflow-hidden" aria-labelledby="purchase-summary-heading">
+            <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <h3 id="purchase-summary-heading" class="font-semibold text-slate-900 dark:text-white">Weekly totals</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    {{ summary.document_count }} documents · {{ summary.item_count }} distinct stock items ·
+                    {{ summary.supplier_count }} suppliers · {{ summary.line_count }} invoice lines.
+                    Totals cover all filtered results, not just this page.
+                </p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">Totals by invoice currency; no currency conversion</caption>
+                    <thead class="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+                        <tr>
+                            <th scope="col" class="px-5 py-3 text-left">Currency</th>
+                            <th scope="col" class="px-5 py-3 text-right">Purchases, excl. tax</th>
+                            <th scope="col" class="px-5 py-3 text-right">Credits, excl. tax</th>
+                            <th scope="col" class="px-5 py-3 text-right">Net purchases, excl. tax</th>
+                            <th scope="col" class="px-5 py-3 text-right">Net tax</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-900 dark:divide-slate-700 dark:text-slate-100">
+                        {% for total in currency_totals %}
+                        <tr>
+                            <th scope="row" class="px-5 py-3 text-left font-mono">{{ total.currency_code }}</th>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ format_report_number(total.purchases) }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ format_report_number(total.credits) }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums font-semibold {% if total.net < 0 %}text-rose-600 dark:text-rose-400{% endif %}">{{ format_report_number(total.net) }}</td>
+                            <td class="px-5 py-3 text-right font-mono tabular-nums">{{ format_report_number(total.tax) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="px-5 py-4 text-slate-500 dark:text-slate-400">No posted purchases match this week and these filters.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card overflow-hidden" aria-labelledby="purchase-lines-heading">
+            <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <h3 id="purchase-lines-heading" class="font-semibold text-slate-900 dark:text-white">Purchased item lines</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    Quantities and unit prices are as recorded on each invoice. No quantities are summed across different items or units.
+                    An unspecified warehouse does not exclude a purchase. Credits do not confirm a physical stock return.
+                </p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">Posted stock-item purchases and supplier credits</caption>
+                    <thead class="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 text-left">Invoice date</th>
+                            <th scope="col" class="px-4 py-3 text-left">Invoice / type</th>
+                            <th scope="col" class="px-4 py-3 text-left">Item / category</th>
+                            <th scope="col" class="px-4 py-3 text-left">Supplier</th>
+                            <th scope="col" class="px-4 py-3 text-left">Receipt warehouse</th>
+                            <th scope="col" class="px-4 py-3 text-right">Invoice qty</th>
+                            <th scope="col" class="px-4 py-3 text-right">Unit price</th>
+                            <th scope="col" class="px-4 py-3 text-left">Currency</th>
+                            <th scope="col" class="px-4 py-3 text-right">Net, excl. tax</th>
+                            <th scope="col" class="px-4 py-3 text-right">Net tax</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-900 dark:divide-slate-700 dark:text-slate-100">
+                        {% for row in purchase_rows %}
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <td class="whitespace-nowrap px-4 py-3 align-top">{{ row.invoice_date.strftime('%d %b %Y') }}</td>
+                            <td class="px-4 py-3 align-top">
+                                {% if can_view_invoice %}<a href="/finance/ap/invoices/{{ row.invoice_id }}" class="font-mono text-emerald-700 hover:underline dark:text-emerald-400">{{ row.invoice_number }}</a>
+                                {% else %}<span class="font-mono">{{ row.invoice_number }}</span>{% endif %}
+                                <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{{ row.invoice_type.value | replace('_', ' ') | title }}</p>
+                                {{ status_badge(row.status.value, size="sm") }}
+                            </td>
+                            <td class="px-4 py-3 align-top">
+                                <a href="/inventory/items/{{ row.item_id }}" class="font-medium text-emerald-700 hover:underline dark:text-emerald-400">{{ row.item_name }}</a>
+                                <p class="mt-1 font-mono text-xs text-slate-600 dark:text-slate-400">{{ row.item_code }}</p>
+                                <p class="text-xs text-slate-600 dark:text-slate-400">{{ row.category_name if row.category_name else '—' }}</p>
+                            </td>
+                            <td class="px-4 py-3 align-top">{{ row.supplier_name }}</td>
+                            <td class="px-4 py-3 align-top">{{ row.warehouse_name if row.warehouse_name else 'Unspecified' }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 text-right align-top font-mono tabular-nums">{{ format_report_number(row.quantity, 6) }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 text-right align-top font-mono tabular-nums">{{ format_report_number(row.unit_price, 6) }}</td>
+                            <td class="px-4 py-3 align-top font-mono">{{ row.currency_code }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 text-right align-top font-mono tabular-nums {% if row.net_amount < 0 %}text-rose-600 dark:text-rose-400{% endif %}">{{ format_report_number(row.net_amount) }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 text-right align-top font-mono tabular-nums">{{ format_report_number(row.net_tax) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="10">{{ empty_state("No purchases found", "Choose another week or clear filters. Draft invoices, prepayments, non-stock items and stock transfers are not included.", "box") }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <nav class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700" aria-label="Purchase report pages">
+                <span class="text-sm text-slate-600 dark:text-slate-400">Page {{ page }} of {{ total_pages }} · {{ total_count }} lines</span>
+                <div class="flex gap-2">
+                    {% if page > 1 %}<a href="{{ previous_page_url }}" class="btn btn-secondary">Previous page</a>{% endif %}
+                    {% if page < total_pages %}<a href="{{ next_page_url }}" class="btn btn-secondary">Next page</a>{% endif %}
+                </div>
+            </nav>
+        </section>
+    </div>
+</div>
+{% endblock %}
