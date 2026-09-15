@@ -1,161 +1,160 @@
-# People / Performance / KPI Dashboard
+# People / Performance / KPI Dashboard and Employee Insights
 
-## Scope and audit baseline
+## Independent delivery
 
-Focused source audit and first implementation slice based on ERP commit
-`b449c4d82fdb6c19d2c9e26eab8ef85ba50528ed` (15 September 2026).
-This is not a full security or performance audit of every ERP module.
+This is a self-contained feature based on main `b449c4d82fdb6c19d2c9e26eab8ef85ba50528ed`.
+It incorporates the reviewed foundation from PR #580, including that PR's CI
+repairs, but has no commit-parent or merge dependency on #580. This PR supersedes
+the earlier dashboard proposal; do not merge both overlapping implementations.
+No merge or production deployment is performed as part of feature authoring.
 
-Repository access used the authorized GitHub connector. Terminal Git/archive
-retrieval was unavailable because the working environment could not resolve
-GitHub. Existing files were read at the pinned commit; the two modified original
-files were reconstructed locally and verified against their Git blob hashes.
-No production database or customer records were accessed.
+## User surface
 
-### Existing foundations verified
+A single **KPI Dashboard** card lives beside **Goals & KPIs** under
+**People > Performance**, at `/people/perf/kpi-dashboard`.
 
-| Source | Finding / reuse decision |
-| --- | --- |
-| `app/web/people/perf.py` | Performance landing page and Goals & KPIs already exist. Keep KPI creation, targets, updates and existing support-metric syncs there. |
-| `app/models/people/perf/kpi.py` | Employee-owned KPIs already have periods, targets, actuals, units and recorded status. Do not create a second authority. The current model does not define general aggregation/direction semantics. |
-| `app/models/people/hr/department.py` | Canonical departments include `head_id`, active state, hierarchy and cost-centre linkage. Use exact headed departments; do not silently grant descendants. |
-| `app/models/people/hr/employee.py` | `person_id` resolves the actor, `department_id` attributes KPI owners. Explicit organization predicates apply to every join. |
-| `app/models/person.py` | Existing mutable JSON metadata can hold bounded personal display preferences. Only the namespaced preference entry changes. |
-| `app/web/deps.py` | Reuse People access, PRIVATE/HYBRID performance policy, authenticated organization and leave-write restrictions. Add department authorization to this surface. |
-| `app/models/analytics/org_metric_snapshot.py` | A generic metric snapshot store already exists; do not add a duplicate warehouse. |
-| `app/services/analytics/dashboard_metrics.py` | Cross-module organization metrics already exist. They cannot safely become department metrics just by adding a dropdown; attribution, permissions and per-metric freshness need further work. |
-| `templates/people/base_people.html`, `components/macros.html` | Reuse the People shell and existing statistics, status and empty-state components. No separate frontend or BI runtime. |
+Goals & KPIs remains the authority for employee KPI definitions, targets, actuals,
+evidence, department-template generation and existing support-metric syncs. There
+is no second KPI database, scoring authority, separate app or external BI service.
+The dashboard is read-only for business records. Its only writes are personal
+saved display settings under the existing namespaced Person metadata key.
 
-## Delivered surface
+The dashboard provides:
 
-Navigation: **People > Performance > KPI Dashboard** on the Performance landing
-page. Canonical URL: `/people/perf/kpi-dashboard`.
+- One, multiple or all authorized departments, literal employee-name/code and
+  KPI-name search, recorded status selection, current week/month/quarter, previous
+  month and custom inclusive periods of at most 366 days.
+- Six optional/reorderable cards and up to ten named personal saved views.
+  Existing v1 settings load with default insight options; relative periods stay
+  relative. New settings also retain chart visibility, date scope and review mode.
+- Recorded-status stacked department charts and measurement-coverage doughnuts.
+  Data is aggregated before pagination. The chart shows the first 20 departments
+  alphabetically when necessary and says so; the department table contains all.
+  Overdue is never stacked with status, because those sets overlap. Tooltips show
+  counts and percentages; accessible text and tables are always present.
+- An active-employee review matrix: full name/code, department, matching KPI count,
+  recorded achievements, measured below-target results after the deadline,
+  overdue open KPIs, missing measurements and unscorable-measurement warnings.
+- Separate 25-row pagination for employees and underlying KPI records. KPI rows
+  show targets, actuals, units, direction, calculated target attainment and recorded
+  status side by side. Search can narrow the view to a named employee or code.
 
-The page supports:
+Chart.js is already vendored by ERP. The page-specific initializer destroys old
+instances before HTMX removes canvases, rebuilds after swaps/theme changes, and
+is safe against duplicate initialization. It makes no network requests.
 
-- One, multiple or all authorized departments; current week/month/quarter,
-  previous month or a custom inclusive date range of at most 366 days.
-- Literal KPI-name search and explicit recorded-status selection. Draft,
-  deferred and cancelled records are excluded initially but can be selected.
-- Six optional, reorderable summary cards: tracked KPIs, distinct owners,
-  recorded achieved, at risk/missed, overdue open and actuals-recorded coverage.
-- Department comparison and a stable, paginated 25-record target/actual table.
-- Up to ten named personal saved views; create, rename/update, load and delete.
-  Saved periods remain relative unless custom dates are selected.
+## Meaning and limits
 
-Saved configuration is not executable: only approved periods, statuses, widget
-keys, bounded search strings and authorized department UUIDs are accepted.
-There is no arbitrary SQL/Python expression editor.
+**Due** selects KPI period-end dates. **Active** selects periods overlapping the
+reporting range. **All overdue** ignores reporting dates and selects open KPIs
+whose deadlines have passed, using the organization's business date. The default
+remains Due. Status and KPI-name filters still apply to the selected records.
 
-## Meaning of the numbers
+Employee review mode filters only the employee table, not the KPI totals/charts.
+Assignment coverage ignores status and KPI-name filters, but retains department,
+employee and date scope. An achieved-only filter must not make an employee's
+other assigned KPIs disappear from assignment coverage. In All overdue, having no
+matching records means no overdue open KPIs, and does not itself require review.
 
-This is a dashboard **of existing employee KPI records**, not a new automatic
-finance, inventory, NOC, advertising or CRM data integration.
+“Needs attention” is a request to review evidence: below target after deadline,
+overdue open, missing measurement on a started KPI, unscorable measurement, or
+no KPI records in the date scope. It is **not** a finding that an employee is
+failing, and triggers no appraisal, disciplinary or PIP action. A KPI below its
+final target before period end is “In progress”; no invented linear pacing curve
+or final failure is applied. Existing private status bands remain 100/80; recorded
+status and end-of-period target assessment deliberately answer different questions.
 
-The date filter selects records whose **KPI period end** is within the chosen
-range. Values are the records' current values, not values as they stood at that
-past date. A quarterly KPI is not prorated across months. Department attribution
-uses the owner's **current** department, not historical department membership.
+Current employee department assignments attribute the results. Past-period views
+show today's records, NOT historical as-of snapshots. No trend history, composite
+employee ranking or cross-role leaderboard is fabricated. The existing OHCSF
+appraisal scoring engine, appraisal completion gates and final decisions remain
+separate. There is no new automation for Sales/Marketing/NOC/CRM metrics.
 
-`Recorded achieved` counts only status `ACHIEVED`; `COMPLETED` is not assumed to
-mean the target was achieved. `At risk or missed` counts the corresponding
-recorded statuses. `Overdue open` means a past end date and status PENDING,
-ACTIVE, ON_TRACK or AT_RISK. Today's date uses the organization timezone;
-missing timezone falls back explicitly to UTC, invalid timezone fails visibly.
+Coverage is non-null actual count / selected KPI count; a genuine zero is present
+measurement data. Record-change timestamps do not claim that an actual is fresh.
+A database failure does not turn into a zero-valued successful dashboard.
 
-Coverage is `count(non-null actuals) / count(selected KPI records) * 100`.
-A recorded zero is present data. An empty cohort has no coverage percentage.
-There is no sum of mixed currencies/units, average of departmental percentages,
-inferred lower-is-better scoring or composite employee ranking.
+## Measurement corrections
 
-The page states when it was read; individual record-change dates are shown.
-A recent read is not a claim that every actual is fresh. Database failures are
-not converted into zero-valued success responses. No historical trend is
-fabricated from current data.
+`perf.kpi.lower_is_better` is a new nullable Boolean with an additive migration.
+NULL means legacy behavior: recognize supported lower-is-better ticket tags, and
+otherwise retain the old higher-is-better default. Nothing guesses the direction
+of other legacy KPIs. Managers should review them using the new explicit direction
+selector on the existing KPI form; the API also accepts the field. Newly generated
+employee KPIs inherit the template's direction. Changing a template does not rewrite
+already generated employee definitions.
 
-## Access and persistence
+`kpi_measurement.py` defines shared target attainment for the model, manual progress,
+system sync, and KPI-fed scorecard-item updates. The dashboard uses the same pure
+function for row details and matching direction/comparison rules for SQL counts.
 
-All routes retain People access and PRIVATE/HYBRID performance-mode guards.
-GOVERNMENT_PMS-only deployments do not expose this private KPI surface.
+- Zero actuals are scored explicitly; they cannot retain a stale achieved status.
+- Lower-is-better uses target/actual, including explicit zero-tolerance handling.
+- Missing, non-finite, negative ratio inputs and zero higher-is-better targets are
+  unscorable. A missing observation is never treated as a measured zero.
+- Ratios are capped at 999.99 to fit the existing Numeric(5,2) field. Rounding just
+  below 100 cannot turn an unmet target into an achieved target.
+- Target/direction/actual changes recalculate cached achievement through the same
+  path. A draft without an actual stays a draft. Completed, missed, deferred and
+  cancelled lifecycle statuses are not reopened by score refreshes.
+- Empty support resolution-rate/duration cohorts produce None and clear stale
+  achievement/scorecard item scores. Count metrics can legitimately measure zero.
+  Invalid negative resolution durations are excluded from duration measurement.
+- Support synchronization preserves existing metric/perspective notes instead of
+  replacing the whole notes field.
+- The resolution-rate default no longer claims to be SLA compliance. Explicit
+  template regeneration can rename that known legacy default, with an alias check
+  to avoid generating duplicate employee KPIs. Existing employee KPI labels and
+  targets are not bulk-renamed or backfilled. True SLA timeliness is not implemented.
 
-Within that gate, normalized `admin`, `hr_manager` and `hr_director` roles can
-read the current organization. Other People-authorized users must resolve to
-an ACTIVE employee and can read only active departments where `head_id` is
-that employee. A general manager/payroll role alone grants no company scope.
-Unassigned owners appear only in unrestricted organization views.
+There is no automatic rescore job/backfill. Old recorded statuses can disagree
+with newly calculated attainment until reviewed or updated through the normal
+writer/sync. Both are visible. Existing ticket calculations still read ERP's
+`support.ticket`; their completeness against Sub/CRM must be validated separately.
 
-Scope is resolved server-side for every request and saved department selections
-are reauthorized on load/save. KPI, employee and department queries are tenant
-constrained; all summaries, comparisons and detail rows derive from the same
-scoped query. Responses use `Cache-Control: private, no-store`.
+## Security boundary
 
-Views belong to the authenticated person and organization, even for admins.
-The storage key is `Person.metadata_["people_kpi_dashboard_v1"]`, containing
-version 1 and at most ten validated view entries. Writes lock and reload that
-person row, preserve unrelated metadata, flush in the service, and commit only
-in the route. Existing CSRF middleware and POST form tokens remain mandatory.
-Leave-write-restricted accounts cannot save/delete views.
+All routes retain existing People access and PRIVATE/HYBRID mode guards.
+Within that boundary, admin/hr_manager/hr_director see their current organization;
+other People-authorized users must be active employees heading the selected active
+departments. Descendant departments are not silently granted. Every join to KPI,
+Employee, Person and Department is tenant-constrained. Employee roster queries
+reuse the same authorization. Saved department selections are reauthorized on
+load/save. Responses remain `Cache-Control: private, no-store`.
 
-**Pre-existing authorization boundary:** legacy People/Goals routes use broader
-People-level guards. This change does not claim to secure every other HR route.
-Do not grant broad `hr:access` just to onboard a dashboard-only manager. A future
-narrow-permission rollout must review module entry, existing authoring/detail
-routes and department-scoped permissions together. No new roles or grants are
-seeded by this feature. Organization viewers receive links to existing KPI
-management; department viewers see the underlying records without those links.
+Personal views are limited to the authenticated person's organization/profile,
+row locked on changes, and preserve unrelated metadata. All POST forms retain
+CSRF tokens. Leave-write-restricted accounts cannot save/delete views. Manager
+links to pre-existing authoring pages remain limited to organization-wide users.
 
-## Deployment and acceptance
+**Inherited limitation:** other People/Goals routes have broader module guards.
+Do not grant broad `hr:access` solely for dashboard-only managers. This feature
+introduces no new role grants and does not claim a full legacy People RBAC repair.
 
-No new database table, migration, dependency, background job or external
-credential is required for this slice. It performs no automatic KPI backfill and
-changes no existing targets, actuals, lifecycle state or appraisal calculations.
-Deploy through the existing ERP build/release process, including the normal
-frontend asset build. No merge or deployment was performed during authoring.
+## Deployment / verification
 
-Before releasing the draft:
+Apply `20260915_kpi_direction` through the normal `alembic upgrade heads` pipeline
+before serving the updated model. It adds a nullable column without rewriting KPI
+values. Build CSS using the locked npm toolchain and regenerate the served-static
+fingerprint; both compiled assets and descriptor must agree with the tested image.
+No new runtime package or production credential is required.
 
-1. Run the repository's locked Poetry/Ruff/type checks and full relevant tests.
-   New tests are `tests/unit/test_kpi_dashboard_contract.py`,
-   `tests/unit/test_kpi_dashboard_service.py` and
-   `tests/architecture/test_kpi_dashboard_surface.py`.
-   Apply the repository's minor-version release workflow and version metadata
-   using its approved bump script; no version files were altered in this draft.
-2. In staging with real PostgreSQL and the application's composed template
-   loader, check authorized HR/admin access and department-head restriction,
-   foreign department/organization attempts, unmapped/inactive actor denial,
-   and PRIVATE/HYBRID versus GOVERNMENT_PMS routing.
-3. Verify missing/invalid CSRF rejection for both write routes, simultaneous
-   personal-view saves, preservation of other metadata, stale/revoked saved
-   department access, and leave-write restriction.
-4. Exercise real empty/populated KPI data, non-null zero, mixed units, inactive
-   departments, unassigned owners, pagination, filters, HTMX and ordinary form
-   navigation. Check desktop/mobile, dark mode and keyboard accessibility.
-5. Reconcile summary counts to the same filtered KPI records and measure the
-   aggregate/group/page query plans against representative organization data.
-   KPI count is bounded by date selection; detail rows are paginated, but the
-   aggregate still scans the eligible cohort. Do not assume performance at scale
-   without that check.
+Run the normal required CI unchanged, plus the focused KPI measurement, insight,
+seeded-record, configuration, service and web tests. Run chart lifecycle tests with
+`node --test tests/js/test_kpi_dashboard_charts.cjs`. In staging verify real
+PostgreSQL/RLS, composed dotmac-ui rendering, forged department requests, saved-view
+reauthorization, CSRF, permissions, mobile/dark-mode/keyboard use and query plans.
+Reconcile a representative employee in Goals & KPIs against the same dashboard
+scope; include unfinished periods, no records, zero results, empty support cohorts,
+legacy lower-direction tags, template regeneration and more than one page.
 
-Local authoring verification: 53 pure contract tests and 4 static surface tests
-passed; 12 service/query tests passed in an offline harness with minimal
-SQLAlchemy column-contract substitutes. The latter does **not** verify the
-actual ERP model registry or PostgreSQL/RLS behavior. Python compilation and
-Jinja syntax parsing passed. The full locked ERP environment, Ruff 0.15.0,
-type checks, composed-template rendering and browser/production database tests
-were unavailable locally and remain release gates, not claimed successes.
+Offline authoring checks run with the pinned Ruff wheel and isolated tests because
+terminal GitHub/Forgejo networking is unavailable. Any SQL column-substitute or
+extracted-method harness is LOCAL ONLY and is not claimed as full ERP/PostgreSQL
+verification. Hosted CI and browser staging results must be recorded separately.
 
-Rollback: reverting the code removes the page and router. Existing KPI data
-is unchanged. Unused namespaced personal preferences may remain harmlessly;
-never erase all Person metadata as a cleanup operation.
-
-## Next slice, not part of this implementation
-
-Extend the existing MetricStore with reviewed KPI/provider definitions,
-source-specific permissions, department/cost-centre attribution and explicit
-missing/stale states. Version targets and formulas before adding historical
-comparisons. Support department-owned/shared dashboards with separately
-reviewed permissions instead of broadening personal preferences into business
-records. Automate Finance/Engineering/Support/Marketing metrics only when each
-authoritative source, period basis and eligible cohort has been agreed and
-reconciled. This slice does not deliver those integrations or a general BI
-report builder.
+Rollback the code first; the unused nullable column can remain safely. Downgrading
+that migration removes explicitly chosen directions, so export those settings
+before an intentional schema downgrade. Do not erase all Person metadata. A roll
+back to the earlier #580 code can reject new saved-view option fields; strip only
+new display options in a reviewed recovery procedure, not unrelated preferences.

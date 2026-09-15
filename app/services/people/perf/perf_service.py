@@ -40,6 +40,11 @@ from app.models.finance.core_org import Organization, PerformanceMode
 from app.models.people.hr import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.perf.pip import PerformanceImprovementPlan
+from app.models.people.perf.kpi_measurement import (
+    achievement,
+    progress_status,
+    support_metric_key,
+)
 from app.models.people.perf.pms_enums import PIPStatus
 from app.models.support.ticket import Ticket, TicketStatus
 from app.services.common import PaginatedResult, PaginationParams
@@ -167,7 +172,7 @@ DEPARTMENT_TEMPLATE_LIBRARY: dict[str, list[dict[str, object]]] = {
         },
         {
             "kra_name": "SLA Compliance",
-            "kpi_name": "Meet Ticket SLA",
+            "kpi_name": "Resolve Tickets Opened in Period",
             "target_value": Decimal("95.00"),
             "unit_of_measure": "%",
             "weightage": Decimal("30.00"),
@@ -1243,6 +1248,19 @@ class PerformanceService:
             for default in defaults:
                 key = (str(default["kra_name"]), str(default["kpi_name"]))
                 existing = existing_by_key.get(key)
+                if (
+                    existing is None
+                    and default.get("metric_source_key") == "support.resolution_rate"
+                ):
+                    legacy = existing_by_key.get(
+                        (str(default["kra_name"]), "Meet Ticket SLA")
+                    )
+                    if (
+                        legacy is not None
+                        and legacy.metric_source_key == "support.resolution_rate"
+                    ):
+                        existing = legacy
+                        existing.kpi_name = str(default["kpi_name"])
                 if existing:
                     existing.scorecard_perspective = cast(
                         str,
@@ -1368,7 +1386,11 @@ class PerformanceService:
                     select(KPI.kpi_id).where(
                         KPI.organization_id == org_id,
                         KPI.employee_id == employee.employee_id,
-                        KPI.kpi_name == template.kpi_name,
+                        KPI.kpi_name.in_(
+                            [template.kpi_name, "Meet Ticket SLA"]
+                            if template.metric_source_key == "support.resolution_rate"
+                            else [template.kpi_name]
+                        ),
                         KPI.period_start == period_start,
                         KPI.period_end == period_end,
                     )
@@ -1397,6 +1419,7 @@ class PerformanceService:
                     target_value=template.target_value,
                     unit_of_measure=template.unit_of_measure,
                     weightage=template.weightage,
+                    lower_is_better=template.lower_is_better,
                     notes="\n".join(notes_parts),
                     status=KPIStatus.ACTIVE,
                 )
@@ -1702,6 +1725,7 @@ class PerformanceService:
         unit_of_measure: str | None = None,
         threshold_value: Decimal | None = None,
         stretch_value: Decimal | None = None,
+        lower_is_better: bool | None = None,
         weightage: Decimal = Decimal("0"),
         notes: str | None = None,
         description: str | None = None,
@@ -1718,6 +1742,7 @@ class PerformanceService:
             unit_of_measure=unit_of_measure,
             threshold_value=threshold_value,
             stretch_value=stretch_value,
+            lower_is_better=lower_is_better,
             weightage=weightage,
             notes=notes,
             description=description,
@@ -1734,11 +1759,28 @@ class PerformanceService:
         kpi_id: UUID,
         **kwargs,
     ) -> KPI:
-        """Update a KPI."""
+        """Update a KPI and invalidate/recalculate derived progress consistently."""
         kpi = self.get_kpi(org_id, kpi_id)
+        rescore = any(
+            key in kwargs
+            for key in (
+                "actual_value",
+                "target_value",
+                "lower_is_better",
+                "notes",
+                "description",
+                "kpi_name",
+            )
+        )
         for key, value in kwargs.items():
-            if value is not None and hasattr(kpi, key):
+            if (
+                value is not None or key in {"actual_value", "lower_is_better"}
+            ) and hasattr(kpi, key):
                 setattr(kpi, key, value)
+        if rescore:
+            self._apply_kpi_actual_value(
+                kpi, kpi.actual_value, lower_is_better=kpi.effective_lower_is_better
+            )
         self.db.flush()
         return kpi
 
@@ -1751,77 +1793,54 @@ class PerformanceService:
         evidence: str | None = None,
         notes: str | None = None,
     ) -> KPI:
-        """Update KPI progress."""
+        """Manual and system updates share the same measurement rules."""
         kpi = self.get_kpi(org_id, kpi_id)
-
-        kpi.actual_value = actual_value
-        if evidence:
-            kpi.evidence = evidence
         if notes:
             kpi.notes = notes
-
-        # Calculate achievement percentage
-        if kpi.target_value and kpi.target_value > 0:
-            kpi.achievement_percentage = (
-                actual_value / kpi.target_value * 100
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-        # Update status based on achievement
-        if kpi.achievement_percentage:
-            if kpi.achievement_percentage >= 100:
-                kpi.status = KPIStatus.ACHIEVED
-            elif kpi.achievement_percentage >= 80:
-                kpi.status = KPIStatus.ON_TRACK
-            else:
-                kpi.status = KPIStatus.AT_RISK
-
+        self._apply_kpi_actual_value(
+            kpi,
+            actual_value,
+            lower_is_better=kpi.effective_lower_is_better,
+            evidence=evidence,
+        )
         self.db.flush()
         return kpi
 
     @staticmethod
     def _support_ticket_metric_key(kpi: KPI) -> str | None:
-        text = " ".join(
-            part.lower() for part in (kpi.kpi_name, kpi.description, kpi.notes) if part
-        )
-        for metric_key in SUPPORT_TICKET_METRIC_KEYS:
-            if metric_key in text:
-                return metric_key
-        return None
+        return support_metric_key(kpi.kpi_name, kpi.description, kpi.notes)
 
     @staticmethod
     def _apply_kpi_actual_value(
         kpi: KPI,
-        actual_value: Decimal,
+        actual_value: Decimal | None,
         *,
         lower_is_better: bool = False,
         evidence: str | None = None,
         notes: str | None = None,
     ) -> None:
-        kpi.actual_value = actual_value.quantize(Decimal("0.01"))
+        if actual_value is not None and not actual_value.is_finite():
+            raise PerformanceServiceError("KPI actual must be a finite number.")
+        kpi.actual_value = (
+            actual_value.quantize(Decimal("0.01")) if actual_value is not None else None
+        )
         if evidence:
             kpi.evidence = evidence
         if notes:
             kpi.notes = notes
-
-        if kpi.target_value and kpi.target_value > 0:
-            if lower_is_better:
-                if actual_value <= 0:
-                    achievement = Decimal("100")
-                else:
-                    achievement = kpi.target_value / actual_value * Decimal("100")
-            else:
-                achievement = actual_value / kpi.target_value * Decimal("100")
-            kpi.achievement_percentage = achievement.quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-
-        if kpi.achievement_percentage is not None:
-            if kpi.achievement_percentage >= 100:
-                kpi.status = KPIStatus.ACHIEVED
-            elif kpi.achievement_percentage >= 80:
-                kpi.status = KPIStatus.ON_TRACK
-            else:
-                kpi.status = KPIStatus.AT_RISK
+        kpi.achievement_percentage = achievement(
+            kpi.actual_value, kpi.target_value, lower=lower_is_better
+        )
+        # Final/administrative lifecycle outcomes are not reopened by a score refresh.
+        if not (
+            kpi.status == KPIStatus.DRAFT and kpi.actual_value is None
+        ) and kpi.status not in {
+            KPIStatus.CANCELLED,
+            KPIStatus.DEFERRED,
+            KPIStatus.COMPLETED,
+            KPIStatus.MISSED,
+        }:
+            kpi.status = KPIStatus(progress_status(kpi.achievement_percentage))
 
     def _calculate_support_ticket_metric(
         self,
@@ -1831,7 +1850,7 @@ class PerformanceService:
         metric_key: str,
         period_start: date,
         period_end: date,
-    ) -> Decimal:
+    ) -> Decimal | None:
         resolved_statuses = [TicketStatus.RESOLVED, TicketStatus.CLOSED]
         open_statuses = [TicketStatus.OPEN, TicketStatus.REPLIED, TicketStatus.ON_HOLD]
 
@@ -1868,7 +1887,7 @@ class PerformanceService:
                 )
             )
             if not total:
-                return Decimal("0")
+                return None
             resolved = self.db.scalar(
                 select(func.count(Ticket.ticket_id)).where(
                     Ticket.organization_id == org_id,
@@ -1897,10 +1916,12 @@ class PerformanceService:
             durations = [
                 (ticket.resolution_date - ticket.opening_date).days
                 for ticket in tickets
-                if ticket.resolution_date and ticket.opening_date
+                if ticket.resolution_date
+                and ticket.opening_date
+                and ticket.resolution_date >= ticket.opening_date
             ]
             if not durations:
-                return Decimal("0")
+                return None
             return (Decimal(sum(durations)) / Decimal(len(durations))).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
@@ -1923,9 +1944,8 @@ class PerformanceService:
         self._apply_kpi_actual_value(
             kpi,
             actual_value,
-            lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+            lower_is_better=kpi.effective_lower_is_better,
             evidence=f"Auto-calculated from support.ticket metric {metric_key}",
-            notes=f"Metric key: {metric_key}",
         )
         return metric_key
 
@@ -1936,27 +1956,15 @@ class PerformanceService:
         lower_is_better: bool = False,
     ) -> None:
         """Calculate scorecard item score from target, actual, and weight."""
-        if item.actual_value is None or not item.target_value or item.target_value <= 0:
-            return
-
-        if lower_is_better:
-            if item.actual_value <= 0:
-                item.score = Decimal("100.00")
-            else:
-                item.score = (
-                    item.target_value / item.actual_value * Decimal("100")
-                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        else:
-            item.score = (
-                item.actual_value / item.target_value * Decimal("100")
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-        if item.score > 100:
-            item.score = Decimal("100.00")
-        if item.weightage:
-            item.weighted_score = (
-                item.score * item.weightage / Decimal("100")
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        score = achievement(item.actual_value, item.target_value, lower=lower_is_better)
+        item.score = min(score, Decimal("100.00")) if score is not None else None
+        item.weighted_score = (
+            (item.score * item.weightage / Decimal("100")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            if item.score is not None and item.weightage is not None
+            else None
+        )
 
     def sync_support_ticket_kpi_progress(
         self,
@@ -2903,7 +2911,7 @@ class PerformanceService:
                 )
                 self._apply_scorecard_item_score(
                     item,
-                    lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+                    lower_is_better=kpi.effective_lower_is_better,
                 )
                 self.db.add(item)
                 item_count += 1
@@ -2962,7 +2970,7 @@ class PerformanceService:
                 existing_item.status = kpi.status.value if kpi.status else None
                 self._apply_scorecard_item_score(
                     existing_item,
-                    lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+                    lower_is_better=kpi.effective_lower_is_better,
                 )
                 updated += 1
                 continue
@@ -2982,7 +2990,7 @@ class PerformanceService:
             )
             self._apply_scorecard_item_score(
                 item,
-                lower_is_better=metric_key in LOWER_IS_BETTER_SUPPORT_METRICS,
+                lower_is_better=kpi.effective_lower_is_better,
             )
             self.db.add(item)
             existing_items_by_name[metric_name_key] = item

@@ -30,10 +30,13 @@ router = APIRouter(
 def kpi_dashboard(
     request: Request,
     page: int = Query(default=1, ge=1, le=100_000),
+    employee_page: int = Query(default=1, ge=1, le=100_000),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
 ):
-    return kpi_dashboard_web_service.dashboard_response(request, auth, db, page=page)
+    return kpi_dashboard_web_service.dashboard_response(
+        request, auth, db, page=page, employee_page=employee_page
+    )
 
 
 @router.post("/views")

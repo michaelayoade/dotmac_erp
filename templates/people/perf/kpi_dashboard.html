@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import stats_card, status_badge, empty_state, icon_svg %}
+{% from "components/macros.html" import stats_card, status_badge, empty_state, icon_svg, progress_bar %}
 
 {% block page_title %}KPI Dashboard{% endblock %}
 {% block breadcrumbs %}
@@ -72,7 +72,35 @@
                 <input type="search" id="kpi-search" name="search" maxlength="100" value="{{ config.search }}" class="form-input" placeholder="Search recorded KPIs">
             </div>
         </div>
-        <p id="custom-dates-help" class="text-xs text-slate-500 dark:text-slate-400">Dates apply only when Custom dates is selected. Maximum range: 366 days. KPIs are included by their period end date.</p>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div>
+                <label for="employee-search" class="form-label">Employee name or code</label>
+                <input id="employee-search" name="employee_search" type="search" maxlength="100" value="{{ config.employee_search }}" class="form-input" placeholder="Find an employee">
+            </div>
+            <div>
+                <label for="kpi-cohort" class="form-label">KPI date scope</label>
+                <select id="kpi-cohort" name="cohort" class="form-select">
+                    <option value="due" {% if config.cohort == 'due' %}selected{% endif %}>Due in reporting period</option>
+                    <option value="active" {% if config.cohort == 'active' %}selected{% endif %}>Active during reporting period</option>
+                    <option value="overdue" {% if config.cohort == 'overdue' %}selected{% endif %}>All overdue open KPIs</option>
+                </select>
+            </div>
+            <div>
+                <label for="employee-attention" class="form-label">Employee review</label>
+                <select id="employee-attention" name="attention" class="form-select">
+                    <option value="all" {% if config.attention == 'all' %}selected{% endif %}>All active employees</option>
+                    <option value="needs_attention" {% if config.attention == 'needs_attention' %}selected{% endif %}>Needs attention</option>
+                </select>
+            </div>
+            <div>
+                <label for="show-kpi-charts" class="form-label">Charts</label>
+                <select id="show-kpi-charts" name="show_charts" class="form-select">
+                    <option value="1" {% if config.show_charts %}selected{% endif %}>Show charts</option>
+                    <option value="0" {% if not config.show_charts %}selected{% endif %}>Tables only</option>
+                </select>
+            </div>
+        </div>
+        <p id="custom-dates-help" class="text-xs text-slate-500 dark:text-slate-400">Dates apply only when Custom dates is selected. Maximum range: 366 days. Due scope uses period-end dates; Active scope uses overlapping periods. All overdue ignores the reporting dates and includes open KPIs with a past deadline. Employee review filters only the employee table, not the KPI totals or charts.</p>
         <fieldset>
             <legend class="form-label">Departments</legend>
             <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">Select one or several. Leave all unchecked to include every department you are authorized to view.</p>
@@ -144,7 +172,8 @@
 
     <div id="results-container" class="space-y-6" aria-live="polite">
         <div class="text-sm text-slate-600 dark:text-slate-300">
-            <p><strong>Period-end cohort:</strong> {{ period_start.strftime('%d %b %Y') }} – {{ period_end.strftime('%d %b %Y') }}.</p>
+            <p><strong>{{ 'All overdue open KPIs as of' if config.cohort == 'overdue' else ('Active-period overlap:' if config.cohort == 'active' else 'Period-end cohort:') }}</strong>
+                {% if config.cohort == 'overdue' %}{{ business_date.strftime('%d %b %Y') }}{% else %}{{ period_start.strftime('%d %b %Y') }} – {{ period_end.strftime('%d %b %Y') }}{% endif %}.</p>
             <p class="mt-1 text-xs">Source: existing Goals &amp; KPIs records, including any existing metric syncs. Department attribution uses the employee's current department. These are current records, not historical snapshots or a combined employee performance score.</p>
             <p class="mt-1 text-xs">Read at {{ queried_at.strftime('%d %b %Y %H:%M %Z') }}. Deadline checks use {{ organization_timezone }} ({{ business_date.isoformat() }}). A recent page read does not mean every actual has been updated recently.</p>
         </div>
@@ -154,6 +183,59 @@
             {% else %}{{ empty_state("No summary cards selected", "Choose at least one summary card above.") }}{% endfor %}
         </div>
 
+        {% if config.show_charts and summary.tracked %}
+        <div class="grid gap-6 lg:grid-cols-2">
+            <section class="card p-5" aria-labelledby="department-chart-heading">
+                <h3 id="department-chart-heading" class="font-display text-lg font-semibold text-slate-900 dark:text-white">Recorded status by department</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Complete filtered counts, not the current page. Overdue is not stacked because it overlaps recorded statuses.{% if chart_department_limit %} Showing the first 20 departments; the table below contains all departments.{% endif %}</p>
+                <div class="relative h-64 mt-4"><canvas data-kpi-chart="departments" data-kpi-config='{{ department_chart | tojson }}' role="img" aria-label="Stacked KPI status counts by department" aria-describedby="kpi-department-table">Department comparison is available in the table below.</canvas></div>
+            </section>
+            <section class="card p-5" aria-labelledby="coverage-chart-heading">
+                <h3 id="coverage-chart-heading" class="font-display text-lg font-semibold text-slate-900 dark:text-white">Measurement coverage</h3>
+                <p id="measurement-coverage-text" class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ summary.reported }} of {{ summary.tracked }} KPIs have an actual recorded. This measures data completeness, not employee performance.</p>
+                <div class="relative h-64 mt-4"><canvas data-kpi-chart="coverage" data-kpi-config='{{ coverage_chart | tojson }}' role="img" aria-label="Recorded versus missing KPI actuals" aria-describedby="measurement-coverage-text">Read the measurement coverage count above.</canvas></div>
+            </section>
+        </div>
+        {% endif %}
+
+        <section class="card overflow-hidden" aria-labelledby="employee-review-heading">
+            <div class="p-5">
+                <h3 id="employee-review-heading" class="font-display text-lg font-semibold text-slate-900 dark:text-white">Active employee review</h3>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">{{ employee_counts.total }} active employees · {{ employee_counts.needs_review }} need review · {{ employee_counts.no_kpis }} have no KPI records in this date scope.</p>
+                <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Needs attention means below target after the deadline, overdue open, missing measurement, unscorable measurements, or no KPI records in scope. It is not a disciplinary finding or overall employee score. No-KPI coverage ignores status and KPI-name filters; other columns use all filters. In All overdue scope, no records means no overdue open KPIs—not no assigned goals.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">Employee KPI review matrix with explicit reason counts</caption>
+                    <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"><tr>
+                        <th scope="col" class="px-5 py-3 text-left">Employee</th><th scope="col" class="px-5 py-3 text-left">Department</th>
+                        <th scope="col" class="px-5 py-3 text-right">Matching KPIs</th><th scope="col" class="px-5 py-3 text-right">Recorded achieved</th>
+                        <th scope="col" class="px-5 py-3 text-right">Below target after deadline</th><th scope="col" class="px-5 py-3 text-right">Overdue open</th><th scope="col" class="px-5 py-3 text-right">Missing measurement</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
+                        {% for employee in employee_rows %}<tr>
+                            <th scope="row" class="px-5 py-3 text-left font-medium">
+                                {% if can_manage_kpis %}<a href="/people/perf/goals?employee_id={{ employee.employee_id }}" class="text-violet-700 dark:text-violet-300">{{ employee.employee_name or employee.employee_code }}</a>{% else %}{{ employee.employee_name or employee.employee_code }}{% endif %}
+                                <div class="mt-1 text-xs font-mono">{{ employee.employee_code }}</div>
+                                {% if employee.unscorable %}<div class="mt-1 text-xs">Review measurement setup: {{ employee.unscorable }}</div>{% endif %}
+                                {% if employee.assigned == 0 %}<div class="mt-1 text-xs">No KPI records in date scope</div>{% elif employee.tracked == 0 %}<div class="mt-1 text-xs">No records match the current status/name filters</div>{% endif %}
+                            </th>
+                            <td class="px-5 py-3">{{ employee.department_name or 'Unassigned' }}</td>
+                            <td class="px-5 py-3 text-right font-mono">{{ employee.tracked }}</td>
+                            <td class="px-5 py-3 text-right font-mono">{{ employee.achieved }}</td>
+                            <td class="px-5 py-3 text-right font-mono {{ 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' if employee.below_target else '' }}">{{ employee.below_target }}</td>
+                            <td class="px-5 py-3 text-right font-mono {{ 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' if employee.overdue else '' }}">{{ employee.overdue }}</td>
+                            <td class="px-5 py-3 text-right font-mono">{{ employee.missing }}</td>
+                        </tr>{% else %}<tr><td colspan="7">{{ empty_state("No employees match this review", "Try another department, employee name or review filter.") }}</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <nav aria-label="Employee review pages" class="flex flex-wrap items-center justify-between gap-3 p-5">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Page {{ employee_page }} of {{ employee_total_pages }} · {{ employee_total }} employees</p>
+                <div class="flex gap-2">{% if previous_employee_url %}<a class="btn btn-secondary" href="{{ previous_employee_url }}">Previous employees</a>{% endif %}{% if next_employee_url %}<a class="btn btn-secondary" href="{{ next_employee_url }}">Next employees</a>{% endif %}</div>
+            </nav>
+        </section>
+
         <section class="card overflow-hidden" aria-labelledby="kpi-departments-heading">
             <div class="p-5">
                 <h3 id="kpi-departments-heading" class="font-display text-lg font-semibold text-slate-900 dark:text-white">Department comparison</h3>
@@ -161,7 +243,7 @@
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
-                    <caption class="sr-only">KPI counts and reporting coverage by current department</caption>
+                    <caption id="kpi-department-table" class="sr-only">KPI counts and reporting coverage by current department</caption>
                     <thead class="bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300"><tr>
                         <th scope="col" class="px-5 py-3 text-left">Department</th>
                         <th scope="col" class="px-5 py-3 text-right">Tracked</th>
@@ -186,7 +268,7 @@
 
         <section class="card overflow-hidden" aria-labelledby="kpi-records-heading">
             <div class="p-5"><h3 id="kpi-records-heading" class="font-display text-lg font-semibold text-slate-900 dark:text-white">Underlying KPI records</h3>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Targets and actuals retain their own units. Missing actuals are shown as —, not zero. Recorded status is not recalculated by this dashboard.</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Targets and actuals retain their own units. Missing actuals are shown as —, not zero. Recorded status is not changed by this dashboard. Target attainment uses the shared direction-aware calculation. A period still in progress is not assessed as a missed target.</p>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -198,6 +280,7 @@
                         <th scope="col" class="px-5 py-3 text-right">Target</th>
                         <th scope="col" class="px-5 py-3 text-right">Actual</th>
                         <th scope="col" class="px-5 py-3 text-left">Unit</th>
+                        <th scope="col" class="px-5 py-3 text-left">Target attainment / assessment</th>
                         <th scope="col" class="px-5 py-3 text-left">Recorded status</th>
                         <th scope="col" class="px-5 py-3 text-left">Record changed</th>
                     </tr></thead>
@@ -205,16 +288,21 @@
                         {% for kpi in kpis %}<tr>
                             <td class="px-5 py-3">
                                 {% if can_manage_kpis %}<a class="font-medium text-violet-700 dark:text-violet-300" href="/people/perf/goals/{{ kpi.kpi_id }}">{{ kpi.kpi_name }}</a>{% else %}<span class="font-medium">{{ kpi.kpi_name }}</span>{% endif %}
-                                <div class="mt-1 text-xs font-mono text-slate-500 dark:text-slate-400">{{ kpi.employee_code }}</div>
+                                <div class="mt-1 text-sm">{{ kpi.employee_name }}</div><div class="mt-1 text-xs font-mono text-slate-500 dark:text-slate-400">{{ kpi.employee_code }}</div>
                             </td>
                             <td class="px-5 py-3">{{ kpi.department_name if kpi.department_name else 'Unassigned' }}</td>
                             <td class="px-5 py-3 whitespace-nowrap">{{ kpi.period_end.strftime('%d %b %Y') }}</td>
                             <td class="px-5 py-3 text-right font-mono tabular-nums">{{ number(kpi.target_value) }}</td>
                             <td class="px-5 py-3 text-right font-mono tabular-nums">{{ number(kpi.actual_value) }}</td>
                             <td class="px-5 py-3">{{ kpi.unit_of_measure if kpi.unit_of_measure else '—' }}</td>
+                            <td class="px-5 py-3">
+                                <p class="text-sm">{{ kpi.assessment }}</p>
+                                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ 'Lower' if kpi.lower_is_better else 'Higher' }} is better · {{ kpi.achievement|string + '%' if kpi.achievement is not none else 'Not scored' }}</p>
+                                {% if kpi.achievement is not none %}{{ progress_bar("Target attainment", kpi.achievement|string + '%', [kpi.achievement|float, 100]|min, color="violet") }}{% endif %}
+                            </td>
                             <td class="px-5 py-3">{{ status_badge(kpi.status.value, size="sm") }}</td>
                             <td class="px-5 py-3 whitespace-nowrap">{{ kpi.record_updated_at.strftime('%d %b %Y') if kpi.record_updated_at else '—' }}</td>
-                        </tr>{% else %}<tr><td colspan="8">{{ empty_state("No KPIs match this view", "Select another reporting period or ask the KPI owner to create the required records.") }}</td></tr>{% endfor %}
+                        </tr>{% else %}<tr><td colspan="9">{{ empty_state("No KPIs match this view", "Select another reporting period or ask the KPI owner to create the required records.") }}</td></tr>{% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -228,4 +316,10 @@
         </section>
     </div>
 </div>
+{% endblock %}
+
+
+{% block extra_scripts %}
+{{ super() }}
+<script defer src="/static/js/people-kpi-dashboard.js"></script>
 {% endblock %}

@@ -204,6 +204,7 @@ class KPIBase(BaseModel):
     period_start: date
     period_end: date
     target_value: Decimal
+    lower_is_better: bool | None = None
     unit_of_measure: str | None = Field(default=None, max_length=30)
     threshold_value: Decimal | None = None
     stretch_value: Decimal | None = None
@@ -226,6 +227,7 @@ class KPIUpdate(BaseModel):
     period_start: date | None = None
     period_end: date | None = None
     target_value: Decimal | None = None
+    lower_is_better: bool | None = None
     unit_of_measure: str | None = Field(default=None, max_length=30)
     threshold_value: Decimal | None = None
     stretch_value: Decimal | None = None

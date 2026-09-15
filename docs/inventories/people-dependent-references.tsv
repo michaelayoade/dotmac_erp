@@ -268,9 +268,9 @@ perf	institutional_performance	reconciled_by_id	hr	employee	employee_id	explicit
 perf	institutional_performance	reviewed_by_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:112
 perf	institutional_performance	reviewer_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:138
 perf	institutional_performance	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/institutional_performance.py:43 via app/models/people/base.py:66
-perf	kpi	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:50 via app/models/people/base.py:61
-perf	kpi	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/kpi.py:82
-perf	kpi	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:50 via app/models/people/base.py:66
+perf	kpi	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:52 via app/models/people/base.py:61
+perf	kpi	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/kpi.py:84
+perf	kpi	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:52 via app/models/people/base.py:66
 perf	kra	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kra.py:32 via app/models/people/base.py:61
 perf	kra	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kra.py:32 via app/models/people/base.py:66
 perf	monthly_review	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/monthly_review.py:36 via app/models/people/base.py:61
