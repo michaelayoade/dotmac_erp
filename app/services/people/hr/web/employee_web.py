@@ -188,6 +188,7 @@ class HRWebService:
             "Department",
             lambda emp: emp.department.department_name if emp.department else "",
         ),
+        "assigned_branch": ("Assigned Branch", None),
         "designation": (
             "Designation",
             lambda emp: emp.designation.designation_name if emp.designation else "",
@@ -933,11 +934,28 @@ class HRWebService:
             if "employment_type" in selected_fields
             else {}
         )
+        # Load the tenant catalogue once, including inactive assigned branches.
+        assigned_branch_names = (
+            {
+                row.location_id: row.location_name
+                for row in db.execute(
+                    select(Location.location_id, Location.location_name).where(
+                        Location.organization_id == org_id,
+                    )
+                ).all()
+            }
+            if "assigned_branch" in selected_fields and employees
+            else {}
+        )
 
         def _field_value(field: str, employee: Employee) -> object:
             _, extractor = self.EMPLOYEE_EXPORT_FIELDS[field]
             if extractor is not None:
                 return extractor(employee)
+            if field == "assigned_branch":
+                if employee.assigned_location_id is None:
+                    return ""
+                return assigned_branch_names.get(employee.assigned_location_id, "")
             if field != "employment_type":
                 raise RuntimeError(f"missing employee export extractor: {field}")
             if employee.employment_type_id is None:

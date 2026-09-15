@@ -18,6 +18,7 @@
     <div>
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Stock Reports</h2>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {% include "inventory/_weekly_purchases_card.html" %}
             <a href="/inventory/reports/stock-on-hand" class="card p-5 hover:border-amber-300 dark:hover:border-amber-700 transition-colors group">
                 <div class="flex items-start gap-4">
                     <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400 group-hover:bg-teal-200 dark:group-hover:bg-teal-900/50 transition-colors">
