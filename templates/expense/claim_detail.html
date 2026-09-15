@@ -340,8 +340,10 @@
                     <tbody>
                         {% for item in claim.items %}
                         <tr>
-                            <input type="hidden" name="item_id" value="{{ item.item_id }}">
-                            <td class="text-slate-500">{{ item.expense_date }}</td>
+                            <td class="text-slate-500">
+                                <input type="hidden" name="item_id" value="{{ item.item_id }}">
+                                {{ item.expense_date }}
+                            </td>
                             <td>
                                 <select aria-label="Category" name="category_id_{{ item.item_id }}" class="form-select text-sm">
                                     {% for cat in categories %}

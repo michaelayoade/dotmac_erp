@@ -849,6 +849,10 @@ class InventoryWebService:
             )
 
         total_pages = max(1, (total_count + limit - 1) // limit)
+        active_filters = build_active_filters(
+            params={"transaction_type": transaction_type, "search": search},
+            labels={"transaction_type": "Type", "search": "Search"},
+        )
 
         return {
             "transactions": transactions_view,
@@ -860,6 +864,7 @@ class InventoryWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
         }
 
     @staticmethod

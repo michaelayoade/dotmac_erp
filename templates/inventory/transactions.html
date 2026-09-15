@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import empty_state, icon_svg %}
+{% from "components/macros.html" import compact_filters, empty_state, filter_select_field, icon_svg, pagination %}
 
 {% block page_title %}Inventory Transactions{% endblock %}
 
@@ -46,7 +46,17 @@
         </div>
     </div>
 
-    {% if transactions %}
+    {% call(filter_attrs) compact_filters(
+        base_url="/inventory/transactions",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search transactions..."
+    ) %}
+    {{ filter_select_field("transaction_type", "Type", transaction_type, transaction_types, filter_attrs, "All Types", true) }}
+    {% endcall %}
+
+    {% if transactions or search or transaction_type %}
     <div class="card">
         <div class="table-container">
             <table class="table">
@@ -80,7 +90,7 @@
                     {% else %}
                     <tr>
                         <td colspan="99" class="p-0">
-                            {{ empty_state("No transactions found", "There are no transactions to display.") }}
+                            {{ empty_state("No transactions found", "Try adjusting your search or transaction type filter.") }}
                         </td>
                     </tr>
                     {% endfor %}
@@ -88,6 +98,14 @@
             </table>
         </div>
     </div>
+    {{ pagination(
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
+        limit=limit,
+        search=search,
+        filters={"transaction_type": transaction_type}
+    ) }}
     {% else %}
     <div class="card p-12 text-center">
         {{ empty_state('No transactions yet', 'Inventory transactions will appear here.', 'document') }}

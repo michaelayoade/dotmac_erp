@@ -8,7 +8,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.procurement.enums import (
@@ -24,6 +24,8 @@ from app.models.procurement.enums import (
     UrgencyLevel,
 )
 from app.models.procurement.rfq import RequestForQuotation
+from app.models.finance.ap.supplier import Supplier
+from app.models.procurement.vendor_prequalification import VendorPrequalification
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.procurement.contract import ContractService
@@ -146,6 +148,44 @@ class ProcurementWebService:
             status="ACTIVE",
             limit=5,
         )
+        vendor_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(Supplier)
+                .where(
+                    Supplier.organization_id == org_id,
+                    Supplier.is_active.is_(True),
+                )
+            )
+            or 0
+        )
+        prequalified_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(VendorPrequalification)
+                .where(
+                    VendorPrequalification.organization_id == org_id,
+                    VendorPrequalification.status == PrequalificationStatus.QUALIFIED,
+                )
+            )
+            or 0
+        )
+        pending_evaluation_count = (
+            self.db.scalar(
+                select(func.count())
+                .select_from(VendorPrequalification)
+                .where(
+                    VendorPrequalification.organization_id == org_id,
+                    VendorPrequalification.status.in_(
+                        [
+                            PrequalificationStatus.PENDING,
+                            PrequalificationStatus.UNDER_REVIEW,
+                        ]
+                    ),
+                )
+            )
+            or 0
+        )
 
         return {
             "plan_summary": plan_summary,
@@ -155,6 +195,9 @@ class ProcurementWebService:
             "open_rfq_count": open_rfq_count,
             "active_contracts": active_contracts,
             "active_contract_count": active_contract_count,
+            "vendor_count": vendor_count,
+            "prequalified_count": prequalified_count,
+            "pending_evaluation_count": pending_evaluation_count,
             "status_labels": PLAN_STATUS_LABELS,
             "req_status_labels": REQUISITION_STATUS_LABELS,
             "rfq_status_labels": RFQ_STATUS_LABELS,
@@ -451,6 +494,9 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "page": (offset // limit) + 1 if limit else 1,
+            "total_pages": max(1, (total + limit - 1) // limit) if limit else 1,
+            "total_count": total,
             "search": search or "",
             "filter_status": status,
             "status_labels": EVALUATION_STATUS_LABELS,
@@ -546,6 +592,9 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "page": (offset // limit) + 1 if limit else 1,
+            "total_pages": max(1, (total + limit - 1) // limit) if limit else 1,
+            "total_count": total,
             "search": search or "",
             "filter_status": status,
             "status_labels": CONTRACT_STATUS_LABELS,

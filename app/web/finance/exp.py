@@ -21,6 +21,7 @@ from app.web.deps import (
     base_context,
     get_db_for_org,
     require_expense_access,
+    require_any_web_permission,
     require_web_permission,
 )
 from app.web.finance.exp_limits import router as limits_router
@@ -28,7 +29,13 @@ from app.web.finance.exp_limits import router as limits_router
 logger = logging.getLogger(__name__)
 
 # Permission dependencies for action-specific routes
-_require_claim_approve = require_web_permission("expense:claims:approve:tier1")
+_require_claim_approve = require_any_web_permission(
+    [
+        "expense:claims:approve:tier1",
+        "expense:claims:approve:tier2",
+        "expense:claims:approve:tier3",
+    ]
+)
 _require_claim_reject = require_web_permission("expense:claims:reject")
 _require_claim_submit = require_web_permission("expense:claims:submit")
 _require_claim_delete = require_web_permission("expense:claims:delete")
@@ -176,12 +183,15 @@ def expense_claims_list(
     search: str | None = None,
     employee_id: str | None = None,
     approver_id: str | None = None,
+    page: int | None = Query(None, ge=1),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db_for_org),
 ):
     """Expense claims list page."""
+    if page is not None:
+        offset = (page - 1) * limit
     return expense_claims_web_service.claims_list_response(
         request=request,
         auth=auth,

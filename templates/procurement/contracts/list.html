@@ -39,7 +39,7 @@
     </div>
     {% endif %}
 
-    {% from "components/macros.html" import compact_filters, filter_select_field, icon_svg, status_badge, empty_state %}
+    {% from "components/macros.html" import compact_filters, filter_select_field, icon_svg, pagination, status_badge, empty_state %}
     {% call(filter_attrs) compact_filters(
         base_url="/procurement/contracts",
         active_filters=active_filters | default([]),
@@ -92,15 +92,14 @@
             </table>
         </div>
 
-        {% if total > limit %}
-        <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm text-slate-600 dark:text-slate-300">
-            <span>Showing {{ offset + 1 }}-{{ [offset + limit, total] | min }} of {{ total }}</span>
-            <div class="flex gap-2">
-                {% if offset > 0 %}<a href="?offset={{ offset - limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="btn btn-secondary text-xs">Previous</a>{% endif %}
-                {% if offset + limit < total %}<a href="?offset={{ offset + limit }}&limit={{ limit }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="btn btn-secondary text-xs">Next</a>{% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {{ pagination(
+            page=page,
+            total_pages=total_pages,
+            total_count=total_count,
+            limit=limit,
+            search=search,
+            filters={"status": filter_status}
+        ) }}
     </div>
     </div>{# /results-container #}
 </div>
