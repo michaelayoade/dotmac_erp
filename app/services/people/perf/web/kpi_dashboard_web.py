@@ -53,7 +53,7 @@ def _read_configuration(values) -> DashboardConfig:
 
 
 def _chart_setting(value: Any) -> bool:
-    if value not in ("0", "1"):
+    if not isinstance(value, str) or value not in ("0", "1"):
         raise DashboardValidationError("Choose whether to show charts.")
     return value == "1"
 

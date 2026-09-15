@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, and_, case, cast, func, or_, select
+from sqlalchemy import String, and_, case, cast, false, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_org.organization import Organization
@@ -535,7 +535,7 @@ class KPIDashboardService:
             roster_rows.c.overdue > 0,
             roster_rows.c.missing > 0,
             roster_rows.c.unscorable > 0,
-            (roster_rows.c.assigned == 0) if config.cohort != "overdue" else False,
+            (roster_rows.c.assigned == 0) if config.cohort != "overdue" else false(),
         )
         roster_counts = (
             self.db.execute(
