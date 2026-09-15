@@ -26,17 +26,35 @@ WIDGETS = {
     "achieved": ("Recorded achieved", "Status explicitly marked Achieved", "emerald"),
     "at_risk": ("At risk or missed", "Recorded At Risk or Missed status", "rose"),
     "overdue": ("Overdue open KPIs", "Deadline passed; KPI is still open", "amber"),
-    "coverage": ("Actuals recorded", "Share of tracked KPIs with an actual value", "teal"),
+    "coverage": (
+        "Actuals recorded",
+        "Share of tracked KPIs with an actual value",
+        "teal",
+    ),
 }
 DEFAULT_WIDGETS = tuple(WIDGETS)
 KPI_STATUSES = frozenset(
     {
-        "DRAFT", "PENDING", "ACTIVE", "ON_TRACK", "AT_RISK", "ACHIEVED",
-        "COMPLETED", "MISSED", "DEFERRED", "CANCELLED",
+        "DRAFT",
+        "PENDING",
+        "ACTIVE",
+        "ON_TRACK",
+        "AT_RISK",
+        "ACHIEVED",
+        "COMPLETED",
+        "MISSED",
+        "DEFERRED",
+        "CANCELLED",
     }
 )
 DEFAULT_STATUSES = (
-    "PENDING", "ACTIVE", "ON_TRACK", "AT_RISK", "ACHIEVED", "COMPLETED", "MISSED",
+    "PENDING",
+    "ACTIVE",
+    "ON_TRACK",
+    "AT_RISK",
+    "ACHIEVED",
+    "COMPLETED",
+    "MISSED",
 )
 OPEN_STATUSES = ("PENDING", "ACTIVE", "ON_TRACK", "AT_RISK")
 ORG_WIDE_ROLES = frozenset({"admin", "hr_manager", "hr_director"})
@@ -122,15 +140,22 @@ class DashboardConfig:
     @classmethod
     def parse(cls, payload: Mapping[str, Any]) -> DashboardConfig:
         permitted = {
-            "period", "start_date", "end_date", "department_ids", "statuses",
-            "widgets", "search",
+            "period",
+            "start_date",
+            "end_date",
+            "department_ids",
+            "statuses",
+            "widgets",
+            "search",
         }
         if set(payload) - permitted:
             raise DashboardValidationError("Unsupported dashboard configuration field.")
         period = payload.get("period", "this_month")
         if not isinstance(period, str) or period not in PERIODS:
             raise DashboardValidationError("Choose a supported reporting period.")
-        departments = _strings(payload.get("department_ids", []), "department", MAX_DEPARTMENTS)
+        departments = _strings(
+            payload.get("department_ids", []), "department", MAX_DEPARTMENTS
+        )
         canonical = []
         for value in departments:
             try:
@@ -139,15 +164,23 @@ class DashboardConfig:
                 raise DashboardValidationError("Invalid department selection.") from exc
         if len(set(canonical)) != len(canonical):
             raise DashboardValidationError("Select each department only once.")
-        statuses = _strings(payload.get("statuses", list(DEFAULT_STATUSES)), "status", len(KPI_STATUSES))
+        statuses = _strings(
+            payload.get("statuses", list(DEFAULT_STATUSES)), "status", len(KPI_STATUSES)
+        )
         if not statuses or not set(statuses) <= KPI_STATUSES:
             raise DashboardValidationError("Choose at least one valid KPI status.")
-        widgets = _strings(payload.get("widgets", list(DEFAULT_WIDGETS)), "widget", len(WIDGETS))
+        widgets = _strings(
+            payload.get("widgets", list(DEFAULT_WIDGETS)), "widget", len(WIDGETS)
+        )
         if not widgets or not set(widgets) <= WIDGETS.keys():
-            raise DashboardValidationError("Choose at least one supported summary widget.")
+            raise DashboardValidationError(
+                "Choose at least one supported summary widget."
+            )
         search = payload.get("search", "")
         if not isinstance(search, str) or len(search) > 100:
-            raise DashboardValidationError("KPI search must be no longer than 100 characters.")
+            raise DashboardValidationError(
+                "KPI search must be no longer than 100 characters."
+            )
         start_date = end_date = ""
         if period == "custom":
             start = _date(payload.get("start_date"), "start")
@@ -155,16 +188,23 @@ class DashboardConfig:
             _validate_window(start, end)
             start_date, end_date = start.isoformat(), end.isoformat()
         return cls(
-            period=period, start_date=start_date, end_date=end_date,
-            department_ids=tuple(canonical), statuses=statuses,
-            widgets=widgets, search=search.strip(),
+            period=period,
+            start_date=start_date,
+            end_date=end_date,
+            department_ids=tuple(canonical),
+            statuses=statuses,
+            widgets=widgets,
+            search=search.strip(),
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "period": self.period, "start_date": self.start_date,
-            "end_date": self.end_date, "department_ids": list(self.department_ids),
-            "statuses": list(self.statuses), "widgets": list(self.widgets),
+            "period": self.period,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "department_ids": list(self.department_ids),
+            "statuses": list(self.statuses),
+            "widgets": list(self.widgets),
             "search": self.search,
         }
 
@@ -178,7 +218,8 @@ class DashboardConfig:
             month = 1 + ((today.month - 1) // 3) * 3
             start = today.replace(month=month, day=1)
             next_quarter = (
-                date(today.year + 1, 1, 1) if month == 10
+                date(today.year + 1, 1, 1)
+                if month == 10
                 else date(today.year, month + 3, 1)
             )
             end = next_quarter - timedelta(days=1)
@@ -197,24 +238,33 @@ class DashboardConfig:
 
 def _validate_window(start: date, end: date) -> None:
     if end < start:
-        raise DashboardValidationError("The end date must not be before the start date.")
+        raise DashboardValidationError(
+            "The end date must not be before the start date."
+        )
     if (end - start).days + 1 > MAX_DATE_SPAN:
         raise DashboardValidationError("Choose a date range of no more than 366 days.")
 
 
 def authorize_departments(
-    requested: Iterable[str], allowed: Iterable[str], *, organization_wide: bool,
+    requested: Iterable[str],
+    allowed: Iterable[str],
+    *,
+    organization_wide: bool,
 ) -> tuple[UUID, ...] | None:
     """None means organization-wide; an empty tuple never means unrestricted."""
     selection, permitted = set(requested), set(allowed)
     if not selection <= permitted:
-        raise DashboardAccessError("One or more selected departments are unavailable to you.")
+        raise DashboardAccessError(
+            "One or more selected departments are unavailable to you."
+        )
     if selection:
         return tuple(UUID(value) for value in sorted(selection))
     if organization_wide:
         return None
     if not permitted:
-        raise DashboardAccessError("No department has been assigned to your dashboard access.")
+        raise DashboardAccessError(
+            "No department has been assigned to your dashboard access."
+        )
     return tuple(UUID(value) for value in sorted(permitted))
 
 
@@ -224,7 +274,8 @@ def reporting_percentage(reported: int, total: int) -> Decimal | None:
     if total == 0:
         return None
     return (Decimal(reported) * 100 / Decimal(total)).quantize(
-        Decimal("0.1"), rounding=ROUND_HALF_UP,
+        Decimal("0.1"),
+        rounding=ROUND_HALF_UP,
     )
 
 

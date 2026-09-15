@@ -32,8 +32,11 @@ from app.services.people.perf.kpi_dashboard_contract import (
     ],
 )
 def test_period_boundaries(period, today, start, end):
-    assert DashboardConfig.parse({"period": period}).window(date.fromisoformat(today)) == (
-        date.fromisoformat(start), date.fromisoformat(end),
+    assert DashboardConfig.parse({"period": period}).window(
+        date.fromisoformat(today)
+    ) == (
+        date.fromisoformat(start),
+        date.fromisoformat(end),
     )
 
 
@@ -81,10 +84,14 @@ def test_invalid_configuration_rejected(payload):
 
 
 def test_custom_range_inclusive_limit_and_widget_order():
-    config = DashboardConfig.parse({
-        "period": "custom", "start_date": "2024-01-01", "end_date": "2024-12-31",
-        "widgets": ["coverage", "", "tracked"],
-    })
+    config = DashboardConfig.parse(
+        {
+            "period": "custom",
+            "start_date": "2024-01-01",
+            "end_date": "2024-12-31",
+            "widgets": ["coverage", "", "tracked"],
+        }
+    )
     assert config.widgets == ("coverage", "tracked")
     assert config.window(date(2026, 1, 1)) == (date(2024, 1, 1), date(2024, 12, 31))
 
@@ -97,7 +104,9 @@ def test_uuid_alias_does_not_bypass_duplicate_check():
 
 def test_restricted_empty_selection_means_all_permitted_not_all_company():
     department = uuid4()
-    assert authorize_departments([], [str(department)], organization_wide=False) == (department,)
+    assert authorize_departments([], [str(department)], organization_wide=False) == (
+        department,
+    )
     assert authorize_departments([], [str(department)], organization_wide=True) is None
 
 
@@ -114,7 +123,12 @@ def test_foreign_department_rejected_even_for_org_admin(wide):
 
 def test_explicit_multi_department_scope():
     departments = [str(uuid4()), str(uuid4())]
-    assert {str(value) for value in authorize_departments(departments, departments, organization_wide=False)} == set(departments)
+    assert {
+        str(value)
+        for value in authorize_departments(
+            departments, departments, organization_wide=False
+        )
+    } == set(departments)
 
 
 @pytest.mark.parametrize("roles", [["ADMIN"], [" HR_Manager "], ["hr_director"]])
@@ -122,7 +136,9 @@ def test_explicit_organization_roles(roles):
     assert has_organization_access(roles)
 
 
-@pytest.mark.parametrize("roles", [[], ["payroll_admin"], ["manager"], ["employee"], ["superadmin"]])
+@pytest.mark.parametrize(
+    "roles", [[], ["payroll_admin"], ["manager"], ["employee"], ["superadmin"]]
+)
 def test_other_roles_do_not_receive_company_access(roles):
     assert not has_organization_access(roles)
 

@@ -58,7 +58,10 @@ class KPIDashboardService:
         self.db = db
 
     def resolve_scope(
-        self, organization_id: UUID, person_id: UUID, roles: list[str],
+        self,
+        organization_id: UUID,
+        person_id: UUID,
+        roles: list[str],
     ) -> DashboardScope:
         org = self.db.scalars(
             select(Organization).where(Organization.organization_id == organization_id)
@@ -78,7 +81,9 @@ class KPIDashboardService:
                 )
             ).one_or_none()
             if employee is None:
-                raise DashboardAccessError("An active department-head assignment is required.")
+                raise DashboardAccessError(
+                    "An active department-head assignment is required."
+                )
             departments = departments.where(
                 Department.head_id == employee.employee_id,
                 Department.is_active.is_(True),
@@ -87,7 +92,9 @@ class KPIDashboardService:
             departments.order_by(Department.department_name, Department.department_id)
         ).all()
         if not organization_wide and not rows:
-            raise DashboardAccessError("An active department-head assignment is required.")
+            raise DashboardAccessError(
+                "An active department-head assignment is required."
+            )
         return DashboardScope(
             organization_id=organization_id,
             person_id=person_id,
@@ -118,7 +125,9 @@ class KPIDashboardService:
                 KPI.actual_value,
                 KPI.unit_of_measure,
                 KPI.status,
-                func.coalesce(KPI.updated_at, KPI.created_at).label("record_updated_at"),
+                func.coalesce(KPI.updated_at, KPI.created_at).label(
+                    "record_updated_at"
+                ),
                 Employee.employee_code,
                 Department.department_id,
                 Department.department_name,
@@ -159,10 +168,17 @@ class KPIDashboardService:
             func.count(rows.c.kpi_id).label("tracked"),
             func.count(func.distinct(rows.c.employee_id)).label("owners"),
             func.coalesce(
-                func.sum(case((rows.c.status == KPIStatus.ACHIEVED, 1), else_=0)), 0,
+                func.sum(case((rows.c.status == KPIStatus.ACHIEVED, 1), else_=0)),
+                0,
             ).label("achieved"),
             func.coalesce(
-                func.sum(case((rows.c.status.in_([KPIStatus.AT_RISK, KPIStatus.MISSED]), 1), else_=0)), 0,
+                func.sum(
+                    case(
+                        (rows.c.status.in_([KPIStatus.AT_RISK, KPIStatus.MISSED]), 1),
+                        else_=0,
+                    )
+                ),
+                0,
             ).label("at_risk"),
             func.coalesce(
                 func.sum(
@@ -170,7 +186,9 @@ class KPIDashboardService:
                         (
                             and_(
                                 rows.c.period_end < today,
-                                rows.c.status.in_([KPIStatus(status) for status in OPEN_STATUSES]),
+                                rows.c.status.in_(
+                                    [KPIStatus(status) for status in OPEN_STATUSES]
+                                ),
                             ),
                             1,
                         ),
@@ -190,7 +208,11 @@ class KPIDashboardService:
         return result
 
     def dashboard(
-        self, scope: DashboardScope, config: DashboardConfig, *, page: int = 1,
+        self,
+        scope: DashboardScope,
+        config: DashboardConfig,
+        *,
+        page: int = 1,
         now: datetime | None = None,
     ) -> dict[str, Any]:
         if not isinstance(page, int) or not 1 <= page <= 100_000:
@@ -200,19 +222,27 @@ class KPIDashboardService:
         rows = self._base_query(scope, config, today).subquery("scoped_kpis")
         columns = self._aggregates(rows, today)
         summary = self._summary(self.db.execute(select(*columns)).mappings().one())
-        department_rows = self.db.execute(
-            select(rows.c.department_id, rows.c.department_name, *columns)
-            .group_by(rows.c.department_id, rows.c.department_name)
-            .order_by(rows.c.department_name, rows.c.department_id)
-        ).mappings().all()
+        department_rows = (
+            self.db.execute(
+                select(rows.c.department_id, rows.c.department_name, *columns)
+                .group_by(rows.c.department_id, rows.c.department_name)
+                .order_by(rows.c.department_name, rows.c.department_id)
+            )
+            .mappings()
+            .all()
+        )
         total_pages = max(1, (summary["tracked"] + PAGE_SIZE - 1) // PAGE_SIZE)
         page = min(page, total_pages)
-        details = self.db.execute(
-            select(rows)
-            .order_by(rows.c.period_end, rows.c.kpi_name, rows.c.kpi_id)
-            .limit(PAGE_SIZE)
-            .offset((page - 1) * PAGE_SIZE)
-        ).mappings().all()
+        details = (
+            self.db.execute(
+                select(rows)
+                .order_by(rows.c.period_end, rows.c.kpi_name, rows.c.kpi_id)
+                .limit(PAGE_SIZE)
+                .offset((page - 1) * PAGE_SIZE)
+            )
+            .mappings()
+            .all()
+        )
         return {
             "summary": summary,
             "department_rows": [self._summary(row) for row in department_rows],
@@ -243,7 +273,9 @@ class KPIDashboardService:
     def _views(person: Person) -> list[dict[str, Any]]:
         metadata = person.metadata_ or {}
         if not isinstance(metadata, dict):
-            raise DashboardValidationError("Saved dashboard settings need administrator review.")
+            raise DashboardValidationError(
+                "Saved dashboard settings need administrator review."
+            )
         stored = metadata.get(PREFERENCE_KEY, {"version": 1, "views": []})
         if (
             not isinstance(stored, dict)
@@ -251,7 +283,9 @@ class KPIDashboardService:
             or not isinstance(stored.get("views"), list)
             or len(stored["views"]) > MAX_SAVED_VIEWS
         ):
-            raise DashboardValidationError("Saved dashboard settings need administrator review.")
+            raise DashboardValidationError(
+                "Saved dashboard settings need administrator review."
+            )
         views = stored["views"]
         if any(
             not isinstance(item, dict)
@@ -260,14 +294,18 @@ class KPIDashboardService:
             or not isinstance(item.get("config"), dict)
             for item in views
         ):
-            raise DashboardValidationError("Saved dashboard settings need administrator review.")
+            raise DashboardValidationError(
+                "Saved dashboard settings need administrator review."
+            )
         return [dict(item) for item in views]
 
     def list_views(self, scope: DashboardScope) -> list[dict[str, Any]]:
         # Never returns another person's views, even when the viewer is an admin.
         return self._views(self._person(scope))
 
-    def get_view(self, scope: DashboardScope, view_id: str) -> tuple[str, DashboardConfig]:
+    def get_view(
+        self, scope: DashboardScope, view_id: str
+    ) -> tuple[str, DashboardConfig]:
         for item in self.list_views(scope):
             if item["id"] == view_id:
                 config = DashboardConfig.parse(item["config"])
@@ -276,8 +314,12 @@ class KPIDashboardService:
         raise SavedViewNotFound("This saved view is unavailable.")
 
     def save_view(
-        self, scope: DashboardScope, config: DashboardConfig, name: str,
-        *, view_id: str | None = None,
+        self,
+        scope: DashboardScope,
+        config: DashboardConfig,
+        name: str,
+        *,
+        view_id: str | None = None,
     ) -> str:
         name = view_name(name)
         # Never trust a caller-created dataclass or a previously saved filter.
@@ -288,12 +330,19 @@ class KPIDashboardService:
         if view_id and not any(item["id"] == view_id for item in views):
             raise SavedViewNotFound("This saved view is unavailable.")
         if not view_id and len(views) >= MAX_SAVED_VIEWS:
-            raise DashboardValidationError("Delete a saved view before adding another (maximum 10).")
-        if any(item["name"].casefold() == name.casefold() and item["id"] != view_id for item in views):
+            raise DashboardValidationError(
+                "Delete a saved view before adding another (maximum 10)."
+            )
+        if any(
+            item["name"].casefold() == name.casefold() and item["id"] != view_id
+            for item in views
+        ):
             raise DashboardValidationError("A saved view already uses that name.")
         identifier = view_id or str(uuid4())
         entry = {
-            "id": identifier, "name": name, "config": config.to_dict(),
+            "id": identifier,
+            "name": name,
+            "config": config.to_dict(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         views = [entry if item["id"] == identifier else item for item in views]
@@ -318,4 +367,6 @@ class KPIDashboardService:
             PREFERENCE_KEY: {"version": 1, "views": remaining},
         }
         self.db.flush()
-        logger.info("Deleted personal KPI dashboard view for person %s", scope.person_id)
+        logger.info(
+            "Deleted personal KPI dashboard view for person %s", scope.person_id
+        )

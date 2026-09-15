@@ -76,7 +76,7 @@
         <fieldset>
             <legend class="form-label">Departments</legend>
             <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">Select one or several. Leave all unchecked to include every department you are authorized to view.</p>
-            <div class="flex flex-wrap gap-x-5 gap-y-3">
+            <div class="flex flex-wrap gap-x-5 gap-y-4">
                 {% for department in departments %}
                 <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                     <input type="checkbox" name="department_id" value="{{ department.id }}" {% if department.id in config.department_ids %}checked{% endif %}>
@@ -89,7 +89,7 @@
             <summary class="cursor-pointer text-sm font-medium text-violet-700 dark:text-violet-300">Customize statuses and summary cards</summary>
             <fieldset class="mt-4">
                 <legend class="form-label">Recorded KPI statuses</legend>
-                <div class="flex flex-wrap gap-x-5 gap-y-3">
+                <div class="flex flex-wrap gap-x-5 gap-y-4">
                     {% for status in status_options %}
                     <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                         <input type="checkbox" name="status" value="{{ status }}" {% if status in config.statuses %}checked{% endif %}>

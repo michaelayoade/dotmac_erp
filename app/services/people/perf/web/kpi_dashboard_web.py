@@ -20,6 +20,7 @@ from app.services.people.perf.kpi_dashboard_contract import (
     DashboardConfig,
     DashboardValidationError,
     SavedViewNotFound,
+    view_name,
 )
 from app.services.people.perf.kpi_dashboard_service import KPIDashboardService
 from app.templates import templates
@@ -36,8 +37,12 @@ def _read_configuration(values) -> DashboardConfig:
             "start_date": values.get("start_date", ""),
             "end_date": values.get("end_date", ""),
             "department_ids": values.getlist("department_id"),
-            "statuses": values.getlist("status") if explicit or "status" in values else list(DEFAULT_STATUSES),
-            "widgets": values.getlist("widget") if explicit or "widget" in values else list(DEFAULT_WIDGETS),
+            "statuses": values.getlist("status")
+            if explicit or "status" in values
+            else list(DEFAULT_STATUSES),
+            "widgets": values.getlist("widget")
+            if explicit or "widget" in values
+            else list(DEFAULT_WIDGETS),
             "search": values.get("search", ""),
         }
     )
@@ -54,8 +59,10 @@ def _identifier(value: Any) -> str:
 
 def _pairs(config: DashboardConfig) -> list[tuple[str, str]]:
     return [
-        ("configured", "1"), ("period", config.period),
-        ("start_date", config.start_date), ("end_date", config.end_date),
+        ("configured", "1"),
+        ("period", config.period),
+        ("start_date", config.start_date),
+        ("end_date", config.end_date),
         ("search", config.search),
         *(("department_id", value) for value in config.department_ids),
         *(("status", value) for value in config.statuses),
@@ -73,15 +80,24 @@ def _http_error(exc: Exception) -> HTTPException:
 
 class KPIDashboardWebService:
     @staticmethod
-    def _scope(service: KPIDashboardService, auth: WebAuthContext, *, write: bool = False):
+    def _scope(
+        service: KPIDashboardService, auth: WebAuthContext, *, write: bool = False
+    ):
         if not auth.organization_id or not auth.person_id:
-            raise DashboardAccessError("An authenticated organization context is required.")
+            raise DashboardAccessError(
+                "An authenticated organization context is required."
+            )
         if write and auth.leave_write_restricted:
             raise DashboardAccessError("Your account currently has read-only access.")
         return service.resolve_scope(auth.organization_id, auth.person_id, auth.roles)
 
     def dashboard_response(
-        self, request: Request, auth: WebAuthContext, db: Session, *, page: int = 1,
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        page: int = 1,
     ) -> HTMLResponse:
         service = KPIDashboardService(db)
         try:
@@ -93,13 +109,18 @@ class KPIDashboardWebService:
                 selected_name, saved_config = service.get_view(scope, selected_id)
                 config = (
                     _read_configuration(request.query_params)
-                    if request.query_params.get("configured") == "1" else saved_config
+                    if request.query_params.get("configured") == "1"
+                    else saved_config
                 )
             else:
                 config = _read_configuration(request.query_params)
             data = service.dashboard(scope, config, page=page)
             saved_views = service.list_views(scope)
-        except (DashboardValidationError, DashboardAccessError, SavedViewNotFound) as exc:
+        except (
+            DashboardValidationError,
+            DashboardAccessError,
+            SavedViewNotFound,
+        ) as exc:
             raise _http_error(exc) from exc
 
         context = base_context(request, auth, "KPI Dashboard", "perf", db=db)
@@ -117,7 +138,9 @@ class KPIDashboardWebService:
                 display = f"{value}%" if value is not None else "—"
             else:
                 display = f"{value:,}"
-            cards.append({"label": label, "subtitle": subtitle, "color": color, "value": display})
+            cards.append(
+                {"label": label, "subtitle": subtitle, "color": color, "value": display}
+            )
         context.update(
             {
                 **data,
@@ -130,23 +153,34 @@ class KPIDashboardWebService:
                 "period_options": PERIODS,
                 "status_options": sorted(KPI_STATUSES),
                 "widget_options": WIDGETS,
-                "widget_slots": list(config.widgets) + [""] * (len(WIDGETS) - len(config.widgets)),
+                "widget_slots": list(config.widgets)
+                + [""] * (len(WIDGETS) - len(config.widgets)),
                 "saved_views": saved_views,
                 "selected_view_id": selected_id,
                 "selected_view_name": selected_name,
                 "configuration_pairs": pairs,
-                "previous_page_url": page_url(data["page"] - 1) if data["page"] > 1 else None,
-                "next_page_url": page_url(data["page"] + 1) if data["page"] < data["total_pages"] else None,
+                "previous_page_url": page_url(data["page"] - 1)
+                if data["page"] > 1
+                else None,
+                "next_page_url": page_url(data["page"] + 1)
+                if data["page"] < data["total_pages"]
+                else None,
                 "can_save_view": not auth.leave_write_restricted,
-                "can_manage_kpis": scope.organization_wide and not auth.leave_write_restricted,
+                "can_manage_kpis": scope.organization_wide
+                and not auth.leave_write_restricted,
             }
         )
-        response = templates.TemplateResponse(request, "people/perf/kpi_dashboard.html", context)
+        response = templates.TemplateResponse(
+            request, "people/perf/kpi_dashboard.html", context
+        )
         response.headers["Cache-Control"] = "private, no-store"
         return response
 
     async def save_response(
-        self, request: Request, auth: WebAuthContext, db: Session,
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
     ) -> RedirectResponse:
         service = KPIDashboardService(db)
         try:
@@ -156,26 +190,44 @@ class KPIDashboardWebService:
             mode = form.get("save_mode", "new")
             if mode not in {"new", "update"}:
                 raise DashboardValidationError("Choose a valid save action.")
-            identifier = _identifier(form.get("view_id", "")) if mode == "update" else None
-            identifier = service.save_view(scope, config, form.get("name", ""), view_id=identifier)
-        except (DashboardValidationError, DashboardAccessError, SavedViewNotFound) as exc:
+            identifier = (
+                _identifier(form.get("view_id", "")) if mode == "update" else None
+            )
+            identifier = service.save_view(
+                scope, config, view_name(form.get("name", "")), view_id=identifier
+            )
+        except (
+            DashboardValidationError,
+            DashboardAccessError,
+            SavedViewNotFound,
+        ) as exc:
             raise _http_error(exc) from exc
         return RedirectResponse(
-            f"{DASHBOARD_URL}?{urlencode({'view_id': identifier})}", status_code=303,
+            f"{DASHBOARD_URL}?{urlencode({'view_id': identifier})}",
+            status_code=303,
             headers={"Cache-Control": "private, no-store"},
         )
 
     def delete_response(
-        self, auth: WebAuthContext, db: Session, view_id: UUID,
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        view_id: UUID,
     ) -> RedirectResponse:
         service = KPIDashboardService(db)
         try:
             scope = self._scope(service, auth, write=True)
             service.delete_view(scope, str(view_id))
-        except (DashboardValidationError, DashboardAccessError, SavedViewNotFound) as exc:
+        except (
+            DashboardValidationError,
+            DashboardAccessError,
+            SavedViewNotFound,
+        ) as exc:
             raise _http_error(exc) from exc
         return RedirectResponse(
-            DASHBOARD_URL, status_code=303, headers={"Cache-Control": "private, no-store"},
+            DASHBOARD_URL,
+            status_code=303,
+            headers={"Cache-Control": "private, no-store"},
         )
 
 

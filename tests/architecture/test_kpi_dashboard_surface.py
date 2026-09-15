@@ -15,7 +15,11 @@ def test_route_keeps_people_and_private_mode_guards():
     tree = ast.parse(source)
     assert 'prefix="/perf/kpi-dashboard"' in source
     assert "Depends(require_private_performance_mode)" in source
-    functions = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    functions = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
     assert len(functions) == 3
     for function in functions:
         code = ast.unparse(function)
@@ -27,7 +31,7 @@ def test_route_keeps_people_and_private_mode_guards():
 
 def test_template_compiles_and_post_forms_have_csrf_without_get_leaks():
     source = TEMPLATE.read_text()
-    Environment().parse(source)
+    Environment(autoescape=True).parse(source)
     forms = re.findall(r'<form\s+method="(get|post)".*?</form>', source, re.DOTALL)
     blocks = re.findall(r'<form\s+method="(?:get|post)".*?</form>', source, re.DOTALL)
     assert len(forms) == len(blocks) == 4
@@ -42,8 +46,14 @@ def test_template_compiles_and_post_forms_have_csrf_without_get_leaks():
 
 
 def test_people_navigation_and_router_are_registered():
-    assert "router.include_router(kpi_dashboard_router)" in (ROOT / "app/web/people/__init__.py").read_text()
-    assert '/people/perf/kpi-dashboard' in (ROOT / "templates/people/perf/index.html").read_text()
+    assert (
+        "router.include_router(kpi_dashboard_router)"
+        in (ROOT / "app/web/people/__init__.py").read_text()
+    )
+    assert (
+        "/people/perf/kpi-dashboard"
+        in (ROOT / "templates/people/perf/index.html").read_text()
+    )
 
 
 def test_no_business_writes_or_commits_in_dashboard_service():
