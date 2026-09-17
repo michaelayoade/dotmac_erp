@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Generator
@@ -660,6 +661,8 @@ class InvoiceAccountingSyncRecord:
     disposition: InvoiceAccountingSyncDisposition
     issues: tuple[InvoiceAccountingSyncIssueRecord, ...]
     lines: tuple[InvoiceAccountingSyncLineRecord, ...]
+    digest_version: int
+    projection_digest: str
 
 
 @dataclass(frozen=True)
@@ -964,6 +967,55 @@ def _defaulted_money(
     return _parse_money_value(
         value, record=record, field=key, updated_at=updated_at, minor_units=minor_units
     )
+
+
+_DIGEST_HEX_PATTERN = re.compile(r"[0-9a-f]{64}")
+
+
+def _required_digest_version(
+    item: dict[str, Any],
+    key: str,
+    *,
+    record: str,
+    updated_at: datetime | None,
+) -> int:
+    """Sub's ``digest_version`` fact: required, a real (non-bool) int, positive.
+
+    ``bool`` is a subclass of ``int`` in Python, so it is rejected explicitly
+    rather than silently admitted as ``0``/``1``."""
+    value = item.get(key)
+    if value is None or isinstance(value, bool) or not isinstance(value, int):
+        raise DotmacSubParseError(
+            f"{record}: {key} must be an int, got {type(value).__name__} {value!r}",
+            record=record,
+            updated_at=updated_at,
+        )
+    if value <= 0:
+        raise DotmacSubParseError(
+            f"{record}: {key} must be positive, got {value!r}",
+            record=record,
+            updated_at=updated_at,
+        )
+    return value
+
+
+def _required_digest_hex(
+    item: dict[str, Any],
+    key: str,
+    *,
+    record: str,
+    updated_at: datetime | None,
+) -> str:
+    """Sub's ``projection_digest`` fact: required, exactly 64 lowercase hex."""
+    value = item.get(key)
+    if not isinstance(value, str) or not _DIGEST_HEX_PATTERN.fullmatch(value):
+        raise DotmacSubParseError(
+            f"{record}: {key} must be exactly 64 lowercase hex characters, "
+            f"got {value!r}",
+            record=record,
+            updated_at=updated_at,
+        )
+    return value
 
 
 def _parse_wire_instant(
@@ -2215,6 +2267,18 @@ class DotmacSubClient:
             disposition=disposition,
             issues=tuple(issues),
             lines=tuple(lines),
+            digest_version=_required_digest_version(
+                item,
+                "digest_version",
+                record=record,
+                updated_at=updated_at,
+            ),
+            projection_digest=_required_digest_hex(
+                item,
+                "projection_digest",
+                record=record,
+                updated_at=updated_at,
+            ),
         )
 
     def get_invoices(

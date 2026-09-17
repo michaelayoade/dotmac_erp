@@ -6,14 +6,10 @@ dependency on the ERP invoice posting service.
 
 from __future__ import annotations
 
-import hashlib
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
-from enum import Enum
 from itertools import islice
-from typing import Any
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import select
@@ -37,6 +33,13 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
     record_invoice_sync_outcome,
 )
 
+# Kept as an independent local constant, not imported from
+# ``app.schemas.integrator_observation`` (which defines its own
+# ``SUPPORTED_DIGEST_VERSION``) — that module is an API schema, and this
+# direct-pull shadow module importing it would create the wrong dependency
+# direction. The two constants must move together.
+SUPPORTED_DIGEST_VERSION: Final[int] = 1
+
 
 class InvoiceSyncShadowContractError(ValueError):
     """The v2 feed could not be consumed without losing cursor safety."""
@@ -51,31 +54,6 @@ class InvoiceSyncShadowResult:
     replayed: int
     resolved_prior: int
     truncated: bool
-
-
-def _json_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _json_value(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
-    if isinstance(value, Decimal):
-        return format(value, "f")
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, Enum):
-        return value.value
-    return value
-
-
-def invoice_projection_fingerprint(record: InvoiceAccountingSyncRecord) -> str:
-    """Hash every admitted source fact using a stable JSON representation."""
-    payload = json.dumps(
-        _json_value(asdict(record)),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-    ).encode()
-    return hashlib.sha256(payload).hexdigest()
 
 
 def _latest_position(
@@ -99,6 +77,12 @@ def _latest_position(
 def _command(
     organization_id: UUID, record: InvoiceAccountingSyncRecord
 ) -> RecordInvoiceSyncOutcome:
+    if record.digest_version != SUPPORTED_DIGEST_VERSION:
+        raise InvoiceSyncShadowContractError(
+            f"invoice {record.source_invoice_id} carries unsupported "
+            f"digest_version {record.digest_version!r}; this ERP build only "
+            f"accepts {SUPPORTED_DIGEST_VERSION!r}"
+        )
     if record.updated_at is None or record.updated_at.tzinfo is None:
         raise InvoiceSyncShadowContractError(
             f"invoice {record.source_invoice_id} has no timezone-aware updated_at"
@@ -126,7 +110,7 @@ def _command(
         source_updated_at=record.updated_at,
         source_kind=source_kind,
         disposition=disposition,
-        projection_fingerprint=invoice_projection_fingerprint(record),
+        projection_fingerprint=record.projection_digest,
         issues=issues,
     )
 

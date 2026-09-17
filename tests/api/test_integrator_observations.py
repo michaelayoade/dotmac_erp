@@ -136,6 +136,7 @@ def _payload(**overrides) -> dict:
         "source_kind": "native",
         "disposition": "ready",
         "projection_fingerprint": VALID_FINGERPRINT,
+        "digest_version": 1,
         "issues": [],
         "idempotency_key": "key-1",
     }
@@ -211,6 +212,57 @@ def test_write_route_rejects_invalid_enum(db_session) -> None:
 def test_write_route_rejects_malformed_fingerprint(db_session) -> None:
     client = _client(db_session, scopes=[SCOPE_WRITE])
     response = _write(client, _payload(projection_fingerprint="not-hex"))
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        "a" * 63,
+        "A" * 64,
+        "z" * 64,
+    ],
+)
+def test_write_route_rejects_various_malformed_fingerprints(
+    db_session, malformed: str
+) -> None:
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+    response = _write(client, _payload(projection_fingerprint=malformed))
+    assert response.status_code == 422
+
+
+def test_write_route_accepts_valid_digest_version_and_fingerprint(db_session) -> None:
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+    response = _write(
+        client,
+        _payload(
+            idempotency_key="valid-digest-1",
+            digest_version=1,
+            projection_fingerprint=VALID_FINGERPRINT,
+        ),
+    )
+    assert response.status_code == 200
+
+
+def test_write_route_rejects_unsupported_digest_version(db_session) -> None:
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+    response = _write(client, _payload(digest_version=2))
+    assert response.status_code == 422
+    detail = str(response.json())
+    assert "digest_version" in detail
+
+
+def test_write_route_rejects_string_digest_version(db_session) -> None:
+    """Strict typing: ``"1"`` must not be silently coerced to the int 1."""
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+    response = _write(client, _payload(digest_version="1"))
+    assert response.status_code == 422
+
+
+def test_write_route_rejects_boolean_digest_version(db_session) -> None:
+    """Strict typing: ``True`` must not be silently coerced to the int 1."""
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+    response = _write(client, _payload(digest_version=True))
     assert response.status_code == 422
 
 

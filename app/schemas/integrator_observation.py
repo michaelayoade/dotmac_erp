@@ -7,11 +7,13 @@ the request body — there is no field here for it to disagree with.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from decimal import Decimal
+from typing import Final
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.services.dotmac_sub.invoice_sync_outcomes import (
     CONTRACT_VERSION,
@@ -20,6 +22,14 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
     InvoiceSyncSourceKind,
 )
 from dotmac_kernel.idempotency import MAX_KEY_LENGTH
+
+# Sub's invoice-accounting-sync.v2 feed publishes ``digest_version`` alongside
+# its canonical ``projection_digest``. This is the only version this ERP
+# build knows how to validate/trust — bump it here once a version-aware
+# bridge (deferred future work) exists to accept more than one.
+SUPPORTED_DIGEST_VERSION: Final[int] = 1
+
+_PROJECTION_DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 class IntegratorInvoiceSyncIssuePayload(BaseModel):
@@ -43,10 +53,25 @@ class IntegratorInvoiceSyncObservationRequest(BaseModel):
     source_kind: InvoiceSyncSourceKind
     disposition: InvoiceSyncDisposition
     projection_fingerprint: str
+    digest_version: int = Field(strict=True)
     issues: tuple[IntegratorInvoiceSyncIssuePayload, ...] = ()
     observed_at: datetime | None = None
     contract_version: str = CONTRACT_VERSION
     idempotency_key: str = Field(..., min_length=1, max_length=MAX_KEY_LENGTH)
+
+    @model_validator(mode="after")
+    def _validate_digest(self) -> IntegratorInvoiceSyncObservationRequest:
+        if not _PROJECTION_DIGEST_PATTERN.fullmatch(self.projection_fingerprint):
+            raise ValueError(
+                "projection_fingerprint must be exactly 64 lowercase hex "
+                f"characters, got {self.projection_fingerprint!r}"
+            )
+        if self.digest_version != SUPPORTED_DIGEST_VERSION:
+            raise ValueError(
+                f"unsupported digest_version {self.digest_version!r}; this "
+                f"ERP build only accepts {SUPPORTED_DIGEST_VERSION!r}"
+            )
+        return self
 
 
 class IntegratorInvoiceSyncObservationResponse(BaseModel):

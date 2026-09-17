@@ -7,6 +7,11 @@ from uuid import UUID
 
 import pytest
 
+from app.services.dotmac_sub.client import (
+    DotmacSubClient,
+    DotmacSubConfig,
+    InvoiceAccountingSyncRecord,
+)
 from app.services.dotmac_sub.invoice_sync_outcomes import (
     InvoiceSyncDisposition,
     InvoiceSyncSourceKind,
@@ -14,6 +19,7 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
 )
 from app.services.dotmac_sub.invoice_sync_shadow import (
     InvoiceSyncShadowContractError,
+    _command as _shadow_command,
     observe_invoice_accounting_v2,
     record_blocked_invoice_accounting_revision,
 )
@@ -32,6 +38,50 @@ def _command(disposition: InvoiceSyncDisposition) -> RecordInvoiceSyncOutcome:
         disposition=disposition,
         projection_fingerprint="a" * 64,
     )
+
+
+def _accounting_v2_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "contract_version": "invoice-accounting-sync.v2",
+        "source_kind": "native",
+        "source_invoice_id": str(INVOICE_ID),
+        "source_splynx_invoice_id": None,
+        "account_id": "22222222-2222-2222-2222-222222222222",
+        "account": {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "display_name": "Shadow account",
+            "updated_at": "2026-09-06T10:00:00Z",
+        },
+        "invoice_number": "INV-1",
+        "status": "issued",
+        "currency": "NGN",
+        "subtotal_before_discount": "1000.00",
+        "discount_type": None,
+        "discount_value": None,
+        "discount_amount": "0.00",
+        "discounted_subtotal": "1000.00",
+        "tax_total": "75.00",
+        "total": "1075.00",
+        "balance_due": "1075.00",
+        "issued_at": "2026-09-05T10:00:00Z",
+        "due_at": None,
+        "paid_at": None,
+        "memo": None,
+        "is_proforma": False,
+        "updated_at": UPDATED_AT.isoformat(),
+        "disposition": "ready",
+        "digest_version": 1,
+        "projection_digest": "c" * 64,
+        "issues": [],
+        "lines": [],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _record(**overrides: object) -> InvoiceAccountingSyncRecord:
+    client = DotmacSubClient(DotmacSubConfig(api_url="https://sub.test", api_token="t"))
+    return client._parse_invoice_accounting_sync_v2(_accounting_v2_payload(**overrides))
 
 
 def test_shadow_records_blocked_as_consumed_without_calling_posting(monkeypatch):
@@ -137,6 +187,40 @@ def test_targeted_blocked_revision_uses_durable_outcome_owner(monkeypatch):
         invoice_id=str(INVOICE_ID),
         on_parse_error=ANY,
     )
+
+
+def test_command_forwards_projection_digest_verbatim() -> None:
+    record = _record(projection_digest="d" * 64)
+
+    command = _shadow_command(ORG_ID, record)
+
+    assert command.projection_fingerprint == record.projection_digest
+    assert command.projection_fingerprint == "d" * 64
+
+
+def test_command_rejects_unsupported_digest_version() -> None:
+    record = _record(digest_version=2)
+
+    with pytest.raises(InvoiceSyncShadowContractError, match="digest_version"):
+        _shadow_command(ORG_ID, record)
+
+
+def test_shadow_rejects_unsupported_digest_version_before_recording(monkeypatch):
+    """An unsupported digest_version must never reach the outcome recorder."""
+    db = Mock()
+    db.execute.return_value.first.return_value = None
+    client = Mock()
+    client.get_invoice_accounting_sync_v2.return_value = [_record(digest_version=2)]
+    recorder = Mock()
+    monkeypatch.setattr(
+        "app.services.dotmac_sub.invoice_sync_shadow.record_invoice_sync_outcome",
+        recorder,
+    )
+
+    with pytest.raises(InvoiceSyncShadowContractError, match="digest_version"):
+        observe_invoice_accounting_v2(db, client, ORG_ID)
+
+    recorder.assert_not_called()
 
 
 def test_targeted_revision_refuses_non_blocked_source(monkeypatch):
