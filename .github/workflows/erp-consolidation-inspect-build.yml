@@ -1,4 +1,4 @@
-name: Inspect consolidated ERP CI checkout
+name: Inspect consolidated ERP raw CI logs
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   inspect:
@@ -13,36 +14,59 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: 0e2aa7d8da674f150089bebfea55deee8754c0dc
-          persist-credentials: false
-      - name: Inspect tracked build sources without executing application code
+      - name: Read exact run metadata and bounded diagnostic excerpts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          import pathlib
+          import json
+          import os
           import re
-          import subprocess
+          import urllib.error
+          import urllib.parse
+          import urllib.request
 
-          print(subprocess.check_output(['git', 'log', '-1', '--format=%H %s'], text=True))
-          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '0e2aa7d8da674f150089bebfea55deee8754c0dc'
-          candidates = ['Dockerfile', 'scripts/entrypoint.sh', 'scripts/docker-entrypoint.sh', 'app/version_info.py']
-          for path in candidates:
-              source = pathlib.Path(path)
-              if source.is_file():
-                  print(f'\n===== {path} blob {subprocess.check_output(["git", "hash-object", path], text=True).strip()} =====')
-                  for number, line in enumerate(source.read_text().splitlines(), 1):
-                      print(f'{number}: {line}')
-          for path in ['.github/workflows/ci.yml', 'tests/integration/test_dotmac_sub_lock_connection.py']:
-              lines = pathlib.Path(path).read_text().splitlines()
-              selected = set()
-              pattern = r'CREATE ROLE|GRANT |app_user|static-tree|static-files|compile_catalog|_lock_identity|_resolve_sync_lock_identity|organizations'
+          api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+
+          def read(path):
+              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
+                  return json.load(response)
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
+
+          run = read('actions/runs/35381732919')
+          assert run['head_sha'] == '0e2aa7d8da674f150089bebfea55deee8754c0dc'
+          print(json.dumps({key: run[key] for key in ('id', 'head_sha', 'status', 'conclusion', 'run_attempt')}))
+          jobs = read('actions/runs/35381732919/jobs?per_page=100&filter=latest')['jobs']
+          print(json.dumps([{key: job[key] for key in ('id', 'name', 'head_sha', 'status', 'conclusion')} for job in jobs], indent=2))
+          for job in jobs:
+              if job['id'] not in (105720225335, 105720225349) or job['status'] != 'completed':
+                  continue
+              assert job['head_sha'] == run['head_sha']
+              print('\n===== RAW JOB', job['id'], job['name'], '=====')
+              request = urllib.request.Request(api + 'actions/jobs/' + str(job['id']) + '/logs', headers=headers)
+              try:
+                  response = urllib.request.build_opener(NoRedirect()).open(request, timeout=30)
+              except urllib.error.HTTPError as error:
+                  if error.code not in (301, 302, 303, 307, 308):
+                      raise
+                  target = error.headers['Location']
+                  parsed = urllib.parse.urlparse(target)
+                  assert parsed.scheme == 'https'
+                  assert parsed.hostname.endswith(('.blob.core.windows.net', '.actions.githubusercontent.com', '.githubusercontent.com'))
+                  response = urllib.request.urlopen(target, timeout=30)
+              with response:
+                  text = response.read(30000000).decode('utf-8-sig', errors='replace')
+              lines = text.splitlines()
+              selected = set(range(min(8, len(lines))))
+              selected.update(range(max(0, len(lines) - 90), len(lines)))
+              pattern = r'FAILED |ERROR |E   |AssertionError|Error:|Traceback|InsufficientPrivilege|PoolTimeout|TimeoutError|FAILBUCKET|digest mismatch|static tree|checkout vs image|PermissionError|OperationalError|ProgrammingError|short test summary|tests/integration/test_dotmac_sub|0e2aa7d|ee4df8b'
               for index, line in enumerate(lines):
                   if re.search(pattern, line):
-                      selected.update(range(max(0, index - 8), min(len(lines), index + 12)))
-              print(f'\n===== selected {path} =====')
-              for index in sorted(selected):
-                  print(f'{index + 1}: {lines[index]}')
-          print('\n===== tracked translation-related tests and scripts =====')
-          subprocess.run(['git', 'grep', '-n', '-E', 'compile_catalog|static-tree.sha256|static-files.sha256', '--', 'tests', 'scripts', 'Makefile', 'Dockerfile', 'app/version_info.py'], check=False)
+                      selected.update(range(max(0, index-3), min(len(lines), index+8)))
+              for index in sorted(selected)[-600:]:
+                  print(lines[index])
           PY
