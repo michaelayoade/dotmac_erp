@@ -1,4 +1,4 @@
-name: Verify ERP PostgreSQL test isolation
+name: Validate ERP native PostgreSQL fixture repair
 
 on:
   push:
@@ -19,6 +19,7 @@ jobs:
         with:
           ref: 64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a
           fetch-depth: 0
+          show-progress: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.12'
@@ -31,141 +32,33 @@ jobs:
         env:
           POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
           POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
-        run: poetry install --with dev --no-interaction
-      - name: Add fresh-interpreter regressions before changing the fixture
+        run: poetry install --with dev --no-interaction --quiet
+      - name: Execute the exact reviewed repair using structured sensitivity evidence
         run: |
-          python3 - <<'PY'
+          poetry run python - <<'PY'
           import pathlib
-          import textwrap
-          path = pathlib.Path('tests/unit/test_database_dialect_isolation.py')
-          assert not path.exists()
-          path.write_text(textwrap.dedent('''\
-          """The PostgreSQL lane must never construct SQLite-typed ORM expressions."""
-
-          import os
           import subprocess
-          import sys
-          import textwrap
-          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          import yaml
 
-          import pytest
-
-          ROOT = Path(__file__).resolve().parents[2]
-
-
-          @pytest.mark.parametrize(
-              "database_url",
-              ["postgresql://localhost/dialect_probe", "postgresql+psycopg://localhost/dialect_probe"],
-          )
-          def test_postgresql_url_preserves_native_types_before_model_import(database_url):
-              script = textwrap.dedent("""\
-                  import tests.conftest
-                  from uuid import uuid4
-                  from sqlalchemy.dialects import postgresql
-                  from sqlalchemy.dialects.postgresql.json import JSONB
-                  from sqlalchemy.sql.sqltypes import UUID
-                  from app.models.person import Person
-                  from app.models.finance.ar.customer import Customer
-                  assert postgresql.UUID is UUID
-                  assert postgresql.JSONB is JSONB
-                  expression = Person.id == uuid4()
-                  assert '::UUID' in str(expression.compile(dialect=postgresql.dialect()))
-                  email = Customer.primary_contact['email'].astext
-                  assert '->>' in str(email.compile(dialect=postgresql.dialect()))
-              """)
-              environment = dict(os.environ, TEST_DATABASE_URL=database_url)
-              result = subprocess.run(
-                  [sys.executable, "-c", script], cwd=ROOT, env=environment,
-                  capture_output=True, text=True, timeout=60, check=False,
-              )
-              assert result.returncode == 0, result.stdout + result.stderr
-
-
-          @pytest.mark.parametrize("database_url", [None, "sqlite+pysqlite:///:memory:"])
-          def test_unit_lane_keeps_sqlite_type_adapters(database_url):
-              script = textwrap.dedent("""\
-                  import tests.conftest as fixtures
-                  from sqlalchemy.dialects import postgresql
-                  from sqlalchemy.dialects.sqlite import dialect
-                  from sqlalchemy import create_engine
-                  from app.models.person import Person
-                  assert postgresql.UUID is fixtures.PatchedUUID
-                  assert postgresql.JSONB is fixtures.PatchedJSONB
-                  assert str(Person.__table__.c.id.type.compile(dialect=dialect())) == 'VARCHAR(36)'
-                  engine = create_engine('sqlite://')
-                  value = {'email': 'fixture@example.invalid'}
-                  adapter = fixtures.PatchedJSONB()
-                  encoded = adapter.bind_processor(engine.dialect)(value)
-                  assert adapter.result_processor(engine.dialect, None)(encoded) == value
-                  engine.dispose()
-              """)
-              environment = dict(os.environ)
-              environment.pop("TEST_DATABASE_URL", None)
-              if database_url is not None:
-                  environment["TEST_DATABASE_URL"] = database_url
-              result = subprocess.run(
-                  [sys.executable, "-c", script], cwd=ROOT, env=environment,
-                  capture_output=True, text=True, timeout=60, check=False,
-              )
-              assert result.returncode == 0, result.stdout + result.stderr
-          '''))
-          PY
-      - name: Prove native-type regression catches the original leakage
-        run: |
-          set +e
-          poetry run pytest -q --timeout=90 tests/unit/test_database_dialect_isolation.py -k postgresql_url > /tmp/isolation-before.log 2>&1
-          status=$?
-          set -e
-          tail -n 18 /tmp/isolation-before.log
-          test "$status" -eq 1
-          grep -q '2 failed' /tmp/isolation-before.log
-      - name: Keep SQLite adapters confined to the SQLite test lane
-        run: |
-          python3 - <<'PY'
-          import pathlib
-          path = pathlib.Path('tests/conftest.py')
-          source = path.read_text()
-          before = '# Replace the PostgreSQL UUID with our patched version\npg_dialect.UUID = PatchedUUID'
-          after = '''# The integration lane explicitly supplies TEST_DATABASE_URL. Leave native
-          # PostgreSQL types intact BEFORE any mapper or annotated expression exists.
-          # Repairing table columns afterwards cannot repair already-cached ORM
-          # comparators/bind types. DATABASE_URL alone is deliberately not used:
-          # developers may have a production DSN while running SQLite unit tests.
-          _POSTGRESQL_TEST_TYPES = os.environ.get("TEST_DATABASE_URL", "").startswith(
-              ("postgresql://", "postgresql+")
-          )
-          if not _POSTGRESQL_TEST_TYPES:
-              pg_dialect.UUID = PatchedUUID'''
-          assert source.count(before) == 1
-          source = source.replace(before, after, 1)
-          before = 'if _original_jsonb is not None:\n    pg_dialect.JSONB = PatchedJSONB'
-          after = 'if _original_jsonb is not None and not _POSTGRESQL_TEST_TYPES:\n    pg_dialect.JSONB = PatchedJSONB'
-          assert source.count(before) == 1
-          path.write_text(source.replace(before, after, 1))
-          PY
-      - name: Verify both database lanes and existing type restoration regressions
-        run: |
-          poetry run ruff format tests/conftest.py tests/unit/test_database_dialect_isolation.py
-          poetry run ruff check tests/conftest.py tests/unit/test_database_dialect_isolation.py
-          poetry run pytest -q --timeout=90 \
-            tests/unit/test_database_dialect_isolation.py \
-            tests/test_postgresql_type_restoration_cache.py \
-            tests/unit/test_postgresql_type_restoration.py
-      - name: Publish only the validated test-isolation repair
-        run: |
-          python3 - <<'PY'
-          import subprocess
-          allowed = {'tests/conftest.py', 'tests/unit/test_database_dialect_isolation.py'}
-          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
-          untracked = set(subprocess.check_output(['git','ls-files','--others','--exclude-standard'], text=True).splitlines())
-          assert changed | untracked == allowed, (changed, untracked)
-          subprocess.run(['git','diff','--check'], check=True)
-          subprocess.run(['git','diff','--stat'], check=True)
-          subprocess.run(['git','config','user.name','github-actions[bot]'], check=True)
-          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'], check=True)
-          subprocess.run(['git','add','--',*sorted(allowed)], check=True)
-          subprocess.run(['git','commit','-m','fix(tests): isolate SQLite adapters before PostgreSQL model imports'], check=True)
-          assert subprocess.check_output(['git','rev-parse','HEAD^'], text=True).strip() == '64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a'
-          subprocess.run(['git','push','origin','HEAD:refs/heads/work/erp-consolidation-isolation-output-20260918'], check=True)
-          subprocess.run(['git','log','-1','--format=Verified repair commit: %H'], check=True)
+          expected = '64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a'
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == expected
+          # Reuse only the exact repair scripts already reviewed in this pinned
+          # helper revision. The helper workflow never enters the output commit.
+          source = subprocess.check_output(['git','show','2eb7c24709315ea3a44235cbb3aa30648f1fe585:.github/workflows/erp-consolidation-inspect-build.yml'], text=True)
+          steps = {s['name']: s['run'] for s in yaml.safe_load(source)['jobs']['repair']['steps'] if 'run' in s}
+          def execute(name):
+              print('\n===', name, '===', flush=True)
+              subprocess.run(['bash','-e','-o','pipefail','-c',steps[name]], check=True)
+          execute('Add fresh-interpreter regressions before changing the fixture')
+          result = subprocess.run(['poetry','run','pytest','-q','--timeout=90','tests/unit/test_database_dialect_isolation.py','-k','postgresql_url','--junitxml=/tmp/isolation-before.xml'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+          print('\n'.join(result.stdout.splitlines()[-12:]))
+          assert result.returncode == 1, result.returncode
+          suites = ET.parse('/tmp/isolation-before.xml').getroot().iter('testsuite')
+          counts = [(int(s.attrib['tests']),int(s.attrib['failures']),int(s.attrib['errors'])) for s in suites]
+          assert counts == [(2,2,0)], counts
+          print('Sensitivity proof: both new PostgreSQL cases fail before the fix.')
+          execute('Keep SQLite adapters confined to the SQLite test lane')
+          execute('Verify both database lanes and existing type restoration regressions')
+          execute('Publish only the validated test-isolation repair')
           PY
