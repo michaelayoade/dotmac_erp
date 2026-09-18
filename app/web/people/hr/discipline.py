@@ -118,6 +118,9 @@ def discipline_employee_search(
 async def create_case(
     request: Request,
     employee_id: str | None = Form(None),
+    target_mode: str = Form("individual"),
+    employee_ids: list[str] = Form([]),
+    department_id: str | None = Form(None),
     violation_type: str | None = Form(None),
     severity: str | None = Form(None),
     subject: str | None = Form(None),
@@ -146,6 +149,14 @@ async def create_case(
         return raw or None
 
     employee_id = _value("employee_id", employee_id)
+    target_mode = _value("target_mode", target_mode) or "individual"
+    department_id = _value("department_id", department_id)
+    if form and hasattr(form, "getlist"):
+        employee_ids = [
+            value.strip()
+            for value in form.getlist("employee_ids")
+            if isinstance(value, str) and value.strip()
+        ]
     violation_type = _value("violation_type", violation_type)
     severity = _value("severity", severity)
     subject = _value("subject", subject)
@@ -158,7 +169,13 @@ async def create_case(
         employee_name = _value("employee_name", employee_name)
         reported_by_name = _value("reported_by_name", reported_by_name)
 
-    if not employee_id or not violation_type or not severity or not subject:
+    if (
+        (target_mode == "individual" and not employee_id)
+        or (target_mode == "selected" and not employee_ids)
+        or not violation_type
+        or not severity
+        or not subject
+    ):
         return discipline_web_service.list_cases_response(
             request=request,
             auth=auth,
@@ -167,6 +184,9 @@ async def create_case(
             new_case_form_data={
                 "employee_id": employee_id or "",
                 "employee_name": employee_name or "",
+                "target_mode": target_mode,
+                "employee_ids": employee_ids,
+                "department_id": department_id or "",
                 "violation_type": violation_type or "",
                 "severity": severity or "",
                 "subject": subject or "",
@@ -188,8 +208,12 @@ async def create_case(
             description=description,
             incident_date=incident_date,
             reported_by_id=reported_by_id,
+            target_mode=target_mode,
+            employee_ids=employee_ids,
+            department_id=department_id,
         )
     except Exception as exc:
+        db.rollback()
         message = getattr(exc, "detail", None) or str(exc)
         return discipline_web_service.list_cases_response(
             request=request,
@@ -199,6 +223,9 @@ async def create_case(
             new_case_form_data={
                 "employee_id": employee_id or "",
                 "employee_name": employee_name or "",
+                "target_mode": target_mode,
+                "employee_ids": employee_ids,
+                "department_id": department_id or "",
                 "violation_type": violation_type or "",
                 "severity": severity or "",
                 "subject": subject or "",
@@ -208,6 +235,38 @@ async def create_case(
                 "reported_by_name": reported_by_name or "",
             },
             show_new_case_modal=True,
+        )
+
+
+@router.post("/bulk-issue-query")
+async def bulk_issue_query(
+    request: Request,
+    case_ids: list[str] = Form([]),
+    query_text: str | None = Form(None),
+    response_due_date: str | None = Form(None),
+    auth: WebAuthContext = Depends(require_discipline_workflow_manage),
+    db: Session = Depends(get_db_for_org),
+):
+    """Issue one query to multiple draft cases."""
+    form = getattr(request.state, "csrf_form", None)
+    if form and hasattr(form, "getlist"):
+        case_ids = [value for value in form.getlist("case_ids") if value]
+        query_text = form.get("query_text") or query_text
+        response_due_date = form.get("response_due_date") or response_due_date
+    try:
+        return discipline_web_service.bulk_issue_query_response(
+            auth=auth,
+            db=db,
+            case_ids=case_ids,
+            query_text=(query_text or "").strip(),
+            response_due_date=(response_due_date or "").strip(),
+        )
+    except Exception as exc:
+        db.rollback()
+        message = quote(getattr(exc, "detail", None) or str(exc))
+        return RedirectResponse(
+            url=f"/people/hr/discipline/cases?error={message}",
+            status_code=303,
         )
 
 
