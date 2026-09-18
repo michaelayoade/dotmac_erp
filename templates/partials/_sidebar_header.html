@@ -3,7 +3,7 @@
 <div class="flex-shrink-0">
     <div class="flex h-16 items-center gap-3 border-b border-slate-200 dark:border-slate-800"
          :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
-        <a href="/" class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+        <a href="/" class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl hover:opacity-90 transition-opacity"
            data-testid="sidebar-home-link" data-no-context hx-boost="false" @click.stop
            aria-label="{{ brand_name }} home" title="Return to main dashboard">
             {% if brand_logo_url %}
@@ -18,7 +18,7 @@
                         {{ brand_mark }}
                     </span>
                 </span>
-                <span class="hidden dark:block">
+                <span class="hidden dark:flex">
                     <img src="{{ brand_logo_dark_url }}" alt="{{ brand_name }} logo dark"
                          class="h-10 w-10 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
                          loading="lazy"
