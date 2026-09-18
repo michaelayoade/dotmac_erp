@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from app.tasks import notifications as tasks
 
@@ -99,7 +100,7 @@ def test_task_queries_are_org_scoped_and_expiry_is_not_a_send(monkeypatch):
     )
     assert "push_status" in str(statements[-1])
     assert "push_next_retry_at" in str(statements[-1])
-    assert "SKIP LOCKED" in str(statements[-1])
+    assert "SKIP LOCKED" in str(statements[-1].compile(dialect=postgresql.dialect()))
     expired_values = statements[1].compile().params
     assert expired_values["push_status"] == "expired"
     assert "push_sent" not in expired_values
