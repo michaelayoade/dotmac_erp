@@ -1,4 +1,4 @@
-name: Inspect consolidated ERP raw CI logs
+name: Verify ERP consolidation fixture and asset repairs
 
 on:
   push:
@@ -6,67 +6,187 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  inspect:
+  repair:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
-      - name: Read exact run metadata and bounded diagnostic excerpts
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 0e2aa7d8da674f150089bebfea55deee8754c0dc
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Install locked application and test dependencies
         env:
-          GH_TOKEN: ${{ github.token }}
+          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: poetry install --with dev --no-interaction
+      - name: Apply bounded test-fixture repair and regenerate the asset record
         run: |
           python3 - <<'PY'
           import json
-          import os
-          import re
-          import urllib.error
-          import urllib.parse
-          import urllib.request
+          import pathlib
+          import subprocess
+          import textwrap
 
-          api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
-          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '0e2aa7d8da674f150089bebfea55deee8754c0dc'
+          def replace_once(text, before, after):
+              if text.count(before) != 1:
+                  raise SystemExit('Expected exactly one matching source anchor')
+              return text.replace(before, after, 1)
 
-          def read(path):
-              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
-                  return json.load(response)
+          path = pathlib.Path('tests/postgresql_types.py')
+          source = path.read_text()
+          source = replace_once(source, 'from sqlalchemy import Text', 'from sqlalchemy import Column, Text')
+          addition = textwrap.dedent('''\
+          def set_column_type(column: Column[Any], column_type: TypeEngine[Any]) -> None:
+              """Swap a test column type without retaining its previous comparator.
 
-          class NoRedirect(urllib.request.HTTPRedirectHandler):
-              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-                  return None
+              SQLAlchemy memoizes a column's comparator. A cached TypeDecorator
+              comparator accesses coerce_to_is_types on the current type, which a
+              native UUID does not expose. Clear expression memoizations on BOTH
+              fixture setup and restoration; production models remain untouched.
+              """
+              column.type = column_type
+              column._reset_memoizations()
 
-          run = read('actions/runs/35381732919')
-          assert run['head_sha'] == '0e2aa7d8da674f150089bebfea55deee8754c0dc'
-          print(json.dumps({key: run[key] for key in ('id', 'head_sha', 'status', 'conclusion', 'run_attempt')}))
-          jobs = read('actions/runs/35381732919/jobs?per_page=100&filter=latest')['jobs']
-          print(json.dumps([{key: job[key] for key in ('id', 'name', 'head_sha', 'status', 'conclusion')} for job in jobs], indent=2))
-          for job in jobs:
-              if job['id'] not in (105720225335, 105720225349) or job['status'] != 'completed':
-                  continue
-              assert job['head_sha'] == run['head_sha']
-              print('\n===== RAW JOB', job['id'], job['name'], '=====')
-              request = urllib.request.Request(api + 'actions/jobs/' + str(job['id']) + '/logs', headers=headers)
-              try:
-                  response = urllib.request.build_opener(NoRedirect()).open(request, timeout=30)
-              except urllib.error.HTTPError as error:
-                  if error.code not in (301, 302, 303, 307, 308):
-                      raise
-                  target = error.headers['Location']
-                  parsed = urllib.parse.urlparse(target)
-                  assert parsed.scheme == 'https'
-                  assert parsed.hostname.endswith(('.blob.core.windows.net', '.actions.githubusercontent.com', '.githubusercontent.com'))
-                  response = urllib.request.urlopen(target, timeout=30)
-              with response:
-                  text = response.read(30000000).decode('utf-8-sig', errors='replace')
-              lines = text.splitlines()
-              selected = set(range(min(8, len(lines))))
-              selected.update(range(max(0, len(lines) - 90), len(lines)))
-              pattern = r'FAILED |ERROR |E   |AssertionError|Error:|Traceback|InsufficientPrivilege|PoolTimeout|TimeoutError|FAILBUCKET|digest mismatch|static tree|checkout vs image|PermissionError|OperationalError|ProgrammingError|short test summary|tests/integration/test_dotmac_sub|0e2aa7d|ee4df8b'
-              for index, line in enumerate(lines):
-                  if re.search(pattern, line):
-                      selected.update(range(max(0, index-3), min(len(lines), index+8)))
-              for index in sorted(selected)[-600:]:
-                  print(lines[index])
+
+          ''')
+          source = replace_once(source, 'def native_postgresql_type(', addition + 'def native_postgresql_type(')
+          path.write_text(source)
+          path = pathlib.Path('tests/integration/conftest.py')
+          source = path.read_text()
+          source = replace_once(source, 'from tests.postgresql_types import native_postgresql_type', 'from tests.postgresql_types import native_postgresql_type, set_column_type')
+          source = replace_once(source, 'col.type = native_postgresql_type(col.type)', 'set_column_type(col, native_postgresql_type(col.type))')
+          source = replace_once(source, 'col.type = col_type', 'set_column_type(col, col_type)')
+          path.write_text(source)
+
+          tests = textwrap.dedent('''\
+          """Regression proof for cached comparators during PostgreSQL type repair."""
+
+          from uuid import uuid4
+
+          import pytest
+          from sqlalchemy import Column, String
+          from sqlalchemy.dialects import postgresql, sqlite
+          from sqlalchemy.types import TypeDecorator
+
+          from tests.postgresql_types import native_postgresql_type, set_column_type
+
+
+          class SQLiteUUID(TypeDecorator):
+              impl = String(36)
+              cache_ok = True
+              as_uuid = True
+
+
+          @pytest.mark.parametrize("operator", ["eq", "ne"])
+          def test_native_uuid_repair_discards_a_cached_decorator_comparator(operator):
+              original = SQLiteUUID()
+              column = Column("identifier", original)
+              value = uuid4()
+              getattr(column, f"__{operator}__")(value)
+              old_comparator = column.comparator
+              set_column_type(column, native_postgresql_type(original))
+              assert column.comparator is not old_comparator
+              expression = getattr(column, f"__{operator}__")(value)
+              assert "::UUID" in str(expression.compile(dialect=postgresql.dialect()))
+              assert "IS NULL" in str(column.is_(None))
+
+
+          def test_restoration_rebuilds_the_original_sqlite_comparator():
+              original = SQLiteUUID()
+              column = Column("identifier", original)
+              value = uuid4()
+              column == value
+              set_column_type(column, native_postgresql_type(original))
+              column == value
+              native_comparator = column.comparator
+              set_column_type(column, original)
+              assert column.type is original
+              assert column.comparator is not native_comparator
+              assert str((column == value).compile(dialect=sqlite.dialect())) == "identifier = ?"
+              assert "IS NULL" in str(column.is_(None))
+
+
+          def test_repeated_native_and_sqlite_restoration_remains_safe():
+              original = SQLiteUUID()
+              column = Column("identifier", original)
+              for _ in range(3):
+                  column == uuid4()
+                  set_column_type(column, native_postgresql_type(original))
+                  assert "::UUID" in str((column == uuid4()).compile(dialect=postgresql.dialect()))
+                  set_column_type(column, original)
+                  assert str((column == uuid4()).compile(dialect=sqlite.dialect())) == "identifier = ?"
+          ''')
+          path = pathlib.Path('tests/test_postgresql_type_restoration_cache.py')
+          assert not path.exists()
+          path.write_text(tests)
+          record_path = pathlib.Path('deploy/static-tree-digest.json')
+          record = json.loads(record_path.read_text())
+          assert record['tree_digest'] == 'sha256:e462e28182181f93c339234c261bcb9c5095e87ed988f596857d9b3d445e3734'
+          digest = subprocess.check_output(['python3', 'scripts/static_tree_digest.py', 'static'], text=True).strip()
+          assert digest == 'sha256:393b311f8642ed7233e1ed4791866a40b45d55dd1936f71b74ea85c96bf82aec', digest
+          record['tree_digest'] = digest
+          record_path.write_text(json.dumps(record, indent=2) + '\n')
+          print('Verified exact checkout digest:', digest)
+          subprocess.run(['git', 'grep', '-n', 'native_postgresql_type', '--', 'tests'], check=True)
+          PY
+      - name: Prove the new regression fails without cache invalidation
+        run: |
+          poetry run python - <<'PY'
+          import importlib.util
+          from uuid import uuid4
+          from sqlalchemy import Column, String
+          from sqlalchemy.sql.sqltypes import UUID
+          from sqlalchemy.types import TypeDecorator
+          class StandIn(TypeDecorator):
+              impl = String(36)
+              cache_ok = True
+          column = Column('id', StandIn())
+          column == uuid4()
+          column.type = UUID(as_uuid=True)
+          try:
+              column == uuid4()
+          except AttributeError as error:
+              assert 'coerce_to_is_types' in str(error), error
+              print('Confirmed original cached-comparator failure:', error)
+          else:
+              raise SystemExit('Original defect was not reproduced')
+          PY
+      - name: Format, lint and execute regression proofs
+        run: |
+          poetry run ruff format tests/postgresql_types.py tests/integration/conftest.py tests/test_postgresql_type_restoration_cache.py
+          poetry run ruff check tests/postgresql_types.py tests/test_postgresql_type_restoration_cache.py
+          poetry run pytest -q tests/test_postgresql_type_restoration_cache.py
+          python3 scripts/check_evidence_json.py
+          python3 scripts/static_tree_digest.py static --expect sha256:393b311f8642ed7233e1ed4791866a40b45d55dd1936f71b74ea85c96bf82aec
+      - name: Publish only the four reviewed repair files to an output branch
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          allowed = {'tests/postgresql_types.py', 'tests/integration/conftest.py', 'tests/test_postgresql_type_restoration_cache.py', 'deploy/static-tree-digest.json'}
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          untracked = set(subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard'], text=True).splitlines())
+          assert changed | untracked == allowed, (changed, untracked)
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          subprocess.run(['git', 'diff', '--', *sorted(allowed)], check=True)
+          subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
+          subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+          subprocess.run(['git', 'add', '--', *sorted(allowed)], check=True)
+          subprocess.run(['git', 'commit', '-m', 'fix(ci): clear restored UUID comparators and refresh static asset digest'], check=True)
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == '0e2aa7d8da674f150089bebfea55deee8754c0dc'
+          subprocess.run(['git', 'push', 'origin', 'HEAD:refs/heads/work/erp-consolidation-fixture-output-20260918'], check=True)
+          subprocess.run(['git', 'log', '-1', '--format=Verified repair commit: %H'], check=True)
           PY
