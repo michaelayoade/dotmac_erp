@@ -1,0 +1,48 @@
+name: Inspect consolidated ERP CI checkout
+
+on:
+  push:
+    branches: [work/erp-consolidation-ci-repair-20260918]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 0e2aa7d8da674f150089bebfea55deee8754c0dc
+          persist-credentials: false
+      - name: Inspect tracked build sources without executing application code
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import subprocess
+
+          print(subprocess.check_output(['git', 'log', '-1', '--format=%H %s'], text=True))
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '0e2aa7d8da674f150089bebfea55deee8754c0dc'
+          candidates = ['Dockerfile', 'scripts/entrypoint.sh', 'scripts/docker-entrypoint.sh', 'app/version_info.py']
+          for path in candidates:
+              source = pathlib.Path(path)
+              if source.is_file():
+                  print(f'\n===== {path} blob {subprocess.check_output(["git", "hash-object", path], text=True).strip()} =====')
+                  for number, line in enumerate(source.read_text().splitlines(), 1):
+                      print(f'{number}: {line}')
+          for path in ['.github/workflows/ci.yml', 'tests/integration/test_dotmac_sub_lock_connection.py']:
+              lines = pathlib.Path(path).read_text().splitlines()
+              selected = set()
+              pattern = r'CREATE ROLE|GRANT |app_user|static-tree|static-files|compile_catalog|_lock_identity|_resolve_sync_lock_identity|organizations'
+              for index, line in enumerate(lines):
+                  if re.search(pattern, line):
+                      selected.update(range(max(0, index - 8), min(len(lines), index + 12)))
+              print(f'\n===== selected {path} =====')
+              for index in sorted(selected):
+                  print(f'{index + 1}: {lines[index]}')
+          print('\n===== tracked translation-related tests and scripts =====')
+          subprocess.run(['git', 'grep', '-n', '-E', 'compile_catalog|static-tree.sha256|static-files.sha256', '--', 'tests', 'scripts', 'Makefile', 'Dockerfile', 'app/version_info.py'], check=False)
+          PY
