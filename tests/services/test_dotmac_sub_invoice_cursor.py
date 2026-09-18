@@ -220,8 +220,12 @@ def test_invoice_mismatch_is_logged_and_quarantined_by_source_revision(
     monkeypatch.setattr(invoices_module, "logger", logger)
     outcome_id = uuid.UUID("30000000-0000-0000-0000-000000000001")
     quarantine = MagicMock(return_value=MagicMock(outcome_id=outcome_id))
+    monkeypatch.setattr(invoices_module, "record_invoice_sync_outcome", quarantine)
+
+    command = object()
+    evidence = MagicMock(return_value=command)
     monkeypatch.setattr(
-        invoices_module, "record_blocked_invoice_accounting_revision", quarantine
+        invoices_module, "fetch_blocked_invoice_accounting_revision", evidence
     )
 
     result = harness.sync_invoices(batch_size=10)
@@ -230,8 +234,8 @@ def test_invoice_mismatch_is_logged_and_quarantined_by_source_revision(
     assert result.skipped == 1
     advanced = harness._advance_sync_watermark_position.call_args.args[1]
     assert advanced == SyncWatermarkPosition(_T0, invoice_id)
-    quarantine.assert_called_once_with(
-        harness.db,
+    quarantine.assert_called_once_with(harness.db, command)
+    evidence.assert_called_once_with(
         harness.client,
         harness.organization_id,
         invoice_id=uuid.UUID(invoice_id),
@@ -274,14 +278,19 @@ def test_invoice_quarantine_evidence_work_is_bounded(monkeypatch) -> None:
         header_total=100,
     )
     quarantine = MagicMock(return_value=MagicMock(outcome_id=uuid.uuid4()))
-    monkeypatch.setattr(
-        invoices_module, "record_blocked_invoice_accounting_revision", quarantine
-    )
+    monkeypatch.setattr(invoices_module, "record_invoice_sync_outcome", quarantine)
     monkeypatch.setattr(invoices_module, "_QUARANTINE_EVIDENCE_LIMIT", 1)
+
+    command = object()
+    evidence = MagicMock(return_value=command)
+    monkeypatch.setattr(
+        invoices_module, "fetch_blocked_invoice_accounting_revision", evidence
+    )
 
     result = harness.sync_invoices(batch_size=10)
 
-    assert quarantine.call_count == 1
+    quarantine.assert_called_once_with(harness.db, command)
+    assert evidence.call_count == 1
     assert result.skipped == 1
     assert "invoice quarantine evidence work limit (1) reached" in result.message
     advanced = harness._advance_sync_watermark_position.call_args.args[1]
@@ -307,7 +316,7 @@ def test_invoice_mismatch_parks_cursor_without_durable_v2_evidence(
     )
     monkeypatch.setattr(
         invoices_module,
-        "record_blocked_invoice_accounting_revision",
+        "fetch_blocked_invoice_accounting_revision",
         MagicMock(side_effect=ValueError("v2 evidence unavailable")),
     )
 
