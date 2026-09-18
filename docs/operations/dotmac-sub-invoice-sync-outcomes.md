@@ -61,6 +61,14 @@ tables out of the live path into a frozen archive and creates a fresh, empty
 pair of tables at the original names. It performs no data copy, backfill or
 row rewrite. See "Frozen legacy tables" below.
 
+`digest_version` is `NOT NULL` with no default on the fresh canonical table,
+so any application instance still running the pre-cutover code (writing
+without `digest_version`) will fail every write to this table immediately
+after this migration commits — the table name is unchanged, so the failure
+looks like a write error, not a missing-table error. Deploy the code that
+sets `digest_version` (or pause the shadow task) across this migration, not
+after it.
+
 ## Frozen legacy tables
 
 Every row `20260906_invoice_sync_outcomes` ever wrote used ERP's own,

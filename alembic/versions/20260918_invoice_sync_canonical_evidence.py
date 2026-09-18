@@ -72,6 +72,17 @@ FROZEN_COMMENT = (
     "cutover evidence. Read-only to app_user."
 )
 
+# COMMENT ON TABLE/COLUMN ... IS <text> requires a literal string constant in
+# PostgreSQL's grammar (Sconst) — it is a utility statement, not DML, and
+# cannot accept a bound/server-side parameter at all (confirmed against this
+# repo's own precedent: every other COMMENT ON statement under
+# alembic/versions/, e.g. 20260202_create_fleet_management_schema.py, uses an
+# inline literal with manually-doubled apostrophes; every .bindparams() usage
+# elsewhere in this directory is on real DML). So free text embedded in a
+# COMMENT statement is escaped with standard SQL single-quote doubling
+# instead of a bind parameter.
+_FROZEN_COMMENT_SQL = FROZEN_COMMENT.replace("'", "''")
+
 
 def _protect(table: str) -> None:
     qualified = f"{SCHEMA}.{table}"
@@ -147,9 +158,7 @@ def upgrade() -> None:
         f"{SCHEMA}.{LEGACY_ISSUE_TABLE} FROM app_user"
     )
     op.execute(
-        sa.text(
-            f"COMMENT ON TABLE {SCHEMA}.{LEGACY_OUTCOME_TABLE} IS :comment"
-        ).bindparams(comment=FROZEN_COMMENT)
+        f"COMMENT ON TABLE {SCHEMA}.{LEGACY_OUTCOME_TABLE} IS '{_FROZEN_COMMENT_SQL}'"
     )
 
     # --- B. A fresh, empty canonical table at the freed familiar name ------
@@ -233,15 +242,9 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
     op.execute(
-        sa.text(
-            f"COMMENT ON COLUMN {SCHEMA}.{OUTCOME_TABLE}.projection_fingerprint "
-            "IS :comment"
-        ).bindparams(
-            comment=(
-                "forwarded verbatim from Self-Care's canonical digest; never "
-                "computed locally."
-            )
-        )
+        f"COMMENT ON COLUMN {SCHEMA}.{OUTCOME_TABLE}.projection_fingerprint IS "
+        "'forwarded verbatim from Self-Care''s canonical digest; never "
+        "computed locally.'"
     )
     # Cursor-oriented replacement for ix_sub_invoice_outcome_org_source,
     # matching how invoice_sync_shadow._latest_canonical_position actually

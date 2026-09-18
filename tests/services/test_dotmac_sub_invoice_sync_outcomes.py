@@ -47,6 +47,20 @@ def _legacy_tables(db_session):
     tables the shared fixture also does not know about.
     """
     engine = db_session.get_bind()
+    # SQLite can't parse Postgres server-defaults like gen_random_uuid(); drop
+    # them (Python-side defaults still supply the PK), mirroring the shared
+    # harness's ``_strip_sqlite_server_defaults`` and the identical local
+    # idiom in ``tests/services/test_dotmac_sub_payment_idempotency.py``.
+    for table in (
+        DotmacSubInvoiceSyncOutcomeLegacy.__table__,
+        DotmacSubInvoiceSyncIssueLegacy.__table__,
+    ):
+        for col in table.columns:
+            default = col.server_default
+            if default is not None and "gen_random_uuid" in str(
+                getattr(default, "arg", default)
+            ):
+                col.server_default = None
     DotmacSubInvoiceSyncOutcomeLegacy.__table__.create(engine, checkfirst=True)
     DotmacSubInvoiceSyncIssueLegacy.__table__.create(engine, checkfirst=True)
     yield
