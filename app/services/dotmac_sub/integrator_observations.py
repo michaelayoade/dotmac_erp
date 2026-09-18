@@ -28,11 +28,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from dotmac_kernel.idempotency import execute_once
@@ -174,10 +175,15 @@ def validate_invoice_sync_observation(
 ) -> None:
     """Validate-only: shared construction check for both write and mirror.
 
-    Raises ``IntegratorObservationValidationError`` (or the narrower
-    ``InvoiceSyncIdentityCollision``) on any check
-    ``record_invoice_sync_outcome`` construction would itself reject. Never
-    reads or writes the outcome table.
+    Raises ``IntegratorObservationValidationError`` on any check
+    ``invoice_sync_outcomes._validated`` (construction-time validation, not
+    the existing-row stability check) would itself reject — unsupported
+    contract/digest version, malformed fingerprint, a disposition/issues
+    inconsistency, or duplicate issue evidence. It can NEVER raise the
+    narrower ``InvoiceSyncIdentityCollision``: that exception only comes
+    from ``record_invoice_sync_outcome``'s existing-row comparison, which
+    this function never reaches (it does not read the outcome table at
+    all). Never reads or writes the outcome table.
     """
     command = _build_command(envelope, organization_id=organization_id)
     try:
@@ -235,22 +241,82 @@ def record_invoice_sync_observation(
     )
 
 
+def format_validation_errors(errors: Sequence[Mapping[str, object]]) -> str:
+    """Pydantic/FastAPI's list-shaped ``.errors()`` into one readable string.
+
+    Shared by the write route's ``RequestValidationError`` handling and the
+    mirror route's own ``pydantic.ValidationError`` handling below, so the
+    two never drift on message shape.
+    """
+    if not errors:
+        return "request body failed validation"
+    parts = []
+    for error in errors:
+        loc = ".".join(str(part) for part in error.get("loc", ()))
+        parts.append(f"{loc}: {error.get('msg', 'invalid')}")
+    return "; ".join(parts)
+
+
+def _best_effort_identity(raw_envelope: Mapping[str, object]) -> str:
+    """A readable identity string even when the body fails to parse at all.
+
+    Best-effort only: used exclusively for a ``verdict="blocked"`` report's
+    ``identity`` field when the raw body could not be validated into an
+    ``IntegratorInvoiceSyncEnvelope`` at all, so operators reading the
+    mirror evidence still have something to correlate against.
+    """
+    observation = raw_envelope.get("observation")
+    if not isinstance(observation, Mapping):
+        return "unknown"
+    parts = tuple(
+        str(observation.get(field, "?"))
+        for field in ("source_invoice_id", "source_updated_at", "digest_version")
+    )
+    return ":".join(parts)
+
+
 def compare_invoice_sync_observation(
     db: Session,
     *,
     organization_id: UUID,
-    envelope: IntegratorInvoiceSyncEnvelope,
+    raw_envelope: Mapping[str, object],
 ) -> InvoiceSyncMirrorComparison:
     """The mirror route's entire job: validate, then compare, never write.
 
-    On a construction/business-rule failure (including what would be an
-    ``InvoiceSyncIdentityCollision`` on the write path), returns
-    ``verdict="blocked"`` rather than raising — the mirror route must never
-    answer a domain-validation failure with a non-200 status (it would be
-    misread as a transport outage, destroying the parity evidence a mirror
-    pass exists to collect). No row found at the identity key is an honest
-    ``"missing"``, never reported as agreement.
+    Accepts the RAW request body — not the write route's strict,
+    ``extra="forbid"``/``Literal``-pinned ``IntegratorInvoiceSyncEnvelope``
+    — because several genuine domain-fact disagreements (an out-of-pattern
+    ``projection_digest``, an unrecognized enum value, a ``capability_id``
+    mismatch) are exactly the class of disagreement a mirror pass exists to
+    surface as evidence, never as a client-visible transport failure. Both
+    that STRUCTURAL validation (via ``IntegratorInvoiceSyncEnvelope.model_validate``)
+    and the existing BUSINESS-RULE validation happen here, uniformly
+    converted into ``verdict="blocked"`` rather than raised — the mirror
+    route must never answer any validation failure with a non-200 status
+    (it would be misread as a transport outage, destroying the parity
+    evidence a mirror pass exists to collect).
+
+    A same-revision content disagreement (what would be an
+    ``InvoiceSyncIdentityCollision`` on the write path) surfaces via the
+    ``disagreements`` branch below (a named field mismatch against an
+    existing row), not via ``blocking_reasons`` — ``blocking_reasons`` is
+    reserved for a validation failure that happens before any row lookup
+    ever runs. No row found at the identity key is an honest ``"missing"``,
+    never reported as agreement.
     """
+    identity = _best_effort_identity(raw_envelope)
+    try:
+        envelope = IntegratorInvoiceSyncEnvelope.model_validate(raw_envelope)
+    except ValidationError as exc:
+        return InvoiceSyncMirrorComparison(
+            verdict="blocked",
+            agrees=False,
+            identity=identity,
+            counterpart_identity=None,
+            blocking_reasons=(format_validation_errors(exc.errors()),),
+            disagreements=(),
+        )
+
     observation = envelope.observation
     identity = (
         f"{observation.source_invoice_id}:"

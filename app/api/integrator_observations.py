@@ -64,6 +64,7 @@ from app.services.dotmac_sub.integrator_observations import (
     InvoiceSyncIdentityCollision,
     ProductPortDescriptorError,
     compare_invoice_sync_observation,
+    format_validation_errors,
     invoice_accounting_sync_product_port_descriptor,
     record_invoice_sync_observation,
 )
@@ -77,16 +78,10 @@ require_write_or_mirror_scope = require_any_service_scope(SCOPE_WRITE, SCOPE_MIR
 
 def _validation_error_detail(exc: RequestValidationError) -> dict[str, object]:
     """FastAPI's own list-shaped ``exc.errors()`` into ERP's typed object."""
-    errors = exc.errors()
-    if errors:
-        parts = []
-        for error in errors:
-            loc = ".".join(str(part) for part in error.get("loc", ()))
-            parts.append(f"{loc}: {error.get('msg', 'invalid')}")
-        message = "; ".join(parts)
-    else:
-        message = "request body failed validation"
-    return {"code": "invoices.accounting_sync.schema_rejected", "message": message}
+    return {
+        "code": "invoices.accounting_sync.schema_rejected",
+        "message": format_validation_errors(exc.errors()),
+    }
 
 
 class _TypedErrorRoute(APIRoute):
@@ -155,12 +150,29 @@ def record_integrator_invoice_sync_observation(
     idempotency_key: str = Header(
         ..., alias="Idempotency-Key", min_length=1, max_length=MAX_KEY_LENGTH
     ),
-    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+    x_correlation_id: str | None = Header(
+        default=None, alias="X-Correlation-Id", max_length=200
+    ),
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
 ) -> IntegratorInvoiceSyncReceipt:
     _bind(capability_binding_id)
     organization_id = UUID(str(auth["organization_id"]))
+    if not idempotency_key.strip():
+        # `min_length=1` alone admits whitespace-only header values (a single
+        # space passes it). `dotmac_kernel.idempotency`'s own `_validate`
+        # would reject this with `BadRequestError` — a `dotmac_kernel`
+        # exception type this app has no registered handler for, which would
+        # otherwise fall through to a 500 and be misread by the real client
+        # as a retryable UNAVAILABLE, retrying the same poison key forever.
+        # Refuse it here as an honest, terminal 422 instead.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invoices.accounting_sync.schema_rejected",
+                "message": "Idempotency-Key must not be blank",
+            },
+        )
     try:
         outcome = record_invoice_sync_observation(
             db,
@@ -212,9 +224,9 @@ def record_integrator_invoice_sync_observation(
     response_model=IntegratorInvoiceSyncMirrorReport,
     dependencies=[Depends(require_write_or_mirror_scope)],
 )
-def mirror_integrator_invoice_sync_observation(
+async def mirror_integrator_invoice_sync_observation(
     capability_binding_id: UUID,
-    envelope: IntegratorInvoiceSyncEnvelope,
+    request: Request,
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
 ) -> IntegratorInvoiceSyncMirrorReport:
@@ -227,11 +239,32 @@ def mirror_integrator_invoice_sync_observation(
     never a non-200 status, which the real client's ``mirror()`` would raise
     as a transport failure and misreport as an outage rather than a real
     disagreement.
+
+    The body is read as a RAW JSON object here, deliberately bypassing the
+    write route's strict, ``extra="forbid"``/``Literal``-pinned
+    ``IntegratorInvoiceSyncEnvelope`` schema: several genuine domain-fact
+    disagreements (an out-of-pattern ``projection_digest``, an unrecognized
+    ``source_kind``/``disposition``/issue ``code``, a ``capability_id``
+    mismatch) would otherwise be caught by FastAPI's own request parsing
+    BEFORE this route body ever runs, producing a 422 the real client's
+    ``ObservationPortClient.mirror()`` turns into a ``TransportFailure`` —
+    exactly the failure mode a mirror pass exists to avoid, and precisely
+    the class of disagreement it is FOR. All structural AND business-rule
+    validation instead happens inside
+    ``compare_invoice_sync_observation``, which converts every failure into
+    an honest ``verdict="blocked"`` — always HTTP 200. The write route keeps
+    its strict schema unchanged; this loosening is mirror-route-only.
     """
     _bind(capability_binding_id)
     organization_id = UUID(str(auth["organization_id"]))
+    try:
+        raw_body = await request.json()
+    except ValueError:
+        raw_body = {}
+    if not isinstance(raw_body, dict):
+        raw_body = {}
     comparison = compare_invoice_sync_observation(
-        db, organization_id=organization_id, envelope=envelope
+        db, organization_id=organization_id, raw_envelope=raw_body
     )
     return IntegratorInvoiceSyncMirrorReport(
         verdict=comparison.verdict,

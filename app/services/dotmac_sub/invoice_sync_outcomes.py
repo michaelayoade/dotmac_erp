@@ -140,8 +140,24 @@ def _validated(
     if command.disposition is not InvoiceSyncDisposition.BLOCKED and command.issues:
         raise InvoiceSyncOutcomeError("only blocked outcomes may carry issue evidence")
 
+    # Sorted by an explicit key of already-comparable primitives, never by
+    # falling through tuple comparison into the `InvoiceSyncIssueEvidence`
+    # instances themselves: that dataclass has no `__lt__` (not
+    # `order=True`), so two entries sharing a fingerprint would raise
+    # `TypeError` on comparison — reachable in practice if a `Decimal("NaN")`
+    # amount (a bare `Decimal` field admits it) ever produced equal
+    # fingerprints for two otherwise-distinct issues.
     normalized = tuple(
-        sorted((_issue_fingerprint(issue), issue) for issue in command.issues)
+        sorted(
+            ((_issue_fingerprint(issue), issue) for issue in command.issues),
+            key=lambda item: (
+                item[0],
+                str(item[1].source_line_id),
+                _decimal_text(item[1].expected_amount) or "",
+                _decimal_text(item[1].actual_amount) or "",
+                item[1].code.value,
+            ),
+        )
     )
     fingerprints = [item[0] for item in normalized]
     if len(fingerprints) != len(set(fingerprints)):

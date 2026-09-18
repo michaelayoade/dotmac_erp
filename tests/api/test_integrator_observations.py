@@ -315,6 +315,63 @@ def test_write_route_rejects_malformed_envelope_with_typed_422(
     assert detail["code"] == "invoices.accounting_sync.schema_rejected"
 
 
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda obs: {**obs, "capability_id": "wrong.capability"},
+        lambda obs: {**obs, "projection_digest": "not-hex"},
+        lambda obs: {**obs, "digest_version": 2},
+        lambda obs: {k: v for k, v in obs.items() if k != "source_invoice_id"},
+    ],
+)
+def test_mirror_route_never_422s_on_the_same_malformed_bodies_the_write_route_rejects(
+    db_session, mutate
+) -> None:
+    """The write-route counterparts of these cases correctly 422 (strict
+    schema). The mirror route must instead answer 200/blocked for every one
+    of them — this is precisely the class of disagreement a mirror pass
+    exists to surface as evidence, not as a client-visible transport
+    failure (F3)."""
+    client = _client(db_session, scopes=[SCOPE_MIRROR])
+    envelope = _envelope(observation=mutate(_observation()))
+
+    response = _mirror(client, envelope)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdict"] == "blocked"
+    assert body["agrees"] is False
+    assert body["blocking_reasons"]
+
+
+def test_mirror_route_rejects_extra_field_as_blocked_not_422(db_session) -> None:
+    client = _client(db_session, scopes=[SCOPE_MIRROR])
+    observation = _observation()
+    observation["unexpected_field"] = "nope"
+
+    response = _mirror(client, _envelope(observation=observation))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdict"] == "blocked"
+    assert body["agrees"] is False
+
+
+def test_mirror_route_malformed_json_body_is_blocked_not_500(db_session) -> None:
+    client = _client(db_session, scopes=[SCOPE_MIRROR])
+
+    response = client.post(
+        f"/api/v1/integration/observations/{TEST_BINDING_ID}/mirror",
+        content=b"{not-json",
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["verdict"] == "blocked"
+    assert body["agrees"] is False
+
+
 def test_write_route_rejects_extra_field_on_observation(db_session) -> None:
     client = _client(db_session, scopes=[SCOPE_WRITE])
     observation = _observation()
@@ -354,6 +411,46 @@ def test_write_route_accepts_explicit_null_optional_dates(db_session) -> None:
         client, _envelope(observation=observation), idempotency_key="null-dates"
     )
     assert response.status_code == 200
+
+
+def test_write_route_rejects_oversized_correlation_id_header(db_session) -> None:
+    """F1: the real ``IdempotencyRecord.correlation_id`` column is
+    ``String(200)`` (both the kernel model and this repo's own migration).
+    An unbounded header would otherwise reach `db.flush()` and raise a
+    Postgres ``DataError`` — not caught anywhere in this route, falling
+    through to a 500 the real client misreads as retryable UNAVAILABLE and
+    retries the same poison header forever. Bounding the header parameter
+    turns this into an honest, terminal 422 before the DB is ever touched
+    (verified here at the header-parameter level; SQLite itself would not
+    enforce the column length)."""
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+
+    response = client.post(
+        f"/api/v1/integration/observations/{TEST_BINDING_ID}",
+        json=_envelope(),
+        headers={
+            "Idempotency-Key": "correlation-oversized-1",
+            "X-Correlation-Id": "x" * 201,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_write_route_rejects_whitespace_only_idempotency_key(db_session) -> None:
+    """F2: ``min_length=1`` alone admits a single space. ``dotmac_kernel``'s
+    own ``_validate`` would reject this with ``BadRequestError`` — a type
+    this app has no registered handler for, which would otherwise 500 and
+    be misread as retryable UNAVAILABLE, retrying the same poison key
+    forever. The route must refuse it as an honest, terminal 422 itself."""
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+
+    response = _write(client, _envelope(), idempotency_key="   ")
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail["code"] == "invoices.accounting_sync.schema_rejected"
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +514,11 @@ def test_write_route_same_key_different_payload_is_idempotency_conflict_409(
         idempotency_key="idem-conflict-1",
     )
     assert response.status_code == 409
+    # Confirm it's specifically the IdempotencyConflict path (plain-string
+    # detail) under test here, not InvoiceSyncIdentityCollision (typed-object
+    # detail) — both answer 409, but the real client's behavior differs by
+    # shape, and the two must not be conflated.
+    assert isinstance(response.json()["detail"], str)
 
 
 # ---------------------------------------------------------------------------

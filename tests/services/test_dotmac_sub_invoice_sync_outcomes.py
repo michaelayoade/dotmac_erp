@@ -283,3 +283,52 @@ def test_uppercase_fingerprint_is_rejected_at_the_db_check_constraint_level(
     db_session.add(outcome)
     with pytest.raises(IntegrityError):
         db_session.flush()
+
+
+def test_nan_amount_issues_with_a_tied_fingerprint_raise_domain_error_not_typeerror(
+    db_session,
+) -> None:
+    """Sensitivity proof for the sort-key hardening in ``_validated``.
+
+    Two issue entries with identical code/line/amounts (both ``Decimal("NaN")``)
+    produce the SAME string-rendered fingerprint (``format(Decimal("NaN"), "f")``
+    is the stable string ``"NaN"`` every time), while the raw Decimals compare
+    ``NaN != NaN``. Before the fix, Python's tuple-comparison fallback in
+    ``sorted(...)`` would reach past the tied fingerprint strings and compare
+    the two ``InvoiceSyncIssueEvidence`` instances directly — a dataclass
+    with no ``__lt__`` — raising a bare ``TypeError``. This is only reachable
+    from a caller that bypasses ``app.schemas.integrator_observation``'s
+    pydantic validation (verified separately: pydantic 2.11's bare
+    ``Decimal`` field type rejects ``NaN`` by default, so the wire route
+    itself cannot trigger this — see the task report), i.e. any other
+    direct internal caller of this frozen module.
+    """
+    same_line_id = uuid4()
+    command = RecordInvoiceSyncOutcome(
+        organization_id=ORGANIZATION_ID,
+        source_invoice_id=INVOICE_ID,
+        source_updated_at=datetime(2026, 9, 18, 13, tzinfo=UTC),
+        source_kind=InvoiceSyncSourceKind.NATIVE,
+        disposition=InvoiceSyncDisposition.BLOCKED,
+        projection_fingerprint=_fingerprint("nan-amounts"),
+        digest_version=SUPPORTED_DIGEST_VERSION,
+        issues=(
+            InvoiceSyncIssueEvidence(
+                code=InvoiceSyncIssueCode.HEADER_TAX_MISMATCH,
+                source_line_id=same_line_id,
+                expected_amount=Decimal("NaN"),
+                actual_amount=Decimal("NaN"),
+            ),
+            InvoiceSyncIssueEvidence(
+                code=InvoiceSyncIssueCode.HEADER_TAX_MISMATCH,
+                source_line_id=same_line_id,
+                expected_amount=Decimal("NaN"),
+                actual_amount=Decimal("NaN"),
+            ),
+        ),
+    )
+
+    # A domain-level rejection (genuinely tied evidence), never a raw
+    # TypeError escaping the sort.
+    with pytest.raises(InvoiceSyncOutcomeError, match="duplicate issue evidence"):
+        record_invoice_sync_outcome(db_session, command)
