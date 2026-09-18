@@ -228,7 +228,13 @@ def test_refund_reversal_failure_leaves_payment_untouched(monkeypatch):
 
 
 def test_unchanged_source_payment_repairs_missing_accounting_projection():
-    payment = SimpleNamespace(payment_id=uuid.uuid4())
+    payment = SimpleNamespace(
+        payment_id=uuid.uuid4(),
+        journal_entry_id=None,
+        gross_amount=Decimal("100"),
+        bank_account_id=uuid.uuid4(),
+        currency_code="NGN",
+    )
     harness = _Harness(db=None, org=uuid.uuid4())
     repaired = []
     harness._compute_hash = lambda _data: "same"  # type: ignore[method-assign]

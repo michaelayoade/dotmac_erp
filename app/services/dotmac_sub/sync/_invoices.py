@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
+
+from billiard.exceptions import SoftTimeLimitExceeded
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -26,12 +29,14 @@ from app.services.dotmac_sub.client import (
     CreditNoteRecord,
     DotmacSubAuthenticationError,
     DotmacSubError,
+    DotmacSubRateLimitError,
     InvoiceRecord,
     TaxApplication,
 )
 from app.services.dotmac_sub.invoice_sync_shadow import (
-    record_blocked_invoice_accounting_revision,
+    fetch_blocked_invoice_accounting_revision,
 )
+from app.services.dotmac_sub.invoice_sync_outcomes import record_invoice_sync_outcome
 from app.services.finance.money_boundary import round_to_minor_units, to_boundary_money
 
 from ._base import (
@@ -51,6 +56,9 @@ logger = logging.getLogger(__name__)
 # cannot consume the Celery phase's entire soft-limit budget and roll back all
 # staged outcomes. Healthy invoice throughput retains the normal batch limit.
 _QUARANTINE_EVIDENCE_LIMIT = 50
+# Checked between evidence requests; an individual request keeps the existing
+# integration client's timeout and Retry-After limits.
+_QUARANTINE_REMOTE_BUDGET_SECONDS = 120.0
 
 
 def _invoice_hash_payload(inv: InvoiceRecord) -> dict[str, Any]:
@@ -139,6 +147,8 @@ class InvoiceSyncMixin:
         processed = 0
         attempted = 0
         quarantined = 0
+        quarantine_remote_seconds = 0.0
+        quarantine_stop_reason: str | None = None
         reported_permanent_errors: set[tuple[str, ...]] = set()
         # Incremental pull: only when this is the unfiltered full sync (a
         # targeted account_id/status pull must not touch the global cursor).
@@ -206,21 +216,64 @@ class InvoiceSyncMixin:
                         self.db.rollback()
                     observe_dotmac_sub_invoice_sync_row(e.metric_reason)
                     if isinstance(e, InvoiceSourceAccountingMismatchError):
+                        if (
+                            quarantine_remote_seconds
+                            >= _QUARANTINE_REMOTE_BUDGET_SECONDS
+                        ):
+                            quarantine_stop_reason = (
+                                "invoice quarantine remote evidence time budget reached"
+                            )
+                            quarantine_limit_reached = True
+                            progress.record_failure(row_updated_at, inv.id)
+                            break
+                        # Release prior accepted writes before remote IO. Do NOT
+                        # advance the cursor here: a later unpositioned parse
+                        # failure must still freeze the original run position.
+                        # Committed rows/evidence can be safely replayed if the
+                        # process stops before the final cursor transaction.
+                        self.db.commit()
                         quarantine_savepoint = None
                         try:
                             if row_updated_at is None:
                                 raise ValueError(
                                     "source revision has no updated_at watermark"
                                 )
+                            evidence_started = time.monotonic()
+                            try:
+                                command = fetch_blocked_invoice_accounting_revision(
+                                    self.client,
+                                    self.organization_id,
+                                    invoice_id=UUID(inv.id),
+                                    expected_updated_at=row_updated_at,
+                                )
+                            finally:
+                                quarantine_remote_seconds += (
+                                    time.monotonic() - evidence_started
+                                )
+                            self._reprime_tenant_context()
                             quarantine_savepoint = self.db.begin_nested()
-                            receipt = record_blocked_invoice_accounting_revision(
-                                self.db,
-                                self.client,
-                                self.organization_id,
-                                invoice_id=UUID(inv.id),
-                                expected_updated_at=row_updated_at,
-                            )
+                            receipt = record_invoice_sync_outcome(self.db, command)
                             quarantine_savepoint.commit()
+                        except (
+                            DotmacSubAuthenticationError,
+                            SoftTimeLimitExceeded,
+                            OperationalError,
+                        ):
+                            raise
+                        except DotmacSubRateLimitError:
+                            quarantine_stop_reason = (
+                                "invoice quarantine deferred after upstream rate limit"
+                            )
+                            quarantine_limit_reached = True
+                            progress.record_failure(row_updated_at, inv.id)
+                            logger.warning(
+                                "Stopping invoice quarantine work after upstream throttling; cursor remains safe",
+                                extra={
+                                    "event": "dotmac_sub_invoice_quarantine_throttled",
+                                    "source_invoice_id": inv.id,
+                                },
+                            )
+                            break
                         except Exception:  # noqa: BLE001
                             if quarantine_savepoint is not None:
                                 try:
@@ -273,9 +326,10 @@ class InvoiceSyncMixin:
                                 "header_total": str(e.header_total),
                             },
                         )
-                        # The durable blocked outcome and cursor update share
-                        # the caller's transaction. A corrected source revision
-                        # has a later updated_at and will be considered again.
+                        # Evidence is either in the final cursor transaction
+                        # or already durable from a preceding IO checkpoint.
+                        # The cursor never commits ahead of its evidence. A
+                        # corrected source revision is considered again.
                         result.skipped += 1
                         progress.record_success(row_updated_at, inv.id)
                         quarantined += 1
@@ -339,7 +393,8 @@ class InvoiceSyncMixin:
                 suffixes.append(f"invoice work limit ({batch_size}) reached")
             if quarantine_limit_reached:
                 suffixes.append(
-                    "invoice quarantine evidence work limit "
+                    quarantine_stop_reason
+                    or "invoice quarantine evidence work limit "
                     f"({_QUARANTINE_EVIDENCE_LIMIT}) reached"
                 )
             suffix = f"; {'; '.join(suffixes)}" if suffixes else ""

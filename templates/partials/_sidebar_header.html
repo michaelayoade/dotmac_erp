@@ -1,65 +1,66 @@
 {% from "components/macros.html" import icon_svg %}
-{# Shared sidebar header for module shells (non-admin) #}
-<div class="flex h-16 items-center border-b border-slate-200 dark:border-slate-800"
-     :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
-    <a href="{{ brand_href | default('/') }}" class="flex min-w-0 flex-1 items-center gap-3" x-show="!sidebarCollapsed" x-cloak aria-label="{{ brand_name }}">
-        {% if brand_logo_url %}
-            {% if brand_logo_dark_url %}
-            {# Light/dark logo pair #}
-            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
-                 class="h-10 w-10 flex-shrink-0 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80 dark:hidden"
-                 loading="lazy"
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-            <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} dark:hidden">
-                {{ brand_mark }}
-            </div>
-            <img src="{{ brand_logo_dark_url }}" alt="{{ brand_name }} logo dark"
-                 class="hidden h-10 w-10 flex-shrink-0 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80 dark:block"
-                 loading="lazy"
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-            <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} dark:flex">
-                {{ brand_mark }}
-            </div>
+{# The brand returns home; the module label retains its own destination. #}
+<div class="flex-shrink-0">
+    <div class="flex h-16 items-center gap-3 border-b border-slate-200 dark:border-slate-800"
+         :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
+        <a href="/" class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl hover:opacity-90 transition-opacity"
+           data-testid="sidebar-home-link" data-no-context hx-boost="false" @click.stop
+           aria-label="{{ brand_name }} home" title="Return to main dashboard">
+            {% if brand_logo_url %}
+                {% if brand_logo_dark_url %}
+                {# Keep each failure fallback inside its light/dark wrapper. #}
+                <span class="dark:hidden">
+                    <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
+                         class="h-10 w-10 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
+                         loading="lazy"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <span class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
+                        {{ brand_mark }}
+                    </span>
+                </span>
+                <span class="hidden dark:flex">
+                    <img src="{{ brand_logo_dark_url }}" alt="{{ brand_name }} logo dark"
+                         class="h-10 w-10 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
+                         loading="lazy"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <span class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
+                        {{ brand_mark }}
+                    </span>
+                </span>
+                {% else %}
+                <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
+                     class="h-10 w-10 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
+                     loading="lazy"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <span class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
+                    {{ brand_mark }}
+                </span>
+                {% endif %}
             {% else %}
-            {# Single logo for both modes #}
-            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
-                 class="h-10 w-10 flex-shrink-0 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
-                 loading="lazy"
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-            <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
+            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
                 {{ brand_mark }}
-            </div>
+            </span>
             {% endif %}
-        {% else %}
-        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
-            {{ brand_mark }}
-        </div>
-        {% endif %}
-        <div class="min-w-0">
+        </a>
+        <a href="{{ brand_href | default('/') }}" class="min-w-0 flex-1"
+           data-testid="sidebar-module-link" x-show="!sidebarCollapsed" x-cloak aria-label="{{ module_label }}">
             <span class="hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide {{ module_pill_class }}">{{ module_label }}</span>
-        </div>
-    </a>
-    <button @click="closeSidebar()" x-show="!isDesktop" x-cloak
-            class="flex-shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
-            aria-label="Close sidebar">
-        {{ icon_svg("x-mark") }}
-    </button>
-    <button @click="sidebarCollapsed = false; sidebarCollapsedStored = false; localStorage.setItem('appSidebarCollapsed', false)" x-show="isDesktop && sidebarCollapsed" x-cloak
-            class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} hover:opacity-90 transition-opacity"
-            aria-label="Expand sidebar">
-        {% if brand_logo_url %}
-        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
-             class="h-10 w-10 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
-             loading="lazy"
-             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
-        <span class="hidden">{{ brand_mark }}</span>
-        {% else %}
-        {{ brand_mark }}
-        {% endif %}
-    </button>
-    <button @click="sidebarCollapsed = true; sidebarCollapsedStored = true; localStorage.setItem('appSidebarCollapsed', true)" x-show="isDesktop && !sidebarCollapsed" x-cloak
-            class="flex-shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
-            aria-label="Collapse sidebar">
-        {{ icon_svg("chevron-double-left", "h-5 w-5 transition-transform duration-300") }}
+        </a>
+        <button type="button" @click="closeSidebar()" x-show="!isDesktop" x-cloak
+                class="flex-shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+                aria-label="Close sidebar">
+            {{ icon_svg("x-mark") }}
+        </button>
+        <button type="button" @click="sidebarCollapsed = true; sidebarCollapsedStored = true; localStorage.setItem('appSidebarCollapsed', true)" x-show="isDesktop && !sidebarCollapsed" x-cloak
+                class="flex-shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+                aria-label="Collapse sidebar">
+            {{ icon_svg("chevron-double-left", "h-5 w-5 transition-transform duration-300") }}
+        </button>
+    </div>
+    {# A separate row fits the expansion control in the 4rem collapsed rail. #}
+    <button type="button" @click="sidebarCollapsed = false; sidebarCollapsedStored = false; localStorage.setItem('appSidebarCollapsed', false)" x-show="isDesktop && sidebarCollapsed" x-cloak
+            class="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
+            aria-label="Expand sidebar" title="Expand sidebar">
+        {{ icon_svg("chevron-double-left", "h-5 w-5 rotate-180") }}
     </button>
 </div>

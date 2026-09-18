@@ -30,6 +30,7 @@ from app.services.finance.money_boundary import (
 )
 
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
+from ._bank_mapping import MissingPaymentBankMappingError
 from ._progress import WatermarkProgress
 from ._types import SyncResult
 
@@ -113,7 +114,20 @@ class PaymentSyncMixin:
                     except Exception:  # noqa: BLE001
                         self.db.rollback()
                     result.errors.append(f"Payment {pay.id}: {e!s}")
-                    logger.exception("Error syncing payment %s", pay.id)
+                    if isinstance(e, MissingPaymentBankMappingError):
+                        logger.warning(
+                            "Payment sync blocked by bank mapping configuration",
+                            extra={
+                                "event": "dotmac_sub_payment_configuration_blocked",
+                                "error_code": e.error_code,
+                                "organization_id": str(self.organization_id),
+                                "source_payment_id": e.source_payment_id,
+                                "payment_channel_id": e.channel_id,
+                                "currency_code": e.currency_code,
+                            },
+                        )
+                    else:
+                        logger.exception("Error syncing payment %s", pay.id)
                     progress.record_failure(row_updated_at)
             # Advance-or-park, or freeze on an unpositioned failure (see
             # WatermarkProgress).
@@ -192,6 +206,19 @@ class PaymentSyncMixin:
                 # An unchanged source row can still repair a missing ERP
                 # projection. Reconciliation is driven from canonical Sub
                 # facts, not from the import hash alone.
+                if (
+                    payment.journal_entry_id is None
+                    and payment.gross_amount != Decimal("0")
+                    and payment.bank_account_id is None
+                ):
+                    bank_account_id = self._get_bank_account_for_channel(
+                        pay.payment_channel_id, payment.currency_code
+                    )
+                    if bank_account_id is None:
+                        raise MissingPaymentBankMappingError(
+                            pay.id, pay.payment_channel_id, payment.currency_code
+                        )
+                    payment.bank_account_id = bank_account_id
                 self._ensure_synced_payment_posted(payment, created_by_user_id)
                 self._ensure_wht_terminal_consequence(
                     payment,
@@ -274,6 +301,12 @@ class PaymentSyncMixin:
         bank_account_id = self._get_bank_account_for_channel(
             pay.payment_channel_id, currency_code
         )
+        if gross_amount != Decimal("0") and bank_account_id is None:
+            # Fail before creating a receipt, applying allocations, or reversing
+            # an existing journal. The caller rolls back this row's savepoint.
+            raise MissingPaymentBankMappingError(
+                pay.id, pay.payment_channel_id, currency_code
+            )
         method = self._map_payment_method(pay.payment_channel_id)
         channel_name = self._channel_name(pay.payment_channel_id) or "dotmac_sub"
 

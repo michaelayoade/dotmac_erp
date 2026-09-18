@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -19,6 +20,7 @@ from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
 )
 
 CONTRACT_VERSION = "invoice-accounting-sync.v2"
+logger = logging.getLogger(__name__)
 
 
 class InvoiceSyncDisposition(str, Enum):
@@ -76,6 +78,21 @@ class InvoiceSyncOutcomeReceipt:
 
 class InvoiceSyncOutcomeError(ValueError):
     """The supplied projection contradicts the durable outcome contract."""
+
+
+class InvoiceSyncOutcomeConflictError(InvoiceSyncOutcomeError):
+    """One immutable source revision disagrees with previously recorded facts.
+
+    Only contract metadata is retained here: never the invoice payload, customer
+    details, or tax-line contents. A conflict must still stop cursor advancement.
+    """
+
+    def __init__(self, differences: dict[str, dict[str, str | int]]) -> None:
+        self.differences = differences
+        super().__init__(
+            "the same Self-Care invoice revision produced a different outcome"
+            f" (changed fields: {', '.join(sorted(differences))})"
+        )
 
 
 def _decimal_text(value: Decimal | None) -> str | None:
@@ -141,17 +158,32 @@ def record_invoice_sync_outcome(
         .with_for_update()
     )
     if existing is not None:
-        stable = (
-            existing.contract_version == command.contract_version
-            and existing.source_kind == command.source_kind.value
-            and existing.disposition == command.disposition.value
-            and existing.projection_fingerprint == command.projection_fingerprint
-            and existing.issue_count == len(normalized)
-        )
-        if not stable:
-            raise InvoiceSyncOutcomeError(
-                "the same Self-Care invoice revision produced a different outcome"
+        incoming: dict[str, str | int] = {
+            "contract_version": command.contract_version,
+            "source_kind": command.source_kind.value,
+            "disposition": command.disposition.value,
+            "projection_fingerprint": command.projection_fingerprint,
+            "issue_count": len(normalized),
+        }
+        differences = {
+            field: {"existing": getattr(existing, field), "incoming": value}
+            for field, value in incoming.items()
+            if getattr(existing, field) != value
+        }
+        if differences:
+            logger.error(
+                "Conflicting Self-Care invoice revision; durable evidence is unchanged",
+                extra={
+                    "event": "dotmac_sub_invoice_outcome_conflict",
+                    "error_code": "dotmac_sub_invoice_revision_conflict",
+                    "organization_id": str(command.organization_id),
+                    "source_invoice_id": str(command.source_invoice_id),
+                    "source_updated_at": command.source_updated_at.isoformat(),
+                    "outcome_id": str(existing.outcome_id),
+                    "differences": differences,
+                },
             )
+            raise InvoiceSyncOutcomeConflictError(differences)
         existing.occurrence_count += 1
         existing.last_seen_at = observed_at
         db.flush()

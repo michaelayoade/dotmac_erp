@@ -385,6 +385,23 @@ else
     echo "-> nginx site not readable at $NGINX_SITE; skipping the static check."
 fi
 
+# Use effective Compose interpolation, not an ad-hoc .env parser. Validate
+# before backup/pull, and again after a pull can change the Compose command.
+validate_metrics_configuration() {
+    local validation_image="${APP_IMAGE:-}"
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "ERROR: python3 is required for metrics configuration preflight." >&2
+        return 2
+    fi
+    if [[ -z "$validation_image" ]]; then
+        validation_image="$("$SCRIPT_DIR/resolve_deploy_image.sh" \
+            --compose "$PROJECT_DIR/$RENDERED_COMPOSE")"
+    fi
+    ( export APP_IMAGE="$validation_image"; docker compose config --format json ) |
+        python3 "$SCRIPT_DIR/validate_metrics_remote_write.py"
+}
+validate_metrics_configuration
+
 # Step 1: pre-migration DB backup (SKIP_BACKUP=1 to skip)
 if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
     echo "→ Backing up database (SKIP_BACKUP=1 to skip)..."
@@ -416,6 +433,7 @@ if [[ "$quick_deploy" != "1" ]]; then
         echo "  Image selector: ${RENDERED_COMPOSE}"
     fi
     export APP_IMAGE="$NEW_IMAGE"
+    validate_metrics_configuration
     echo "  Pinning image: ${APP_IMAGE}"
     echo "  Rollback target: ${PREV_IMAGE:-<none; image rollback unavailable>}"
 

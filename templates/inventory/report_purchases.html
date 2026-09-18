@@ -1,0 +1,198 @@
+{% extends "inventory/base_inventory.html" %}
+{% from "components/macros.html" import icon_svg, empty_state, status_badge %}
+
+{% block page_title %}Purchase Report{% endblock %}
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <ol class="flex items-center gap-2">
+        <li><a href="/inventory" class="hover:text-emerald-600 dark:hover:text-emerald-400">Inventory</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li><a href="/inventory/reports" class="hover:text-emerald-600 dark:hover:text-emerald-400">Reports</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li class="font-medium text-slate-900 dark:text-white" aria-current="page">Purchase Report</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div id="purchase-report" class="space-y-6">
+    <section class="card p-5" aria-labelledby="purchase-period-heading">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h2 id="purchase-period-heading" class="text-xl font-semibold text-slate-900 dark:text-white">{{ purchase_period.label }}</h2>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    {{ purchase_period.start.strftime('%d %b %Y') }} – {{ purchase_period.end.strftime('%d %b %Y') }} · Africa/Lagos<br>
+                    {% if purchase_period.is_current %}{{ purchase_period.unit | title }} to date, through {{ purchase_period.through.strftime('%d %b %Y') }}.{% else %}Completed reporting period.{% endif %}
+                    Quarters and years use the calendar, not the fiscal year.
+                </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ export_url }}" class="btn btn-secondary">{{ icon_svg("download", "h-4 w-4 mr-2") }} Item lines CSV</a>
+                <a href="{{ invoice_export_url }}" class="btn btn-secondary">Invoice totals CSV</a>
+            </div>
+        </div>
+        <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
+            All saved lines on eligible posted supplier invoices, by invoice date: registered items, manually described items, services and charges.
+            Credits are deducted once. This is a billed-purchases report, not a payment or goods-received report.
+        </p>
+        <nav class="mt-4 flex flex-wrap items-center gap-2" aria-label="Reporting period">
+            {% if previous_period_url %}<a href="{{ previous_period_url }}" class="btn btn-secondary">Previous {{ purchase_period.unit }}</a>{% endif %}
+            <a href="{{ current_period_url }}" class="btn btn-secondary">This {{ purchase_period.unit }}</a>
+            {% if next_period_url %}<a href="{{ next_period_url }}" class="btn btn-secondary">Next {{ purchase_period.unit }}</a>{% endif %}
+        </nav>
+    </section>
+
+    <form id="purchase-report-filters" method="get" action="/inventory/reports/purchases"
+          hx-get="/inventory/reports/purchases" hx-target="#purchase-report" hx-select="#purchase-report"
+          hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace"
+          hx-trigger="submit, change, input changed delay:300ms from:#purchase-search"
+          class="card grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+        <div>
+            <label for="purchase-period" class="form-label">Reporting period</label>
+            <select id="purchase-period" name="period" class="form-select">
+                {% for option in period_options %}<option value="{{ option }}" {% if purchase_period.kind == option %}selected{% endif %}>{{ option | title }}</option>{% else %}<option disabled>No periods available</option>{% endfor %}
+            </select>
+        </div>
+        {% if purchase_period.kind == 'weekly' %}
+        <div>
+            <label for="purchase-anchor" class="form-label">Week containing</label>
+            <input id="purchase-anchor" name="period_start" type="date" required class="form-input" min="1900-01-01" max="{{ purchase_period.today.isoformat() }}" value="{{ purchase_period.start.isoformat() }}">
+        </div>
+        {% else %}
+        <input name="period_start" type="hidden" value="{{ purchase_period.start.isoformat() }}">
+        {% if purchase_period.kind == 'monthly' %}
+        <div>
+            <label for="purchase-month" class="form-label">Month and year</label>
+            <input id="purchase-month" name="month" type="month" required class="form-input" min="1900-01" max="{{ purchase_period.today.strftime('%Y-%m') }}" value="{{ purchase_period.start.strftime('%Y-%m') }}">
+        </div>
+        {% else %}
+        {% if purchase_period.kind == 'quarterly' %}
+        <div>
+            <label for="purchase-quarter" class="form-label">Calendar quarter</label>
+            <select id="purchase-quarter" name="quarter" class="form-select">
+                {% for q, label in [(1, 'Q1 · Jan–Mar'), (2, 'Q2 · Apr–Jun'), (3, 'Q3 · Jul–Sep'), (4, 'Q4 · Oct–Dec')] %}<option value="{{ q }}" {% if (purchase_period.start.month - 1) // 3 + 1 == q %}selected{% endif %}>{{ label }}</option>{% else %}<option disabled>No quarters available</option>{% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div>
+            <label for="purchase-year" class="form-label">Calendar year</label>
+            <input id="purchase-year" name="year" type="number" required class="form-input" min="1900" max="{{ purchase_period.today.year }}" value="{{ purchase_period.start.year }}">
+        </div>
+        {% endif %}
+        {% endif %}
+        {% for key, label, options in [('supplier', 'Supplier', suppliers), ('warehouse', 'Receipt warehouse', warehouses), ('category', 'Item category', categories)] %}
+        <div>
+            <label for="purchase-{{ key }}" class="form-label">{{ label }}</label>
+            <select id="purchase-{{ key }}" name="{{ key }}" class="form-select">
+                <option value="">All (including unspecified)</option>
+                {% if key != 'supplier' %}<option value="unspecified" {% if purchase_filters.get(key) == 'unspecified' %}selected{% endif %}>Unspecified</option>{% endif %}
+                {% for option in options %}<option value="{{ option.id }}" {% if purchase_filters.get(key) == option.id %}selected{% endif %}>{{ option.label }}</option>{% else %}<option disabled>No registered choices in this period</option>{% endfor %}
+            </select>
+        </div>
+        {% else %}<p>No filter choices available.</p>{% endfor %}
+        <div>
+            <label for="purchase-search" class="form-label">Search invoice lines</label>
+            <input id="purchase-search" name="search" type="search" maxlength="100" class="form-input" placeholder="Description, item, supplier, or invoice" value="{{ purchase_filters.get('search', '') }}">
+        </div>
+        <div class="flex items-end gap-2">
+            <button type="submit" class="btn btn-primary">Apply filters</button>
+            <a href="{{ reset_url }}" class="btn btn-secondary">Clear filters</a>
+        </div>
+    </form>
+
+    <div id="results-container" class="space-y-6" aria-live="polite">
+        <section class="card overflow-hidden" aria-labelledby="purchase-summary-heading">
+            <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <h3 id="purchase-summary-heading" class="font-semibold text-slate-900 dark:text-white">Period totals</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{{ summary.document_count }} documents · {{ summary.line_count }} invoice lines · {{ summary.item_count }} distinct registered items · {{ summary.unlinked_count }} lines without an available item link · {{ summary.supplier_count }} registered suppliers.</p>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Totals cover every matching line, not only this page. No mixed-currency grand total or currency conversion.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">Matching purchase line totals by currency</caption>
+                    <thead class="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400"><tr>
+                        {% for heading in ['Currency', 'Purchases excl. tax', 'Credits excl. tax', 'Net excl. tax', 'Net tax', 'Matching lines incl. tax'] %}<th scope="col" class="px-4 py-3 text-right">{{ heading }}</th>{% else %}{% endfor %}
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-900 dark:divide-slate-700 dark:text-slate-100">
+                        {% for total in currency_totals %}<tr>
+                            <th scope="row" class="px-4 py-3 text-left font-mono">{{ total.currency_code }}</th>
+                            {% for key in ['purchases', 'credits', 'net', 'tax', 'matching_total'] %}<td class="px-4 py-3 text-right font-mono tabular-nums">{{ format_report_number(total[key]) }}</td>{% else %}{% endfor %}
+                        </tr>{% else %}<tr><td colspan="6" class="px-5 py-4">No posted purchases match this period and these filters.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card overflow-hidden" aria-labelledby="purchase-lines-heading">
+            <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <h3 id="purchase-lines-heading" class="font-semibold text-slate-900 dark:text-white">Purchased item lines</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Descriptions and amounts come from the saved invoice. Quantities are not summed across different items or inferred units.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">All matching supplier invoice lines, including manually described items</caption>
+                    <thead class="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400"><tr>
+                        {% for heading in ['Invoice date', 'Invoice / type', 'Item / description', 'Supplier', 'Receipt warehouse', 'Quantity', 'Unit price', 'Currency', 'Net excl. tax', 'Net tax', 'Total incl. tax'] %}<th scope="col" class="px-4 py-3 text-left">{{ heading }}</th>{% else %}{% endfor %}
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-900 dark:divide-slate-700 dark:text-slate-100">
+                        {% for row in purchase_rows %}<tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <td class="whitespace-nowrap px-4 py-3 align-top">{{ row.invoice_date.strftime('%d %b %Y') }}</td>
+                            <td class="px-4 py-3 align-top">
+                                {% if can_view_invoice %}<a href="/finance/ap/invoices/{{ row.invoice_id }}" class="font-mono text-emerald-700 hover:underline dark:text-emerald-400">{{ row.invoice_number }}</a>{% else %}{{ row.invoice_number }}{% endif %}
+                                <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{{ row.invoice_type.value | replace('_', ' ') | title }} · Line {{ row.line_number }}</p>
+                                {{ status_badge(row.status.value, size="sm") }}
+                            </td>
+                            <td class="px-4 py-3 align-top">
+                                <p class="font-medium">{{ row.description if row.description else 'Description unavailable' }}</p>
+                                {% if row.item_id %}<a href="/inventory/items/{{ row.item_id }}" class="text-emerald-700 hover:underline dark:text-emerald-400">{{ row.item_code }} · {{ row.item_name }}</a>{% else %}<p class="text-xs text-slate-600 dark:text-slate-400">{{ row.item_link_status }}</p>{% endif %}
+                                <p class="text-xs text-slate-600 dark:text-slate-400">{{ row.category_name if row.category_name else 'Unspecified category' }}</p>
+                            </td>
+                            <td class="px-4 py-3 align-top">{{ row.supplier_name if row.supplier_name else 'Supplier unavailable' }}</td>
+                            <td class="px-4 py-3 align-top">{{ row.warehouse_name if row.warehouse_name else 'Unspecified' }}</td>
+                            <td class="px-4 py-3 text-right align-top font-mono tabular-nums">{{ format_report_number(row.quantity, 6) }}</td>
+                            <td class="px-4 py-3 text-right align-top font-mono tabular-nums">{{ format_report_number(row.unit_price, 6) }}</td>
+                            <td class="px-4 py-3 align-top font-mono">{{ row.currency_code }}</td>
+                            {% for value in [row.net_amount, row.net_tax, row.net_amount + row.net_tax] %}<td class="whitespace-nowrap px-4 py-3 text-right align-top font-mono tabular-nums">{{ format_report_number(value) }}</td>{% else %}{% endfor %}
+                        </tr>{% else %}<tr><td colspan="11">{{ empty_state("No purchases found", "Choose another period or clear filters. Draft, void and prepayment invoices are excluded.", "box") }}</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <nav class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700" aria-label="Purchase report pages">
+                <span class="text-sm text-slate-600 dark:text-slate-400">Page {{ page }} of {{ total_pages }} · {{ total_count }} lines</span>
+                <div class="flex gap-2">
+                    {% if page > 1 %}<a href="{{ previous_page_url }}" class="btn btn-secondary">Previous page</a>{% endif %}
+                    {% if page < total_pages %}<a href="{{ next_page_url }}" class="btn btn-secondary">Next page</a>{% endif %}
+                </div>
+            </nav>
+        </section>
+
+        <section class="card overflow-hidden" aria-labelledby="purchase-reconciliation-heading">
+            <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <h3 id="purchase-reconciliation-heading" class="font-semibold text-slate-900 dark:text-white">Invoice reconciliation</h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Full invoices are counted once. Category, warehouse or search filters may select only some lines; a filtered line total is not the full invoice amount. Difference = stored invoice total minus all saved invoice lines including tax. No values are adjusted to force a match.</p>
+                {% for total in currency_totals %}<p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
+                    <strong>{{ total.currency_code }}</strong> · All lines of matched invoices: {{ format_report_number(total.full_line_total) }} · Stored invoice totals: {{ format_report_number(total.invoice_total) }} · Difference: {{ format_report_number(total.difference, 6) }} · {{ total.mismatch_count }} invoices with differences · {{ total.partial_count }} partially selected invoices.
+                </p>{% else %}<p class="mt-1 text-sm text-slate-600 dark:text-slate-400">No matched invoices to reconcile.</p>{% endfor %}
+                <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">Details below are for invoices represented on this page; their full line totals include lines on other pages. Invoice totals CSV covers all matched invoices.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">Full invoice reconciliation for invoices represented on this page</caption>
+                    <thead class="bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-400"><tr>
+                        {% for heading in ['Invoice', 'Currency', 'Matching lines incl. tax', 'All invoice lines incl. tax', 'Stored invoice total', 'Difference', 'Result'] %}<th scope="col" class="px-4 py-3 text-left">{{ heading }}</th>{% else %}{% endfor %}
+                    </tr></thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-900 dark:divide-slate-700 dark:text-slate-100">
+                        {% for row in invoice_rows %}<tr>
+                            <td class="px-4 py-3">{% if can_view_invoice %}<a href="/finance/ap/invoices/{{ row.invoice_id }}" class="text-emerald-700 hover:underline dark:text-emerald-400">{{ row.invoice_number }}</a>{% else %}{{ row.invoice_number }}{% endif %}<p class="text-xs text-slate-600 dark:text-slate-400">{{ row.matching_line_count }} of {{ row.full_line_count }} lines match</p></td>
+                            <td class="px-4 py-3 font-mono">{{ row.currency_code }}</td>
+                            {% for key in ['matching_total', 'full_line_total', 'invoice_total'] %}<td class="px-4 py-3 text-right font-mono tabular-nums">{{ format_report_number(row[key]) }}</td>{% else %}{% endfor %}
+                            <td class="px-4 py-3 text-right font-mono tabular-nums">{{ format_report_number(row.difference, 6) }}</td>
+                            <td class="px-4 py-3">{% if row.difference != 0 %}Review difference{% else %}Full invoice matches{% endif %}{% if row.matching_line_count < row.full_line_count %}<p class="text-xs">Partial line selection</p>{% endif %}</td>
+                        </tr>{% else %}<tr><td colspan="7" class="px-5 py-4">No invoice details on this page.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

@@ -326,7 +326,7 @@ pm	time_entry	updated_by_id	public	people	id	mixin_expansion	app/models/pm/time_
 public	api_keys	person_id	public	people	id	explicit	app/models/auth.py:236
 public	audit_events	actor_person_id	public	people	id	explicit	app/models/audit.py:42
 public	batch_operations	started_by_id	public	people	id	explicit	app/models/batch_operation.py:104
-public	device_token	person_id	public	people	id	explicit	app/models/notification.py:259
+public	device_token	person_id	public	people	id	explicit	app/models/notification.py:269
 public	domain_setting_history	changed_by_id	public	people	id	explicit	app/models/domain_settings.py:315
 public	email_profile	created_by_id	public	people	id	explicit	app/models/email_profile.py:182
 public	feature_flag_registry	created_by_id	public	people	id	explicit	app/models/feature_flag.py:115
@@ -336,7 +336,7 @@ public	help_article_override	owner_id	public	people	id	explicit	app/models/help/
 public	help_search_event	person_id	public	people	id	explicit	app/models/help/models.py:220
 public	help_user_progress	person_id	public	people	id	explicit	app/models/help/models.py:144
 public	mfa_methods	person_id	public	people	id	explicit	app/models/auth.py:171
-public	notification	actor_id	public	people	id	explicit	app/models/notification.py:194
+public	notification	actor_id	public	people	id	explicit	app/models/notification.py:204
 public	notification	recipient_id	public	people	id	explicit	app/models/notification.py:122
 public	person_roles	person_id	public	people	id	explicit	app/models/rbac.py:95
 public	sessions	person_id	public	people	id	explicit	app/models/auth.py:209
