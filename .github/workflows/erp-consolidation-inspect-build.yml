@@ -1,4 +1,4 @@
-name: Inspect remaining ERP integration failures
+name: Verify ERP PostgreSQL test isolation
 
 on:
   push:
@@ -6,71 +6,166 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
-  inspect:
+  repair:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 12
+    permissions:
+      contents: write
     steps:
-      - name: Read bounded failure evidence from the exact completed jobs
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Install locked dependencies
         env:
-          GH_TOKEN: ${{ github.token }}
+          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: poetry install --with dev --no-interaction
+      - name: Add fresh-interpreter regressions before changing the fixture
         run: |
           python3 - <<'PY'
-          import collections
-          import json
-          import os
-          import re
-          import urllib.error
-          import urllib.parse
-          import urllib.request
+          import pathlib
+          import textwrap
+          path = pathlib.Path('tests/unit/test_database_dialect_isolation.py')
+          assert not path.exists()
+          path.write_text(textwrap.dedent('''\
+          """The PostgreSQL lane must never construct SQLite-typed ORM expressions."""
 
-          api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
-          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
-          def read(path):
-              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
-                  return json.load(response)
-          class NoRedirect(urllib.request.HTTPRedirectHandler):
-              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
-                  return None
-          run = read('actions/runs/35385009065')
-          assert run['head_sha'] == '5914989f3ba4a3980d346b5511fc30cc50653083'
-          jobs = read('actions/runs/35385009065/jobs?per_page=100&filter=latest')['jobs']
-          print(json.dumps([{k: j[k] for k in ('id','name','status','conclusion')} for j in jobs], indent=2))
-          for job_id in (105729760978, 105729760458):
-              job = next(j for j in jobs if j['id'] == job_id)
-              assert job['status'] == 'completed'
-              request = urllib.request.Request(api + f'actions/jobs/{job_id}/logs', headers=headers)
-              try:
-                  response = urllib.request.build_opener(NoRedirect()).open(request, timeout=30)
-              except urllib.error.HTTPError as error:
-                  if error.code not in (301,302,303,307,308):
-                      raise
-                  target = error.headers['Location']
-                  parsed = urllib.parse.urlparse(target)
-                  assert parsed.scheme == 'https' and parsed.hostname.endswith(('.blob.core.windows.net','.actions.githubusercontent.com','.githubusercontent.com'))
-                  response = urllib.request.urlopen(target, timeout=30)
-              with response:
-                  raw = response.read(50000000).decode('utf-8-sig', errors='replace')
-              raw = re.sub(r'\x1b\[[0-9;]*m', '', raw)
-              lines = [re.sub(r'^\d{4}-\d\d-\d\dT\S+Z ?', '', line) for line in raw.splitlines()]
-              print('\n===== JOB', job_id, job['name'], '=====')
-              names = [line for line in lines if line.startswith(('FAILED ', 'ERROR '))]
-              print('Failing case count:', len(names))
-              print('\n'.join(names[:15]))
-              print('Exception counts:', dict(collections.Counter(line.strip() for line in lines if re.match(r'^E\s+(?:\w+\.)*\w*(?:Error|Exception):', line)).most_common(8)))
-              totals = [line for line in lines if re.search(r'\d+ failed|\d+ passed|\d+ errors', line) and not line.startswith('E ')]
-              print('\n'.join(totals[-3:]))
-              if job_id == 105729760978:
-                  blocks = [i for i,line in enumerate(lines) if re.match(r'^_{3,} .* _{3,}$', line)]
-                  for n,start in enumerate(blocks[:2]):
-                      end = blocks[n+1] if n+1 < len(blocks) else min(start+120,len(lines))
-                      block = lines[start:end]
-                      print('\n===== FIRST FAILURE TRACE =====')
-                      print('\n'.join(block[:35]))
-                      if len(block)>35:
-                          print('...')
-                          print('\n'.join(block[-20:]))
+          import os
+          import subprocess
+          import sys
+          import textwrap
+          from pathlib import Path
+
+          import pytest
+
+          ROOT = Path(__file__).resolve().parents[2]
+
+
+          @pytest.mark.parametrize(
+              "database_url",
+              ["postgresql://localhost/dialect_probe", "postgresql+psycopg://localhost/dialect_probe"],
+          )
+          def test_postgresql_url_preserves_native_types_before_model_import(database_url):
+              script = textwrap.dedent("""\
+                  import tests.conftest
+                  from uuid import uuid4
+                  from sqlalchemy.dialects import postgresql
+                  from sqlalchemy.dialects.postgresql.json import JSONB
+                  from sqlalchemy.sql.sqltypes import UUID
+                  from app.models.person import Person
+                  from app.models.finance.ar.customer import Customer
+                  assert postgresql.UUID is UUID
+                  assert postgresql.JSONB is JSONB
+                  expression = Person.id == uuid4()
+                  assert '::UUID' in str(expression.compile(dialect=postgresql.dialect()))
+                  email = Customer.primary_contact['email'].astext
+                  assert '->>' in str(email.compile(dialect=postgresql.dialect()))
+              """)
+              environment = dict(os.environ, TEST_DATABASE_URL=database_url)
+              result = subprocess.run(
+                  [sys.executable, "-c", script], cwd=ROOT, env=environment,
+                  capture_output=True, text=True, timeout=60, check=False,
+              )
+              assert result.returncode == 0, result.stdout + result.stderr
+
+
+          @pytest.mark.parametrize("database_url", [None, "sqlite+pysqlite:///:memory:"])
+          def test_unit_lane_keeps_sqlite_type_adapters(database_url):
+              script = textwrap.dedent("""\
+                  import tests.conftest as fixtures
+                  from sqlalchemy.dialects import postgresql
+                  from sqlalchemy.dialects.sqlite import dialect
+                  from sqlalchemy import create_engine
+                  from app.models.person import Person
+                  assert postgresql.UUID is fixtures.PatchedUUID
+                  assert postgresql.JSONB is fixtures.PatchedJSONB
+                  assert str(Person.__table__.c.id.type.compile(dialect=dialect())) == 'VARCHAR(36)'
+                  engine = create_engine('sqlite://')
+                  value = {'email': 'fixture@example.invalid'}
+                  adapter = fixtures.PatchedJSONB()
+                  encoded = adapter.bind_processor(engine.dialect)(value)
+                  assert adapter.result_processor(engine.dialect, None)(encoded) == value
+                  engine.dispose()
+              """)
+              environment = dict(os.environ)
+              environment.pop("TEST_DATABASE_URL", None)
+              if database_url is not None:
+                  environment["TEST_DATABASE_URL"] = database_url
+              result = subprocess.run(
+                  [sys.executable, "-c", script], cwd=ROOT, env=environment,
+                  capture_output=True, text=True, timeout=60, check=False,
+              )
+              assert result.returncode == 0, result.stdout + result.stderr
+          '''))
+          PY
+      - name: Prove native-type regression catches the original leakage
+        run: |
+          set +e
+          poetry run pytest -q --timeout=90 tests/unit/test_database_dialect_isolation.py -k postgresql_url > /tmp/isolation-before.log 2>&1
+          status=$?
+          set -e
+          tail -n 18 /tmp/isolation-before.log
+          test "$status" -eq 1
+          grep -q '2 failed' /tmp/isolation-before.log
+      - name: Keep SQLite adapters confined to the SQLite test lane
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          path = pathlib.Path('tests/conftest.py')
+          source = path.read_text()
+          before = '# Replace the PostgreSQL UUID with our patched version\npg_dialect.UUID = PatchedUUID'
+          after = '''# The integration lane explicitly supplies TEST_DATABASE_URL. Leave native
+          # PostgreSQL types intact BEFORE any mapper or annotated expression exists.
+          # Repairing table columns afterwards cannot repair already-cached ORM
+          # comparators/bind types. DATABASE_URL alone is deliberately not used:
+          # developers may have a production DSN while running SQLite unit tests.
+          _POSTGRESQL_TEST_TYPES = os.environ.get("TEST_DATABASE_URL", "").startswith(
+              ("postgresql://", "postgresql+")
+          )
+          if not _POSTGRESQL_TEST_TYPES:
+              pg_dialect.UUID = PatchedUUID'''
+          assert source.count(before) == 1
+          source = source.replace(before, after, 1)
+          before = 'if _original_jsonb is not None:\n    pg_dialect.JSONB = PatchedJSONB'
+          after = 'if _original_jsonb is not None and not _POSTGRESQL_TEST_TYPES:\n    pg_dialect.JSONB = PatchedJSONB'
+          assert source.count(before) == 1
+          path.write_text(source.replace(before, after, 1))
+          PY
+      - name: Verify both database lanes and existing type restoration regressions
+        run: |
+          poetry run ruff format tests/conftest.py tests/unit/test_database_dialect_isolation.py
+          poetry run ruff check tests/conftest.py tests/unit/test_database_dialect_isolation.py
+          poetry run pytest -q --timeout=90 \
+            tests/unit/test_database_dialect_isolation.py \
+            tests/test_postgresql_type_restoration_cache.py \
+            tests/unit/test_postgresql_type_restoration.py
+      - name: Publish only the validated test-isolation repair
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          allowed = {'tests/conftest.py', 'tests/unit/test_database_dialect_isolation.py'}
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          untracked = set(subprocess.check_output(['git','ls-files','--others','--exclude-standard'], text=True).splitlines())
+          assert changed | untracked == allowed, (changed, untracked)
+          subprocess.run(['git','diff','--check'], check=True)
+          subprocess.run(['git','diff','--stat'], check=True)
+          subprocess.run(['git','config','user.name','github-actions[bot]'], check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+          subprocess.run(['git','add','--',*sorted(allowed)], check=True)
+          subprocess.run(['git','commit','-m','fix(tests): isolate SQLite adapters before PostgreSQL model imports'], check=True)
+          assert subprocess.check_output(['git','rev-parse','HEAD^'], text=True).strip() == '64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a'
+          subprocess.run(['git','push','origin','HEAD:refs/heads/work/erp-consolidation-isolation-output-20260918'], check=True)
+          subprocess.run(['git','log','-1','--format=Verified repair commit: %H'], check=True)
           PY
