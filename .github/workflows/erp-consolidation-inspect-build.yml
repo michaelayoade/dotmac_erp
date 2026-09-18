@@ -109,9 +109,9 @@ jobs:
               original = SQLiteUUID()
               column = Column("identifier", original)
               value = uuid4()
-              column == value
+              _ = column == value
               set_column_type(column, native_postgresql_type(original))
-              column == value
+              _ = column == value
               native_comparator = column.comparator
               set_column_type(column, original)
               assert column.type is original
@@ -123,8 +123,8 @@ jobs:
           def test_repeated_native_and_sqlite_restoration_remains_safe():
               original = SQLiteUUID()
               column = Column("identifier", original)
-              for _ in range(3):
-                  column == uuid4()
+              for _iteration in range(3):
+                  _ = column == uuid4()
                   set_column_type(column, native_postgresql_type(original))
                   assert "::UUID" in str((column == uuid4()).compile(dialect=postgresql.dialect()))
                   set_column_type(column, original)
@@ -141,12 +141,10 @@ jobs:
           record['tree_digest'] = digest
           record_path.write_text(json.dumps(record, indent=2) + '\n')
           print('Verified exact checkout digest:', digest)
-          subprocess.run(['git', 'grep', '-n', 'native_postgresql_type', '--', 'tests'], check=True)
           PY
       - name: Prove the new regression fails without cache invalidation
         run: |
           poetry run python - <<'PY'
-          import importlib.util
           from uuid import uuid4
           from sqlalchemy import Column, String
           from sqlalchemy.sql.sqltypes import UUID
@@ -155,10 +153,10 @@ jobs:
               impl = String(36)
               cache_ok = True
           column = Column('id', StandIn())
-          column == uuid4()
+          _ = column == uuid4()
           column.type = UUID(as_uuid=True)
           try:
-              column == uuid4()
+              _ = column == uuid4()
           except AttributeError as error:
               assert 'coerce_to_is_types' in str(error), error
               print('Confirmed original cached-comparator failure:', error)
@@ -169,7 +167,7 @@ jobs:
         run: |
           poetry run ruff format tests/postgresql_types.py tests/integration/conftest.py tests/test_postgresql_type_restoration_cache.py
           poetry run ruff check tests/postgresql_types.py tests/test_postgresql_type_restoration_cache.py
-          poetry run pytest -q tests/test_postgresql_type_restoration_cache.py
+          poetry run pytest -q tests/test_postgresql_type_restoration_cache.py tests/unit/test_postgresql_type_restoration.py
           python3 scripts/check_evidence_json.py
           python3 scripts/static_tree_digest.py static --expect sha256:393b311f8642ed7233e1ed4791866a40b45d55dd1936f71b74ea85c96bf82aec
       - name: Publish only the four reviewed repair files to an output branch
