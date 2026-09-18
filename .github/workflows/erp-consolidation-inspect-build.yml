@@ -33,7 +33,7 @@ jobs:
           POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
           POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
         run: poetry install --with dev --no-interaction --quiet
-      - name: Execute the exact reviewed repair using structured sensitivity evidence
+      - name: Execute the reviewed repair with structured sensitivity evidence
         run: |
           poetry run python - <<'PY'
           import pathlib
@@ -43,21 +43,28 @@ jobs:
 
           expected = '64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a'
           assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == expected
-          # Reuse only the exact repair scripts already reviewed in this pinned
-          # helper revision. The helper workflow never enters the output commit.
           source = subprocess.check_output(['git','show','2eb7c24709315ea3a44235cbb3aa30648f1fe585:.github/workflows/erp-consolidation-inspect-build.yml'], text=True)
           steps = {s['name']: s['run'] for s in yaml.safe_load(source)['jobs']['repair']['steps'] if 'run' in s}
           def execute(name):
               print('\n===', name, '===', flush=True)
               subprocess.run(['bash','-e','-o','pipefail','-c',steps[name]], check=True)
           execute('Add fresh-interpreter regressions before changing the fixture')
+          path = pathlib.Path('tests/unit/test_database_dialect_isolation.py')
+          code = path.read_text()
+          anchor = '    result = subprocess.run('
+          assert code.count(anchor) == 2
+          # These two new tests run only this interpreter and source literals,
+          # without a shell or caller-supplied executable/script. Keep the
+          # security rule enabled everywhere else, including application code.
+          code = code.replace(anchor, '    # Fixed interpreter and inline test source; no shell or user command.\n    result = subprocess.run(  # noqa: S603')
+          path.write_text(code)
           result = subprocess.run(['poetry','run','pytest','-q','--timeout=90','tests/unit/test_database_dialect_isolation.py','-k','postgresql_url','--junitxml=/tmp/isolation-before.xml'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
           print('\n'.join(result.stdout.splitlines()[-12:]))
           assert result.returncode == 1, result.returncode
           suites = ET.parse('/tmp/isolation-before.xml').getroot().iter('testsuite')
           counts = [(int(s.attrib['tests']),int(s.attrib['failures']),int(s.attrib['errors'])) for s in suites]
           assert counts == [(2,2,0)], counts
-          print('Sensitivity proof: both new PostgreSQL cases fail before the fix.')
+          print('Sensitivity proof: both PostgreSQL cases fail before the fix.')
           execute('Keep SQLite adapters confined to the SQLite test lane')
           execute('Verify both database lanes and existing type restoration regressions')
           execute('Publish only the validated test-isolation repair')
