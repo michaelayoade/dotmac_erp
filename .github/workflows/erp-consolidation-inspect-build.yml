@@ -1,4 +1,4 @@
-name: Verify ERP consolidation metadata and regression repairs
+name: Inspect remaining ERP integration failures
 
 on:
   push:
@@ -6,130 +6,71 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  repair:
+  inspect:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
+    timeout-minutes: 3
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: 5914989f3ba4a3980d346b5511fc30cc50653083
-          fetch-depth: 0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
-      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
-        with:
-          version: '2.4.1'
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-      - name: Install locked application and test dependencies
+      - name: Read bounded failure evidence from the exact completed jobs
         env:
-          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
-          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
-        run: poetry install --with dev --no-interaction
-      - name: Apply bounded descriptor and regression expectation repairs
-        run: |
-          poetry run python - <<'PY'
-          import csv
-          import pathlib
-          import re
-          import subprocess
-          import tomllib
-          from tests.architecture import test_people_dependent_references as inventory
-
-          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '5914989f3ba4a3980d346b5511fc30cc50653083'
-          def replace_once(source, before, after):
-              assert source.count(before) == 1, before
-              return source.replace(before, after, 1)
-          old_head = '20260915_merge_workforce_kpi'
-          new_head = '20260918_push_delivery_outcomes'
-          path = pathlib.Path('deploy/product.toml')
-          source = path.read_text()
-          before = tomllib.loads(source)
-          source = replace_once(source, '"' + old_head + '"', '"' + new_head + '"')
-          after = tomllib.loads(source)
-          expected = tomllib.loads(path.read_text())
-          assert old_head in expected['migration']['expected_heads']
-          expected['migration']['expected_heads'] = [new_head if value == old_head else value for value in expected['migration']['expected_heads']]
-          assert after == expected
-          assert before['image'] == after['image'], 'Never change the deployed image identity'
-          path.write_text(source)
-          path = pathlib.Path('tests/migrations/test_people_employment_type_activation_migration.py')
-          source = replace_once(path.read_text(), 'assert heads == ["' + old_head + '"], heads', 'assert heads == ["' + new_head + '"], heads')
-          path.write_text(source)
-          path = pathlib.Path('tests/tasks/test_push_delivery_outcomes.py')
-          source = replace_once(path.read_text(), 'import pytest\n', 'import pytest\nfrom sqlalchemy.dialects import postgresql\n')
-          source = replace_once(source, 'assert "SKIP LOCKED" in str(statements[-1])', 'assert "SKIP LOCKED" in str(\n        statements[-1].compile(dialect=postgresql.dialect())\n    )')
-          path.write_text(source)
-
-          actual = inventory._scan_models()
-          recorded = inventory._load_inventory()
-          assert actual.keys() == recorded.keys(), 'No dependency may be added or retired'
-          changed = [identity for identity in actual if actual[identity] != recorded[identity]]
-          assert 0 < len(changed) <= 10, changed
-          for identity in changed:
-              left, right = recorded[identity], actual[identity]
-              assert {item.kind for item in left} == {item.kind for item in right}
-              assert len(left) == len(right)
-              old_lines = []
-              new_lines = []
-              for evidence, output in ((left, old_lines), (right, new_lines)):
-                  for item in evidence:
-                      match = re.fullmatch(r'app/models/notification\.py:(\d+)', item.path)
-                      assert match and item.kind == 'explicit', (identity, item)
-                      output.append(int(match.group(1)))
-              assert sorted(new_lines) == [number + 10 for number in sorted(old_lines)]
-              print('Line-only evidence repair:', identity, sorted(old_lines), '->', sorted(new_lines))
-          with inventory.INVENTORY.open(newline='') as handle:
-              rows = list(csv.DictReader(handle, delimiter='\t'))
-          for row in rows:
-              identity = inventory.ForeignKeyIdentity(*(row[key] for key in inventory.INVENTORY_FIELDS[:6]))
-              if identity in changed:
-                  row['declaration_paths'] = '|'.join(sorted({item.path for item in actual[identity]}))
-          with inventory.INVENTORY.open('w', newline='') as handle:
-              writer = csv.DictWriter(handle, fieldnames=inventory.INVENTORY_FIELDS, delimiter='\t', lineterminator='\n')
-              writer.writeheader()
-              writer.writerows(rows)
-          assert inventory._load_inventory() == actual
-          print('All dependency identities and declaration kinds preserved:', len(actual))
-          PY
-      - name: Format and verify the unchanged deployment render
-        run: |
-          poetry run ruff format tests/tasks/test_push_delivery_outcomes.py tests/migrations/test_people_employment_type_activation_migration.py
-          poetry run ruff check tests/tasks/test_push_delivery_outcomes.py tests/migrations/test_people_employment_type_activation_migration.py
-          poetry run dotmac-deploy -f deploy/product.toml validate
-          poetry run dotmac-deploy -f deploy/product.toml render --thresholds deploy/alerts/thresholds.json --check -o deploy/rendered
-          python3 scripts/check_evidence_json.py
-      - name: Re-run all six previously failing unit cases plus their surrounding regression suites
-        run: |
-          poetry run pytest -q --timeout=60 \
-            tests/architecture/test_deployment_descriptor.py \
-            tests/architecture/test_people_dependent_references.py \
-            tests/architecture/test_static_is_image_only.py \
-            tests/migrations/test_people_employment_type_activation_migration.py \
-            tests/tasks/test_push_delivery_outcomes.py \
-            tests/test_postgresql_type_restoration_cache.py \
-            tests/unit/test_postgresql_type_restoration.py
-      - name: Publish only the four verified repair files to an output branch
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          import subprocess
-          allowed = {'deploy/product.toml', 'docs/inventories/people-dependent-references.tsv', 'tests/migrations/test_people_employment_type_activation_migration.py', 'tests/tasks/test_push_delivery_outcomes.py'}
-          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
-          untracked = set(subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard'], text=True).splitlines())
-          assert changed == allowed and not untracked, (changed, untracked)
-          subprocess.run(['git', 'diff', '--check'], check=True)
-          subprocess.run(['git', 'diff', '--', *sorted(allowed)], check=True)
-          subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
-          subprocess.run(['git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com'], check=True)
-          subprocess.run(['git', 'add', '--', *sorted(allowed)], check=True)
-          subprocess.run(['git', 'commit', '-m', 'fix(ci): align migration metadata and verify push locking with PostgreSQL dialect'], check=True)
-          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == '5914989f3ba4a3980d346b5511fc30cc50653083'
-          subprocess.run(['git', 'push', 'origin', 'HEAD:refs/heads/work/erp-consolidation-metadata-output-20260918'], check=True)
-          subprocess.run(['git', 'log', '-1', '--format=Verified repair commit: %H'], check=True)
+          import collections
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          def read(path):
+              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
+                  return json.load(response)
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
+          run = read('actions/runs/35385009065')
+          assert run['head_sha'] == '5914989f3ba4a3980d346b5511fc30cc50653083'
+          jobs = read('actions/runs/35385009065/jobs?per_page=100&filter=latest')['jobs']
+          print(json.dumps([{k: j[k] for k in ('id','name','status','conclusion')} for j in jobs], indent=2))
+          for job_id in (105729760978, 105729760458):
+              job = next(j for j in jobs if j['id'] == job_id)
+              assert job['status'] == 'completed'
+              request = urllib.request.Request(api + f'actions/jobs/{job_id}/logs', headers=headers)
+              try:
+                  response = urllib.request.build_opener(NoRedirect()).open(request, timeout=30)
+              except urllib.error.HTTPError as error:
+                  if error.code not in (301,302,303,307,308):
+                      raise
+                  target = error.headers['Location']
+                  parsed = urllib.parse.urlparse(target)
+                  assert parsed.scheme == 'https' and parsed.hostname.endswith(('.blob.core.windows.net','.actions.githubusercontent.com','.githubusercontent.com'))
+                  response = urllib.request.urlopen(target, timeout=30)
+              with response:
+                  raw = response.read(50000000).decode('utf-8-sig', errors='replace')
+              raw = re.sub(r'\x1b\[[0-9;]*m', '', raw)
+              lines = [re.sub(r'^\d{4}-\d\d-\d\dT\S+Z ?', '', line) for line in raw.splitlines()]
+              print('\n===== JOB', job_id, job['name'], '=====')
+              names = [line for line in lines if line.startswith(('FAILED ', 'ERROR '))]
+              print('Failing case count:', len(names))
+              print('\n'.join(names[:15]))
+              print('Exception counts:', dict(collections.Counter(line.strip() for line in lines if re.match(r'^E\s+(?:\w+\.)*\w*(?:Error|Exception):', line)).most_common(8)))
+              totals = [line for line in lines if re.search(r'\d+ failed|\d+ passed|\d+ errors', line) and not line.startswith('E ')]
+              print('\n'.join(totals[-3:]))
+              if job_id == 105729760978:
+                  blocks = [i for i,line in enumerate(lines) if re.match(r'^_{3,} .* _{3,}$', line)]
+                  for n,start in enumerate(blocks[:2]):
+                      end = blocks[n+1] if n+1 < len(blocks) else min(start+120,len(lines))
+                      block = lines[start:end]
+                      print('\n===== FIRST FAILURE TRACE =====')
+                      print('\n'.join(block[:35]))
+                      if len(block)>35:
+                          print('...')
+                          print('\n'.join(block[-20:]))
           PY
