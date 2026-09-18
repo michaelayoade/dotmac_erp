@@ -64,8 +64,16 @@ class PatchedUUID(SQLiteUUID):
         self.as_uuid = as_uuid
 
 
-# Replace the PostgreSQL UUID with our patched version
-pg_dialect.UUID = PatchedUUID
+# The integration lane explicitly supplies TEST_DATABASE_URL. Leave native
+# PostgreSQL types intact BEFORE any mapper or annotated expression exists.
+# Repairing table columns afterwards cannot repair already-cached ORM
+# comparators/bind types. DATABASE_URL alone is deliberately not used:
+# developers may have a production DSN while running SQLite unit tests.
+_POSTGRESQL_TEST_TYPES = os.environ.get("TEST_DATABASE_URL", "").startswith(
+    ("postgresql://", "postgresql+")
+)
+if not _POSTGRESQL_TEST_TYPES:
+    pg_dialect.UUID = PatchedUUID
 
 
 class PatchedJSONB(Text):
@@ -136,7 +144,7 @@ class PatchedJSONB(Text):
         return process
 
 
-if _original_jsonb is not None:
+if _original_jsonb is not None and not _POSTGRESQL_TEST_TYPES:
     pg_dialect.JSONB = PatchedJSONB
 
 
