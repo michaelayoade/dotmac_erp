@@ -1,4 +1,4 @@
-name: Retire superseded ERP consolidation checks
+name: Verify ERP consolidation behavior preservation
 
 on:
   push:
@@ -8,59 +8,73 @@ permissions:
   contents: read
 
 jobs:
-  retire:
+  verify:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
     runs-on: ubuntu-latest
-    timeout-minutes: 4
-    permissions:
-      actions: write
-      pull-requests: read
+    timeout-minutes: 12
     steps:
-      - name: Verify the replacement and cancel only the exact obsolete PR CI runs
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 906c6108b248b970939009d30a4ebb364559e72e
+          fetch-depth: 0
+          persist-credentials: false
+          show-progress: false
+      - name: Verify original histories and unchanged application semantics
         run: |
           python3 - <<'PY'
-          import json
-          import os
-          import time
-          import urllib.request
+          import ast
+          import pathlib
+          import subprocess
 
-          api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
-          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
-          def read(path):
-              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
-                  return json.load(response)
-          branch = 'consolidate/erp-open-prs-20260918'
+          start = '39aeb4f9d988524685524037ae83101fdf48aa6e'
+          combined = 'ddc56587bfe0638c3ed5740a3b3ff537a9639c5e'
           target = '906c6108b248b970939009d30a4ebb364559e72e'
-          pr = read('pulls/596')
-          assert pr['state'] == 'open' and pr['head']['ref'] == branch and pr['head']['sha'] == target
-          replacements = []
-          for _ in range(12):
-              runs = read('actions/runs?head_sha=' + target + '&event=pull_request&per_page=100')['workflow_runs']
-              replacements = [r for r in runs if r['head_branch'] == branch and r['path'] == '.github/workflows/ci.yml']
-              if replacements:
-                  break
-              time.sleep(5)
-          assert len(replacements) == 1, 'Require exactly one replacement CI run'
-          replacement = replacements[0]
-          assert replacement['status'] != 'completed' or replacement['conclusion'] == 'success'
-          print('Replacement CI retained:', replacement['id'], target, replacement['status'])
-          obsolete = {
-              35385009065: '5914989f3ba4a3980d346b5511fc30cc50653083',
-              35385963436: '64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a',
-          }
-          for run_id, sha in obsolete.items():
-              run = read('actions/runs/' + str(run_id))
-              assert run['head_sha'] == sha and run['head_branch'] == branch
-              assert run['event'] == 'pull_request' and run['path'] == '.github/workflows/ci.yml'
-              if run['status'] == 'completed':
-                  print('Already completed:', run_id, run['conclusion'])
-                  continue
-              request = urllib.request.Request(api + f'actions/runs/{run_id}/cancel', headers=headers, method='POST')
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  assert response.status == 202
-              print('Canceled superseded CI:', run_id, sha)
-          latest = read('actions/runs/' + str(replacement['id']))
-          print('Current CI:', latest['id'], latest['head_sha'], latest['status'], latest['conclusion'])
+          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == target
+          sources = ['71d9134d9ffe90ba9fd6d1b869a0bbde82ae88dc','cbb153b081bc8310d0ab10d0109cde3addc2c7ae','fc983616dd2e039efed8c0f1f8c0be8414e9812a','38788e465d6c86f43782a9d3aeb32aa9abd5306a','620c3aff59905623b8f572ef481fe393b5dd7eb4','72fbb193c35312e5ac3d09892507e4196c30465b','11601b3fbf2fc511dc0a7f66e74df690af647b1c','40be0b0ff39ff1a9ca4ffeb046da1054ee82998b','cfe63d1a62d0582317be9f917b5731b825109784']
+          for sha in sources:
+              subprocess.run(['git','merge-base','--is-ancestor',sha,target], check=True)
+          print('All nine source heads remain ancestors.')
+          changed = subprocess.check_output(['git','diff','--name-only',combined,target,'--','app','templates','scripts','alembic','Dockerfile','docker-compose.yml','.github/workflows'], text=True).splitlines()
+          for path in changed:
+              assert path.startswith('app/') and path.endswith('.py'), path
+              before = subprocess.check_output(['git','show',combined+':'+path], text=True)
+              after = pathlib.Path(path).read_text()
+              assert ast.dump(ast.parse(before, type_comments=True), include_attributes=False) == ast.dump(ast.parse(after, type_comments=True), include_attributes=False), path
+              print('Formatting-only application change:', path)
+          print('All application semantics, templates, migrations, scripts and CI workflows preserved from the original consolidation.')
+          files = subprocess.check_output(['git','diff','--name-only',start,combined,'--','tests'], text=True).splitlines()
+          tests = [path for path in files if pathlib.Path(path).name.startswith('test_') and path.endswith('.py') and not path.startswith('tests/integration/')]
+          assert tests and all(pathlib.Path(path).is_file() for path in tests)
+          pathlib.Path('/tmp/erp-original-regressions.txt').write_text('\n'.join(tests)+'\n')
+          print('Original changed non-PostgreSQL test files:', len(tests))
+          print('\n'.join(tests))
+          PY
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Install exact locked test dependencies
+        env:
+          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: poetry install --with dev --no-interaction --quiet
+      - name: Execute the original PR regression suites at the repaired head
+        run: |
+          poetry run python - <<'PY'
+          import pathlib
+          import subprocess
+          import xml.etree.ElementTree as ET
+          tests = pathlib.Path('/tmp/erp-original-regressions.txt').read_text().splitlines()
+          result = subprocess.run(['poetry','run','pytest','-q','--timeout=60','--junitxml=/tmp/original-regressions.xml',*tests], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+          print('\n'.join(result.stdout.splitlines()[-55:]))
+          if pathlib.Path('/tmp/original-regressions.xml').is_file():
+              for suite in ET.parse('/tmp/original-regressions.xml').getroot().iter('testsuite'):
+                  print('ORIGINAL REGRESSION COUNTS:', {k:suite.attrib[k] for k in ('tests','failures','errors','skipped')})
+          if result.returncode:
+              raise SystemExit(result.returncode)
+          subprocess.run(['git','diff','--exit-code'], check=True)
           PY
