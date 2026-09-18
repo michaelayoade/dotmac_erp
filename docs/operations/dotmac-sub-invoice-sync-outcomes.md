@@ -54,3 +54,44 @@ tax mapping merely to make the ledger appear clear.
 `20260906_invoice_sync_outcomes` is additive. It creates two tables, indexes,
 constraints, forced RLS policies and explicit `app_user` grants. It performs no
 invoice backfill, posting, deletion or historical tax inference.
+
+`20260918_invoice_sync_canonical_evidence` is metadata-only: it renames both
+tables out of the live path into a frozen archive and creates a fresh, empty
+pair of tables at the original names. It performs no data copy, backfill or
+row rewrite. See "Frozen legacy tables" below.
+
+## Frozen legacy tables
+
+Every row `20260906_invoice_sync_outcomes` ever wrote used ERP's own,
+now-deleted, confirmed-buggy local fingerprint algorithm — never a digest
+forwarded from Self-Care's canonical projection. ERP never archived the
+original full projection that produced a stored `projection_fingerprint`, and
+Self-Care's feed reconstructs from current state, not a historical snapshot,
+so a present-day re-fetch cannot prove a historical match. Those rows are
+**historically unverifiable**.
+
+Michael's ruling: preserve them exactly as written, forever, but exclude them
+structurally from ever counting as canonical parity or cutover-success
+evidence — never delete rows, never delete or block the underlying invoices.
+
+`20260918_invoice_sync_canonical_evidence` renamed the live tables to
+`ar.dotmac_sub_invoice_sync_outcome_legacy` and
+`ar.dotmac_sub_invoice_sync_issue_legacy`, revoked `INSERT`/`UPDATE`/`DELETE`/
+`TRUNCATE` from `app_user` on both (SELECT is preserved — tenant RLS still
+applies to forensic/audit reads), and created a fresh, empty pair of tables
+at the original familiar names
+(`ar.dotmac_sub_invoice_sync_outcome`/`ar.dotmac_sub_invoice_sync_issue`) for
+canonical-scheme evidence only, going forward. Canonical rows carry a
+required `digest_version` and their fingerprint is always forwarded verbatim
+from Self-Care's canonical digest — never computed locally.
+
+A query against `ar.dotmac_sub_invoice_sync_outcome`/`ar.dotmac_sub_invoice_
+sync_issue` after this migration sees only canonical-scheme evidence,
+correctly scoped and initially empty. To review the frozen legacy evidence
+(forensic/audit only — never as canonical parity or cutover proof), query the
+`_legacy`-suffixed tables directly, e.g.:
+
+```sql
+SELECT count(*) FROM ar.dotmac_sub_invoice_sync_outcome_legacy
+WHERE organization_id = :organization_id;
+```

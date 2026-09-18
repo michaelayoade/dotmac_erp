@@ -1,4 +1,30 @@
-"""Durable, tenant-scoped outcomes from the Self-Care invoice projection."""
+"""Frozen, read-only archive of pre-canonical Self-Care invoice sync outcomes.
+
+TEST-ONLY. Production code never imports or queries this module — it exists
+solely so tests can construct a legacy row at a colliding key and prove the
+canonical write path (``app.services.dotmac_sub.invoice_sync_outcomes``,
+which maps to ``DotmacSubInvoiceSyncOutcome`` in
+``dotmac_sub_invoice_sync_outcome.py``) is unaffected by its presence.
+
+These classes are mapped to the tables the
+``20260918_invoice_sync_canonical_evidence`` migration renamed out of the
+live path: ``ar.dotmac_sub_invoice_sync_outcome_legacy`` and
+``ar.dotmac_sub_invoice_sync_issue_legacy``. Every row in them was written by
+ERP's now-deleted, confirmed-buggy local fingerprint algorithm — never
+forwarded from Self-Care's canonical digest — and is historically
+unverifiable (ERP never archived the original full projection that produced
+a stored ``projection_fingerprint``). They are preserved exactly as written,
+forever, and are structurally excluded from ever being treated as canonical
+evidence, parity proof, or cutover-success proof. ``app_user`` holds SELECT
+only on the real tables (INSERT/UPDATE/DELETE/TRUNCATE are revoked) — these
+ORM classes carry no such enforcement themselves; the privilege boundary is
+proven against a real PostgreSQL database in
+``tests/integration/test_dotmac_sub_invoice_sync_outcome_legacy_frozen.py``.
+
+Column shape is the CURRENT (pre-``20260918``) shape of
+``DotmacSubInvoiceSyncOutcome``/``DotmacSubInvoiceSyncIssue`` — no
+``digest_version`` column, since legacy rows never had one.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +38,6 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Integer,
     Numeric,
-    SmallInteger,
     String,
     UniqueConstraint,
     func,
@@ -24,20 +49,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 
-class DotmacSubInvoiceSyncOutcome(Base):
-    """One observed Self-Care invoice revision and its durable disposition.
+class DotmacSubInvoiceSyncOutcomeLegacy(Base):
+    """One frozen, historically-unverifiable legacy invoice sync outcome."""
 
-    Canonical-scheme evidence only: ``projection_fingerprint`` here is always
-    forwarded verbatim from Self-Care's canonical digest (never computed
-    locally). Rows written under ERP's now-deleted local fingerprint
-    algorithm live in the frozen, read-only
-    ``DotmacSubInvoiceSyncOutcomeLegacy`` archive and are never mixed into
-    this table (see the ``20260918_invoice_sync_canonical_evidence``
-    migration).
-    """
-
-    __tablename__ = "dotmac_sub_invoice_sync_outcome"
+    __tablename__ = "dotmac_sub_invoice_sync_outcome_legacy"
     __table_args__ = (
+        # CHECK/FK constraint names are unique per RELATION, not per schema, so
+        # the migration keeps their original (pre-rename) names — only the two
+        # UniqueConstraints below collided with the fresh canonical table's
+        # names and were renamed. Mirror that exactly.
         ForeignKeyConstraint(
             ["organization_id"],
             ["core_org.organization.organization_id"],
@@ -47,13 +67,12 @@ class DotmacSubInvoiceSyncOutcome(Base):
             "organization_id",
             "source_invoice_id",
             "source_updated_at",
-            "digest_version",
-            name="uq_sub_invoice_outcome_org_revision_digest",
+            name="uq_sub_invoice_outcome_legacy_org_revision",
         ),
         UniqueConstraint(
             "outcome_id",
             "organization_id",
-            name="uq_sub_invoice_outcome_id_org",
+            name="uq_sub_invoice_outcome_legacy_id_org",
         ),
         CheckConstraint(
             "disposition IN ('ready', 'blocked', 'not_applicable')",
@@ -68,8 +87,7 @@ class DotmacSubInvoiceSyncOutcome(Base):
             name="ck_sub_invoice_outcome_source_kind",
         ),
         CheckConstraint(
-            "length(projection_fingerprint) = 64 AND "
-            "projection_fingerprint = lower(projection_fingerprint)",
+            "length(projection_fingerprint) = 64",
             name="ck_sub_invoice_outcome_fingerprint",
         ),
         CheckConstraint(
@@ -80,10 +98,6 @@ class DotmacSubInvoiceSyncOutcome(Base):
         CheckConstraint(
             "occurrence_count > 0",
             name="ck_sub_invoice_outcome_occurrences",
-        ),
-        CheckConstraint(
-            "digest_version >= 1",
-            name="ck_sub_invoice_outcome_digest_version",
         ),
         {"schema": "ar"},
     )
@@ -107,7 +121,6 @@ class DotmacSubInvoiceSyncOutcome(Base):
     source_kind: Mapped[str] = mapped_column(String(40), nullable=False)
     disposition: Mapped[str] = mapped_column(String(24), nullable=False)
     projection_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
-    digest_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     issue_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     first_seen_at: Mapped[datetime] = mapped_column(
@@ -118,23 +131,23 @@ class DotmacSubInvoiceSyncOutcome(Base):
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    issues: Mapped[list[DotmacSubInvoiceSyncIssue]] = relationship(
+    issues: Mapped[list[DotmacSubInvoiceSyncIssueLegacy]] = relationship(
         back_populates="outcome",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
 
 
-class DotmacSubInvoiceSyncIssue(Base):
-    """Normalized, non-PII evidence for one blocked outcome."""
+class DotmacSubInvoiceSyncIssueLegacy(Base):
+    """Normalized, non-PII evidence for one frozen legacy blocked outcome."""
 
-    __tablename__ = "dotmac_sub_invoice_sync_issue"
+    __tablename__ = "dotmac_sub_invoice_sync_issue_legacy"
     __table_args__ = (
         ForeignKeyConstraint(
             ["outcome_id", "organization_id"],
             [
-                "ar.dotmac_sub_invoice_sync_outcome.outcome_id",
-                "ar.dotmac_sub_invoice_sync_outcome.organization_id",
+                "ar.dotmac_sub_invoice_sync_outcome_legacy.outcome_id",
+                "ar.dotmac_sub_invoice_sync_outcome_legacy.organization_id",
             ],
             ondelete="CASCADE",
             name="fk_sub_invoice_issue_outcome_org",
@@ -142,7 +155,7 @@ class DotmacSubInvoiceSyncIssue(Base):
         UniqueConstraint(
             "outcome_id",
             "issue_fingerprint",
-            name="uq_sub_invoice_issue_outcome_fingerprint",
+            name="uq_sub_invoice_issue_legacy_outcome_fingerprint",
         ),
         CheckConstraint(
             "expected_amount IS NOT NULL OR actual_amount IS NOT NULL "
@@ -171,4 +184,6 @@ class DotmacSubInvoiceSyncIssue(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    outcome: Mapped[DotmacSubInvoiceSyncOutcome] = relationship(back_populates="issues")
+    outcome: Mapped[DotmacSubInvoiceSyncOutcomeLegacy] = relationship(
+        back_populates="issues"
+    )

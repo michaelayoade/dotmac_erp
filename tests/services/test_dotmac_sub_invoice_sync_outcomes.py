@@ -7,11 +7,16 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
     DotmacSubInvoiceSyncOutcome,
 )
+from app.models.finance.ar.dotmac_sub_invoice_sync_outcome_legacy import (
+    DotmacSubInvoiceSyncOutcomeLegacy,
+)
 from app.services.dotmac_sub.invoice_sync_outcomes import (
+    SUPPORTED_DIGEST_VERSION,
     InvoiceSyncDisposition,
     InvoiceSyncIssueCode,
     InvoiceSyncIssueEvidence,
@@ -30,7 +35,11 @@ def _fingerprint(value: str) -> str:
 
 
 def _command(
-    *, disposition: InvoiceSyncDisposition, revision: datetime, value: str
+    *,
+    disposition: InvoiceSyncDisposition,
+    revision: datetime,
+    value: str,
+    digest_version: int = SUPPORTED_DIGEST_VERSION,
 ) -> RecordInvoiceSyncOutcome:
     issues = (
         (
@@ -50,6 +59,7 @@ def _command(
         source_kind=InvoiceSyncSourceKind.NATIVE,
         disposition=disposition,
         projection_fingerprint=_fingerprint(value),
+        digest_version=digest_version,
         issues=issues,
         observed_at=revision + timedelta(seconds=1),
     )
@@ -131,3 +141,109 @@ def test_later_ready_revision_resolves_prior_blocked_evidence(db_session) -> Non
     # SQLite drops timezone metadata even for DateTime(timezone=True); compare
     # the UTC instant rather than the backend-specific returned wrapper.
     assert prior.resolved_at.replace(tzinfo=UTC) == ready_at + timedelta(seconds=1)
+
+
+def test_legacy_row_at_same_key_does_not_block_a_canonical_write(db_session) -> None:
+    """A legacy row at the same key, with a different fingerprint, must not be
+    seen by the canonical stability check at all — it lives in a physically
+    separate table (``DotmacSubInvoiceSyncOutcomeLegacy``), not merely a
+    different scheme value in the same row set."""
+    revision = datetime(2026, 9, 18, 9, tzinfo=UTC)
+    legacy = DotmacSubInvoiceSyncOutcomeLegacy(
+        organization_id=ORGANIZATION_ID,
+        source_invoice_id=INVOICE_ID,
+        source_updated_at=revision,
+        contract_version="invoice-accounting-sync.v2",
+        source_kind=InvoiceSyncSourceKind.NATIVE.value,
+        disposition=InvoiceSyncDisposition.READY.value,
+        projection_fingerprint=_fingerprint("legacy-fingerprint-a"),
+        issue_count=0,
+        occurrence_count=1,
+    )
+    db_session.add(legacy)
+    db_session.flush()
+
+    canonical_command = _command(
+        disposition=InvoiceSyncDisposition.READY,
+        revision=revision,
+        value="canonical-fingerprint-b",
+    )
+
+    receipt = record_invoice_sync_outcome(db_session, canonical_command)
+
+    assert receipt.replayed is False
+    stored = db_session.scalar(
+        select(DotmacSubInvoiceSyncOutcome).where(
+            DotmacSubInvoiceSyncOutcome.outcome_id == receipt.outcome_id
+        )
+    )
+    assert stored is not None
+    assert stored.projection_fingerprint == _fingerprint("canonical-fingerprint-b")
+    assert stored.digest_version == SUPPORTED_DIGEST_VERSION
+
+
+def test_two_canonical_observations_same_key_different_fingerprint_still_raises(
+    db_session,
+) -> None:
+    """The same-content invariant keeps biting within the canonical scheme —
+    not just before this change, and not only over an empty/never-triggered
+    set. Both commands here carry the same explicit ``digest_version``."""
+    revision = datetime(2026, 9, 18, 10, tzinfo=UTC)
+    record_invoice_sync_outcome(
+        db_session,
+        _command(
+            disposition=InvoiceSyncDisposition.READY,
+            revision=revision,
+            value="canonical-first",
+        ),
+    )
+
+    with pytest.raises(
+        InvoiceSyncOutcomeError, match="same Self-Care invoice revision"
+    ):
+        record_invoice_sync_outcome(
+            db_session,
+            _command(
+                disposition=InvoiceSyncDisposition.READY,
+                revision=revision,
+                value="canonical-second",
+            ),
+        )
+
+
+def test_rejects_unsupported_digest_version(db_session) -> None:
+    command = _command(
+        disposition=InvoiceSyncDisposition.READY,
+        revision=datetime(2026, 9, 18, 11, tzinfo=UTC),
+        value="wrong-version",
+        digest_version=SUPPORTED_DIGEST_VERSION + 1,
+    )
+
+    with pytest.raises(InvoiceSyncOutcomeError, match="digest_version"):
+        record_invoice_sync_outcome(db_session, command)
+
+
+def test_uppercase_fingerprint_is_rejected_at_the_db_check_constraint_level(
+    db_session,
+) -> None:
+    """Belt-and-braces (matches this repo's existing DB-level constraint
+    testing style, e.g. RLS/privilege canaries elsewhere in ``tests/``):
+    the pydantic-layer validator in ``app.schemas.integrator_observation``
+    already rejects an uppercase-containing ``projection_fingerprint``, but
+    ``ck_sub_invoice_outcome_fingerprint`` must independently enforce it at
+    the database level, for any writer that bypasses the API schema."""
+    outcome = DotmacSubInvoiceSyncOutcome(
+        organization_id=ORGANIZATION_ID,
+        source_invoice_id=INVOICE_ID,
+        source_updated_at=datetime(2026, 9, 18, 12, tzinfo=UTC),
+        contract_version="invoice-accounting-sync.v2",
+        source_kind=InvoiceSyncSourceKind.NATIVE.value,
+        disposition=InvoiceSyncDisposition.READY.value,
+        projection_fingerprint=_fingerprint("uppercase-check").upper(),
+        digest_version=SUPPORTED_DIGEST_VERSION,
+        issue_count=0,
+        occurrence_count=1,
+    )
+    db_session.add(outcome)
+    with pytest.raises(IntegrityError):
+        db_session.flush()

@@ -51,6 +51,7 @@ def _build_command(
         source_kind=payload.source_kind,
         disposition=payload.disposition,
         projection_fingerprint=payload.projection_fingerprint,
+        digest_version=payload.digest_version,
         issues=tuple(
             InvoiceSyncIssueEvidence(
                 code=issue.code,

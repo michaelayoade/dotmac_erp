@@ -6,13 +6,21 @@ from unittest.mock import ANY, Mock
 from uuid import UUID
 
 import pytest
+from sqlalchemy import select
 
+from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
+    DotmacSubInvoiceSyncOutcome,
+)
+from app.models.finance.ar.dotmac_sub_invoice_sync_outcome_legacy import (
+    DotmacSubInvoiceSyncOutcomeLegacy,
+)
 from app.services.dotmac_sub.client import (
     DotmacSubClient,
     DotmacSubConfig,
     InvoiceAccountingSyncRecord,
 )
 from app.services.dotmac_sub.invoice_sync_outcomes import (
+    SUPPORTED_DIGEST_VERSION,
     InvoiceSyncDisposition,
     InvoiceSyncSourceKind,
     RecordInvoiceSyncOutcome,
@@ -20,6 +28,7 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
 from app.services.dotmac_sub.invoice_sync_shadow import (
     InvoiceSyncShadowContractError,
     _command as _shadow_command,
+    _latest_canonical_position,
     observe_invoice_accounting_v2,
     record_blocked_invoice_accounting_revision,
 )
@@ -37,6 +46,7 @@ def _command(disposition: InvoiceSyncDisposition) -> RecordInvoiceSyncOutcome:
         source_kind=InvoiceSyncSourceKind.NATIVE,
         disposition=disposition,
         projection_fingerprint="a" * 64,
+        digest_version=SUPPORTED_DIGEST_VERSION,
     )
 
 
@@ -240,3 +250,68 @@ def test_targeted_revision_refuses_non_blocked_source(monkeypatch):
             invoice_id=INVOICE_ID,
             expected_updated_at=UPDATED_AT,
         )
+
+
+def test_latest_canonical_position_ignores_legacy_evidence(db_session) -> None:
+    """The canonical cursor must return ``None`` when the canonical table is
+    empty, even though a legacy row exists at a real position for this
+    organization — legacy evidence lives in a physically separate table this
+    function never queries."""
+    legacy = DotmacSubInvoiceSyncOutcomeLegacy(
+        organization_id=ORG_ID,
+        source_invoice_id=INVOICE_ID,
+        source_updated_at=UPDATED_AT,
+        contract_version="invoice-accounting-sync.v2",
+        source_kind=InvoiceSyncSourceKind.NATIVE.value,
+        disposition=InvoiceSyncDisposition.READY.value,
+        projection_fingerprint="b" * 64,
+        issue_count=0,
+        occurrence_count=1,
+    )
+    db_session.add(legacy)
+    db_session.flush()
+
+    assert _latest_canonical_position(db_session, ORG_ID) is None
+
+
+def test_observe_reobserves_an_invoice_whose_only_evidence_is_legacy(
+    db_session,
+) -> None:
+    """Given a canonical table that is empty because the only existing
+    evidence for this invoice is a legacy row,
+    ``observe_invoice_accounting_v2`` must actually re-observe it (not skip
+    it) — the natural consequence of the cursor returning ``None``."""
+    legacy = DotmacSubInvoiceSyncOutcomeLegacy(
+        organization_id=ORG_ID,
+        source_invoice_id=INVOICE_ID,
+        source_updated_at=UPDATED_AT,
+        contract_version="invoice-accounting-sync.v2",
+        source_kind=InvoiceSyncSourceKind.NATIVE.value,
+        disposition=InvoiceSyncDisposition.READY.value,
+        projection_fingerprint="b" * 64,
+        issue_count=0,
+        occurrence_count=1,
+    )
+    db_session.add(legacy)
+    db_session.flush()
+
+    record = _record(disposition="ready", digest_version=SUPPORTED_DIGEST_VERSION)
+    client = Mock()
+    client.get_invoice_accounting_sync_v2.return_value = [record]
+
+    result = observe_invoice_accounting_v2(db_session, client, ORG_ID)
+
+    assert result.observed == 1
+    client.get_invoice_accounting_sync_v2.assert_called_once_with(
+        invoice_id=None,
+        updated_since=None,
+        on_parse_error=ANY,
+    )
+    stored = db_session.scalar(
+        select(DotmacSubInvoiceSyncOutcome).where(
+            DotmacSubInvoiceSyncOutcome.organization_id == ORG_ID,
+            DotmacSubInvoiceSyncOutcome.source_invoice_id == INVOICE_ID,
+        )
+    )
+    assert stored is not None
+    assert stored.digest_version == SUPPORTED_DIGEST_VERSION

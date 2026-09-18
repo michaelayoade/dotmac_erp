@@ -50,8 +50,14 @@ For the versioned Self-Care invoice accounting feed, Self-Care owns invoice
 facts and ERP owns accounting mappings and postings. ERP persists each consumed
 source revision in `ar.dotmac_sub_invoice_sync_outcome` and normalized blockers
 in `ar.dotmac_sub_invoice_sync_issue`. An exact replay increments recurrence; a
-later ready revision resolves rather than deletes prior evidence. See ADR-0012
-and `docs/operations/dotmac-sub-invoice-sync-outcomes.md`.
+later ready revision resolves rather than deletes prior evidence. Rows written
+before `20260918_invoice_sync_canonical_evidence` used ERP's own, since-deleted
+local fingerprint algorithm rather than Self-Care's forwarded canonical digest
+and are historically unverifiable; that migration renamed them, unchanged,
+into a frozen `_legacy` archive (read-only to `app_user`) and gave the live
+table names to a fresh, canonical-scheme-only table so legacy evidence can
+never count as canonical parity or cutover proof. See ADR-0012 and
+`docs/operations/dotmac-sub-invoice-sync-outcomes.md`.
 
 The built-in `staff-sync-reconcile` run at 02:30 Africa/Lagos also repairs the
 ERP-owned staff account-status and approved-leave projections before invoking

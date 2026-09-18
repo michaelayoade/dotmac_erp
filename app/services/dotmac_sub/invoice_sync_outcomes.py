@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -19,6 +20,15 @@ from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
 )
 
 CONTRACT_VERSION = "invoice-accounting-sync.v2"
+
+# Sub's invoice-accounting-sync.v2 feed publishes ``digest_version`` alongside
+# its canonical ``projection_digest``. This is the ONE place both
+# ``app.schemas.integrator_observation`` and
+# ``app.services.dotmac_sub.invoice_sync_shadow`` import it from — this module
+# is the persistence/contract owner, and both of those already import
+# ``CONTRACT_VERSION`` from here, so this is an existing, acyclic import
+# direction, not a new dependency.
+SUPPORTED_DIGEST_VERSION: Final[int] = 1
 
 
 class InvoiceSyncDisposition(str, Enum):
@@ -61,6 +71,7 @@ class RecordInvoiceSyncOutcome:
     source_kind: InvoiceSyncSourceKind
     disposition: InvoiceSyncDisposition
     projection_fingerprint: str
+    digest_version: int
     issues: tuple[InvoiceSyncIssueEvidence, ...] = ()
     observed_at: datetime | None = None
     contract_version: str = CONTRACT_VERSION
@@ -104,6 +115,11 @@ def _validated(
         raise InvoiceSyncOutcomeError(
             f"unsupported invoice sync contract {command.contract_version!r}"
         )
+    if command.digest_version != SUPPORTED_DIGEST_VERSION:
+        raise InvoiceSyncOutcomeError(
+            f"unsupported digest_version {command.digest_version!r}; this ERP "
+            f"build only accepts {SUPPORTED_DIGEST_VERSION!r}"
+        )
     fingerprint = command.projection_fingerprint
     if len(fingerprint) != 64 or any(
         char not in "0123456789abcdef" for char in fingerprint
@@ -137,6 +153,7 @@ def record_invoice_sync_outcome(
             DotmacSubInvoiceSyncOutcome.organization_id == command.organization_id,
             DotmacSubInvoiceSyncOutcome.source_invoice_id == command.source_invoice_id,
             DotmacSubInvoiceSyncOutcome.source_updated_at == command.source_updated_at,
+            DotmacSubInvoiceSyncOutcome.digest_version == command.digest_version,
         )
         .with_for_update()
     )
@@ -146,6 +163,7 @@ def record_invoice_sync_outcome(
             and existing.source_kind == command.source_kind.value
             and existing.disposition == command.disposition.value
             and existing.projection_fingerprint == command.projection_fingerprint
+            and existing.digest_version == command.digest_version
             and existing.issue_count == len(normalized)
         )
         if not stable:
@@ -170,6 +188,7 @@ def record_invoice_sync_outcome(
         source_kind=command.source_kind.value,
         disposition=command.disposition.value,
         projection_fingerprint=command.projection_fingerprint,
+        digest_version=command.digest_version,
         issue_count=len(normalized),
         first_seen_at=observed_at,
         last_seen_at=observed_at,

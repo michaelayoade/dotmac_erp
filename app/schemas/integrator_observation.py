@@ -10,24 +10,18 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from decimal import Decimal
-from typing import Final
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.services.dotmac_sub.invoice_sync_outcomes import (
     CONTRACT_VERSION,
+    SUPPORTED_DIGEST_VERSION,
     InvoiceSyncDisposition,
     InvoiceSyncIssueCode,
     InvoiceSyncSourceKind,
 )
 from dotmac_kernel.idempotency import MAX_KEY_LENGTH
-
-# Sub's invoice-accounting-sync.v2 feed publishes ``digest_version`` alongside
-# its canonical ``projection_digest``. This is the only version this ERP
-# build knows how to validate/trust — bump it here once a version-aware
-# bridge (deferred future work) exists to accept more than one.
-SUPPORTED_DIGEST_VERSION: Final[int] = 1
 
 _PROJECTION_DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}")
 
