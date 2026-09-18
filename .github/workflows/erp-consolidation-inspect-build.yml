@@ -1,4 +1,4 @@
-name: Inspect repaired ERP PostgreSQL result
+name: Inspect ERP final test dispositions
 
 on:
   push:
@@ -12,18 +12,16 @@ jobs:
   inspect:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 3
     steps:
-      - name: Read the exact PostgreSQL result and bounded raw failure evidence
+      - name: Read current test results, explicit skips and remaining failures
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          import collections
           import json
           import os
           import re
-          import time
           import urllib.error
           import urllib.parse
           import urllib.request
@@ -31,59 +29,48 @@ jobs:
           api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
           headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
           def read(path):
-              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
+              with urllib.request.urlopen(urllib.request.Request(api+path, headers=headers), timeout=30) as response:
                   return json.load(response)
           target = '906c6108b248b970939009d30a4ebb364559e72e'
-          run_id = 35387098805
-          run = read(f'actions/runs/{run_id}')
-          assert run['head_sha'] == target and run['event'] == 'pull_request'
-          assert run['head_branch'] == 'consolidate/erp-open-prs-20260918'
-          for _ in range(60):
-              jobs = read(f'actions/runs/{run_id}/jobs?per_page=100&filter=latest')['jobs']
-              selected = next(job for job in jobs if job['id'] == 105736963960)
-              assert selected['head_sha'] == target
-              if selected['status'] == 'completed':
-                  break
-              time.sleep(10)
-          print('EXACT HEAD:', target)
-          print('CI JOB STATES:', json.dumps([{k:j[k] for k in ('id','name','status','conclusion')} for j in jobs]))
-          if selected['status'] != 'completed':
-              raise SystemExit('PostgreSQL validation remains in progress; no success claimed.')
+          run = read('actions/runs/35387098805')
+          assert run['head_sha'] == target
+          print('CI:', json.dumps({k:run[k] for k in ('id','head_sha','status','conclusion')}))
+          checks = read('commits/'+target+'/check-runs?per_page=100&filter=latest')
+          assert checks['total_count'] <= 100
+          print('CHECKS:', json.dumps([{k:r[k] for k in ('name','status','conclusion')} for r in checks['check_runs']]))
+          jobs = read('actions/runs/35387098805/jobs?per_page=100&filter=latest')['jobs']
           class NoRedirect(urllib.request.HTTPRedirectHandler):
               def redirect_request(self, req, fp, code, msg, hdrs, newurl):
                   return None
-          request = urllib.request.Request(api + 'actions/jobs/105736963960/logs', headers=headers)
-          try:
-              response = urllib.request.build_opener(NoRedirect()).open(request, timeout=30)
-          except urllib.error.HTTPError as error:
-              if error.code not in (301,302,303,307,308):
-                  raise
-              location = error.headers['Location']
-              parsed = urllib.parse.urlparse(location)
-              assert parsed.scheme == 'https' and parsed.hostname.endswith(('.blob.core.windows.net','.actions.githubusercontent.com','.githubusercontent.com'))
-              response = urllib.request.urlopen(location, timeout=30)
-          with response:
-              raw = response.read(50000000).decode('utf-8-sig', errors='replace')
-          raw = re.sub(r'\x1b\[[0-9;]*m', '', raw)
-          lines = [re.sub(r'^\d{4}-\d\d-\d\dT\S+Z ?', '', line) for line in raw.splitlines()]
-          print('POSTGRESQL CONCLUSION:', selected['conclusion'])
-          failures = [line for line in lines if line.startswith(('FAILED ', 'ERROR '))]
-          print('FAILED CASE COUNT:', len(failures))
-          for line in failures[:25]:
-              print('LOG', line)
-          for line in lines:
-              if re.search(r'= .*\d+ passed|= .*\d+ failed', line):
-                  print('TOTAL', line)
-          print('ERROR TYPES:', dict(collections.Counter(line.strip() for line in lines if re.match(r'^E\s+(?:\w+\.)*\w*(?:Error|Exception):', line)).most_common(8)))
-          if failures:
-              indices = [i for i,line in enumerate(lines) if re.match(r'^_{3,} .* _{3,}$', line)]
-              for index,start in enumerate(indices[:3]):
-                  end = indices[index+1] if index+1 < len(indices) else min(start+100,len(lines))
-                  block = lines[start:end]
-                  for line in block[:35]:
-                      print('LOG', line)
-                  if len(block)>35:
-                      print('LOG ...')
-                      for line in block[-20:]:
-                          print('LOG', line)
+          for job in jobs:
+              if job['id'] not in (105736963960,105736963890):
+                  continue
+              print('TEST JOB:', job['id'], job['name'], job['status'], job['conclusion'])
+              if job['status'] != 'completed':
+                  continue
+              assert job['head_sha'] == target
+              request = urllib.request.Request(api+f"actions/jobs/{job['id']}/logs", headers=headers)
+              try:
+                  response = urllib.request.build_opener(NoRedirect()).open(request, timeout=30)
+              except urllib.error.HTTPError as error:
+                  if error.code not in (301,302,303,307,308):
+                      raise
+                  location = error.headers['Location']
+                  parsed = urllib.parse.urlparse(location)
+                  assert parsed.scheme == 'https' and parsed.hostname.endswith(('.blob.core.windows.net','.actions.githubusercontent.com','.githubusercontent.com'))
+                  response = urllib.request.urlopen(location, timeout=30)
+              with response:
+                  raw = response.read(50000000).decode('utf-8-sig', errors='replace')
+              raw = re.sub(r'\x1b\[[0-9;]*m', '', raw)
+              lines = [re.sub(r'^\d{4}-\d\d-\d\dT\S+Z ?', '', line) for line in raw.splitlines()]
+              interesting = [line for line in lines if line.startswith(('FAILED ', 'ERROR ', 'SKIPPED ', 'XFAIL ')) or ('tests/' in line and re.search(r'SKIPPED|XFAIL', line)) or re.search(r'= .*\d+ passed|= .*\d+ failed|TOTAL\s+\d', line)]
+              for line in interesting[:55]:
+                  print('RESULT', line)
+              if job['conclusion'] != 'success':
+                  indices = [i for i,line in enumerate(lines) if re.match(r'^_{3,} .* _{3,}$', line)]
+                  for n,start in enumerate(indices[:3]):
+                      end = indices[n+1] if n+1<len(indices) else min(start+100,len(lines))
+                      block = lines[start:end]
+                      for line in block[:30]+(['...']+block[-15:] if len(block)>30 else []):
+                          print('FAILURE', line)
           PY
