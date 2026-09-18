@@ -86,6 +86,13 @@ class EmailProfileService:
                         module.value,
                         organization_id,
                         routing.email_profile_id,
+                        extra={
+                            "event": "email_profile_route_fallback",
+                            "organization_id": str(organization_id),
+                            "email_module": module.value,
+                            "profile_id": str(routing.email_profile_id),
+                            "fallback_reason": "missing_or_inactive_profile",
+                        },
                     )
 
         # Step 2: Try organization's default profile
@@ -257,9 +264,13 @@ class EmailProfileService:
         """
         # Validate that the profile exists before setting routing
         if profile_id is not None:
-            profile = self.db.get(EmailProfile, profile_id)
+            profile = self.db.get(EmailProfile, profile_id, with_for_update=True)
             if not profile:
                 raise ValueError(f"Email profile {profile_id} not found")
+            if profile.organization_id not in (None, organization_id):
+                raise ValueError("Email profile is not available to this organization")
+            if not profile.is_active:
+                raise ValueError("Cannot route module email to an inactive profile")
 
         # Check if routing exists
         existing = self.db.scalar(
@@ -314,6 +325,51 @@ class EmailProfileService:
             return True
 
         return False
+
+    def set_profile_active(
+        self,
+        organization_id: UUID,
+        profile_id: UUID,
+        *,
+        is_active: bool,
+    ) -> EmailProfile:
+        """Change a tenant-owned profile's state without silently breaking routes.
+
+        Shared system profiles are not tenant-owned and cannot be modified
+        through this method. Callers must first reassign explicit routes and
+        the default profile before deactivation. The caller owns the commit.
+        """
+        profile = self.db.scalar(
+            select(EmailProfile)
+            .where(
+                EmailProfile.profile_id == profile_id,
+                EmailProfile.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        if profile is None:
+            raise ValueError("Email profile is not owned by this organization")
+        if not is_active:
+            if profile.is_default:
+                raise ValueError(
+                    "Choose another default email profile before deactivation"
+                )
+            linked = self.db.scalar(
+                select(ModuleEmailRouting)
+                .where(
+                    ModuleEmailRouting.organization_id == organization_id,
+                    ModuleEmailRouting.email_profile_id == profile_id,
+                    ModuleEmailRouting.use_default.is_(False),
+                )
+                .limit(1)
+            )
+            if linked is not None:
+                raise ValueError(
+                    "Reassign module email routes before deactivating this profile"
+                )
+        profile.is_active = is_active
+        self.db.flush()
+        return profile
 
     def list_profiles(
         self,

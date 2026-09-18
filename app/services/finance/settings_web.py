@@ -693,6 +693,12 @@ class SettingsWebService:
             if routing and routing.email_profile_id:
                 profile = db.get(EmailProfile, routing.email_profile_id)
 
+            if profile is not None and profile.organization_id != organization_id:
+                return (
+                    False,
+                    "A shared or other organization's email profile cannot be edited here.",
+                )
+
             if profile is None:
                 profile = EmailProfile(
                     name=f"{module_def['label']} SMTP",
@@ -747,17 +753,14 @@ class SettingsWebService:
             if not ok:
                 return False, f"{module_def['label']}: {error}"
 
-            if routing:
-                routing.email_profile_id = profile.profile_id
-                routing.use_default = False
-            else:
-                routing = ModuleEmailRouting(
-                    organization_id=organization_id,
-                    module=module_def["module"],
-                    email_profile_id=profile.profile_id,
-                    use_default=False,
-                )
-                db.add(routing)
+            from app.services.email_profile import EmailProfileService
+
+            EmailProfileService(db).set_module_routing(
+                organization_id,
+                module_def["module"],
+                profile.profile_id,
+                use_default=False,
+            )
 
         db.commit()
         return True, None
