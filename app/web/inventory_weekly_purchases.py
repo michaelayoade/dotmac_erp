@@ -56,7 +56,9 @@ def purchases_report(
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db_for_org),
 ) -> HTMLResponse:
-    return PurchaseReportWebService(db).report_response(request, auth, filters, page=page)
+    return PurchaseReportWebService(db).report_response(
+        request, auth, filters, page=page
+    )
 
 
 @router.get("/purchases/export")

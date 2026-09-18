@@ -67,7 +67,9 @@ def test_reports_hub_card_respects_stock_and_ap_read_permissions(stock, ap):
         autoescape=True,
     )
     permissions = {"inventory:stock:read": stock, "ap:invoices:read": ap}
-    user = SimpleNamespace(has_permission=lambda permission: permissions.get(permission))
+    user = SimpleNamespace(
+        has_permission=lambda permission: permissions.get(permission)
+    )
     html = env.get_template("inventory/_weekly_purchases_card.html").render(auth=user)
     assert ("/inventory/reports/purchases" in html) is (stock and ap)
     assert "Weekly Purchases" not in html

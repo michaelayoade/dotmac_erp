@@ -136,7 +136,9 @@ class PurchaseReportFilters:
         if week_start and (
             kind != "weekly" or (period_start and period_start != week_start)
         ):
-            raise ValueError("The legacy week_start parameter is only for weekly reports.")
+            raise ValueError(
+                "The legacy week_start parameter is only for weekly reports."
+            )
         anchor = period_start or week_start
         # Form-specific selectors override the hidden anchor; selectors belonging
         # to a previous period type are ignored when the user switches the type.
@@ -284,7 +286,10 @@ class PurchaseReportService:
                     invoice.status.in_(SupplierInvoiceStatus.gl_impacting()),
                     and_(
                         invoice.status.in_(
-                            [SupplierInvoiceStatus.ON_HOLD, SupplierInvoiceStatus.DISPUTED]
+                            [
+                                SupplierInvoiceStatus.ON_HOLD,
+                                SupplierInvoiceStatus.DISPUTED,
+                            ]
                         ),
                         invoice.posting_status == PostingStatus.POSTED,
                     ),
@@ -337,7 +342,9 @@ class PurchaseReportService:
             select(
                 source.c.invoice_id,
                 func.count().label("matching_line_count"),
-                func.sum(source.c.net_amount + source.c.net_tax).label("matching_total"),
+                func.sum(source.c.net_amount + source.c.net_tax).label(
+                    "matching_total"
+                ),
             )
             .where(source.c.organization_id == organization_id)
             .group_by(source.c.invoice_id)
@@ -397,16 +404,22 @@ class PurchaseReportService:
                     func.count(func.distinct(s.c.invoice_id)).label("document_count"),
                     func.count(func.distinct(s.c.item_id)).label("item_count"),
                     func.count(func.distinct(s.c.supplier_id)).label("supplier_count"),
-                    func.count(case((s.c.item_id.is_(None), 1))).label("unlinked_count"),
+                    func.count(case((s.c.item_id.is_(None), 1))).label(
+                        "unlinked_count"
+                    ),
                 ).where(s.c.organization_id == organization_id)
-            ).mappings().one()
+            )
+            .mappings()
+            .one()
         )
         pages = max(1, (summary["line_count"] + PAGE_SIZE - 1) // PAGE_SIZE)
         page = min(page, pages)
         rows = list(
             self.db.execute(
                 self._ordered(stmt).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
-            ).mappings().all()
+            )
+            .mappings()
+            .all()
         )
         credit = s.c.invoice_type == "CREDIT_NOTE"
         totals = [
@@ -414,7 +427,9 @@ class PurchaseReportService:
             for row in self.db.execute(
                 select(
                     s.c.currency_code,
-                    func.sum(case((credit, 0), else_=s.c.net_amount)).label("purchases"),
+                    func.sum(case((credit, 0), else_=s.c.net_amount)).label(
+                        "purchases"
+                    ),
                     func.sum(case((credit, -s.c.net_amount), else_=0)).label("credits"),
                     func.sum(s.c.net_amount).label("net"),
                     func.sum(s.c.net_tax).label("tax"),
@@ -423,7 +438,9 @@ class PurchaseReportService:
                 .where(s.c.organization_id == organization_id)
                 .group_by(s.c.currency_code)
                 .order_by(s.c.currency_code)
-            ).mappings().all()
+            )
+            .mappings()
+            .all()
         ]
         reconciliation = self.reconciliation_statement(organization_id, filters)
         r = reconciliation.subquery()
@@ -442,7 +459,9 @@ class PurchaseReportService:
                 )
                 .where(r.c.organization_id == organization_id)
                 .group_by(r.c.currency_code)
-            ).mappings().all()
+            )
+            .mappings()
+            .all()
         }
         for total in totals:
             total.update(invoice_totals[total["currency_code"]])
@@ -453,13 +472,16 @@ class PurchaseReportService:
 
             invoice_rows = list(
                 self.db.execute(
-                    reconciliation.where(SupplierInvoice.invoice_id.in_(visible_ids))
-                    .order_by(
+                    reconciliation.where(
+                        SupplierInvoice.invoice_id.in_(visible_ids)
+                    ).order_by(
                         SupplierInvoice.invoice_date.desc(),
                         SupplierInvoice.invoice_number,
                         SupplierInvoice.invoice_id,
                     )
-                ).mappings().all()
+                )
+                .mappings()
+                .all()
             )
         return {
             "purchase_rows": rows,
@@ -484,22 +506,30 @@ class PurchaseReportService:
             ("warehouses", source.c.warehouse_id, source.c.warehouse_name),
             ("categories", source.c.category_id, source.c.category_name),
         ):
-            rows = self.db.execute(
-                select(identifier.label("id"), label.label("label"))
-                .where(
-                    source.c.organization_id == organization_id,
-                    identifier.is_not(None),
+            rows = (
+                self.db.execute(
+                    select(identifier.label("id"), label.label("label"))
+                    .where(
+                        source.c.organization_id == organization_id,
+                        identifier.is_not(None),
+                    )
+                    .distinct()
+                    .order_by(label, identifier)
                 )
-                .distinct()
-                .order_by(label, identifier)
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             choices[name] = [
                 {"id": str(row["id"]), "label": str(row["label"])} for row in rows
             ]
         return choices
 
     def export_rows(
-        self, organization_id: UUID, filters: PurchaseReportFilters, *, view: str = "lines"
+        self,
+        organization_id: UUID,
+        filters: PurchaseReportFilters,
+        *,
+        view: str = "lines",
     ) -> list[Any]:
         if view == "lines":
             stmt = self._ordered(self.statement(organization_id, filters))

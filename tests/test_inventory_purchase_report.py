@@ -59,16 +59,21 @@ def test_period_boundaries(kind, anchor, start, end, through):
 @pytest.mark.parametrize(
     "arguments",
     [
-        {"period": "daily"}, {"period_start": "20260230"},
-        {"period_start": "2026-02-30"}, {"period_start": "1899-12-31"},
-        {"period_start": "9999-12-31"}, {"period_start": "2026-09-21"},
+        {"period": "daily"},
+        {"period_start": "20260230"},
+        {"period_start": "2026-02-30"},
+        {"period_start": "1899-12-31"},
+        {"period_start": "9999-12-31"},
+        {"period_start": "2026-09-21"},
         {"period": "monthly", "month": "2026-13"},
         {"period": "monthly", "month": "2026-9"},
         {"period": "quarterly", "quarter": "5"},
         {"period": "yearly", "year": "9999"},
         {"period": "yearly", "year": "2027"},
         {"period": "monthly", "week_start": "2026-09-14"},
-        {"supplier": "invalid"}, {"warehouse": "invalid"}, {"category": "invalid"},
+        {"supplier": "invalid"},
+        {"warehouse": "invalid"},
+        {"category": "invalid"},
         {"search": "x" * 101},
     ],
 )
@@ -79,10 +84,13 @@ def test_invalid_input(arguments):
 
 def test_form_selectors_legacy_alias_and_lagos_rollover():
     assert selected(week_start="2026-09-15").query_params() == {
-        "period": "weekly", "period_start": "2026-09-14"
+        "period": "weekly",
+        "period_start": "2026-09-14",
     }
     assert selected(period="monthly", month="2026-08").period.start == date(2026, 8, 1)
-    assert selected(period="quarterly", quarter="2", year="2026").period.label == "Q2 2026"
+    assert (
+        selected(period="quarterly", quarter="2", year="2026").period.label == "Q2 2026"
+    )
     assert selected(period="yearly", year="2025").period.start == date(2025, 1, 1)
     utc = datetime(2026, 9, 13, 23, 30, tzinfo=timezone.utc)
     with patch.object(module, "datetime") as clock:
@@ -112,8 +120,12 @@ def purchase_projection():
     for model, columns in names.items():
         table = model.__table__
         tables[model] = Table(
-            table.name, metadata,
-            *(Column(n, table.c[n].type, primary_key=table.c[n].primary_key) for n in columns.split()),
+            table.name,
+            metadata,
+            *(
+                Column(n, table.c[n].type, primary_key=table.c[n].primary_key)
+                for n in columns.split()
+            ),
             schema=table.schema,
         )
     engine = create_engine(
@@ -122,30 +134,96 @@ def purchase_projection():
     )
     metadata.create_all(engine)
     with engine.connect() as connection:
+
         def put(model, **values):
             connection.execute(insert(tables[model]).values(**values))
 
-        put(Supplier, supplier_id=SUPPLIER, organization_id=ORG, legal_name="Supplier", is_active=False)
-        put(ItemCategory, category_id=CATEGORY, organization_id=ORG, category_name="Fibre", is_active=False)
-        put(Warehouse, warehouse_id=WAREHOUSE, organization_id=ORG, warehouse_name="Store", is_active=False)
-        put(Item, item_id=ITEM, organization_id=ORG, item_code="CODE", item_name="Current item name", category_id=CATEGORY, item_type=ItemType.INVENTORY, track_inventory=True, is_active=False)
+        put(
+            Supplier,
+            supplier_id=SUPPLIER,
+            organization_id=ORG,
+            legal_name="Supplier",
+            is_active=False,
+        )
+        put(
+            ItemCategory,
+            category_id=CATEGORY,
+            organization_id=ORG,
+            category_name="Fibre",
+            is_active=False,
+        )
+        put(
+            Warehouse,
+            warehouse_id=WAREHOUSE,
+            organization_id=ORG,
+            warehouse_name="Store",
+            is_active=False,
+        )
+        put(
+            Item,
+            item_id=ITEM,
+            organization_id=ORG,
+            item_code="CODE",
+            item_name="Current item name",
+            category_id=CATEGORY,
+            item_type=ItemType.INVENTORY,
+            track_inventory=True,
+            is_active=False,
+        )
         counters, header_totals, kinds = {}, {}, {}
 
         def purchase(
-            *, invoice_id=None, amount="100", tax="7.5", item=ITEM,
-            description="Invoice description", warehouse=WAREHOUSE, currency="NGN",
-            kind=SupplierInvoiceType.STANDARD, status=SupplierInvoiceStatus.POSTED,
-            posting=PostingStatus.POSTED, when=TODAY, org=ORG, supplier=SUPPLIER,
-            prepayment=False, receipt_line=None,
+            *,
+            invoice_id=None,
+            amount="100",
+            tax="7.5",
+            item=ITEM,
+            description="Invoice description",
+            warehouse=WAREHOUSE,
+            currency="NGN",
+            kind=SupplierInvoiceType.STANDARD,
+            status=SupplierInvoiceStatus.POSTED,
+            posting=PostingStatus.POSTED,
+            when=TODAY,
+            org=ORG,
+            supplier=SUPPLIER,
+            prepayment=False,
+            receipt_line=None,
         ):
             if invoice_id is None:
                 invoice_id = uuid4()
                 counters[invoice_id], header_totals[invoice_id] = 0, Decimal("0")
                 kinds[invoice_id] = kind
-                put(SupplierInvoice, invoice_id=invoice_id, organization_id=org, supplier_id=supplier, invoice_number=str(invoice_id), invoice_date=when, invoice_type=kind, status=status, posting_status=posting, currency_code=currency, is_prepayment=prepayment, total_amount=Decimal("0"))
+                put(
+                    SupplierInvoice,
+                    invoice_id=invoice_id,
+                    organization_id=org,
+                    supplier_id=supplier,
+                    invoice_number=str(invoice_id),
+                    invoice_date=when,
+                    invoice_type=kind,
+                    status=status,
+                    posting_status=posting,
+                    currency_code=currency,
+                    is_prepayment=prepayment,
+                    total_amount=Decimal("0"),
+                )
             counters[invoice_id] += 1
             line_id = uuid4()
-            put(SupplierInvoiceLine, line_id=line_id, line_number=counters[invoice_id], invoice_id=invoice_id, item_id=item, description=description, receipt_warehouse_id=warehouse, goods_receipt_line_id=receipt_line, quantity=Decimal("2"), unit_price=Decimal("60"), line_amount=Decimal(amount), tax_amount=Decimal(tax))
+            put(
+                SupplierInvoiceLine,
+                line_id=line_id,
+                line_number=counters[invoice_id],
+                invoice_id=invoice_id,
+                item_id=item,
+                description=description,
+                receipt_warehouse_id=warehouse,
+                goods_receipt_line_id=receipt_line,
+                quantity=Decimal("2"),
+                unit_price=Decimal("60"),
+                line_amount=Decimal(amount),
+                tax_amount=Decimal(tax),
+            )
             value = Decimal(amount) + Decimal(tax)
             if kinds[invoice_id] == SupplierInvoiceType.CREDIT_NOTE:
                 value = -abs(Decimal(amount)) - abs(Decimal(tax))
@@ -154,7 +232,11 @@ def purchase_projection():
             return invoice_id, line_id
 
         def set_total(invoice_id, amount):
-            connection.execute(update(tables[SupplierInvoice]).where(tables[SupplierInvoice].c.invoice_id == invoice_id).values(total_amount=Decimal(amount)))
+            connection.execute(
+                update(tables[SupplierInvoice])
+                .where(tables[SupplierInvoice].c.invoice_id == invoice_id)
+                .values(total_amount=Decimal(amount))
+            )
             connection.commit()
 
         with Session(bind=connection) as db:
@@ -165,12 +247,27 @@ def purchase_projection():
 def test_all_saved_lines_and_invoices_without_catalogue_items(purchase_projection):
     service, purchase, put, _ = purchase_projection
     invoice, _ = purchase(description="Historical description")
-    purchase(invoice_id=invoice, item=None, amount="20", tax="1.5", description="Cable locally purchased")
+    purchase(
+        invoice_id=invoice,
+        item=None,
+        amount="20",
+        tax="1.5",
+        description="Cable locally purchased",
+    )
     purchase(invoice_id=invoice, item=None, amount="5", tax="0", description="Delivery")
     purchase(item=None, warehouse=None, amount="10", tax="0")
     for kind in (ItemType.SERVICE, ItemType.NON_INVENTORY):
         item = uuid4()
-        put(Item, item_id=item, organization_id=ORG, item_code="SERVICE", item_name="Service", category_id=CATEGORY, item_type=kind, track_inventory=False)
+        put(
+            Item,
+            item_id=item,
+            organization_id=ORG,
+            item_code="SERVICE",
+            item_name="Service",
+            category_id=CATEGORY,
+            item_type=kind,
+            track_inventory=False,
+        )
         purchase(item=item)
     purchase(item=uuid4(), description="Deleted item still billed")
     report = service.report(ORG, selected())
@@ -179,13 +276,25 @@ def test_all_saved_lines_and_invoices_without_catalogue_items(purchase_projectio
     assert report["summary"]["item_count"] == 3
     assert report["currency_totals"][0]["difference"] == 0
     assert report["currency_totals"][0]["matching_total"] == Decimal("466.5")
-    assert {r["description"] for r in report["purchase_rows"]} >= {"Delivery", "Historical description"}
+    assert {r["description"] for r in report["purchase_rows"]} >= {
+        "Delivery",
+        "Historical description",
+    }
 
 
-def test_filtered_totals_and_invoice_counting_do_not_duplicate_headers(purchase_projection):
+def test_filtered_totals_and_invoice_counting_do_not_duplicate_headers(
+    purchase_projection,
+):
     service, purchase, _, set_total = purchase_projection
     first, _ = purchase(amount="100", tax="0", description="Router")
-    purchase(invoice_id=first, item=None, warehouse=None, amount="25", tax="0", description="Delivery")
+    purchase(
+        invoice_id=first,
+        item=None,
+        warehouse=None,
+        amount="25",
+        tax="0",
+        description="Delivery",
+    )
     second, _ = purchase(amount="125", tax="0", description="Router")
     report = service.report(ORG, selected(search="Router"))
     total = report["currency_totals"][0]
@@ -208,7 +317,10 @@ def test_credit_signs_currency_and_saved_tax_values(purchase_projection):
     purchase(kind=SupplierInvoiceType.CREDIT_NOTE, amount="-5", tax="-1")
     purchase(kind=SupplierInvoiceType.DEBIT_NOTE, amount="3", tax="0")
     purchase(currency="USD", amount="9", tax="0", item=None)
-    totals = {r["currency_code"]: r for r in service.report(ORG, selected())["currency_totals"]}
+    totals = {
+        r["currency_code"]: r
+        for r in service.report(ORG, selected())["currency_totals"]
+    }
     assert totals["NGN"]["purchases"] == Decimal("103")
     assert totals["NGN"]["credits"] == Decimal("15")
     assert totals["NGN"]["matching_total"] == Decimal("105")
@@ -232,12 +344,30 @@ def test_dates_eligibility_and_all_four_periods(purchase_projection):
         assert service.report(ORG, selected(period=kind))["total_count"] == count
 
 
-def test_tenant_boundaries_preserve_owned_lines_but_hide_foreign_metadata(purchase_projection):
+def test_tenant_boundaries_preserve_owned_lines_but_hide_foreign_metadata(
+    purchase_projection,
+):
     service, purchase, put, _ = purchase_projection
     foreign_item, foreign_supplier, foreign_warehouse = uuid4(), uuid4(), uuid4()
-    put(Item, item_id=foreign_item, organization_id=OTHER_ORG, item_code="PRIVATE", item_name="PRIVATE")
-    put(Supplier, supplier_id=foreign_supplier, organization_id=OTHER_ORG, legal_name="PRIVATE")
-    put(Warehouse, warehouse_id=foreign_warehouse, organization_id=OTHER_ORG, warehouse_name="PRIVATE")
+    put(
+        Item,
+        item_id=foreign_item,
+        organization_id=OTHER_ORG,
+        item_code="PRIVATE",
+        item_name="PRIVATE",
+    )
+    put(
+        Supplier,
+        supplier_id=foreign_supplier,
+        organization_id=OTHER_ORG,
+        legal_name="PRIVATE",
+    )
+    put(
+        Warehouse,
+        warehouse_id=foreign_warehouse,
+        organization_id=OTHER_ORG,
+        warehouse_name="PRIVATE",
+    )
     purchase(org=OTHER_ORG, item=foreign_item, supplier=foreign_supplier)
     purchase(item=foreign_item, supplier=foreign_supplier, warehouse=foreign_warehouse)
     rows = service.export_rows(ORG, selected())
@@ -251,7 +381,9 @@ def test_tenant_boundaries_preserve_owned_lines_but_hide_foreign_metadata(purcha
         service.statement(None, selected())
 
 
-def test_receipt_enrichment_unspecified_filters_and_literal_description_search(purchase_projection):
+def test_receipt_enrichment_unspecified_filters_and_literal_description_search(
+    purchase_projection,
+):
     service, purchase, put, _ = purchase_projection
     receipt, line = uuid4(), uuid4()
     put(GoodsReceipt, receipt_id=receipt, organization_id=ORG, warehouse_id=WAREHOUSE)
@@ -264,7 +396,12 @@ def test_receipt_enrichment_unspecified_filters_and_literal_description_search(p
     assert len(service.export_rows(ORG, selected(category="unspecified"))) == 2
     assert len(service.export_rows(ORG, selected(search="CABLE_10%"))) == 1
     receipt2, line2 = uuid4(), uuid4()
-    put(GoodsReceipt, receipt_id=receipt2, organization_id=OTHER_ORG, warehouse_id=WAREHOUSE)
+    put(
+        GoodsReceipt,
+        receipt_id=receipt2,
+        organization_id=OTHER_ORG,
+        warehouse_id=WAREHOUSE,
+    )
     put(GoodsReceiptLine, line_id=line2, receipt_id=receipt2)
     purchase(warehouse=None, receipt_line=line2)
     assert len(service.export_rows(ORG, selected(warehouse=str(WAREHOUSE)))) == 1

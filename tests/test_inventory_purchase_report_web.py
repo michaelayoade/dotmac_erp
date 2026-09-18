@@ -14,9 +14,18 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.testclient import TestClient
-from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader, StrictUndefined
+from jinja2 import (
+    ChoiceLoader,
+    DictLoader,
+    Environment,
+    FileSystemLoader,
+    StrictUndefined,
+)
 
-from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus, SupplierInvoiceType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
 from app.services.inventory.purchase_report import PurchaseReportFilters
 from app.services.inventory.purchase_report_web import PurchaseReportWebService
 from app.web.deps import get_db_for_org, require_inventory_access
@@ -37,15 +46,25 @@ def user(*, ap=True, organization=True):
 
 def row():
     return {
-        "line_id": uuid4(), "line_number": 1, "invoice_id": uuid4(),
-        "invoice_number": "=SUM(1,1)", "invoice_date": TODAY,
+        "line_id": uuid4(),
+        "line_number": 1,
+        "invoice_id": uuid4(),
+        "invoice_number": "=SUM(1,1)",
+        "invoice_date": TODAY,
         "invoice_type": SupplierInvoiceType.CREDIT_NOTE,
-        "status": SupplierInvoiceStatus.POSTED, "currency_code": "NGN",
-        "supplier_name": "@Supplier", "description": "<script>alert(1)</script>",
-        "item_id": None, "item_code": None, "item_name": None,
-        "item_link_status": "Not linked to an item", "category_name": None,
-        "warehouse_name": None, "quantity": Decimal("2"),
-        "unit_price": Decimal("0.123456"), "net_amount": Decimal("-0.246912"),
+        "status": SupplierInvoiceStatus.POSTED,
+        "currency_code": "NGN",
+        "supplier_name": "@Supplier",
+        "description": "<script>alert(1)</script>",
+        "item_id": None,
+        "item_code": None,
+        "item_name": None,
+        "item_link_status": "Not linked to an item",
+        "category_name": None,
+        "warehouse_name": None,
+        "quantity": Decimal("2"),
+        "unit_price": Decimal("0.123456"),
+        "net_amount": Decimal("-0.246912"),
         "net_tax": Decimal("-0.018518"),
     }
 
@@ -53,10 +72,19 @@ def row():
 def report_data(rows=None):
     rows = rows or []
     return {
-        "purchase_rows": rows, "invoice_rows": [], "currency_totals": [],
-        "summary": {"document_count": 1, "line_count": len(rows), "item_count": 0,
-                    "unlinked_count": len(rows), "supplier_count": 1},
-        "total_count": len(rows), "page": 1, "total_pages": 1,
+        "purchase_rows": rows,
+        "invoice_rows": [],
+        "currency_totals": [],
+        "summary": {
+            "document_count": 1,
+            "line_count": len(rows),
+            "item_count": 0,
+            "unlinked_count": len(rows),
+            "supplier_count": 1,
+        },
+        "total_count": len(rows),
+        "page": 1,
+        "total_pages": 1,
     }
 
 
@@ -64,7 +92,11 @@ def context(kind="weekly", rows=None, *, anchor="2026-09-18"):
     ws = PurchaseReportWebService(Mock())
     ws.service = Mock()
     ws.service.report.return_value = report_data(rows)
-    ws.service.options.return_value = {"suppliers": [], "warehouses": [], "categories": []}
+    ws.service.options.return_value = {
+        "suppliers": [],
+        "warehouses": [],
+        "categories": [],
+    }
     selected = PurchaseReportFilters.parse(
         period=kind, period_start=anchor, search="cable & fibre", today=TODAY
     )
@@ -92,8 +124,11 @@ def test_template_all_periods_empty_populated_and_description_escaping(kind, pop
         ),
     }
     env = Environment(
-        loader=ChoiceLoader([DictLoader(stubs), FileSystemLoader(str(ROOT / "templates"))]),
-        autoescape=True, undefined=StrictUndefined,
+        loader=ChoiceLoader(
+            [DictLoader(stubs), FileSystemLoader(str(ROOT / "templates"))]
+        ),
+        autoescape=True,
+        undefined=StrictUndefined,
     )
     html = env.get_template("inventory/report_purchases.html").render(
         **context(kind, [row()] if populated else [])
@@ -114,7 +149,13 @@ def test_template_all_periods_empty_populated_and_description_escaping(kind, pop
 @pytest.mark.parametrize("kind", ["weekly", "monthly", "quarterly", "yearly"])
 def test_navigation_and_exports_preserve_filters(kind):
     result = context(kind)
-    for key in ("previous_period_url", "current_period_url", "export_url", "invoice_export_url", "next_page_url"):
+    for key in (
+        "previous_period_url",
+        "current_period_url",
+        "export_url",
+        "invoice_export_url",
+        "next_page_url",
+    ):
         query = parse_qs(urlparse(result[key]).query)
         assert query["search"] == ["cable & fibre"]
         assert query["period"] == [kind]
@@ -131,7 +172,9 @@ def test_ap_gate_before_any_report_or_export_query(ap, organization):
     for action in (
         lambda: ws.report_response(Mock(), user(ap=ap, organization=organization), {}),
         lambda: ws.export_response(user(ap=ap, organization=organization), {}),
-        lambda: ws.export_response(user(ap=ap, organization=organization), {}, "invoices"),
+        lambda: ws.export_response(
+            user(ap=ap, organization=organization), {}, "invoices"
+        ),
     ):
         with pytest.raises(HTTPException) as exc:
             action()
@@ -144,7 +187,9 @@ def test_line_csv_and_invoice_csv_preserve_precision_and_do_not_repeat_header_to
     ws = PurchaseReportWebService(Mock())
     ws.service = Mock()
     ws.service.export_rows.return_value = [row()]
-    selected = PurchaseReportFilters.parse(period="yearly", period_start="2026-01-01", today=TODAY)
+    selected = PurchaseReportFilters.parse(
+        period="yearly", period_start="2026-01-01", today=TODAY
+    )
     with patch.object(ws, "_filters", return_value=selected):
         response = ws.export_response(user(), {})
     rows = list(csv.DictReader(StringIO(response.body.decode("utf-8-sig"))))
@@ -155,11 +200,19 @@ def test_line_csv_and_invoice_csv_preserve_precision_and_do_not_repeat_header_to
     assert rows[0]["Invoice description"] == "<script>alert(1)</script>"
     assert rows[0]["Period"] == "yearly"
     assert response.headers["cache-control"] == "no-store"
-    ws.service.export_rows.return_value = [{
-        "invoice_date": TODAY, "invoice_number": "=1+1", "currency_code": "NGN",
-        "matching_line_count": 1, "full_line_count": 2, "matching_total": Decimal("10"),
-        "full_line_total": Decimal("25"), "invoice_total": Decimal("26"), "difference": Decimal("1"),
-    }]
+    ws.service.export_rows.return_value = [
+        {
+            "invoice_date": TODAY,
+            "invoice_number": "=1+1",
+            "currency_code": "NGN",
+            "matching_line_count": 1,
+            "full_line_count": 2,
+            "matching_total": Decimal("10"),
+            "full_line_total": Decimal("25"),
+            "invoice_total": Decimal("26"),
+            "difference": Decimal("1"),
+        }
+    ]
     with patch.object(ws, "_filters", return_value=selected):
         response = ws.export_response(user(), {}, "invoices")
     records = list(csv.DictReader(StringIO(response.body.decode("utf-8-sig"))))
@@ -172,7 +225,10 @@ def test_line_csv_and_invoice_csv_preserve_precision_and_do_not_repeat_header_to
     assert exc.value.status_code == 400
 
 
-@pytest.mark.parametrize("endpoint", ["purchases", "purchases/export", "weekly-purchases", "weekly-purchases/export"])
+@pytest.mark.parametrize(
+    "endpoint",
+    ["purchases", "purchases/export", "weekly-purchases", "weekly-purchases/export"],
+)
 def test_both_url_families_require_ap_permission(endpoint):
     app = FastAPI()
     app.include_router(router)
@@ -199,18 +255,38 @@ def test_canonical_http_period_params_and_legacy_week_mapping():
     ):
         templates.TemplateResponse.return_value = HTMLResponse("Purchase Report")
         query.return_value.report.return_value = report_data()
-        query.return_value.options.return_value = {"suppliers": [], "warehouses": [], "categories": []}
+        query.return_value.options.return_value = {
+            "suppliers": [],
+            "warehouses": [],
+            "categories": [],
+        }
         query.return_value.export_rows.return_value = []
         for kind in ("weekly", "monthly", "quarterly", "yearly"):
-            response = client.get(f"/inventory/reports/purchases?period={kind}&period_start=2024-02-15&search=cable")
+            response = client.get(
+                f"/inventory/reports/purchases?period={kind}&period_start=2024-02-15&search=cable"
+            )
             assert response.status_code == 200
             filters = query.return_value.report.call_args.args[1]
             assert filters.period.kind == kind and filters.search == "cable"
-        response = client.get("/inventory/reports/weekly-purchases?week_start=2024-02-15&search=delivery")
+        response = client.get(
+            "/inventory/reports/weekly-purchases?week_start=2024-02-15&search=delivery"
+        )
         assert response.status_code == 200
         filters = query.return_value.report.call_args.args[1]
-        assert filters.period.start == date(2024, 2, 12) and filters.search == "delivery"
-        assert client.get("/inventory/reports/purchases/export?view=invoices&period=yearly&period_start=2024-01-01").status_code == 200
-        assert client.get("/inventory/reports/purchases?period=invalid").status_code == 400
+        assert (
+            filters.period.start == date(2024, 2, 12) and filters.search == "delivery"
+        )
+        assert (
+            client.get(
+                "/inventory/reports/purchases/export?view=invoices&period=yearly&period_start=2024-01-01"
+            ).status_code
+            == 200
+        )
+        assert (
+            client.get("/inventory/reports/purchases?period=invalid").status_code == 400
+        )
         assert client.get("/inventory/reports/purchases?page=0").status_code == 422
-        assert client.get("/inventory/reports/purchases?search=" + "x" * 101).status_code == 422
+        assert (
+            client.get("/inventory/reports/purchases?search=" + "x" * 101).status_code
+            == 422
+        )

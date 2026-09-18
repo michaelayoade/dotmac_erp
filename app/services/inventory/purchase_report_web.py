@@ -92,7 +92,10 @@ class PurchaseReportWebService:
                 and not any(option["id"] == value for option in choices[name])
             ):
                 choices[name].append(
-                    {"id": value, "label": "Selected filter (no purchases in this period)"}
+                    {
+                        "id": value,
+                        "label": "Selected filter (no purchases in this period)",
+                    }
                 )
         context.update(choices)
         previous_url = None
@@ -164,10 +167,15 @@ class PurchaseReportWebService:
             writer.writerow(
                 period_headers
                 + [
-                    "Invoice date", "Invoice number", "Currency",
-                    "Matching line count", "Full invoice line count",
-                    "Matching lines including tax", "All invoice lines including tax",
-                    "Stored invoice total", "Reconciliation difference",
+                    "Invoice date",
+                    "Invoice number",
+                    "Currency",
+                    "Matching line count",
+                    "Full invoice line count",
+                    "Matching lines including tax",
+                    "All invoice lines including tax",
+                    "Stored invoice total",
+                    "Reconciliation difference",
                 ]
             )
             for row in rows:
@@ -182,8 +190,10 @@ class PurchaseReportWebService:
                         *(
                             format(Decimal(row[key]), "f")
                             for key in (
-                                "matching_total", "full_line_total",
-                                "invoice_total", "difference",
+                                "matching_total",
+                                "full_line_total",
+                                "invoice_total",
+                                "difference",
                             )
                         ),
                     ]
@@ -192,11 +202,24 @@ class PurchaseReportWebService:
             writer.writerow(
                 period_headers
                 + [
-                    "Invoice date", "Invoice number", "Document type", "Status",
-                    "Supplier", "Invoice line", "Invoice description", "Item code",
-                    "Registered item name", "Item link status", "Category",
-                    "Receipt warehouse", "Recorded quantity", "Unit price", "Currency",
-                    "Net amount excluding tax", "Net tax", "Net amount including tax",
+                    "Invoice date",
+                    "Invoice number",
+                    "Document type",
+                    "Status",
+                    "Supplier",
+                    "Invoice line",
+                    "Invoice description",
+                    "Item code",
+                    "Registered item name",
+                    "Item link status",
+                    "Category",
+                    "Receipt warehouse",
+                    "Recorded quantity",
+                    "Unit price",
+                    "Currency",
+                    "Net amount excluding tax",
+                    "Net tax",
+                    "Net amount including tax",
                 ]
             )
             for row in rows:
