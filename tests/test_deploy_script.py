@@ -52,6 +52,10 @@ def _deployment_harness(
     shutil.copy2(SCRIPT_PATH, deploy_script)
     # The REAL gate, not a stub -- see IMAGE_GATE_PATH.
     shutil.copy2(IMAGE_GATE_PATH, scripts_dir / IMAGE_GATE_PATH.name)
+    shutil.copy2(
+        REPO_ROOT / "scripts/validate_metrics_remote_write.py",
+        scripts_dir / "validate_metrics_remote_write.py",
+    )
 
     # deploy.sh resolves the image it deploys from the rendered Compose
     # project, and then proves the pulled image's OCI revision label against
@@ -114,6 +118,13 @@ with log_path.open("a", encoding="utf-8") as log:
     project = os.environ.get("COMPOSE_PROJECT_NAME", "")
     rendered = " ".join(args).replace("\\n", "\\\\n")
     log.write(f"{project}|{rendered}\\n")
+
+if args[:2] == ["compose", "config"]:
+    import json
+    print(json.dumps({"services": {"vmagent": {"command": [
+        "-remoteWrite.url=" + os.environ.get("DEPLOY_TEST_METRICS_URL", "http://victoriametrics:8428/api/v1/write")
+    ]}}}))
+    raise SystemExit(0)
 
 if args[:2] == ["inspect", "--format"]:
     if ".State.Running" in args[2]:
