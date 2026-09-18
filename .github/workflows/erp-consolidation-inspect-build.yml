@@ -1,4 +1,4 @@
-name: Validate ERP native PostgreSQL fixture repair
+name: Retire superseded ERP consolidation checks
 
 on:
   push:
@@ -8,64 +8,59 @@ permissions:
   contents: read
 
 jobs:
-  repair:
+  retire:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 4
     permissions:
-      contents: write
+      actions: write
+      pull-requests: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: 64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a
-          fetch-depth: 0
-          show-progress: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
-      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
-        with:
-          version: '2.4.1'
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-      - name: Install locked dependencies
+      - name: Verify the replacement and cancel only the exact obsolete PR CI runs
         env:
-          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
-          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
-        run: poetry install --with dev --no-interaction --quiet
-      - name: Execute the reviewed repair with structured sensitivity evidence
+          GH_TOKEN: ${{ github.token }}
         run: |
-          poetry run python - <<'PY'
-          import pathlib
-          import subprocess
-          import xml.etree.ElementTree as ET
-          import yaml
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
 
-          expected = '64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a'
-          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == expected
-          source = subprocess.check_output(['git','show','2eb7c24709315ea3a44235cbb3aa30648f1fe585:.github/workflows/erp-consolidation-inspect-build.yml'], text=True)
-          steps = {s['name']: s['run'] for s in yaml.safe_load(source)['jobs']['repair']['steps'] if 'run' in s}
-          def execute(name):
-              print('\n===', name, '===', flush=True)
-              subprocess.run(['bash','-e','-o','pipefail','-c',steps[name]], check=True)
-          execute('Add fresh-interpreter regressions before changing the fixture')
-          path = pathlib.Path('tests/unit/test_database_dialect_isolation.py')
-          code = path.read_text()
-          anchor = '    result = subprocess.run('
-          assert code.count(anchor) == 2
-          # These two new tests run only this interpreter and source literals,
-          # without a shell or caller-supplied executable/script. Keep the
-          # security rule enabled everywhere else, including application code.
-          code = code.replace(anchor, '    # Fixed interpreter and inline test source; no shell or user command.\n    result = subprocess.run(  # noqa: S603')
-          path.write_text(code)
-          result = subprocess.run(['poetry','run','pytest','-q','--timeout=90','tests/unit/test_database_dialect_isolation.py','-k','postgresql_url','--junitxml=/tmp/isolation-before.xml'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
-          print('\n'.join(result.stdout.splitlines()[-12:]))
-          assert result.returncode == 1, result.returncode
-          suites = ET.parse('/tmp/isolation-before.xml').getroot().iter('testsuite')
-          counts = [(int(s.attrib['tests']),int(s.attrib['failures']),int(s.attrib['errors'])) for s in suites]
-          assert counts == [(2,2,0)], counts
-          print('Sensitivity proof: both PostgreSQL cases fail before the fix.')
-          execute('Keep SQLite adapters confined to the SQLite test lane')
-          execute('Verify both database lanes and existing type restoration regressions')
-          execute('Publish only the validated test-isolation repair')
+          api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          def read(path):
+              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
+                  return json.load(response)
+          branch = 'consolidate/erp-open-prs-20260918'
+          target = '906c6108b248b970939009d30a4ebb364559e72e'
+          pr = read('pulls/596')
+          assert pr['state'] == 'open' and pr['head']['ref'] == branch and pr['head']['sha'] == target
+          replacements = []
+          for _ in range(12):
+              runs = read('actions/runs?head_sha=' + target + '&event=pull_request&per_page=100')['workflow_runs']
+              replacements = [r for r in runs if r['head_branch'] == branch and r['path'] == '.github/workflows/ci.yml']
+              if replacements:
+                  break
+              time.sleep(5)
+          assert len(replacements) == 1, 'Require exactly one replacement CI run'
+          replacement = replacements[0]
+          assert replacement['status'] != 'completed' or replacement['conclusion'] == 'success'
+          print('Replacement CI retained:', replacement['id'], target, replacement['status'])
+          obsolete = {
+              35385009065: '5914989f3ba4a3980d346b5511fc30cc50653083',
+              35385963436: '64bf4a8c9c74a5b9b7040f95f8cb9f32307ef57a',
+          }
+          for run_id, sha in obsolete.items():
+              run = read('actions/runs/' + str(run_id))
+              assert run['head_sha'] == sha and run['head_branch'] == branch
+              assert run['event'] == 'pull_request' and run['path'] == '.github/workflows/ci.yml'
+              if run['status'] == 'completed':
+                  print('Already completed:', run_id, run['conclusion'])
+                  continue
+              request = urllib.request.Request(api + f'actions/runs/{run_id}/cancel', headers=headers, method='POST')
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  assert response.status == 202
+              print('Canceled superseded CI:', run_id, sha)
+          latest = read('actions/runs/' + str(replacement['id']))
+          print('Current CI:', latest['id'], latest['head_sha'], latest['status'], latest['conclusion'])
           PY
