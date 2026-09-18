@@ -6,9 +6,21 @@ on:
     paths:
       - .github/workflows/erp-log-review-implement.yml
       - tools/erp_log_review_workspace.py
+      - tools/erp_log_review_fixes/**
 
 permissions:
   contents: write
+
+concurrency:
+  group: erp-log-review-implementation
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: sqlite:///./test.db
+  SECRET_KEY: ci-test-secret-key-not-for-production
+  REDIS_URL: redis://localhost:6379/0
+  POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+  POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
 
 jobs:
   prepare:
@@ -26,23 +38,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Inspect test and deployment owners
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - uses: actions/cache@v4
+        with:
+          path: source/.venv
+          key: erp-log-review-venv-${{ runner.os }}-3.12-${{ hashFiles('source/poetry.lock') }}
+      - name: Install the repository's locked dependencies
         working-directory: source
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          for path in sorted(Path('.').rglob('AGENTS.md')):
-              print(f'GUIDANCE {path}\n{path.read_text()}')
-          for root in ('tests', 'scripts', 'app/web', 'app/api', 'app/services', 'alembic/versions'):
-              for path in sorted(Path(root).rglob('*.py')):
-                  name = str(path)
-                  if any(key in name.lower() for key in ('email_profile', 'notification', 'push', 'dotmac_sub', 'preflight', 'deploy')):
-                      print(f'OWNER {path}')
-          print('CI SETUP')
-          for line in Path('.github/workflows/ci.yml').read_text().splitlines():
-              if any(key in line for key in ('poetry', 'FORGEJO', 'forgejo', 'pip install', 'pytest', 'DATABASE_URL')):
-                  print(line)
-          PY
+        run: poetry install --no-interaction
       - name: Build and verify isolated fix branches
         working-directory: source
         run: |
