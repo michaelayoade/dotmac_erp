@@ -61,9 +61,7 @@ class Elements(HTMLParser):
             element["text"] += data
 
     def testid(self, value):
-        matches = [
-            e for e in self.elements if e["attrs"].get("data-testid") == value
-        ]
+        matches = [e for e in self.elements if e["attrs"].get("data-testid") == value]
         assert len(matches) == 1
         return matches[0]
 
@@ -188,7 +186,7 @@ def test_dual_logo_fallbacks_share_their_image_theme_wrapper():
     images = [e for e in parsed.elements if e["tag"] == "img"]
     assert len(images) == 2
     assert images[0]["parents"][-1]["attrs"]["class"] == "dark:hidden"
-    assert images[1]["parents"][-1]["attrs"]["class"] == "hidden dark:block"
+    assert images[1]["parents"][-1]["attrs"]["class"] == "hidden dark:flex"
     for image in images:
         wrapper = image["parents"][-1]
         fallbacks = [
