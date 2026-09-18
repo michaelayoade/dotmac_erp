@@ -30,9 +30,7 @@ def replay():
         source_kind=InvoiceSyncSourceKind.NATIVE,
         disposition=InvoiceSyncDisposition.BLOCKED,
         projection_fingerprint="a" * 64,
-        issues=(
-            InvoiceSyncIssueEvidence(InvoiceSyncIssueCode.HEADER_TAX_MISMATCH),
-        ),
+        issues=(InvoiceSyncIssueEvidence(InvoiceSyncIssueCode.HEADER_TAX_MISMATCH),),
         observed_at=now,
     )
     existing = SimpleNamespace(
