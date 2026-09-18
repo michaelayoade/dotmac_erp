@@ -147,7 +147,9 @@ def upgrade() -> None:
         f"{SCHEMA}.{LEGACY_ISSUE_TABLE} FROM app_user"
     )
     op.execute(
-        f"COMMENT ON TABLE {SCHEMA}.{LEGACY_OUTCOME_TABLE} IS '{FROZEN_COMMENT}'"
+        sa.text(
+            f"COMMENT ON TABLE {SCHEMA}.{LEGACY_OUTCOME_TABLE} IS :comment"
+        ).bindparams(comment=FROZEN_COMMENT)
     )
 
     # --- B. A fresh, empty canonical table at the freed familiar name ------
@@ -231,9 +233,15 @@ def upgrade() -> None:
         schema=SCHEMA,
     )
     op.execute(
-        f"COMMENT ON COLUMN {SCHEMA}.{OUTCOME_TABLE}.projection_fingerprint IS "
-        "'forwarded verbatim from Self-Care''s canonical digest; never "
-        "computed locally.'"
+        sa.text(
+            f"COMMENT ON COLUMN {SCHEMA}.{OUTCOME_TABLE}.projection_fingerprint "
+            "IS :comment"
+        ).bindparams(
+            comment=(
+                "forwarded verbatim from Self-Care's canonical digest; never "
+                "computed locally."
+            )
+        )
     )
     # Cursor-oriented replacement for ix_sub_invoice_outcome_org_source,
     # matching how invoice_sync_shadow._latest_canonical_position actually

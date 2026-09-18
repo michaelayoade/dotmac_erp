@@ -19,9 +19,10 @@ queue, or posting path.
 ## Recurrence and resolution
 
 The unique source identity is `(organization_id, source_invoice_id,
-source_updated_at)`. Re-observing the same projection fingerprint increments
-`occurrence_count` and `last_seen_at`. A different fingerprint at that same
-revision is a contract violation and aborts the run.
+source_updated_at, digest_version)`. Re-observing the same projection
+fingerprint increments `occurrence_count` and `last_seen_at`. A different
+fingerprint at that same revision and `digest_version` is a contract
+violation and aborts the run.
 
 A later `ready` revision sets `resolved_at` on older blocked revisions. It does
 not delete their issues. Targeted replay of one `invoice_id` must not rewind the

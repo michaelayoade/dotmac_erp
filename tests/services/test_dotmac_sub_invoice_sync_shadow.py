@@ -12,6 +12,7 @@ from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
     DotmacSubInvoiceSyncOutcome,
 )
 from app.models.finance.ar.dotmac_sub_invoice_sync_outcome_legacy import (
+    DotmacSubInvoiceSyncIssueLegacy,
     DotmacSubInvoiceSyncOutcomeLegacy,
 )
 from app.services.dotmac_sub.client import (
@@ -36,6 +37,25 @@ from app.services.dotmac_sub.invoice_sync_shadow import (
 ORG_ID = UUID("10000000-0000-0000-0000-000000000001")
 INVOICE_ID = UUID("20000000-0000-0000-0000-000000000001")
 UPDATED_AT = datetime(2026, 9, 6, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _legacy_tables(db_session):
+    """Create the frozen legacy archive tables on this file's SQLite engine.
+
+    ``tests/conftest.py``'s ``SQLITE_COMPATIBLE_TABLES`` allowlist only lists
+    the canonical ``DotmacSubInvoiceSyncOutcome``/``DotmacSubInvoiceSyncIssue``
+    tables — touching that shared fixture is out of scope for this change.
+    The two tests here that construct a ``DotmacSubInvoiceSyncOutcomeLegacy``
+    row need the table to exist first; harmless no-op for every other test in
+    this file, the same shape as
+    ``tests/api/test_integrator_observations.py``'s
+    ``_kernel_idempotency_tables`` fixture.
+    """
+    engine = db_session.get_bind()
+    DotmacSubInvoiceSyncOutcomeLegacy.__table__.create(engine, checkfirst=True)
+    DotmacSubInvoiceSyncIssueLegacy.__table__.create(engine, checkfirst=True)
+    yield
 
 
 def _command(disposition: InvoiceSyncDisposition) -> RecordInvoiceSyncOutcome:

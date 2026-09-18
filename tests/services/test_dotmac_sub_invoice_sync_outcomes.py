@@ -13,6 +13,7 @@ from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
     DotmacSubInvoiceSyncOutcome,
 )
 from app.models.finance.ar.dotmac_sub_invoice_sync_outcome_legacy import (
+    DotmacSubInvoiceSyncIssueLegacy,
     DotmacSubInvoiceSyncOutcomeLegacy,
 )
 from app.services.dotmac_sub.invoice_sync_outcomes import (
@@ -28,6 +29,27 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
 
 ORGANIZATION_ID = uuid4()
 INVOICE_ID = uuid4()
+
+
+@pytest.fixture(autouse=True)
+def _legacy_tables(db_session):
+    """Create the frozen legacy archive tables on this file's SQLite engine.
+
+    ``tests/conftest.py`` provisions its SQLite engine from a hand-maintained
+    ``SQLITE_COMPATIBLE_TABLES`` allowlist (not ``Base.metadata.create_all``),
+    and that allowlist only lists the canonical
+    ``DotmacSubInvoiceSyncOutcome``/``DotmacSubInvoiceSyncIssue`` tables — it
+    is out of scope for this change to touch (shared fixture). This module is
+    the first ERP caller that needs the ``_legacy`` tables to exist for a
+    unit test, so it provisions them itself, the same way
+    ``tests/api/test_integrator_observations.py``'s
+    ``_kernel_idempotency_tables`` fixture provisions the kernel's ledger
+    tables the shared fixture also does not know about.
+    """
+    engine = db_session.get_bind()
+    DotmacSubInvoiceSyncOutcomeLegacy.__table__.create(engine, checkfirst=True)
+    DotmacSubInvoiceSyncIssueLegacy.__table__.create(engine, checkfirst=True)
+    yield
 
 
 def _fingerprint(value: str) -> str:
