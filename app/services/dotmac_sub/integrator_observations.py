@@ -1,34 +1,57 @@
 """Thin orchestration for the Integrator ProductPort observation receiver.
 
-Two callers, one business-rule path: both the write route and the mirror
-route build the same ``RecordInvoiceSyncOutcome`` command and validate it
-through ``invoice_sync_outcomes._validated`` (that module's own construction
-check — there is no public wrapper, and that module is read-only for this
+Three callers, one business-rule path: the write route, the mirror route and
+the descriptor route all reason about the SAME
+``invoices.accounting_sync.observation.v1`` capability. The write and mirror
+paths both build the same ``RecordInvoiceSyncOutcome`` command from the
+generic v2 envelope's ``.observation`` and validate it through
+``invoice_sync_outcomes._validated`` (that module's own construction check —
+there is no public wrapper, and that module is otherwise frozen for this
 slice, so the private function is imported directly rather than duplicating
 its rules here). The write path additionally persists, via
 ``dotmac_kernel.idempotency.execute_once`` (ADR-0001: the kernel is ERP's sole
-new at-most-once owner) wrapping ``record_invoice_sync_outcome``. The mirror
-path never calls ``execute_once`` and never touches the outcome table.
+at-most-once owner), wrapping ``record_invoice_sync_outcome``. The mirror
+path never calls ``execute_once``; it runs the SAME construction/validation
+and then a genuine READ-ONLY comparison against the durable outcome table via
+``invoice_sync_outcomes.find_existing_outcome(for_update=False)`` — the exact
+same 4-column identity lookup the write path's own stability check uses, so
+the two can never independently drift on what "the same key" means.
+
+The descriptor route publishes ERP's own product-port declaration; unlike
+Sub, ERP has no live `IntegrationCapabilityBinding` row behind this binding
+id — the binding is a single fixed deployment config value (see
+``app.config.Settings.integrator_invoice_sync_binding_id``), so its
+descriptor is pure config-plus-constants, with no database read.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any, Final, Literal
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from dotmac_kernel.idempotency import execute_once
 
-from app.schemas.integrator_observation import IntegratorInvoiceSyncObservationRequest
+from app.config import settings
+from app.schemas.integrator_observation import (
+    INVOICE_ACCOUNTING_SYNC_CAPABILITY,
+    IntegratorDestinationScope,
+    IntegratorInvoiceSyncEnvelope,
+    ProductPortDescriptorV2,
+)
 from app.services.dotmac_sub.invoice_sync_outcomes import (
     InvoiceSyncIssueEvidence,
     InvoiceSyncOutcomeError,
     InvoiceSyncOutcomeReceipt,
+    InvoiceSyncRevisionConflict,
     RecordInvoiceSyncOutcome,
     _validated as _validate_invoice_sync_command,
+    find_existing_outcome,
     record_invoice_sync_outcome,
 )
 
@@ -36,22 +59,83 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
 # scope that identifies the OPERATION, not the route path.
 IDEMPOTENCY_SCOPE = "integration.observations.invoices_accounting_sync.v1"
 
+#: Descriptor identity constants — fixed facts about this capability, not
+#: deployment config (decided; see the task packet's "Descriptor identity
+#: constants" section).
+DESCRIPTOR_SCHEMA_VERSION: Final[Literal["dotmac.io/product-port-descriptor/v2"]] = (
+    "dotmac.io/product-port-descriptor/v2"
+)
+DESCRIPTOR_APPLICATION: Final[Literal["erp"]] = "erp"
+DESCRIPTOR_OWNER_MODULE: Final[str] = "app.services.dotmac_sub.integrator_observations"
+DESCRIPTOR_CAPABILITY_SUMMARY: Final[str] = (
+    "Records Self-Care invoice-accounting-sync observations as durable "
+    "canonical evidence; never posts to the general ledger."
+)
+DESCRIPTOR_CONTRACT_VERSION: Final[Literal[1]] = 1
+_DESCRIPTOR_ACTIVATION_STATE: Final[
+    Literal["configured_disabled", "enabled", "quarantined", "retired"]
+] = "configured_disabled"
+
+#: The five stability fields the write path's own duplicate-key check
+#: compares, and the SAME fields the mirror comparison compares — one
+#: vocabulary, shared, so the two paths cannot drift on what "agrees" means.
+_STABILITY_FIELDS: Final[tuple[str, ...]] = (
+    "contract_version",
+    "source_kind",
+    "disposition",
+    "projection_fingerprint",
+    "issue_count",
+)
+
 
 class IntegratorObservationValidationError(ValueError):
     """The observation payload fails the invoice-accounting-sync business rules."""
 
 
+class InvoiceSyncIdentityCollision(IntegratorObservationValidationError):
+    """The same Self-Care invoice revision produced a genuinely different
+    outcome — escalates to a human (409), never dead-lettered as a 422."""
+
+
+@dataclass(frozen=True, slots=True)
+class InvoiceSyncMirrorFieldDisagreement:
+    field: str
+    integrator: str | None
+    erp: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class InvoiceSyncMirrorComparison:
+    """The mirror route's entire job: an honest, read-only verdict."""
+
+    verdict: Literal["match", "missing", "blocked"]
+    agrees: bool
+    identity: str
+    counterpart_identity: str | None
+    blocking_reasons: tuple[str, ...]
+    disagreements: tuple[InvoiceSyncMirrorFieldDisagreement, ...]
+
+
 def _build_command(
-    payload: IntegratorInvoiceSyncObservationRequest, *, organization_id: UUID
+    envelope: IntegratorInvoiceSyncEnvelope, *, organization_id: UUID
 ) -> RecordInvoiceSyncOutcome:
+    """Build ERP's internal command from the envelope's inner observation.
+
+    The ONE explicit field rename happens here and nowhere else:
+    ``projection_fingerprint=envelope.observation.projection_digest``. Every
+    other field maps by name; ``contract_version`` here is the STRING feed
+    contract version (``envelope.observation.contract_version``), never the
+    envelope's own int transport ``contract_version``.
+    """
+    observation = envelope.observation
     return RecordInvoiceSyncOutcome(
         organization_id=organization_id,
-        source_invoice_id=payload.source_invoice_id,
-        source_updated_at=payload.source_updated_at,
-        source_kind=payload.source_kind,
-        disposition=payload.disposition,
-        projection_fingerprint=payload.projection_fingerprint,
-        digest_version=payload.digest_version,
+        source_invoice_id=observation.source_invoice_id,
+        source_updated_at=observation.source_updated_at,
+        source_kind=observation.source_kind,
+        disposition=observation.disposition,
+        projection_fingerprint=observation.projection_digest,
+        digest_version=observation.digest_version,
         issues=tuple(
             InvoiceSyncIssueEvidence(
                 code=issue.code,
@@ -59,36 +143,43 @@ def _build_command(
                 expected_amount=issue.expected_amount,
                 actual_amount=issue.actual_amount,
             )
-            for issue in payload.issues
+            for issue in observation.issues
         ),
-        observed_at=payload.observed_at,
-        contract_version=payload.contract_version,
+        observed_at=None,
+        contract_version=observation.contract_version,
     )
 
 
-def _fingerprint_payload(payload: IntegratorInvoiceSyncObservationRequest) -> str:
-    """A stable digest of the normalized payload, excluding the idempotency key.
+def _fingerprint_observation(envelope: IntegratorInvoiceSyncEnvelope) -> str:
+    """A stable digest of the normalized DOMAIN fact only.
 
-    A replayed key carrying a genuinely different payload must 409, not
-    silently replay stale data — this is what ``execute_once`` compares
-    against the stored fingerprint.
+    Deliberately scoped to ``envelope.observation`` alone, never the whole
+    envelope: ``source``/``scope``/``provider_event_id`` are transport
+    provenance that can legitimately change across a re-delivery (e.g. from a
+    different connector installation) without the underlying invoice fact
+    changing, and the real delivery engine already owns its own separate
+    envelope-level fingerprint/conflict guard
+    (``request_fingerprint_for``/``FingerprintConflict`` in
+    ``receipt_delivery.py``). A replayed idempotency key carrying a genuinely
+    different domain fact must 409, not silently replay stale data — this is
+    what ``execute_once`` compares against the stored fingerprint.
     """
-    normalized = payload.model_dump(mode="json", exclude={"idempotency_key"})
+    normalized = envelope.observation.model_dump(mode="json")
     encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 
 
 def validate_invoice_sync_observation(
-    payload: IntegratorInvoiceSyncObservationRequest, *, organization_id: UUID
+    envelope: IntegratorInvoiceSyncEnvelope, *, organization_id: UUID
 ) -> None:
-    """Validate-only: the mirror route's entire job. Zero persistence.
+    """Validate-only: shared construction check for both write and mirror.
 
-    Raises ``IntegratorObservationValidationError`` on any check
+    Raises ``IntegratorObservationValidationError`` (or the narrower
+    ``InvoiceSyncIdentityCollision``) on any check
     ``record_invoice_sync_outcome`` construction would itself reject. Never
-    calls ``execute_once`` and never reads or writes the outcome table — it
-    does not attempt to predict replay/duplicate status.
+    reads or writes the outcome table.
     """
-    command = _build_command(payload, organization_id=organization_id)
+    command = _build_command(envelope, organization_id=organization_id)
     try:
         _validate_invoice_sync_command(command)
     except InvoiceSyncOutcomeError as exc:
@@ -99,23 +190,29 @@ def record_invoice_sync_observation(
     db: Session,
     *,
     organization_id: UUID,
-    payload: IntegratorInvoiceSyncObservationRequest,
-    capability_binding_id: str,
-) -> dict[str, Any]:
+    envelope: IntegratorInvoiceSyncEnvelope,
+    idempotency_key: str,
+    correlation_id: str | None,
+):
     """Record (or replay) one observation at most once per idempotency key.
 
-    Returns the plain dict the write route serializes into its response
-    schema — the domain receipt fields from ``InvoiceSyncOutcomeReceipt``,
-    identical on a byte-for-byte replay because ``execute_once`` returns the
-    stored result without re-running ``operation``.
+    Returns the kernel's ``IdempotentOutcome`` — ``.result`` is the plain
+    dict the write route serializes into its response schema (the domain
+    receipt fields from ``InvoiceSyncOutcomeReceipt``, identical on a
+    byte-for-byte replay because ``execute_once`` returns the stored result
+    without re-running ``operation``); ``.replayed`` is the KERNEL-level flag
+    the route must OR with the stored domain-level ``replayed`` value — see
+    ``app/api/integrator_observations.py`` for why that distinction matters.
     """
-    command = _build_command(payload, organization_id=organization_id)
+    command = _build_command(envelope, organization_id=organization_id)
 
     def _operation(session: Session) -> dict[str, Any]:
         try:
             receipt: InvoiceSyncOutcomeReceipt = record_invoice_sync_outcome(
                 session, command
             )
+        except InvoiceSyncRevisionConflict as exc:
+            raise InvoiceSyncIdentityCollision(str(exc)) from exc
         except InvoiceSyncOutcomeError as exc:
             raise IntegratorObservationValidationError(str(exc)) from exc
         return {
@@ -123,17 +220,204 @@ def record_invoice_sync_observation(
             "occurrence_count": receipt.occurrence_count,
             "replayed": receipt.replayed,
             "resolved_prior_count": receipt.resolved_prior_count,
+            "disposition": command.disposition.value,
         }
 
-    outcome = execute_once(
+    return execute_once(
         db,
         tenant_id=organization_id,
         scope=IDEMPOTENCY_SCOPE,
-        key=payload.idempotency_key,
+        key=idempotency_key,
         operation=_operation,
         operation_name=IDEMPOTENCY_SCOPE,
-        fingerprint=_fingerprint_payload(payload),
-        # Pure provenance (packet correction 4) — zero authorization weight.
-        correlation_id=capability_binding_id,
+        fingerprint=_fingerprint_observation(envelope),
+        correlation_id=correlation_id,
     )
-    return dict(outcome.result)
+
+
+def compare_invoice_sync_observation(
+    db: Session,
+    *,
+    organization_id: UUID,
+    envelope: IntegratorInvoiceSyncEnvelope,
+) -> InvoiceSyncMirrorComparison:
+    """The mirror route's entire job: validate, then compare, never write.
+
+    On a construction/business-rule failure (including what would be an
+    ``InvoiceSyncIdentityCollision`` on the write path), returns
+    ``verdict="blocked"`` rather than raising — the mirror route must never
+    answer a domain-validation failure with a non-200 status (it would be
+    misread as a transport outage, destroying the parity evidence a mirror
+    pass exists to collect). No row found at the identity key is an honest
+    ``"missing"``, never reported as agreement.
+    """
+    observation = envelope.observation
+    identity = (
+        f"{observation.source_invoice_id}:"
+        f"{observation.source_updated_at.isoformat()}:"
+        f"{observation.digest_version}"
+    )
+    command = _build_command(envelope, organization_id=organization_id)
+    try:
+        # ADDITIONAL to `validate_invoice_sync_observation`, not a
+        # replacement of it — this is the same shared construction check the
+        # write path runs, just reused here ahead of the read-only lookup
+        # below.
+        validate_invoice_sync_observation(envelope, organization_id=organization_id)
+    except IntegratorObservationValidationError as exc:
+        return InvoiceSyncMirrorComparison(
+            verdict="blocked",
+            agrees=False,
+            identity=identity,
+            counterpart_identity=None,
+            blocking_reasons=(str(exc),),
+            disagreements=(),
+        )
+
+    existing = find_existing_outcome(
+        db,
+        organization_id=organization_id,
+        source_invoice_id=observation.source_invoice_id,
+        source_updated_at=observation.source_updated_at,
+        digest_version=observation.digest_version,
+        for_update=False,
+    )
+    if existing is None:
+        return InvoiceSyncMirrorComparison(
+            verdict="missing",
+            agrees=False,
+            identity=identity,
+            counterpart_identity=None,
+            blocking_reasons=(),
+            disagreements=(),
+        )
+
+    issue_count = len(command.issues)
+    incoming = {
+        "contract_version": command.contract_version,
+        "source_kind": command.source_kind.value,
+        "disposition": command.disposition.value,
+        "projection_fingerprint": command.projection_fingerprint,
+        "issue_count": str(issue_count),
+    }
+    stored = {
+        "contract_version": existing.contract_version,
+        "source_kind": existing.source_kind,
+        "disposition": existing.disposition,
+        "projection_fingerprint": existing.projection_fingerprint,
+        "issue_count": str(existing.issue_count),
+    }
+    disagreements = tuple(
+        InvoiceSyncMirrorFieldDisagreement(
+            field=field, integrator=incoming[field], erp=stored[field]
+        )
+        for field in _STABILITY_FIELDS
+        if incoming[field] != stored[field]
+    )
+    counterpart_identity = str(existing.outcome_id)
+    if disagreements:
+        return InvoiceSyncMirrorComparison(
+            verdict="blocked",
+            agrees=False,
+            identity=identity,
+            counterpart_identity=counterpart_identity,
+            blocking_reasons=(),
+            disagreements=disagreements,
+        )
+    return InvoiceSyncMirrorComparison(
+        verdict="match",
+        agrees=True,
+        identity=identity,
+        counterpart_identity=counterpart_identity,
+        blocking_reasons=(),
+        disagreements=(),
+    )
+
+
+class ProductPortDescriptorError(ValueError):
+    """The requested binding is not this ERP deployment's declared port."""
+
+
+def _descriptor_digest(document: Mapping[str, object]) -> str:
+    """SHA-256 over every published descriptor field, canonically encoded.
+
+    Reproduced verbatim from Sub's own
+    ``dotmac_sub/app/services/integrations/product_port_descriptor.py``
+    (``descriptor_digest``) — same algorithm, same encoding, so the digest is
+    independently reproducible against that shipped precedent.
+    """
+    encoded = json.dumps(
+        document, sort_keys=True, separators=(",", ":"), default=str
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def invoice_accounting_sync_product_port_descriptor(
+    capability_binding_id: UUID,
+) -> ProductPortDescriptorV2:
+    """Publish ERP's fixed invoice-accounting-sync ProductPort destination.
+
+    ERP has no live ``IntegrationCapabilityBinding`` row behind this id —
+    unlike Sub, the binding is a single fixed config value. Raises
+    ``ProductPortDescriptorError`` when ``capability_binding_id`` does not
+    match the configured binding.
+    """
+    configured_binding_id = UUID(settings.integrator_invoice_sync_binding_id)
+    if capability_binding_id != configured_binding_id:
+        raise ProductPortDescriptorError(
+            "invoice-accounting-sync product port binding not found"
+        )
+
+    delivery_path = f"/api/v1/integration/observations/{capability_binding_id}"
+    mirror_path = f"{delivery_path}/mirror"
+    destination_scope = IntegratorDestinationScope(
+        kind=settings.integrator_invoice_sync_scope_kind,
+        ref=settings.integrator_invoice_sync_scope_ref,
+    )
+    destination_scope_document = {
+        "kind": destination_scope.kind,
+        "ref": destination_scope.ref,
+    }
+    # Activation is explicitly not this task's call (Michael's ruling) —
+    # always published disabled until a separate, explicit activation step.
+    activation_state = _DESCRIPTOR_ACTIVATION_STATE
+    source_revision = _descriptor_digest(
+        {
+            "application": DESCRIPTOR_APPLICATION,
+            "binding_id": str(capability_binding_id),
+            "capability_id": INVOICE_ACCOUNTING_SYNC_CAPABILITY,
+            "capability_summary": DESCRIPTOR_CAPABILITY_SUMMARY,
+            "contract_version": DESCRIPTOR_CONTRACT_VERSION,
+            "destination_scope": destination_scope_document,
+            "owner_module": DESCRIPTOR_OWNER_MODULE,
+        }
+    )
+    published: dict[str, object] = {
+        "schema_version": DESCRIPTOR_SCHEMA_VERSION,
+        "application": DESCRIPTOR_APPLICATION,
+        "owner_module": DESCRIPTOR_OWNER_MODULE,
+        "capability_id": INVOICE_ACCOUNTING_SYNC_CAPABILITY,
+        "capability_summary": DESCRIPTOR_CAPABILITY_SUMMARY,
+        "contract_version": DESCRIPTOR_CONTRACT_VERSION,
+        "destination_binding_id": str(capability_binding_id),
+        "delivery_path": delivery_path,
+        "mirror_path": mirror_path,
+        "destination_scope": destination_scope_document,
+        "activation_state": activation_state,
+        "source_revision": source_revision,
+    }
+    return ProductPortDescriptorV2(
+        schema_version=DESCRIPTOR_SCHEMA_VERSION,
+        application=DESCRIPTOR_APPLICATION,
+        owner_module=DESCRIPTOR_OWNER_MODULE,
+        capability_id=INVOICE_ACCOUNTING_SYNC_CAPABILITY,
+        capability_summary=DESCRIPTOR_CAPABILITY_SUMMARY,
+        contract_version=DESCRIPTOR_CONTRACT_VERSION,
+        destination_binding_id=capability_binding_id,
+        delivery_path=delivery_path,
+        mirror_path=mirror_path,
+        destination_scope=destination_scope,
+        activation_state=activation_state,
+        source_revision=source_revision,
+        descriptor_digest=_descriptor_digest(published),
+    )

@@ -89,6 +89,14 @@ class InvoiceSyncOutcomeError(ValueError):
     """The supplied projection contradicts the durable outcome contract."""
 
 
+class InvoiceSyncRevisionConflict(InvoiceSyncOutcomeError):
+    """The same Self-Care invoice revision produced a genuinely different
+    outcome — a real producer disagreement, not a malformed request. Callers
+    distinguish this from the parent class to escalate to a human (409)
+    rather than treat it as a terminal, dead-letterable validation failure
+    (422)."""
+
+
 def _decimal_text(value: Decimal | None) -> str | None:
     return format(value, "f") if value is not None else None
 
@@ -141,21 +149,47 @@ def _validated(
     return command.observed_at or datetime.now(timezone.utc), normalized
 
 
+def find_existing_outcome(
+    db: Session,
+    *,
+    organization_id: UUID,
+    source_invoice_id: UUID,
+    source_updated_at: datetime,
+    digest_version: int,
+    for_update: bool,
+) -> DotmacSubInvoiceSyncOutcome | None:
+    """The one 4-column identity lookup, shared by the write path's stability
+    check and the mirror route's read-only comparison — so the two can never
+    independently drift on what "the same key" means.
+
+    ``for_update`` controls row locking: the write path locks (``True``,
+    unchanged behavior); the mirror comparison never writes, so it always
+    passes ``False``.
+    """
+    stmt = select(DotmacSubInvoiceSyncOutcome).where(
+        DotmacSubInvoiceSyncOutcome.organization_id == organization_id,
+        DotmacSubInvoiceSyncOutcome.source_invoice_id == source_invoice_id,
+        DotmacSubInvoiceSyncOutcome.source_updated_at == source_updated_at,
+        DotmacSubInvoiceSyncOutcome.digest_version == digest_version,
+    )
+    if for_update:
+        stmt = stmt.with_for_update()
+    return db.scalar(stmt)
+
+
 def record_invoice_sync_outcome(
     db: Session, command: RecordInvoiceSyncOutcome
 ) -> InvoiceSyncOutcomeReceipt:
     """Record or replay one source revision without committing the caller's transaction."""
 
     observed_at, normalized = _validated(command)
-    existing = db.scalar(
-        select(DotmacSubInvoiceSyncOutcome)
-        .where(
-            DotmacSubInvoiceSyncOutcome.organization_id == command.organization_id,
-            DotmacSubInvoiceSyncOutcome.source_invoice_id == command.source_invoice_id,
-            DotmacSubInvoiceSyncOutcome.source_updated_at == command.source_updated_at,
-            DotmacSubInvoiceSyncOutcome.digest_version == command.digest_version,
-        )
-        .with_for_update()
+    existing = find_existing_outcome(
+        db,
+        organization_id=command.organization_id,
+        source_invoice_id=command.source_invoice_id,
+        source_updated_at=command.source_updated_at,
+        digest_version=command.digest_version,
+        for_update=True,
     )
     if existing is not None:
         stable = (
@@ -167,7 +201,7 @@ def record_invoice_sync_outcome(
             and existing.issue_count == len(normalized)
         )
         if not stable:
-            raise InvoiceSyncOutcomeError(
+            raise InvoiceSyncRevisionConflict(
                 "the same Self-Care invoice revision produced a different outcome"
             )
         existing.occurrence_count += 1
