@@ -14,33 +14,46 @@
 
     <div class="card">
         <div class="card-header px-6 pt-6">
-            <h3 class="font-medium text-slate-900 dark:text-white">Employee Information</h3>
+            <h3 class="font-medium text-slate-900 dark:text-white">Case Targets</h3>
         </div>
-        <div class="card-body px-6 pb-6 space-y-6">
+        <div class="card-body px-6 pb-6 space-y-6" data-discipline-targets>
             <div>
+                <label for="{{ form_prefix }}_target_mode" class="form-label required">Apply case to</label>
+                <select id="{{ form_prefix }}_target_mode" name="target_mode" class="form-select w-full" data-target-mode required>
+                    <option value="individual" {% if new_case_form_data.get('target_mode', 'individual') == 'individual' %}selected{% endif %}>One employee</option>
+                    <option value="selected" {% if new_case_form_data.get('target_mode') == 'selected' %}selected{% endif %}>Selected employees</option>
+                    <option value="department" {% if new_case_form_data.get('target_mode') == 'department' %}selected{% endif %}>Whole department</option>
+                </select>
+            </div>
+
+            <div data-target-panel="individual">
                 <label for="{{ form_prefix }}_employee_name" class="form-label required">Employee</label>
                 <div class="relative" data-typeahead-url="/people/hr/discipline/employees/search" data-typeahead-min="2" data-typeahead-limit="10">
-                    <input
-                        type="text"
-                        id="{{ form_prefix }}_employee_name"
-                        name="employee_name"
-                        class="form-input w-full"
-                        placeholder="Search employee..."
-                        autocomplete="off"
-                        required
-                        value="{{ new_case_form_data.get('employee_name', '') }}"
-                        data-typeahead-input
-                    >
-                    <input
-                        type="hidden"
-                        id="{{ form_prefix }}_employee_id"
-                        name="employee_id"
-                        value="{{ new_case_form_data.get('employee_id', '') }}"
-                        data-typeahead-hidden
-                    >
+                    <input type="text" id="{{ form_prefix }}_employee_name" name="employee_name" class="form-input w-full" placeholder="Search employee..." autocomplete="off" data-typeahead-input value="{{ new_case_form_data.get('employee_name', '') }}">
+                    <input type="hidden" id="{{ form_prefix }}_employee_id" name="employee_id" value="{{ new_case_form_data.get('employee_id', '') }}" data-typeahead-hidden>
                     <div data-typeahead-results></div>
                 </div>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Search and select the employee involved in the violation.</p>
+            </div>
+
+            <div data-target-panel="selected" class="hidden">
+                <label for="{{ form_prefix }}_employee_ids" class="form-label required">Employees</label>
+                <select id="{{ form_prefix }}_employee_ids" name="employee_ids" class="form-select w-full" multiple size="8">
+                    {% for employee in active_employees | default([]) %}
+                    <option value="{{ employee.employee_id }}" {% if employee.employee_id|string in new_case_form_data.get('employee_ids', []) %}selected{% endif %}>{{ employee.person.name if employee.person else employee.employee_code }}{% if employee.employee_code %} ({{ employee.employee_code }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Hold Ctrl/Cmd to select multiple employees.</p>
+            </div>
+
+            <div data-target-panel="department" class="hidden">
+                <label for="{{ form_prefix }}_department_id" class="form-label required">Department</label>
+                <select id="{{ form_prefix }}_department_id" name="department_id" class="form-select w-full">
+                    <option value="">Select department</option>
+                    {% for department in departments | default([]) %}
+                    <option value="{{ department.department_id }}" {% if new_case_form_data.get('department_id') == department.department_id|string %}selected{% endif %}>{{ department.department_name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">All active employees in the department will receive a draft case. You can issue their queries in bulk from the cases list.</p>
             </div>
         </div>
     </div>
@@ -147,3 +160,24 @@
     </div>
     {% endif %}
 </form>
+
+<script>
+(() => {
+  document.querySelectorAll('[data-discipline-targets]').forEach((root) => {
+    const mode = root.querySelector('[data-target-mode]');
+    const refresh = () => {
+      const value = mode.value;
+      root.querySelectorAll('[data-target-panel]').forEach((panel) => {
+        const active = panel.dataset.targetPanel === value;
+        panel.classList.toggle('hidden', !active);
+        panel.querySelectorAll('input, select').forEach((input) => {
+          input.disabled = !active;
+          if (input.name === 'employee_id' || input.name === 'employee_name' || input.name === 'employee_ids' || input.name === 'department_id') input.required = active && input.name !== 'employee_ids';
+        });
+      });
+    };
+    mode.addEventListener('change', refresh);
+    refresh();
+  });
+})();
+</script>
