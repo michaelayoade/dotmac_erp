@@ -20,6 +20,8 @@ def test_incremental_lock_survives_commit_and_releases_same_backend():
         pytest.skip(
             "TEST_DATABASE_URL must point to a disposable PostgreSQL test database"
         )
+    # The CI URL uses the generic dialect; this project installs psycopg 3.
+    url = url.replace("postgresql://", "postgresql+psycopg://", 1)
     engine = create_engine(url, pool_size=2, max_overflow=0)
     org = uuid4()
     identity = {"key": f"dotmac_sub:incremental:{org}"}
