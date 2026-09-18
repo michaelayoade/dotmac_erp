@@ -1,4 +1,4 @@
-name: Verify ERP consolidation behavior preservation
+name: Inspect repaired ERP PostgreSQL result
 
 on:
   push:
@@ -6,75 +6,84 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  verify:
+  inspect:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/work/erp-consolidation-ci-repair-20260918'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: 906c6108b248b970939009d30a4ebb364559e72e
-          fetch-depth: 0
-          persist-credentials: false
-          show-progress: false
-      - name: Verify original histories and unchanged application semantics
+      - name: Read the exact PostgreSQL result and bounded raw failure evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          import ast
-          import pathlib
-          import subprocess
+          import collections
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
 
-          start = '39aeb4f9d988524685524037ae83101fdf48aa6e'
-          combined = 'ddc56587bfe0638c3ed5740a3b3ff537a9639c5e'
+          api = 'https://api.github.com/repos/michaelayoade/dotmac_erp/'
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          def read(path):
+              with urllib.request.urlopen(urllib.request.Request(api + path, headers=headers), timeout=30) as response:
+                  return json.load(response)
           target = '906c6108b248b970939009d30a4ebb364559e72e'
-          assert subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip() == target
-          sources = ['71d9134d9ffe90ba9fd6d1b869a0bbde82ae88dc','cbb153b081bc8310d0ab10d0109cde3addc2c7ae','fc983616dd2e039efed8c0f1f8c0be8414e9812a','38788e465d6c86f43782a9d3aeb32aa9abd5306a','620c3aff59905623b8f572ef481fe393b5dd7eb4','72fbb193c35312e5ac3d09892507e4196c30465b','11601b3fbf2fc511dc0a7f66e74df690af647b1c','40be0b0ff39ff1a9ca4ffeb046da1054ee82998b','cfe63d1a62d0582317be9f917b5731b825109784']
-          for sha in sources:
-              subprocess.run(['git','merge-base','--is-ancestor',sha,target], check=True)
-          print('All nine source heads remain ancestors.')
-          changed = subprocess.check_output(['git','diff','--name-only',combined,target,'--','app','templates','scripts','alembic','Dockerfile','docker-compose.yml','.github/workflows'], text=True).splitlines()
-          for path in changed:
-              assert path.startswith('app/') and path.endswith('.py'), path
-              before = subprocess.check_output(['git','show',combined+':'+path], text=True)
-              after = pathlib.Path(path).read_text()
-              assert ast.dump(ast.parse(before, type_comments=True), include_attributes=False) == ast.dump(ast.parse(after, type_comments=True), include_attributes=False), path
-              print('Formatting-only application change:', path)
-          print('All application semantics, templates, migrations, scripts and CI workflows preserved from the original consolidation.')
-          files = subprocess.check_output(['git','diff','--name-only',start,combined,'--','tests'], text=True).splitlines()
-          tests = [path for path in files if pathlib.Path(path).name.startswith('test_') and path.endswith('.py') and not path.startswith('tests/integration/')]
-          assert tests and all(pathlib.Path(path).is_file() for path in tests)
-          pathlib.Path('/tmp/erp-original-regressions.txt').write_text('\n'.join(tests)+'\n')
-          print('Original changed non-PostgreSQL test files:', len(tests))
-          print('\n'.join(tests))
-          PY
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
-      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
-        with:
-          version: '2.4.1'
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-      - name: Install exact locked test dependencies
-        env:
-          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
-          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
-        run: poetry install --with dev --no-interaction --quiet
-      - name: Execute the original PR regression suites at the repaired head
-        run: |
-          poetry run python - <<'PY'
-          import pathlib
-          import subprocess
-          import xml.etree.ElementTree as ET
-          tests = pathlib.Path('/tmp/erp-original-regressions.txt').read_text().splitlines()
-          result = subprocess.run(['poetry','run','pytest','-q','--timeout=60','--junitxml=/tmp/original-regressions.xml',*tests], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
-          print('\n'.join(result.stdout.splitlines()[-55:]))
-          if pathlib.Path('/tmp/original-regressions.xml').is_file():
-              for suite in ET.parse('/tmp/original-regressions.xml').getroot().iter('testsuite'):
-                  print('ORIGINAL REGRESSION COUNTS:', {k:suite.attrib[k] for k in ('tests','failures','errors','skipped')})
-          if result.returncode:
-              raise SystemExit(result.returncode)
-          subprocess.run(['git','diff','--exit-code'], check=True)
+          run_id = 35387098805
+          run = read(f'actions/runs/{run_id}')
+          assert run['head_sha'] == target and run['event'] == 'pull_request'
+          assert run['head_branch'] == 'consolidate/erp-open-prs-20260918'
+          for _ in range(60):
+              jobs = read(f'actions/runs/{run_id}/jobs?per_page=100&filter=latest')['jobs']
+              selected = next(job for job in jobs if job['id'] == 105736963960)
+              assert selected['head_sha'] == target
+              if selected['status'] == 'completed':
+                  break
+              time.sleep(10)
+          print('EXACT HEAD:', target)
+          print('CI JOB STATES:', json.dumps([{k:j[k] for k in ('id','name','status','conclusion')} for j in jobs]))
+          if selected['status'] != 'completed':
+              raise SystemExit('PostgreSQL validation remains in progress; no success claimed.')
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+                  return None
+          request = urllib.request.Request(api + 'actions/jobs/105736963960/logs', headers=headers)
+          try:
+              response = urllib.request.build_opener(NoRedirect()).open(request, timeout=30)
+          except urllib.error.HTTPError as error:
+              if error.code not in (301,302,303,307,308):
+                  raise
+              location = error.headers['Location']
+              parsed = urllib.parse.urlparse(location)
+              assert parsed.scheme == 'https' and parsed.hostname.endswith(('.blob.core.windows.net','.actions.githubusercontent.com','.githubusercontent.com'))
+              response = urllib.request.urlopen(location, timeout=30)
+          with response:
+              raw = response.read(50000000).decode('utf-8-sig', errors='replace')
+          raw = re.sub(r'\x1b\[[0-9;]*m', '', raw)
+          lines = [re.sub(r'^\d{4}-\d\d-\d\dT\S+Z ?', '', line) for line in raw.splitlines()]
+          print('POSTGRESQL CONCLUSION:', selected['conclusion'])
+          failures = [line for line in lines if line.startswith(('FAILED ', 'ERROR '))]
+          print('FAILED CASE COUNT:', len(failures))
+          for line in failures[:25]:
+              print('LOG', line)
+          for line in lines:
+              if re.search(r'= .*\d+ passed|= .*\d+ failed', line):
+                  print('TOTAL', line)
+          print('ERROR TYPES:', dict(collections.Counter(line.strip() for line in lines if re.match(r'^E\s+(?:\w+\.)*\w*(?:Error|Exception):', line)).most_common(8)))
+          if failures:
+              indices = [i for i,line in enumerate(lines) if re.match(r'^_{3,} .* _{3,}$', line)]
+              for index,start in enumerate(indices[:3]):
+                  end = indices[index+1] if index+1 < len(indices) else min(start+100,len(lines))
+                  block = lines[start:end]
+                  for line in block[:35]:
+                      print('LOG', line)
+                  if len(block)>35:
+                      print('LOG ...')
+                      for line in block[-20:]:
+                          print('LOG', line)
           PY
