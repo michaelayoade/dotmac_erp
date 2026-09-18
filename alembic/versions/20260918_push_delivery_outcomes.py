@@ -17,7 +17,10 @@ def upgrade() -> None:
     op.add_column(
         "notification",
         sa.Column(
-            "push_status", sa.String(24), nullable=False, server_default="pending"
+            "push_status",
+            sa.String(24),
+            nullable=False,
+            server_default="pending",
         ),
         schema="public",
     )
