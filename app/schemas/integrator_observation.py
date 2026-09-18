@@ -90,12 +90,21 @@ class IntegratorObservationSource(BaseModel):
 class InvoiceAccountingSyncIssue(BaseModel):
     """One piece of blocked-disposition evidence.
 
-    The connector's real ``map_item`` only ever emits an issue entry with
-    all four fields populated (a blocked disposition without issues, or an
-    issue entry missing any of these, is rejected at the connector before it
-    is ever sent) — these are typed ``| None`` here to match ERP's own
-    ``InvoiceSyncIssueEvidence`` persistence shape exactly (that dataclass is
-    frozen for this task), not because real traffic ever omits them.
+    Only ``code`` is guaranteed present. Sub's real
+    ``InvoiceAccountingSyncIssueRead`` (and the connector's ``map_item``,
+    which forwards it) declares ``source_line_id``/``expected_amount``/
+    ``actual_amount`` as genuinely optional — a header-level issue such as
+    an unallocated discount has no specific line and no expected amount,
+    only an actual one. The connector OMITS an absent optional field from
+    the wire payload rather than sending it as explicit ``null``; a present
+    field that fails to parse is still rejected at the connector before it
+    is ever sent. These are typed ``| None`` here both because the wire
+    payload can genuinely omit them and to match ERP's own
+    ``InvoiceSyncIssueEvidence`` persistence shape (that dataclass is frozen
+    for this task). Confirmed against the connector's real, shared-fixture
+    contract test (dotmac_connector_sub_accounting,
+    ``tests/test_shared_fixture_contract.py``) — a prior version of this
+    docstring incorrectly claimed all four fields are always populated.
     """
 
     model_config = ConfigDict(extra="forbid")
