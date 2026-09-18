@@ -1,0 +1,51 @@
+name: ERP log-review implementation
+
+on:
+  push:
+    branches: [chore/erp-log-review-workspace]
+    paths:
+      - .github/workflows/erp-log-review-implement.yml
+      - tools/erp_log_review_workspace.py
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: workspace
+      - uses: actions/checkout@v4
+        with:
+          ref: 25b319a04cf1b1909eae83c87988fe196e805349
+          path: source
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inspect test and deployment owners
+        working-directory: source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for path in sorted(Path('.').rglob('AGENTS.md')):
+              print(f'GUIDANCE {path}\n{path.read_text()}')
+          for root in ('tests', 'scripts', 'app/web', 'app/api', 'app/services', 'alembic/versions'):
+              for path in sorted(Path(root).rglob('*.py')):
+                  name = str(path)
+                  if any(key in name.lower() for key in ('email_profile', 'notification', 'push', 'dotmac_sub', 'preflight', 'deploy')):
+                      print(f'OWNER {path}')
+          print('CI SETUP')
+          for line in Path('.github/workflows/ci.yml').read_text().splitlines():
+              if any(key in line for key in ('poetry', 'FORGEJO', 'forgejo', 'pip install', 'pytest', 'DATABASE_URL')):
+                  print(line)
+          PY
+      - name: Build and verify isolated fix branches
+        working-directory: source
+        run: |
+          if [ -f ../workspace/tools/erp_log_review_workspace.py ]; then
+            python ../workspace/tools/erp_log_review_workspace.py
+          fi
