@@ -463,8 +463,7 @@ class DisciplineWebService:
         if target_mode == "selected":
             active_ids = set(
                 db.scalars(
-                    select(Employee.employee_id)
-                    .where(
+                    select(Employee.employee_id).where(
                         Employee.organization_id == org_id,
                         Employee.employee_id.in_(target_ids),
                         Employee.status == EmployeeStatus.ACTIVE,
@@ -478,6 +477,10 @@ class DisciplineWebService:
 
         cases = []
         for target_id in target_ids:
+            if target_id is None:
+                raise ValidationError(
+                    "A valid employee is required for each disciplinary case"
+                )
             data = DisciplinaryCaseCreate(
                 employee_id=target_id,
                 violation_type=ViolationType(violation_type),
@@ -508,8 +511,11 @@ class DisciplineWebService:
         due_date = parse_date(response_due_date)
         if not due_date:
             raise ValidationError("Response due date is invalid")
-        parsed_ids = [parse_uuid(value) for value in case_ids]
-        parsed_ids = [value for value in parsed_ids if value]
+        parsed_ids = []
+        for value in case_ids:
+            parsed_id = parse_uuid(value)
+            if parsed_id is not None:
+                parsed_ids.append(parsed_id)
         data = IssueQueryRequest(query_text=query_text, response_due_date=due_date)
         service = DisciplineService(db)
         cases = service.issue_queries(

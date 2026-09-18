@@ -152,7 +152,11 @@ async def create_case(
     target_mode = _value("target_mode", target_mode) or "individual"
     department_id = _value("department_id", department_id)
     if form and hasattr(form, "getlist"):
-        employee_ids = [value.strip() for value in form.getlist("employee_ids") if value.strip()]
+        employee_ids = [
+            value.strip()
+            for value in form.getlist("employee_ids")
+            if isinstance(value, str) and value.strip()
+        ]
     violation_type = _value("violation_type", violation_type)
     severity = _value("severity", severity)
     subject = _value("subject", subject)
@@ -165,7 +169,13 @@ async def create_case(
         employee_name = _value("employee_name", employee_name)
         reported_by_name = _value("reported_by_name", reported_by_name)
 
-    if (target_mode == "individual" and not employee_id) or (target_mode == "selected" and not employee_ids) or not violation_type or not severity or not subject:
+    if (
+        (target_mode == "individual" and not employee_id)
+        or (target_mode == "selected" and not employee_ids)
+        or not violation_type
+        or not severity
+        or not subject
+    ):
         return discipline_web_service.list_cases_response(
             request=request,
             auth=auth,
