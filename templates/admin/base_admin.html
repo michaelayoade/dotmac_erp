@@ -162,42 +162,41 @@
         <aside
             class="app-sidebar flex flex-col overflow-hidden bg-slate-900 dark:bg-slate-950"
         >
-            <!-- Logo -->
-            <div class="flex h-16 items-center border-b border-slate-800"
-                 :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
-                <a href="/admin" class="flex items-center gap-3" x-show="!sidebarCollapsed" x-cloak>
-                    {% if brand.logo_url %}
-                    <img src="{{ brand.logo_url }}" alt="{{ brand.name }} logo"
-                         class="h-10 w-10 rounded-xl object-contain bg-white/10 p-1"
-                         loading="lazy"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg">
-                        {{ brand_mark }}
-                    </div>
-                    {% else %}
-                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg">
-                        {{ brand_mark }}
-                    </div>
-                    {% endif %}
-                    <span class="text-lg font-semibold text-white font-display">Admin</span>
-                </a>
-                <button @click="toggleSidebar()" x-show="sidebarCollapsed" x-cloak
-                        class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg hover:opacity-90 transition-opacity"
-                        aria-label="Expand sidebar">
-                    {% if brand.logo_url %}
-                    <img src="{{ brand.logo_url }}" alt="{{ brand.name }} logo"
-                         class="h-10 w-10 rounded-xl object-contain"
-                         loading="lazy"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
-                    <span class="hidden">{{ brand_mark }}</span>
-                    {% else %}
-                    {{ brand_mark }}
-                    {% endif %}
-                </button>
-                <button @click="toggleSidebar()" x-show="!sidebarCollapsed && isDesktop" x-cloak
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
-                        aria-label="Collapse sidebar">
-                    {{ icon_svg("chevron-double-left", "h-5 w-5 transition-transform") }}
+            <!-- Logo and module title are independent navigation targets. -->
+            <div class="flex-shrink-0">
+                <div class="flex h-16 items-center gap-3 border-b border-slate-800"
+                     :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
+                    <a href="/" class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+                       data-testid="sidebar-home-link" data-no-context hx-boost="false" @click.stop
+                       aria-label="{{ brand.name }} home" title="Return to main dashboard">
+                        {% if brand.logo_url %}
+                        <img src="{{ brand.logo_url }}" alt="{{ brand.name }} logo"
+                             class="h-10 w-10 rounded-xl object-contain bg-white/10 p-1"
+                             loading="lazy"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg">
+                            {{ brand_mark }}
+                        </div>
+                        {% else %}
+                        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg">
+                            {{ brand_mark }}
+                        </div>
+                        {% endif %}
+                    </a>
+                    <a href="/admin" class="min-w-0 flex-1" data-testid="sidebar-module-link"
+                       x-show="!sidebarCollapsed" x-cloak aria-label="Admin">
+                        <span class="text-lg font-semibold text-white font-display">Admin</span>
+                    </a>
+                    <button type="button" @click="toggleSidebar()" x-show="!sidebarCollapsed && isDesktop" x-cloak
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                            aria-label="Collapse sidebar">
+                        {{ icon_svg("chevron-double-left", "h-5 w-5 transition-transform") }}
+                    </button>
+                </div>
+                <button type="button" @click="toggleSidebar()" x-show="isDesktop && sidebarCollapsed" x-cloak
+                        class="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                        aria-label="Expand sidebar" title="Expand sidebar">
+                    {{ icon_svg("chevron-double-left", "h-5 w-5 rotate-180") }}
                 </button>
             </div>
 
