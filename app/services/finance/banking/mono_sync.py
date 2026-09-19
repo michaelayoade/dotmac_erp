@@ -633,18 +633,26 @@ class MonoSyncService:
             "Fix the bank row (or pick the correct one) and retry."
         )
 
-    def _record_webhook_success(
-        self, mono_account_id: str, meta: dict[str, Any]
-    ) -> None:
-        """Record the only event that proves a reauthorized link recovered."""
-        from app.db.session_context import allow_cross_org, prime_tenant_context
+    def _resolve_webhook_bank_account(
+        self, mono_account_id: str
+    ) -> BankAccount | None:
+        """Resolve the tenant owner for one provider account identifier."""
+        from app.db.session_context import allow_cross_org
 
         with allow_cross_org(self.db):
-            bank_account = self.db.scalar(
+            return self.db.scalar(
                 select(BankAccount).where(
                     BankAccount.mono_account_id == mono_account_id
                 )
             )
+
+    def _record_webhook_success(
+        self, mono_account_id: str, meta: dict[str, Any]
+    ) -> None:
+        """Record the only event that proves a reauthorized link recovered."""
+        from app.db.session_context import prime_tenant_context
+
+        bank_account = self._resolve_webhook_bank_account(mono_account_id)
         if bank_account is None:
             logger.warning("Mono success webhook received for an unlinked account")
             return
@@ -678,15 +686,10 @@ class MonoSyncService:
         Recording it on ``mono_last_sync_error`` surfaces it in the UI
         health banner alongside API-level failures.
         """
-        from app.db.session_context import allow_cross_org, prime_tenant_context
+        from app.db.session_context import prime_tenant_context
 
         # Cross-org lookup: mono_account_id alone, no tenant context yet.
-        with allow_cross_org(self.db):
-            bank_account = self.db.scalar(
-                select(BankAccount).where(
-                    BankAccount.mono_account_id == mono_account_id
-                )
-            )
+        bank_account = self._resolve_webhook_bank_account(mono_account_id)
         if bank_account is None:
             logger.warning("Mono failure webhook received for an unlinked account")
             return
