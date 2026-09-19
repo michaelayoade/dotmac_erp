@@ -4,7 +4,6 @@ import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -22,7 +21,6 @@ from app.services.finance.banking.mono_client import (
     MonoDataRefreshResult,
     MonoError,
     MonoExchangeResult,
-    MonoTransientError,
     MonoTransaction,
 )
 
@@ -88,6 +86,8 @@ def _capture_window(svc, **cursors):
 
 
 def test_banking_templates_separate_mono_freshness_and_surface_health() -> None:
+    from pathlib import Path
+
     detail = Path("templates/finance/banking/account_detail.html").read_text(
         encoding="utf-8"
     )
@@ -2056,6 +2056,8 @@ def test_sync_counts_only_inserted_lines_when_duplicate_insert_races() -> None:
 
 
 def test_transient_mono_error_recovers_after_provider_contact() -> None:
+    from app.services.finance.banking.mono_client import MonoTransientError
+
     db = MagicMock()
     svc = MonoSyncService(db)
     account = _account(mono_last_sync_error=None)
@@ -2322,6 +2324,8 @@ def test_via_refresh_failed_job_records_generic_failure() -> None:
 
 def test_via_refresh_reports_skipped_on_rate_limit() -> None:
     """The refresh result is skipped; the scheduled wrapper drains cache."""
+    from app.services.finance.banking.mono_client import MonoTransientError
+
     db = MagicMock()
     svc = MonoSyncService(db)
     account = _account()
