@@ -1,4 +1,4 @@
-# ERP Organization Calendar: Implementation and Deployment Plan
+# ERP Organizational Calendar: Implementation and Deployment Plan
 
 ## Decision
 
@@ -7,12 +7,15 @@ is the only component that should hold the dedicated Nextcloud calendar service
 account and perform CalDAV/iCalendar operations. Nextcloud displays the event,
 maintains attendee scheduling copies, and delivers reminders.
 
-Personal events created by employees in Nextcloud are outside this integration.
-ERP neither reads nor modifies personal calendars.
+Personal events created directly in Nextcloud remain outside this integration.
+ERP neither reads nor modifies those calendars. Employees may also create
+private ERP events from Self Service My Calendar; those records are visible in
+ERP only to their creator and explicitly invited participants and synchronize
+through the same controlled event contract.
 
 ## Implemented in this ERP branch
 
-### Admin calendar workspace
+### Organizational Calendar workspace
 
 - Permission-gated month view at `/admin/calendar` using the existing ERP admin
   design system.
@@ -33,6 +36,31 @@ ERP neither reads nor modifies personal calendars.
   failed service-hook deliveries, safe errors, identity-readiness exclusions,
   and permission-gated retry actions.
 
+The workspace is not restricted to hard-coded Admin or Finance role names.
+Access, creation, participant management, editing, cancellation, audit, and
+retry actions are independently permission-gated, so any approved role can be
+configured to use the appropriate capabilities.
+
+### Self Service My Calendar
+
+- A My Calendar card and month view use the existing People Self Service shell,
+  navigation, colours, cards, spacing, and responsive layout.
+- Employees see only published organizational events where they are active
+  participants, personal events they own, and personal events to which they
+  were explicitly invited.
+- Employees with `calendar:personal:create` can create, update, and cancel their
+  own personal events. `calendar:personal:invite` independently controls
+  whether they can invite other eligible employees.
+- The creator is always retained as a participant. An invited employee has
+  read-only access; only the creator can edit or cancel the personal event.
+- Organizational calendar users, including administrators, receive no
+  application-level override to view another employee's unshared personal
+  event.
+- Publishing an organizational event creates an ERP in-app notification for
+  each newly involved participant. The notification opens the assigned event
+  in My Calendar. Drafts do not notify, and an ordinary update does not send a
+  duplicate notification to an unchanged participant.
+
 ### Permissions
 
 The migration provisions explicit permissions:
@@ -49,11 +77,14 @@ The migration provisions explicit permissions:
 - `calendar:participants:add_all`
 - `calendar:sync:retry`
 - `calendar:audit:read`
+- `calendar:personal:access`
+- `calendar:personal:create`
+- `calendar:personal:invite`
 
-Admin roles receive all calendar permissions. Finance Manager and Finance
-Director receive calendar access, create, read-all, manage-own, participant, and
-Add Everyone permissions. The employee role receives assigned-event read
-permission for the later Self Service calendar surface.
+The migration provides initial grants for existing Admin, Finance Manager,
+Finance Director, and Employee roles. These are defaults only, not hard-coded
+authorization rules. Administrators can grant the explicit permissions to any
+approved role. Employee receives assigned-event read and My Calendar defaults.
 
 Every route enforces permissions server-side. Menu visibility is not treated as
 authorization. Every database query is tenant-scoped and the four calendar
@@ -98,6 +129,11 @@ an Integrator idempotency key. A terminal webhook failure remains in the
 canonical service-hook execution log and is surfaced as a retryable delivery
 issue. Retrying emits a fresh desired-state command; ERP does not maintain a
 parallel delivery checkpoint or accept a result callback.
+
+The payload also carries `event_scope` so the connector preserves the privacy
+boundary between organizational and personal ERP events. ERP delivery status
+is derived from the canonical service-hook execution log rather than a separate
+calendar synchronization checkpoint.
 
 ERP never stores the Nextcloud calendar service-account password.
 
@@ -200,7 +236,7 @@ calendar fallback before changing the schema or synchronization model.
    duplicate, cancellation, all-day/time-zone, offboarding, and failure/recovery
    tests.
 6. Load-test Add Everyone before choosing production attendee and worker limits.
-7. Pilot with a small Admin/Finance group and monitor queue age, failed events,
+7. Pilot with a small permission-approved group and monitor queue age, failed events,
    participant failures, 401/403, 429, 5xx, latency, and Nextcloud cron health.
 8. Enable broader use only after the pilot acceptance criteria pass.
 

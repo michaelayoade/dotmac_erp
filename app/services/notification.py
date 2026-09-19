@@ -6,6 +6,7 @@ Handles in-app and email notifications for all app modules.
 
 import logging
 import uuid
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from typing import Any, cast
 
@@ -90,6 +91,54 @@ class NotificationService:
         )
 
         return notification
+
+    def create_many(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        recipient_ids: Iterable[uuid.UUID],
+        entity_type: EntityType,
+        entity_id: uuid.UUID,
+        notification_type: NotificationType,
+        title: str,
+        message: str,
+        *,
+        channel: NotificationChannel | None = None,
+        action_url: str | None = None,
+        actor_id: uuid.UUID | None = None,
+    ) -> list[Notification]:
+        """Create equivalent notifications for many recipients in one flush."""
+        effective_channel = channel or (
+            NotificationChannel.BOTH
+            if notification_type == NotificationType.MENTION
+            else NotificationChannel.IN_APP
+        )
+        notifications = [
+            Notification(
+                organization_id=organization_id,
+                recipient_id=recipient_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                notification_type=notification_type,
+                channel=effective_channel,
+                title=title,
+                message=message,
+                action_url=action_url,
+                actor_id=actor_id,
+            )
+            for recipient_id in dict.fromkeys(recipient_ids)
+        ]
+        if not notifications:
+            return []
+        db.add_all(notifications)
+        db.flush()
+        logger.debug(
+            "Created %s %s/%s notifications",
+            len(notifications),
+            entity_type.value,
+            notification_type.value,
+        )
+        return notifications
 
     # ========================================================================
     # Ticket-specific helpers

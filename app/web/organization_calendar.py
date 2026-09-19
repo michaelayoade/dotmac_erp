@@ -1,4 +1,4 @@
-"""Permission-gated ERP organization calendar web routes."""
+"""Permission-gated ERP Organizational Calendar web routes."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.db.session_context import prime_tenant_context
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
     OrganizationCalendarEvent,
@@ -39,6 +40,11 @@ CANCEL_PERMISSIONS = ["calendar:events:cancel_own", "calendar:events:cancel_all"
 
 router = APIRouter(prefix="/admin/calendar", tags=["organization-calendar-web"])
 UTC = timezone.utc
+
+
+def _rollback_and_reprime(db: Session, organization_id: uuid.UUID) -> None:
+    db.rollback()
+    prime_tenant_context(db, organization_id)
 
 
 def _parse_month(value: str | None) -> date:
@@ -114,7 +120,7 @@ def _calendar_context(
             day += timedelta(days=1)
     eligible, excluded = service.eligible_participants()
     context = base_context(
-        request, auth, "Organization Calendar", active_module="settings", db=db
+        request, auth, "Organizational Calendar", active_module="settings", db=db
     )
     context.update(
         {
@@ -426,7 +432,7 @@ async def create_event(
             url=f"/admin/calendar/events/{event.event_id}?created=1", status_code=303
         )
     except CalendarError as exc:
-        db.rollback()
+        _rollback_and_reprime(db, auth.organization_id)
         return templates.TemplateResponse(
             request,
             "admin/calendar/form.html",
@@ -563,7 +569,7 @@ async def update_event(
             url=f"/admin/calendar/events/{updated.event_id}?updated=1", status_code=303
         )
     except (CalendarError, ValueError) as exc:
-        db.rollback()
+        _rollback_and_reprime(db, auth.organization_id)
         latest = service.get_event(event_id)
         message = str(exc) if str(exc) else "The submitted event version is invalid."
         status = 409 if isinstance(exc, CalendarConflictError) else 422
@@ -608,7 +614,7 @@ async def cancel_event(
             actor_person_id=auth.person_id,
         )
     except CalendarConflictError as exc:
-        db.rollback()
+        _rollback_and_reprime(db, auth.organization_id)
         return RedirectResponse(
             url=f"/admin/calendar/events/{event_id}?error={quote_plus(str(exc))}",
             status_code=303,
@@ -627,7 +633,7 @@ def retry_event(
             event_id, actor_person_id=auth.person_id
         )
     except CalendarError as exc:
-        db.rollback()
+        _rollback_and_reprime(db, auth.organization_id)
         return RedirectResponse(
             url=f"/admin/calendar/events/{event_id}?error={quote_plus(str(exc))}",
             status_code=303,

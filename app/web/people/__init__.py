@@ -29,6 +29,7 @@ from app.web.people.perf import router as perf_router
 from app.web.people.recruit import router as recruit_router
 from app.web.people.scheduling import router as scheduling_router
 from app.web.people.self_service import router as self_service_router
+from app.web.people.self_service_calendar import router as self_service_calendar_router
 from app.web.people.settings import router as settings_router
 from app.web.people.training import router as training_router
 from app.web.people.weekly_meeting_reports import (
@@ -74,6 +75,7 @@ router.include_router(perf_router)
 
 # Self-service routes
 router.include_router(self_service_router)
+router.include_router(self_service_calendar_router)
 
 # Settings routes
 router.include_router(settings_router)

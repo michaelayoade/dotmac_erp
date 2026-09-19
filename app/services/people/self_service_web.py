@@ -181,6 +181,9 @@ class SelfServiceWebService:
             )
             or has_direct_reports
         )
+        context["can_my_calendar"] = auth.has_any_permission(
+            ["calendar:personal:access", "calendar:events:read_assigned"]
+        )
         return templates.TemplateResponse(request, "people/self/index.html", context)
 
     @staticmethod
