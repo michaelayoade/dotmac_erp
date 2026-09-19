@@ -12,9 +12,8 @@ adds — this file's ``_bound_settings`` fixture patches them on, following the
 same ``monkeypatch.setattr(settings, ..., raising=False)`` convention already
 used by ``tests/services/test_dotmac_sub_webhook_binding_seed.py``.
 
-``tests/conftest.py``'s fixed SQLite-compatible table whitelist predates the
-kernel idempotency ledger, so this file creates those tables itself (scoped
-to this file's own fixture, not a change to the shared conftest).
+The write route uses ERP's existing endpoint-response idempotency owner. The
+platform adoption ledger explicitly defers the dotmac-kernel runtime cutover.
 """
 
 from __future__ import annotations
@@ -82,21 +81,6 @@ def _bound_settings(monkeypatch):
     )
 
 
-@pytest.fixture(autouse=True)
-def _kernel_idempotency_tables(db_session):
-    """Create the kernel's at-most-once ledger tables on this file's SQLite
-    engine — the first ERP caller of ``dotmac_kernel.idempotency``."""
-    from dotmac_kernel.idempotency_models import (
-        IdempotencyRecord as KernelIdempotencyRecord,
-    )
-    from dotmac_kernel.idempotency_models import PlatformIdempotencyRecord
-
-    engine = db_session.get_bind()
-    KernelIdempotencyRecord.__table__.create(engine, checkfirst=True)
-    PlatformIdempotencyRecord.__table__.create(engine, checkfirst=True)
-    yield
-
-
 def _client(
     db_session: Session, *, scopes: list[str], install_global_handlers: bool = False
 ) -> TestClient:
@@ -160,8 +144,8 @@ def _envelope(*, observation: dict | None = None, **overrides) -> dict:
             "connector_key": "sub_accounting",
         },
         "provider_event_id": (
-            f"sub_accounting:{observation['source_invoice_id']}:"
-            f"{observation['source_updated_at']}"
+            f"sub_accounting:{observation.get('source_invoice_id', 'missing')}:"
+            f"{observation.get('source_updated_at', 'missing')}"
         ),
         "event_type": CAPABILITY_ID,
         "scope": {"kind": "organization", "ref": "org-under-test"},
@@ -226,12 +210,12 @@ def test_mirror_scope_accepts_write_only_key() -> None:
 
 
 # ---------------------------------------------------------------------------
-# THE single most important test: kernel-level replay must win over the
+# THE single most important test: HTTP-level replay must win over the
 # domain's own first-ever stored `replayed=False`.
 # ---------------------------------------------------------------------------
 
 
-def test_write_route_kernel_replay_wins_over_domain_replayed_false(db_session) -> None:
+def test_write_route_http_replay_wins_over_domain_replayed_false(db_session) -> None:
     """Same Idempotency-Key presented twice must answer replayed=true on the
     SECOND call — even though the domain's own FIRST stored write recorded
     replayed=False for itself (this is genuinely its first-ever recording).
@@ -251,7 +235,7 @@ def test_write_route_kernel_replay_wins_over_domain_replayed_false(db_session) -
     assert second.status_code == 200
     second_body = second.json()
     # The domain's stored replayed flag is still False in the ledger (that is
-    # what was recorded the first time) — the kernel-level replay is what
+    # what was recorded the first time) — the HTTP-level replay is what
     # must flip this to true.
     assert second_body["replayed"] is True
     assert second_body["outcome"] == "replayed"
@@ -262,7 +246,7 @@ def test_write_route_kernel_replay_wins_over_domain_replayed_false(db_session) -
 
 def test_write_route_domain_replay_alone_also_sets_true(db_session) -> None:
     """A DIFFERENT idempotency key hitting the SAME invoice revision produces
-    a domain-level replay (occurrence_count increments) on the kernel's own
+    a domain-level replay (occurrence_count increments) on the HTTP owner's
     FIRST execution of that key — the OR's other side."""
     client = _client(db_session, scopes=[SCOPE_WRITE])
     observation = _observation()
@@ -526,7 +510,7 @@ def test_write_route_same_key_different_payload_is_idempotency_conflict_409(
         idempotency_key="idem-conflict-1",
     )
     assert response.status_code == 409
-    # Confirm it's specifically the IdempotencyConflict path (plain-string
+    # Confirm it's specifically the idempotency-conflict path (plain-string
     # detail) under test here, not InvoiceSyncIdentityCollision (typed-object
     # detail) — both answer 409, but the real client's behavior differs by
     # shape, and the two must not be conflated.
@@ -548,23 +532,25 @@ def test_write_route_same_key_different_payload_is_idempotency_conflict_409(
 )
 def test_write_route_rejects_unbound_provenance(db_session, overrides) -> None:
     client = _client(db_session, scopes=[SCOPE_WRITE])
+    before = _row_count(db_session)
     response = _write(client, _envelope(**overrides), idempotency_key="bad-provenance")
     assert response.status_code == 422
     assert response.json()["detail"]["code"].endswith("schema_rejected")
-    assert _row_count(db_session) == 0
+    assert _row_count(db_session) == before
 
 
 def test_mirror_reports_unbound_provenance_as_blocked_without_writing(
     db_session,
 ) -> None:
     client = _client(db_session, scopes=[SCOPE_MIRROR])
+    before = _row_count(db_session)
     response = _mirror(
         client, _envelope(scope={"kind": "organization", "ref": "another-org"})
     )
     assert response.status_code == 200
     assert response.json()["verdict"] == "blocked"
     assert response.json()["agrees"] is False
-    assert _row_count(db_session) == 0
+    assert _row_count(db_session) == before
 
 
 def test_same_key_changed_provider_event_identity_conflicts(db_session) -> None:
@@ -616,6 +602,7 @@ def test_mirror_route_validation_failure_is_200_blocked_never_non_200(
     db_session,
 ) -> None:
     client = _client(db_session, scopes=[SCOPE_MIRROR])
+    before = _row_count(db_session)
     envelope = _envelope(observation=_observation(digest_version=2))
 
     response = _mirror(client, envelope)
@@ -625,7 +612,7 @@ def test_mirror_route_validation_failure_is_200_blocked_never_non_200(
     assert body["verdict"] == "blocked"
     assert body["agrees"] is False
     assert body["blocking_reasons"]
-    assert _row_count(db_session) == 0
+    assert _row_count(db_session) == before
 
 
 def test_mirror_route_no_existing_row_is_honest_missing(db_session) -> None:

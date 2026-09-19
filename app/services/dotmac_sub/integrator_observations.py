@@ -36,8 +36,6 @@ from uuid import UUID
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from dotmac_kernel.idempotency import execute_once
-
 from app.config import settings
 from app.schemas.integrator_observation import (
     INVOICE_ACCOUNTING_SYNC_CAPABILITY,
@@ -57,8 +55,9 @@ from app.services.dotmac_sub.invoice_sync_outcomes import (
     record_invoice_sync_outcome,
 )
 
-# Fixed, endpoint-agnostic — ADR-0001 / dotmac_kernel.idempotency require a
-# scope that identifies the OPERATION, not the route path.
+# Fixed, endpoint-agnostic operation identity used by ERP's existing
+# idempotency owner. Runtime cutover to dotmac-kernel remains deferred by the
+# platform adoption ledger.
 IDEMPOTENCY_SCOPE = "integration.observations.invoices_accounting_sync.v1"
 
 #: Descriptor identity constants — fixed facts about this capability, not
@@ -155,18 +154,6 @@ def _build_command(
     )
 
 
-def _fingerprint_observation(envelope: IntegratorInvoiceSyncEnvelope) -> str:
-    """Bind one idempotency key to the entire accepted wire observation.
-
-    Domain replay across independently delivered receipts remains keyed by
-    invoice identity/revision in ``record_invoice_sync_outcome``. A retry of
-    the SAME receipt must not silently change provider identity or provenance.
-    """
-    normalized = envelope.model_dump(mode="json")
-    encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
 def _validate_provenance(envelope: IntegratorInvoiceSyncEnvelope) -> None:
     """Admit only the configured Sub stream addressed to this ERP binding."""
     if (
@@ -209,49 +196,23 @@ def record_invoice_sync_observation(
     *,
     organization_id: UUID,
     envelope: IntegratorInvoiceSyncEnvelope,
-    idempotency_key: str,
-    correlation_id: str | None,
-):
-    """Record (or replay) one observation at most once per idempotency key.
-
-    Returns the kernel's ``IdempotentOutcome`` — ``.result`` is the plain
-    dict the write route serializes into its response schema (the domain
-    receipt fields from ``InvoiceSyncOutcomeReceipt``, identical on a
-    byte-for-byte replay because ``execute_once`` returns the stored result
-    without re-running ``operation``); ``.replayed`` is the KERNEL-level flag
-    the route must OR with the stored domain-level ``replayed`` value — see
-    ``app/api/integrator_observations.py`` for why that distinction matters.
-    """
+) -> dict[str, Any]:
+    """Record one validated observation without owning the HTTP replay cache."""
     _validate_provenance(envelope)
     command = _build_command(envelope, organization_id=organization_id)
-
-    def _operation(session: Session) -> dict[str, Any]:
-        try:
-            receipt: InvoiceSyncOutcomeReceipt = record_invoice_sync_outcome(
-                session, command
-            )
-        except InvoiceSyncRevisionConflict as exc:
-            raise InvoiceSyncIdentityCollision(str(exc)) from exc
-        except InvoiceSyncOutcomeError as exc:
-            raise IntegratorObservationValidationError(str(exc)) from exc
-        return {
-            "outcome_id": str(receipt.outcome_id),
-            "occurrence_count": receipt.occurrence_count,
-            "replayed": receipt.replayed,
-            "resolved_prior_count": receipt.resolved_prior_count,
-            "disposition": command.disposition.value,
-        }
-
-    return execute_once(
-        db,
-        tenant_id=organization_id,
-        scope=IDEMPOTENCY_SCOPE,
-        key=idempotency_key,
-        operation=_operation,
-        operation_name=IDEMPOTENCY_SCOPE,
-        fingerprint=_fingerprint_observation(envelope),
-        correlation_id=correlation_id,
-    )
+    try:
+        receipt: InvoiceSyncOutcomeReceipt = record_invoice_sync_outcome(db, command)
+    except InvoiceSyncRevisionConflict as exc:
+        raise InvoiceSyncIdentityCollision(str(exc)) from exc
+    except InvoiceSyncOutcomeError as exc:
+        raise IntegratorObservationValidationError(str(exc)) from exc
+    return {
+        "outcome_id": str(receipt.outcome_id),
+        "occurrence_count": receipt.occurrence_count,
+        "replayed": receipt.replayed,
+        "resolved_prior_count": receipt.resolved_prior_count,
+        "disposition": command.disposition.value,
+    }
 
 
 def format_validation_errors(errors: Sequence[Mapping[str, object]]) -> str:

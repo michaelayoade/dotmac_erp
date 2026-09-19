@@ -50,7 +50,7 @@ def _legacy_tables(db_session):
     row need the table to exist first; harmless no-op for every other test in
     this file, the same shape as
     ``tests/api/test_integrator_observations.py``'s
-    ``_kernel_idempotency_tables`` fixture.
+    route-level idempotency fixture.
     """
     engine = db_session.get_bind()
     # SQLite can't parse Postgres server-defaults like gen_random_uuid(); drop

@@ -7,13 +7,17 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse, Response
 
+from app.models.finance.platform.idempotency_record import IdempotencyRecord
 from app.services.finance.platform.idempotency import IdempotencyService
 
 
@@ -89,6 +93,149 @@ def check_or_reserve_idempotency(
         request_hash=request_hash,
     )
     return None
+
+
+def update_idempotency_response(
+    db: Session,
+    *,
+    organization_id: UUID,
+    idempotency_key: str,
+    endpoint: str,
+    response_status: int,
+    response_body: dict[str, Any] | None,
+) -> None:
+    """Finalize a reservation through ERP's existing idempotency owner."""
+    IdempotencyService.update_response(
+        db=db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=endpoint,
+        response_status=response_status,
+        response_body=response_body,
+    )
+
+
+def release_idempotency_reservation(
+    db: Session,
+    *,
+    organization_id: UUID,
+    idempotency_key: str,
+    endpoint: str,
+    request_hash: str,
+) -> None:
+    """Release this caller's unfinished reservation after a failed operation."""
+    record = IdempotencyService.check(
+        db=db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=endpoint,
+        request_hash=request_hash,
+    )
+    if (
+        record is None
+        or record.response_status != IdempotencyService.RESERVATION_STATUS
+    ):
+        return
+    db.delete(record)
+    db.commit()
+
+
+def check_or_reserve_transactional_idempotency(
+    db: Session,
+    *,
+    organization_id: UUID,
+    idempotency_key: str,
+    endpoint: str,
+    request_hash: str,
+) -> IdempotencyReplay | None:
+    """Reserve inside the caller's transaction so cache and effect are atomic."""
+    record = db.scalar(
+        select(IdempotencyRecord).where(
+            IdempotencyRecord.organization_id == organization_id,
+            IdempotencyRecord.idempotency_key == idempotency_key,
+            IdempotencyRecord.endpoint == endpoint,
+        )
+    )
+    if record is not None:
+        now = datetime.now(timezone.utc)
+        expires_at = record.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now:
+            db.delete(record)
+            db.flush()
+            record = None
+        elif record.request_hash and record.request_hash != request_hash:
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key already used with different request body",
+            )
+        elif IdempotencyService.is_stale_reservation(record, now=now):
+            record.created_at = now
+            db.flush()
+            return None
+        else:
+            return IdempotencyReplay(record.response_status, record.response_body)
+
+    now = datetime.now(timezone.utc)
+    reservation = IdempotencyRecord(
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=endpoint,
+        request_hash=request_hash,
+        response_status=IdempotencyService.RESERVATION_STATUS,
+        response_body={"detail": "Request in progress"},
+        expires_at=now + timedelta(hours=IdempotencyService.DEFAULT_TTL_HOURS),
+    )
+    if db.get_bind().dialect.name == "sqlite":
+        db.add(reservation)
+        db.flush()
+        return None
+    try:
+        with db.begin_nested():
+            db.add(reservation)
+            db.flush()
+    except IntegrityError:
+        existing = db.scalar(
+            select(IdempotencyRecord).where(
+                IdempotencyRecord.organization_id == organization_id,
+                IdempotencyRecord.idempotency_key == idempotency_key,
+                IdempotencyRecord.endpoint == endpoint,
+            )
+        )
+        if existing is None:
+            raise
+        if existing.request_hash and existing.request_hash != request_hash:
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key already used with different request body",
+            )
+        return IdempotencyReplay(existing.response_status, existing.response_body)
+    return None
+
+
+def update_transactional_idempotency_response(
+    db: Session,
+    *,
+    organization_id: UUID,
+    idempotency_key: str,
+    endpoint: str,
+    response_status: int,
+    response_body: dict[str, Any] | None,
+) -> None:
+    """Stage a response without committing the caller's transaction."""
+    record = db.scalar(
+        select(IdempotencyRecord).where(
+            IdempotencyRecord.organization_id == organization_id,
+            IdempotencyRecord.idempotency_key == idempotency_key,
+            IdempotencyRecord.endpoint == endpoint,
+        )
+    )
+    if record is None:
+        raise RuntimeError("idempotency reservation disappeared")
+    record.response_status = response_status
+    record.response_body = response_body
+    db.flush()
 
 
 def build_cached_response(replay: IdempotencyReplay) -> Response:

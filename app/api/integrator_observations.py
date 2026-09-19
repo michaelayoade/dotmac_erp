@@ -43,8 +43,11 @@ from fastapi.routing import APIRoute
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse, Response
 
-from dotmac_kernel.idempotency import IdempotencyConflict, MAX_KEY_LENGTH
-
+from app.api.idempotency import (
+    build_request_hash,
+    check_or_reserve_transactional_idempotency,
+    update_transactional_idempotency_response,
+)
 from app.api.service_principal import (
     get_db_with_service_org,
     require_any_service_scope,
@@ -60,6 +63,7 @@ from app.schemas.integrator_observation import (
     ProductPortDescriptorV3,
 )
 from app.services.dotmac_sub.integrator_observations import (
+    IDEMPOTENCY_SCOPE,
     IntegratorObservationValidationError,
     InvoiceSyncIdentityCollision,
     ProductPortDescriptorError,
@@ -67,7 +71,10 @@ from app.services.dotmac_sub.integrator_observations import (
     format_validation_errors,
     invoice_accounting_sync_product_port_descriptor,
     record_invoice_sync_observation,
+    validate_invoice_sync_observation,
 )
+
+MAX_IDEMPOTENCY_KEY_LENGTH = 200
 
 SCOPE_WRITE = "integration:observations:write"
 SCOPE_MIRROR = "integration:observations:mirror"
@@ -148,7 +155,10 @@ def record_integrator_invoice_sync_observation(
     capability_binding_id: UUID,
     envelope: IntegratorInvoiceSyncEnvelope,
     idempotency_key: str = Header(
-        ..., alias="Idempotency-Key", min_length=1, max_length=MAX_KEY_LENGTH
+        ...,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=MAX_IDEMPOTENCY_KEY_LENGTH,
     ),
     x_correlation_id: str | None = Header(
         default=None, alias="X-Correlation-Id", max_length=200
@@ -174,12 +184,38 @@ def record_integrator_invoice_sync_observation(
             },
         )
     try:
-        outcome = record_invoice_sync_observation(
+        validate_invoice_sync_observation(envelope, organization_id=organization_id)
+    except IntegratorObservationValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invoices.accounting_sync.schema_rejected",
+                "message": str(exc),
+            },
+        ) from exc
+    request_hash = build_request_hash(envelope, extra={"operation": IDEMPOTENCY_SCOPE})
+    replay = check_or_reserve_transactional_idempotency(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=IDEMPOTENCY_SCOPE,
+        request_hash=request_hash,
+    )
+    if replay is not None:
+        if replay.status_code == 202 or replay.body is None:
+            raise HTTPException(
+                status_code=409, detail="Request is already in progress"
+            )
+        cached = dict(replay.body)
+        cached["replayed"] = True
+        cached["outcome"] = "replayed"
+        return IntegratorInvoiceSyncReceipt.model_validate(cached)
+
+    try:
+        result = record_invoice_sync_observation(
             db,
             organization_id=organization_id,
             envelope=envelope,
-            idempotency_key=idempotency_key,
-            correlation_id=x_correlation_id or str(capability_binding_id),
         )
     except InvoiceSyncIdentityCollision as exc:
         raise HTTPException(
@@ -197,19 +233,8 @@ def record_integrator_invoice_sync_observation(
                 "message": str(exc),
             },
         ) from exc
-    except IdempotencyConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    result = outcome.result
-    # THE single most important correctness point in this route: a kernel-
-    # level idempotency replay (the identical Idempotency-Key presented
-    # again) must always answer replayed=true, even though the domain's own
-    # FIRST-EVER stored write recorded replayed=False for itself. Collapsing
-    # this into the domain-only value would make a retried delivery look
-    # like a brand-new ACCEPTED to the real client, silently hiding a
-    # double-send.
-    replayed = outcome.replayed or bool(result["replayed"])
-    return IntegratorInvoiceSyncReceipt(
+    replayed = bool(result["replayed"])
+    receipt = IntegratorInvoiceSyncReceipt(
         observation_id=str(result["outcome_id"]),
         outcome="replayed" if replayed else "recorded",
         processing_status=str(result["disposition"]),
@@ -217,6 +242,15 @@ def record_integrator_invoice_sync_observation(
         occurrence_count=int(result["occurrence_count"]),
         resolved_prior_count=int(result["resolved_prior_count"]),
     )
+    update_transactional_idempotency_response(
+        db,
+        organization_id=organization_id,
+        idempotency_key=idempotency_key,
+        endpoint=IDEMPOTENCY_SCOPE,
+        response_status=200,
+        response_body=receipt.model_dump(mode="json"),
+    )
+    return receipt
 
 
 @router.post(

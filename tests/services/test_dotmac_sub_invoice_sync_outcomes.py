@@ -43,7 +43,7 @@ def _legacy_tables(db_session):
     the first ERP caller that needs the ``_legacy`` tables to exist for a
     unit test, so it provisions them itself, the same way
     ``tests/api/test_integrator_observations.py``'s
-    ``_kernel_idempotency_tables`` fixture provisions the kernel's ledger
+    route-level tests provision the HTTP idempotency ledger
     tables the shared fixture also does not know about.
     """
     engine = db_session.get_bind()
