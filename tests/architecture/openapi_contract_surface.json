@@ -1944,6 +1944,17 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/integration/observations/{capability_binding_id}/descriptor": {
+   "params": [
+    "header:x-api-key!",
+    "path:capability_binding_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "9642b6d04c85",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/inventory/categories": {
    "params": [
     "cookie:access_token",
@@ -6927,6 +6938,30 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/integration/observations/{capability_binding_id}": {
+   "params": [
+    "header:Idempotency-Key!",
+    "header:X-Correlation-Id",
+    "header:x-api-key!",
+    "path:capability_binding_id!"
+   ],
+   "request": "8d8a7b62d662",
+   "responses": {
+    "200": "ccfb24ae17d5",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/integration/observations/{capability_binding_id}/mirror": {
+   "params": [
+    "header:x-api-key!",
+    "path:capability_binding_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "3eaf9a75f488",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/inventory/categories": {
    "params": [
     "cookie:access_token",
@@ -9552,6 +9587,12 @@
   "InitializeInvoicePaymentRequest": "204051bf5074",
   "InitializePaymentResponse": "afce36acbf92",
   "InitiateTransferResponse": "c8b97b510735",
+  "IntegratorDestinationScope": "e9e41cdbee92",
+  "IntegratorInvoiceSyncEnvelope": "b3c4a42bc2c3",
+  "IntegratorInvoiceSyncMirrorDisagreement": "6559a830f79f",
+  "IntegratorInvoiceSyncMirrorReport": "e88259e55897",
+  "IntegratorInvoiceSyncReceipt": "6977c335004f",
+  "IntegratorObservationSource": "d68cdc17a9e0",
   "IntercompanyBalanceCreate": "c9260cc5307a",
   "IntercompanyBalanceRead": "f4097bf2f16e",
   "InventoryCountLineRead": "45e2650bb261",
@@ -9561,6 +9602,11 @@
   "InventoryItemRead": "c66e3e4eb678",
   "InventoryItemStock": "d26ae7b78bd7",
   "InventoryListResponse": "f6d63c73ad24",
+  "InvoiceAccountingSyncIssue": "96de93e8f39b",
+  "InvoiceAccountingSyncObservation": "a91457695b48",
+  "InvoiceSyncDisposition": "f61ab156fc2a",
+  "InvoiceSyncIssueCode": "46edd8e33129",
+  "InvoiceSyncSourceKind": "031ae4b1b520",
   "ItemApprovalAmount": "cf28e03cf520",
   "ItemCategoryCreate": "d8dd93c9b548",
   "ItemCategoryRead": "42b98ae92eb1",
@@ -9748,6 +9794,7 @@
   "ProcurementPlanResponse": "8eba031407d5",
   "ProcurementPlanStatus": "8a18a59fa0aa",
   "ProcurementPlanUpdate": "414721add007",
+  "ProductPortDescriptorV3": "b534614b20ea",
   "ProgressUpdateCreate": "03fea2a38db3",
   "ProjectAllocationSummary": "cbe2fee58245",
   "ProjectDashboard": "115a6f17c105",

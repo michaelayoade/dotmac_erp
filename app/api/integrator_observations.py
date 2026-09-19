@@ -1,6 +1,6 @@
 """Integrator ProductPort receiver for Sub's invoice-accounting-sync observations.
 
-Three routes, the generic v2 ProductObservation wire (see
+Three routes, the generic ProductObservation v1 wire (see
 ``app/schemas/integrator_observation.py`` for the full contract):
 
 - ``POST /integration/observations/{capability_binding_id}`` — write.
@@ -57,7 +57,7 @@ from app.schemas.integrator_observation import (
     IntegratorInvoiceSyncMirrorDisagreement,
     IntegratorInvoiceSyncMirrorReport,
     IntegratorInvoiceSyncReceipt,
-    ProductPortDescriptorV2,
+    ProductPortDescriptorV3,
 )
 from app.services.dotmac_sub.integrator_observations import (
     IntegratorObservationValidationError,
@@ -283,13 +283,13 @@ async def mirror_integrator_invoice_sync_observation(
 
 @router.get(
     "/{capability_binding_id}/descriptor",
-    response_model=ProductPortDescriptorV2,
+    response_model=ProductPortDescriptorV3,
     dependencies=[Depends(require_write_or_mirror_scope)],
 )
 def read_invoice_sync_product_port_descriptor(
     capability_binding_id: UUID,
     _auth: dict = Depends(require_service_auth),
-) -> ProductPortDescriptorV2:
+) -> ProductPortDescriptorV3:
     """Publish ERP-owned routing provenance without requiring activation."""
     _bind(capability_binding_id)
     try:

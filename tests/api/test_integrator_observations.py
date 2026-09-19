@@ -19,7 +19,10 @@ to this file's own fixture, not a change to the shared conftest).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Generator
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -39,6 +42,9 @@ from app.api.service_principal import get_db_with_service_org, require_service_a
 from app.config import settings
 from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
     DotmacSubInvoiceSyncOutcome,
+)
+from app.services.dotmac_sub.integrator_observations import (
+    invoice_accounting_sync_product_port_descriptor,
 )
 
 ORG_ID = uuid4()
@@ -67,6 +73,12 @@ def _bound_settings(monkeypatch):
     )
     monkeypatch.setattr(
         settings, "integrator_invoice_sync_scope_ref", "org-under-test", raising=False
+    )
+    monkeypatch.setattr(
+        settings,
+        "integrator_invoice_sync_installation_id",
+        str(INSTALLATION_ID),
+        raising=False,
     )
 
 
@@ -521,6 +533,52 @@ def test_write_route_same_key_different_payload_is_idempotency_conflict_409(
     assert isinstance(response.json()["detail"], str)
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "source": {
+                "installation_id": str(uuid4()),
+                "connector_key": "sub_accounting",
+            }
+        },
+        {"source": {"installation_id": str(INSTALLATION_ID), "connector_key": "other"}},
+        {"scope": {"kind": "organization", "ref": "another-org"}},
+    ],
+)
+def test_write_route_rejects_unbound_provenance(db_session, overrides) -> None:
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+    response = _write(client, _envelope(**overrides), idempotency_key="bad-provenance")
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"].endswith("schema_rejected")
+    assert _row_count(db_session) == 0
+
+
+def test_mirror_reports_unbound_provenance_as_blocked_without_writing(
+    db_session,
+) -> None:
+    client = _client(db_session, scopes=[SCOPE_MIRROR])
+    response = _mirror(
+        client, _envelope(scope={"kind": "organization", "ref": "another-org"})
+    )
+    assert response.status_code == 200
+    assert response.json()["verdict"] == "blocked"
+    assert response.json()["agrees"] is False
+    assert _row_count(db_session) == 0
+
+
+def test_same_key_changed_provider_event_identity_conflicts(db_session) -> None:
+    client = _client(db_session, scopes=[SCOPE_WRITE])
+    first = _envelope()
+    assert (
+        _write(client, first, idempotency_key="outer-identity-key").status_code == 200
+    )
+    changed = _envelope(provider_event_id="different-event")
+    response = _write(client, changed, idempotency_key="outer-identity-key")
+    assert response.status_code == 409
+    assert isinstance(response.json()["detail"], str)
+
+
 # ---------------------------------------------------------------------------
 # Binding mismatch -> plain-string 404 on all three routes.
 # ---------------------------------------------------------------------------
@@ -651,6 +709,7 @@ def test_mirror_route_disagreeing_existing_row_is_blocked_with_named_fields(
 
 _EXPECTED_DESCRIPTOR_FIELDS = {
     "schema_version",
+    "wire_schema_version",
     "application",
     "owner_module",
     "capability_id",
@@ -662,11 +721,12 @@ _EXPECTED_DESCRIPTOR_FIELDS = {
     "destination_scope",
     "activation_state",
     "source_revision",
+    "capability_contract",
     "descriptor_digest",
 }
 
 
-def test_descriptor_route_returns_exactly_the_v2_fields(db_session) -> None:
+def test_descriptor_route_returns_exactly_the_v3_fields(db_session) -> None:
     client = _client(db_session, scopes=[SCOPE_MIRROR])
 
     response = _descriptor(client)
@@ -674,7 +734,13 @@ def test_descriptor_route_returns_exactly_the_v2_fields(db_session) -> None:
     assert response.status_code == 200
     body = response.json()
     assert set(body.keys()) == _EXPECTED_DESCRIPTOR_FIELDS
-    assert body["schema_version"] == "dotmac.io/product-port-descriptor/v2"
+    assert body["schema_version"] == "dotmac.io/product-port-descriptor/v3"
+    assert body["wire_schema_version"] == "dotmac.io/product-observation/v1"
+    assert body["capability_contract"]["observation_schema"] is not None
+    assert body["capability_contract"]["schema_grace"] is None
+    assert body["capability_contract"]["contract_digest"] == (
+        "f69ffd1e486a298bfdff5ab6a4b1a30a6962075b30d91400ef6ca4247609ac74"
+    )
     assert body["application"] == "erp"
     assert body["capability_id"] == CAPABILITY_ID
     assert body["activation_state"] == "configured_disabled"
@@ -685,9 +751,6 @@ def test_descriptor_route_returns_exactly_the_v2_fields(db_session) -> None:
 
 
 def test_descriptor_digest_is_independently_reproducible(db_session) -> None:
-    import hashlib
-    import json
-
     client = _client(db_session, scopes=[SCOPE_MIRROR])
     body = _descriptor(client).json()
 
@@ -699,6 +762,32 @@ def test_descriptor_digest_is_independently_reproducible(db_session) -> None:
     ).hexdigest()
 
     assert recomputed == body["descriptor_digest"]
+
+
+def test_published_descriptor_matches_integrator_contract_fixture(
+    db_session, monkeypatch
+) -> None:
+    """The copied v3 fixture used by Integrator must match ERP's live owner."""
+    fixture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "erp_invoice_product_port_descriptor_v3.json"
+    )
+    assert hashlib.sha256(fixture_path.read_bytes()).hexdigest() == (
+        "98fedb2a7721dbb2c0b1b0f15554dfedfe35ee41bcd83db017ccdda7fe04cc49"
+    )
+    binding_id = UUID("bbbbbbbb-2222-4222-8222-222222222222")
+    monkeypatch.setattr(
+        settings, "integrator_invoice_sync_binding_id", str(binding_id), raising=False
+    )
+    monkeypatch.setattr(
+        settings,
+        "integrator_invoice_sync_scope_ref",
+        "shared-fixture-org",
+        raising=False,
+    )
+    published = invoice_accounting_sync_product_port_descriptor(binding_id)
+    assert published.model_dump(mode="json") == json.loads(fixture_path.read_text())
 
 
 # ---------------------------------------------------------------------------

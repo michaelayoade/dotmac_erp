@@ -416,6 +416,12 @@ class Settings:
     integrator_invoice_sync_scope_ref: str = os.getenv(
         "INTEGRATOR_INVOICE_SYNC_SCOPE_REF", "unconfigured"
     )
+    # The only Integrator installation whose Sub connector this fixed binding
+    # admits. A placeholder fails closed until explicitly configured.
+    integrator_invoice_sync_installation_id: str = os.getenv(
+        "INTEGRATOR_INVOICE_SYNC_INSTALLATION_ID",
+        "00000000-0000-0000-0000-000000000001",
+    )
 
 
 settings = Settings()

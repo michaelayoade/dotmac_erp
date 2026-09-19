@@ -13,11 +13,11 @@ Sub's own independently-verified oracle value for this exact invoice
 projection — this test never recomputes it, only forwards it.
 
 There is no shared build/dependency graph across ``dotmac_sub``, the
-``dotmac_connector_sub_accounting`` connector, and this ERP repository —
-three independent git repositories. Synchronization is manual: this file is
-a plain copy with this provenance comment, not automated cross-repo CI. Each
-repository's own test suite, anchored to the SAME literal fixture content,
-is the enforcement mechanism.
+``dotmac_connector_sub_accounting`` connector, Integrator, and this ERP
+repository. Synchronization is manual: the Sub source fixture and the
+connector/core-generated wire fixture are plain copies with provenance, not
+automated cross-repo CI. Each repository's own test suite, anchored to the
+SAME fixture content, is the current enforcement mechanism.
 
 ## The two real entrypoints this fixture drives
 
@@ -29,16 +29,12 @@ is the enforcement mechanism.
    ``app.services.dotmac_sub.invoice_sync_outcomes.record_invoice_sync_outcome``.
    This mirrors the existing ``_record()`` helper precedent in
    ``tests/services/test_dotmac_sub_invoice_sync_shadow.py``.
-2. **The Integrator-delivered receiver path** — the fixture's fields are
-   mapped directly into an ``InvoiceAccountingSyncObservation`` exactly as
-   ``dotmac_connector_sub_accounting.mapping.map_item`` produces it (verified
-   renames: ``account_id`` -> ``source_account_id``, ``updated_at`` ->
-   ``source_updated_at``, ``total`` -> ``source_total_amount``, an issue's
-   ``line_id`` -> ``source_line_id``; an issue's optional key is OMITTED
-   entirely when the fixture value is null, per the connector's own
-   already-fixed docstring in ``app/schemas/integrator_observation.py``),
-   wrapped in a real ``IntegratorInvoiceSyncEnvelope``, and driven through
-   the REAL mounted API route
+2. **The Integrator-delivered receiver path** — the normal request body is
+   the exact golden wire document asserted by the connector's real
+   ``map_item`` and the integration module's
+   ``product_observation_document``. Integrator's own port test sends that
+   document through its real HTTP client, including the idempotency header.
+   This test drives the document through ERP's REAL mounted API route
    (``app.api.integrator_observations.router``) with service-auth/DB
    dependency overrides — exercising ``execute_once`` end-to-end, not just
    the service function.
@@ -94,6 +90,11 @@ FIXTURE_PATH = (
     / "fixtures"
     / "shared_invoice_accounting_sync_v2_sample.json"
 )
+WIRE_FIXTURE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "shared_invoice_product_observation_v1.json"
+)
 
 # Fixed test identity — organization is explicitly seeded at this exact id so
 # both consumption paths observe the SAME invoice identity/revision key.
@@ -106,6 +107,27 @@ def _load_fixture() -> dict[str, Any]:
     import json
 
     return cast(dict[str, Any], json.loads(FIXTURE_PATH.read_text(encoding="utf-8")))
+
+
+def _load_wire_fixture() -> dict[str, Any]:
+    """The real connector + generic builder's golden document.
+
+    Copied byte-for-byte from dotmac_starter_mt's
+    ``dotmac-connector-sub-accounting/tests/fixtures`` on the companion
+    ``feat/sub-erp-wire-contract-tests`` branch. That branch asserts the real
+    ``map_item`` and ``product_observation_document`` produce this document.
+    SHA-256: dec305d41b87d34563198faf4fd110f5884da3314ca8afa33770d014262ec038.
+    """
+    import json
+    import hashlib
+
+    assert hashlib.sha256(WIRE_FIXTURE_PATH.read_bytes()).hexdigest() == (
+        "dec305d41b87d34563198faf4fd110f5884da3314ca8afa33770d014262ec038"
+    )
+
+    return cast(
+        dict[str, Any], json.loads(WIRE_FIXTURE_PATH.read_text(encoding="utf-8"))
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +147,12 @@ def _bound_settings(monkeypatch: pytest.MonkeyPatch) -> None:
         settings,
         "integrator_invoice_sync_scope_ref",
         "shared-fixture-org",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        settings,
+        "integrator_invoice_sync_installation_id",
+        str(INSTALLATION_ID),
         raising=False,
     )
 
@@ -222,8 +250,8 @@ def _run_shadow_path(db: Session, fixture: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Receiver-path helper — builds the InvoiceAccountingSyncObservation directly
-# from the fixture's fields, matching the connector's map_item() output.
+# Receiver-path helper — normal delivery uses the connector/core golden wire;
+# these builders are retained for intentional mutation/conflict cases.
 # ---------------------------------------------------------------------------
 
 
@@ -265,23 +293,23 @@ def _observation(fixture: dict[str, Any], **overrides: Any) -> dict[str, Any]:
 def _envelope(
     fixture: dict[str, Any], *, observation: dict[str, Any] | None = None
 ) -> dict[str, Any]:
-    observation = observation if observation is not None else _observation(fixture)
-    return {
-        "schema_version": "dotmac.io/product-observation/v1",
-        "capability_id": INVOICE_ACCOUNTING_SYNC_CAPABILITY,
-        "contract_version": 1,
-        "source": {
-            "installation_id": str(INSTALLATION_ID),
-            "connector_key": "sub_accounting",
-        },
-        "provider_event_id": (
-            f"sub_accounting:{observation['source_invoice_id']}:"
-            f"{observation['source_updated_at']}"
-        ),
-        "event_type": INVOICE_ACCOUNTING_SYNC_CAPABILITY,
-        "scope": {"kind": "organization", "ref": "shared-fixture-org"},
-        "observation": observation,
-    }
+    envelope = _load_wire_fixture()
+    # Normal delivery uses the exact document emitted by the real connector
+    # and generic builder. Only mutation tests replace its typed inner body.
+    if observation is not None or fixture != _load_fixture():
+        envelope["observation"] = (
+            observation if observation is not None else _observation(fixture)
+        )
+    return envelope
+
+
+def test_wire_fixture_matches_sub_source_and_erp_binding() -> None:
+    fixture = _load_fixture()
+    envelope = _load_wire_fixture()
+    assert envelope["observation"] == _observation(fixture)
+    assert envelope["capability_id"] == INVOICE_ACCOUNTING_SYNC_CAPABILITY
+    assert envelope["source"]["installation_id"] == str(INSTALLATION_ID)
+    assert envelope["scope"] == {"kind": "organization", "ref": "shared-fixture-org"}
 
 
 def _run_receiver_path(

@@ -4,7 +4,7 @@ Three callers, one business-rule path: the write route, the mirror route and
 the descriptor route all reason about the SAME
 ``invoices.accounting_sync.observation.v1`` capability. The write and mirror
 paths both build the same ``RecordInvoiceSyncOutcome`` command from the
-generic v2 envelope's ``.observation`` and validate it through
+generic ProductObservation v1 envelope's ``.observation`` and validate it through
 ``invoice_sync_outcomes._validated`` (that module's own construction check —
 there is no public wrapper, and that module is otherwise frozen for this
 slice, so the private function is imported directly rather than duplicating
@@ -21,7 +21,7 @@ The descriptor route publishes ERP's own product-port declaration; unlike
 Sub, ERP has no live `IntegrationCapabilityBinding` row behind this binding
 id — the binding is a single fixed deployment config value (see
 ``app.config.Settings.integrator_invoice_sync_binding_id``), so its
-descriptor is pure config-plus-constants, with no database read.
+v3 descriptor is pure config-plus-schema, with no database read.
 """
 
 from __future__ import annotations
@@ -43,7 +43,8 @@ from app.schemas.integrator_observation import (
     INVOICE_ACCOUNTING_SYNC_CAPABILITY,
     IntegratorDestinationScope,
     IntegratorInvoiceSyncEnvelope,
-    ProductPortDescriptorV2,
+    InvoiceAccountingSyncObservation,
+    ProductPortDescriptorV3,
 )
 from app.services.dotmac_sub.invoice_sync_outcomes import (
     InvoiceSyncIssueEvidence,
@@ -63,8 +64,11 @@ IDEMPOTENCY_SCOPE = "integration.observations.invoices_accounting_sync.v1"
 #: Descriptor identity constants — fixed facts about this capability, not
 #: deployment config (decided; see the task packet's "Descriptor identity
 #: constants" section).
-DESCRIPTOR_SCHEMA_VERSION: Final[Literal["dotmac.io/product-port-descriptor/v2"]] = (
-    "dotmac.io/product-port-descriptor/v2"
+DESCRIPTOR_SCHEMA_VERSION: Final[Literal["dotmac.io/product-port-descriptor/v3"]] = (
+    "dotmac.io/product-port-descriptor/v3"
+)
+WIRE_SCHEMA_VERSION: Final[Literal["dotmac.io/product-observation/v1"]] = (
+    "dotmac.io/product-observation/v1"
 )
 DESCRIPTOR_APPLICATION: Final[Literal["erp"]] = "erp"
 DESCRIPTOR_OWNER_MODULE: Final[str] = "app.services.dotmac_sub.integrator_observations"
@@ -152,22 +156,29 @@ def _build_command(
 
 
 def _fingerprint_observation(envelope: IntegratorInvoiceSyncEnvelope) -> str:
-    """A stable digest of the normalized DOMAIN fact only.
+    """Bind one idempotency key to the entire accepted wire observation.
 
-    Deliberately scoped to ``envelope.observation`` alone, never the whole
-    envelope: ``source``/``scope``/``provider_event_id`` are transport
-    provenance that can legitimately change across a re-delivery (e.g. from a
-    different connector installation) without the underlying invoice fact
-    changing, and the real delivery engine already owns its own separate
-    envelope-level fingerprint/conflict guard
-    (``request_fingerprint_for``/``FingerprintConflict`` in
-    ``receipt_delivery.py``). A replayed idempotency key carrying a genuinely
-    different domain fact must 409, not silently replay stale data — this is
-    what ``execute_once`` compares against the stored fingerprint.
+    Domain replay across independently delivered receipts remains keyed by
+    invoice identity/revision in ``record_invoice_sync_outcome``. A retry of
+    the SAME receipt must not silently change provider identity or provenance.
     """
-    normalized = envelope.observation.model_dump(mode="json")
+    normalized = envelope.model_dump(mode="json")
     encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _validate_provenance(envelope: IntegratorInvoiceSyncEnvelope) -> None:
+    """Admit only the configured Sub stream addressed to this ERP binding."""
+    if (
+        envelope.source.installation_id
+        != UUID(settings.integrator_invoice_sync_installation_id)
+        or envelope.source.connector_key != "sub_accounting"
+        or envelope.scope.kind != settings.integrator_invoice_sync_scope_kind
+        or envelope.scope.ref != settings.integrator_invoice_sync_scope_ref
+    ):
+        raise IntegratorObservationValidationError(
+            "observation provenance does not match this binding"
+        )
 
 
 def validate_invoice_sync_observation(
@@ -185,6 +196,7 @@ def validate_invoice_sync_observation(
     this function never reaches (it does not read the outcome table at
     all). Never reads or writes the outcome table.
     """
+    _validate_provenance(envelope)
     command = _build_command(envelope, organization_id=organization_id)
     try:
         _validate_invoice_sync_command(command)
@@ -210,6 +222,7 @@ def record_invoice_sync_observation(
     the route must OR with the stored domain-level ``replayed`` value — see
     ``app/api/integrator_observations.py`` for why that distinction matters.
     """
+    _validate_provenance(envelope)
     command = _build_command(envelope, organization_id=organization_id)
 
     def _operation(session: Session) -> dict[str, Any]:
@@ -420,7 +433,7 @@ def _descriptor_digest(document: Mapping[str, object]) -> str:
 
 def invoice_accounting_sync_product_port_descriptor(
     capability_binding_id: UUID,
-) -> ProductPortDescriptorV2:
+) -> ProductPortDescriptorV3:
     """Publish ERP's fixed invoice-accounting-sync ProductPort destination.
 
     ERP has no live ``IntegrationCapabilityBinding`` row behind this id —
@@ -447,6 +460,22 @@ def invoice_accounting_sync_product_port_descriptor(
     # Activation is explicitly not this task's call (Michael's ruling) —
     # always published disabled until a separate, explicit activation step.
     activation_state = _DESCRIPTOR_ACTIVATION_STATE
+    observation_schema = InvoiceAccountingSyncObservation.model_json_schema()
+    capability_contract: dict[str, object] = {
+        "command_schema": None,
+        "result_schema": None,
+        "observation_schema": observation_schema,
+        "deprecation": None,
+        "schema_grace": None,
+        "contract_digest": _descriptor_digest(
+            {
+                "capability_id": INVOICE_ACCOUNTING_SYNC_CAPABILITY,
+                "command_schema": None,
+                "result_schema": None,
+                "observation_schema": observation_schema,
+            }
+        ),
+    }
     source_revision = _descriptor_digest(
         {
             "application": DESCRIPTOR_APPLICATION,
@@ -456,10 +485,13 @@ def invoice_accounting_sync_product_port_descriptor(
             "contract_version": DESCRIPTOR_CONTRACT_VERSION,
             "destination_scope": destination_scope_document,
             "owner_module": DESCRIPTOR_OWNER_MODULE,
+            "wire_schema_version": WIRE_SCHEMA_VERSION,
+            "capability_contract": capability_contract,
         }
     )
     published: dict[str, object] = {
         "schema_version": DESCRIPTOR_SCHEMA_VERSION,
+        "wire_schema_version": WIRE_SCHEMA_VERSION,
         "application": DESCRIPTOR_APPLICATION,
         "owner_module": DESCRIPTOR_OWNER_MODULE,
         "capability_id": INVOICE_ACCOUNTING_SYNC_CAPABILITY,
@@ -471,9 +503,11 @@ def invoice_accounting_sync_product_port_descriptor(
         "destination_scope": destination_scope_document,
         "activation_state": activation_state,
         "source_revision": source_revision,
+        "capability_contract": capability_contract,
     }
-    return ProductPortDescriptorV2(
+    return ProductPortDescriptorV3(
         schema_version=DESCRIPTOR_SCHEMA_VERSION,
+        wire_schema_version=WIRE_SCHEMA_VERSION,
         application=DESCRIPTOR_APPLICATION,
         owner_module=DESCRIPTOR_OWNER_MODULE,
         capability_id=INVOICE_ACCOUNTING_SYNC_CAPABILITY,
@@ -485,5 +519,6 @@ def invoice_accounting_sync_product_port_descriptor(
         destination_scope=destination_scope,
         activation_state=activation_state,
         source_revision=source_revision,
+        capability_contract=capability_contract,
         descriptor_digest=_descriptor_digest(published),
     )

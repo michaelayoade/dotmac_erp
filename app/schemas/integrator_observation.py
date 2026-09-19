@@ -1,6 +1,7 @@
 """Integrator ProductPort wire contract for Sub's invoice-accounting-sync feed.
 
-ERP is an ingress adapter, not a party to the generic v2 envelope's design:
+ERP is an ingress adapter, not a party to the generic ProductObservation v1
+envelope's design:
 the outer ``IntegratorInvoiceSyncEnvelope`` is the provider-neutral
 ``dotmac.io/product-observation/v1`` shape ``dotmac_integration`` and
 ``dotmac_integrator`` already define and transport unchanged (Sub's own
@@ -195,12 +196,13 @@ class IntegratorInvoiceSyncMirrorReport(BaseModel):
     disagreements: tuple[IntegratorInvoiceSyncMirrorDisagreement, ...] = ()
 
 
-class ProductPortDescriptorV2(BaseModel):
-    """ERP's authenticated v2 declaration for the generic observation wire."""
+class ProductPortDescriptorV3(BaseModel):
+    """ERP's authenticated v3 declaration and domain-owned payload contract."""
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["dotmac.io/product-port-descriptor/v2"]
+    schema_version: Literal["dotmac.io/product-port-descriptor/v3"]
+    wire_schema_version: Literal["dotmac.io/product-observation/v1"]
     application: Literal["erp"]
     owner_module: str = Field(min_length=1, max_length=160)
     capability_id: Literal["invoices.accounting_sync.observation.v1"]
@@ -214,4 +216,5 @@ class ProductPortDescriptorV2(BaseModel):
         "configured_disabled", "enabled", "quarantined", "retired"
     ]
     source_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    capability_contract: dict[str, object]
     descriptor_digest: str = Field(pattern=r"^[0-9a-f]{64}$")

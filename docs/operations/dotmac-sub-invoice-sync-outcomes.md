@@ -16,6 +16,28 @@ queue, or posting path.
 - Both tables use forced tenant RLS. Queries must still include an explicit
   `organization_id` predicate; RLS is the second boundary, not the first.
 
+## Integrator ProductPort boundary
+
+ERP publishes an authenticated ProductPort descriptor v3 for
+`invoices.accounting_sync.observation.v1`. It declares the generic
+`dotmac.io/product-observation/v1` wire and ERP's own observation JSON Schema
+plus canonical contract digest; the Sub connector claims that digest, never
+publishes a competing schema. The descriptor stays `configured_disabled`
+until a separately authorized activation. An isolated ERP Integrator instance
+must have its own receipt database and worker, separate from Sub messaging.
+
+The write and mirror routes admit only the configured binding, destination
+scope and `sub_accounting` connector installation. Set
+`INTEGRATOR_INVOICE_SYNC_BINDING_ID`, `INTEGRATOR_INVOICE_SYNC_SCOPE_KIND`,
+`INTEGRATOR_INVOICE_SYNC_SCOPE_REF`, and
+`INTEGRATOR_INVOICE_SYNC_INSTALLATION_ID` for the intended deployment; the
+shipped binding/installation IDs and scope ref are placeholders. The service
+principal supplies `organization_id`; neither the envelope nor its scope can
+select a tenant. `Idempotency-Key` is an HTTP header bound to the entire
+accepted envelope, so changing provider identity or provenance under one key
+conflicts instead of silently replaying. Domain parity remains keyed by the
+invoice revision and Sub's forwarded digest, not by that transport key.
+
 ## Recurrence and resolution
 
 The unique source identity is `(organization_id, source_invoice_id,
