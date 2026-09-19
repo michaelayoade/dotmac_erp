@@ -25,7 +25,7 @@ from app.models.people.discipline import (
     SeverityLevel,
     ViolationType,
 )
-from app.models.people.hr import Employee, EmployeeStatus
+from app.models.people.hr import Department, Employee, EmployeeStatus
 from app.models.person import Person
 from app.schemas.people.discipline import (
     CaseActionCreate,
@@ -210,6 +210,21 @@ class DisciplineWebService:
                 error=new_case_error,
             )
         )
+        employee_service = EmployeeService(db, org_id)
+        context["departments"] = list(
+            db.scalars(
+                select(Department)
+                .where(
+                    Department.organization_id == org_id,
+                    Department.is_active.is_(True),
+                )
+                .order_by(Department.department_name)
+            ).all()
+        )
+        context["active_employees"] = employee_service.list_employees(
+            filters=EmployeeFilters(status=EmployeeStatus.ACTIVE),
+            pagination=PaginationParams(limit=500),
+        ).items
         return templates.TemplateResponse(
             request, "people/hr/discipline/cases.html", context
         )
@@ -328,6 +343,20 @@ class DisciplineWebService:
                 error=error,
             )
         )
+        context["departments"] = list(
+            db.scalars(
+                select(Department)
+                .where(
+                    Department.organization_id == org_id,
+                    Department.is_active.is_(True),
+                )
+                .order_by(Department.department_name)
+            ).all()
+        )
+        context["active_employees"] = employee_service.list_employees(
+            filters=EmployeeFilters(status=EmployeeStatus.ACTIVE),
+            pagination=PaginationParams(limit=500),
+        ).items
         response = templates.TemplateResponse(
             request, "people/hr/discipline/case_form.html", context
         )
@@ -390,36 +419,114 @@ class DisciplineWebService:
         self,
         auth: WebAuthContext,
         db: Session,
-        employee_id: str,
+        employee_id: str | None,
         violation_type: str,
         severity: str,
         subject: str,
         description: str | None = None,
         incident_date: str | None = None,
         reported_by_id: str | None = None,
+        target_mode: str = "individual",
+        employee_ids: list[str] | None = None,
+        department_id: str | None = None,
     ) -> RedirectResponse:
-        """Create a new disciplinary case."""
+        """Create one draft case for each selected employee."""
         org_id = coerce_uuid(auth.organization_id)
         person_id = auth.person_id
-
         service = DisciplineService(db)
 
-        data = DisciplinaryCaseCreate(
-            employee_id=UUID(employee_id),
-            violation_type=ViolationType(violation_type),
-            severity=SeverityLevel(severity),
-            subject=subject,
-            description=description,
-            incident_date=parse_date(incident_date),
-            reported_date=date.today(),
-            reported_by_id=parse_uuid(reported_by_id),
-        )
+        if target_mode == "individual":
+            target_ids = [parse_uuid(employee_id)] if employee_id else []
+        elif target_mode == "selected":
+            target_ids = [parse_uuid(value) for value in (employee_ids or [])]
+        elif target_mode == "department":
+            department_uuid = parse_uuid(department_id)
+            if not department_uuid:
+                raise ValidationError("Select a department")
+            target_ids = list(
+                db.scalars(
+                    select(Employee.employee_id)
+                    .where(
+                        Employee.organization_id == org_id,
+                        Employee.department_id == department_uuid,
+                        Employee.status == EmployeeStatus.ACTIVE,
+                    )
+                    .order_by(Employee.employee_id)
+                ).all()
+            )
+        else:
+            raise ValidationError("Invalid disciplinary target")
 
-        case = service.create_case(org_id, data, created_by_id=person_id)
+        target_ids = list(dict.fromkeys(value for value in target_ids if value))
+        if not target_ids:
+            raise ValidationError("Select at least one employee")
+        if target_mode == "selected":
+            active_ids = set(
+                db.scalars(
+                    select(Employee.employee_id).where(
+                        Employee.organization_id == org_id,
+                        Employee.employee_id.in_(target_ids),
+                        Employee.status == EmployeeStatus.ACTIVE,
+                    )
+                ).all()
+            )
+            if active_ids != set(target_ids):
+                raise ValidationError(
+                    "Selected employees must be active employees in this organization"
+                )
+
+        cases = []
+        for target_id in target_ids:
+            if target_id is None:
+                raise ValidationError(
+                    "A valid employee is required for each disciplinary case"
+                )
+            data = DisciplinaryCaseCreate(
+                employee_id=target_id,
+                violation_type=ViolationType(violation_type),
+                severity=SeverityLevel(severity),
+                subject=subject,
+                description=description,
+                incident_date=parse_date(incident_date),
+                reported_date=date.today(),
+                reported_by_id=parse_uuid(reported_by_id),
+            )
+            cases.append(service.create_case(org_id, data, created_by_id=person_id))
         db.commit()
 
         return RedirectResponse(
-            url=f"/people/hr/discipline/{case.case_id}?success=created",
+            url=f"/people/hr/discipline/cases?success=created_{len(cases)}_draft_cases",
+            status_code=303,
+        )
+
+    def bulk_issue_query_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        case_ids: list[str],
+        query_text: str,
+        response_due_date: str,
+    ) -> RedirectResponse:
+        """Issue one shared query to selected draft cases."""
+        due_date = parse_date(response_due_date)
+        if not due_date:
+            raise ValidationError("Response due date is invalid")
+        parsed_ids = []
+        for value in case_ids:
+            parsed_id = parse_uuid(value)
+            if parsed_id is not None:
+                parsed_ids.append(parsed_id)
+        data = IssueQueryRequest(query_text=query_text, response_due_date=due_date)
+        service = DisciplineService(db)
+        cases = service.issue_queries(
+            parsed_ids,
+            data,
+            issued_by_id=auth.person_id,
+            organization_id=coerce_uuid(auth.organization_id),
+        )
+        db.commit()
+        return RedirectResponse(
+            url=f"/people/hr/discipline/cases?success=issued_{len(cases)}_queries",
             status_code=303,
         )
 

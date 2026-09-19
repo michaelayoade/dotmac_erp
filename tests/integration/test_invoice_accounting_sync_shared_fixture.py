@@ -78,6 +78,8 @@ from app.models.finance.core_org.organization import Organization
 from app.schemas.integrator_observation import INVOICE_ACCOUNTING_SYNC_CAPABILITY
 from app.services.dotmac_sub.client import DotmacSubClient, DotmacSubConfig
 from app.services.dotmac_sub.invoice_sync_outcomes import (
+    CONTRACT_VERSION,
+    SUPPORTED_DIGEST_VERSION,
     InvoiceSyncRevisionConflict,
     record_invoice_sync_outcome,
 )
@@ -545,3 +547,79 @@ def test_shadow_path_same_revision_conflict_raises_revision_conflict(
         record_invoice_sync_outcome(db, _parsed_command(_altered_fixture(fixture)))
 
     assert _row_count(db) == 1  # the conflicting write never landed
+
+
+# ---------------------------------------------------------------------------
+# 5. digest_version is part of row IDENTITY, not a comparable field — a row
+#    at a different digest_version is a distinct identity, never a conflict.
+# ---------------------------------------------------------------------------
+
+_OTHER_DIGEST_VERSION_FINGERPRINT = "2" * 64
+
+
+def test_same_invoice_revision_with_different_digest_version_is_a_new_identity(
+    db: Session, seeded_organization: Organization
+) -> None:
+    fixture = _load_fixture()
+    command = _parsed_command(fixture)
+    assert command.digest_version == SUPPORTED_DIGEST_VERSION
+
+    seeded = DotmacSubInvoiceSyncOutcome(
+        organization_id=command.organization_id,
+        source_invoice_id=command.source_invoice_id,
+        source_updated_at=command.source_updated_at,
+        contract_version=CONTRACT_VERSION,
+        source_kind=command.source_kind.value,
+        disposition="ready",
+        projection_fingerprint=_OTHER_DIGEST_VERSION_FINGERPRINT,
+        digest_version=SUPPORTED_DIGEST_VERSION + 1,
+        issue_count=0,
+        occurrence_count=1,
+    )
+    db.add(seeded)
+    db.flush()
+    seeded_outcome_id = seeded.outcome_id
+    before = (
+        seeded.contract_version,
+        seeded.source_kind,
+        seeded.disposition,
+        seeded.projection_fingerprint,
+        seeded.digest_version,
+        seeded.issue_count,
+        seeded.occurrence_count,
+    )
+
+    receipt = record_invoice_sync_outcome(db, command)
+    db.flush()
+
+    assert receipt.replayed is False
+
+    # The seeded higher-digest_version row is untouched.
+    refetched_seeded = db.get(DotmacSubInvoiceSyncOutcome, seeded_outcome_id)
+    assert refetched_seeded is not None
+    assert (
+        refetched_seeded.contract_version,
+        refetched_seeded.source_kind,
+        refetched_seeded.disposition,
+        refetched_seeded.projection_fingerprint,
+        refetched_seeded.digest_version,
+        refetched_seeded.issue_count,
+        refetched_seeded.occurrence_count,
+    ) == before
+
+    rows = list(
+        db.scalars(
+            select(DotmacSubInvoiceSyncOutcome).where(
+                DotmacSubInvoiceSyncOutcome.organization_id == command.organization_id,
+                DotmacSubInvoiceSyncOutcome.source_invoice_id
+                == command.source_invoice_id,
+                DotmacSubInvoiceSyncOutcome.source_updated_at
+                == command.source_updated_at,
+            )
+        )
+    )
+    assert len(rows) == 2
+    assert {row.digest_version for row in rows} == {
+        SUPPORTED_DIGEST_VERSION,
+        SUPPORTED_DIGEST_VERSION + 1,
+    }

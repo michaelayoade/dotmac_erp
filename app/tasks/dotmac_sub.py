@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 _SOURCE = "dotmac_sub"
 _INCREMENTAL_SYNC_LOCK_NAMESPACE = "dotmac_sub:incremental"
+_INCREMENTAL_LOCK_CONNECTION_KEY = "dotmac_sub_incremental_lock_connection"
 _INCREMENTAL_SYNC_SOFT_TIME_LIMIT_SECONDS = 25 * 60
 _INCREMENTAL_SYNC_TIME_LIMIT_SECONDS = 28 * 60
 _INCREMENTAL_PHASE_SOFT_TIME_LIMIT_SECONDS = 8 * 60
@@ -185,23 +186,69 @@ def _resolve_org_id(explicit_org_id: str | None) -> UUID | None:
 
 
 def _try_acquire_incremental_sync_lock(db: Session, organization_id: UUID) -> bool:
-    """Acquire the session-scoped single-flight lock for one organization."""
+    """Own a session advisory lock on a dedicated physical connection.
+
+    ORM commit/rollback returns its transaction connection to the pool. A
+    PostgreSQL session lock outlives that transaction, so it must never be
+    acquired through the ORM session. This connection executes lock SQL only;
+    business queries keep their existing tenant-scoped session.
+    """
+    if _INCREMENTAL_LOCK_CONNECTION_KEY in db.info:
+        raise RuntimeError("This session already owns an incremental sync lock")
     lock_identity = f"{_INCREMENTAL_SYNC_LOCK_NAMESPACE}:{organization_id}"
-    acquired = db.scalar(
-        text("SELECT pg_try_advisory_lock(hashtextextended(:lock_identity, 0))"),
-        {"lock_identity": lock_identity},
-    )
-    return bool(acquired)
+    connection = db.get_bind().engine.connect()
+    acquired = False
+    try:
+        connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+        acquired = bool(
+            connection.scalar(
+                text(
+                    "SELECT pg_try_advisory_lock(hashtextextended(:lock_identity, 0))"
+                ),
+                {"lock_identity": lock_identity},
+            )
+        )
+        if acquired:
+            db.info[_INCREMENTAL_LOCK_CONNECTION_KEY] = (organization_id, connection)
+        return acquired
+    except BaseException:
+        # The server may have acquired the lock before a connection error was
+        # reported. Never put an uncertain lock owner back into the pool.
+        acquired = False
+        connection.invalidate()
+        raise
+    finally:
+        if not acquired:
+            connection.close()
 
 
 def _release_incremental_sync_lock(db: Session, organization_id: UUID) -> bool:
-    """Release the session-scoped single-flight lock for one organization."""
+    """Release on the acquiring backend, even if the ORM session is unusable."""
+    owner = db.info.get(_INCREMENTAL_LOCK_CONNECTION_KEY)
+    if owner is None:
+        return False
+    held_org_id, connection = owner
+    if held_org_id != organization_id:
+        raise RuntimeError(
+            "Incremental sync lock organization does not match its owner"
+        )
+    db.info.pop(_INCREMENTAL_LOCK_CONNECTION_KEY)
     lock_identity = f"{_INCREMENTAL_SYNC_LOCK_NAMESPACE}:{organization_id}"
-    released = db.scalar(
-        text("SELECT pg_advisory_unlock(hashtextextended(:lock_identity, 0))"),
-        {"lock_identity": lock_identity},
-    )
-    return bool(released)
+    try:
+        released = bool(
+            connection.scalar(
+                text("SELECT pg_advisory_unlock(hashtextextended(:lock_identity, 0))"),
+                {"lock_identity": lock_identity},
+            )
+        )
+        if not released:
+            raise RuntimeError("Incremental sync advisory unlock was not acknowledged")
+        return True
+    except BaseException:
+        connection.invalidate()
+        raise
+    finally:
+        connection.close()
 
 
 def _resolve_ar_control_account(db: Session, organization_id: UUID) -> UUID | None:
@@ -747,15 +794,17 @@ def _enqueue_incremental_sync_workflow(
                 _handle_sync_failure(history_id, org_id, exc, "Incremental")
             raise task.retry(exc=exc)
         finally:
-            if service is not None:
-                service.close()
             try:
-                _release_incremental_sync_lock(db, org_id)
-            except Exception:
-                logger.exception(
-                    "Failed to release dotmac_sub incremental sync lock for org %s",
-                    org_id,
-                )
+                if service is not None:
+                    service.close()
+            finally:
+                try:
+                    _release_incremental_sync_lock(db, org_id)
+                except Exception:
+                    logger.exception(
+                        "Failed to release dotmac_sub incremental sync lock for org %s",
+                        org_id,
+                    )
 
 
 @shared_task(
@@ -788,15 +837,19 @@ def run_dotmac_sub_incremental_sync_phase(
         lock_acquired = _try_acquire_incremental_sync_lock(db, org_id)
         if not lock_acquired:
             observe_dotmac_sub_incremental_lock_contention()
-            raise self.retry(
-                exc=RuntimeError(
-                    f"dotmac_sub incremental phase lock is held for org {org_id}"
-                ),
-                countdown=60,
+            lock_error = RuntimeError(
+                f"dotmac_sub incremental phase lock is held for org {org_id}"
             )
+            if (
+                self.max_retries is not None
+                and self.request.retries >= self.max_retries
+            ):
+                _handle_sync_failure(
+                    history_uuid, org_id, lock_error, "Incremental phase lock"
+                )
+            raise self.retry(exc=lock_error, countdown=60)
 
         service: DotmacSubSyncService | None = None
-        session_usable = True
         try:
             history = db.get(SyncHistory, history_uuid)
             if not history:
@@ -860,7 +913,7 @@ def run_dotmac_sub_incremental_sync_phase(
                 complete=phase == _INCREMENTAL_SYNC_PHASES[-1],
             )
         except SoftTimeLimitExceeded as exc:
-            session_usable = _rollback_interrupted_session(db)
+            _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
             return {
                 "success": False,
@@ -870,20 +923,22 @@ def run_dotmac_sub_incremental_sync_phase(
                 "error": "Incremental sync phase exceeded its execution time limit",
             }
         except DotmacSubAuthenticationError as exc:
-            session_usable = _rollback_interrupted_session(db)
+            _rollback_interrupted_session(db)
             auth_failure = _handle_auth_failure(
                 history_uuid, org_id, exc, "Incremental phase"
             )
             auth_failure["phase"] = phase
             return auth_failure
         except Exception as exc:
-            session_usable = _rollback_interrupted_session(db)
+            _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
             raise self.retry(exc=exc)
         finally:
-            if service is not None:
-                service.close()
-            if session_usable:
+            try:
+                if service is not None:
+                    service.close()
+            finally:
+                # Lock ownership is independent of the interrupted ORM transaction.
                 try:
                     _release_incremental_sync_lock(db, org_id)
                 except Exception:

@@ -124,15 +124,14 @@ def _command(
     )
 
 
-def record_blocked_invoice_accounting_revision(
-    db: Session,
+def fetch_blocked_invoice_accounting_revision(
     client: DotmacSubClient,
     organization_id: UUID,
     *,
     invoice_id: UUID,
     expected_updated_at: datetime,
-) -> InvoiceSyncOutcomeReceipt:
-    """Persist one exact blocked v2 revision through the durable outcome owner.
+) -> RecordInvoiceSyncOutcome:
+    """Fetch and validate one exact blocked v2 revision without database access.
 
     The legacy invoice consumer may use this only after its own source/header
     validation rejects a row.  Cursor advancement is safe only when Self-Care's
@@ -175,6 +174,24 @@ def record_blocked_invoice_accounting_revision(
         raise InvoiceSyncShadowContractError(
             "legacy mismatch is not blocked by the authoritative v2 projection"
         )
+    return command
+
+
+def record_blocked_invoice_accounting_revision(
+    db: Session,
+    client: DotmacSubClient,
+    organization_id: UUID,
+    *,
+    invoice_id: UUID,
+    expected_updated_at: datetime,
+) -> InvoiceSyncOutcomeReceipt:
+    """Compatibility owner for callers already controlling their IO boundary."""
+    command = fetch_blocked_invoice_accounting_revision(
+        client,
+        organization_id,
+        invoice_id=invoice_id,
+        expected_updated_at=expected_updated_at,
+    )
     return record_invoice_sync_outcome(db, command)
 
 

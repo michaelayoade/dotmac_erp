@@ -10,10 +10,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Text
+from sqlalchemy import Column, Text
 from sqlalchemy.dialects.postgresql.json import JSONB
 from sqlalchemy.sql.sqltypes import UUID
 from sqlalchemy.sql.type_api import TypeEngine
+
+
+def set_column_type(column: Column[Any], column_type: TypeEngine[Any]) -> None:
+    """Swap a test column type without retaining its previous comparator.
+
+    SQLAlchemy memoizes a column's comparator. A cached TypeDecorator
+    comparator accesses coerce_to_is_types on the current type, which a
+    native UUID does not expose. Clear expression memoizations on BOTH
+    fixture setup and restoration; production models remain untouched.
+    """
+    column.type = column_type
+    column._reset_memoizations()
 
 
 def native_postgresql_type(column_type: TypeEngine[Any]) -> TypeEngine[Any]:

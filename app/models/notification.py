@@ -187,6 +187,16 @@ class Notification(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     push_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # "sent" means provider acceptance, not proof of handset delivery. Old
+    # records are labelled legacy_processed because push_sent formerly meant
+    # attempted or expired as well as actually sent.
+    push_status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="pending", server_default="pending"
+    )
+    push_retry_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    push_next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Actor who triggered the notification (optional)
     actor_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -244,29 +244,41 @@ def test_stale_cleanup_uses_last_activity_heartbeat(monkeypatch) -> None:
 def test_incremental_sync_lock_is_session_scoped() -> None:
     organization_id = uuid4()
     db = MagicMock()
-    db.scalar.return_value = True
+    db.info = {}
+    connection = db.get_bind.return_value.engine.connect.return_value
+    connection.execution_options.return_value = connection
+    connection.scalar.return_value = True
 
     assert dotmac_sub._try_acquire_incremental_sync_lock(db, organization_id) is True
 
-    statement = str(db.scalar.call_args.args[0])
+    statement = str(connection.scalar.call_args.args[0])
     assert "pg_try_advisory_lock" in statement
     assert "pg_try_advisory_xact_lock" not in statement
     assert "hashtextextended" in statement
-    assert db.scalar.call_args.args[1] == {
+    assert connection.scalar.call_args.args[1] == {
         "lock_identity": f"dotmac_sub:incremental:{organization_id}"
     }
+    db.scalar.assert_not_called()
+    assert dotmac_sub._release_incremental_sync_lock(db, organization_id) is True
 
 
 def test_incremental_sync_lock_release_uses_same_identity() -> None:
     organization_id = uuid4()
     db = MagicMock()
-    db.scalar.return_value = True
+    db.info = {}
+    connection = db.get_bind.return_value.engine.connect.return_value
+    connection.execution_options.return_value = connection
+    connection.scalar.return_value = True
 
+    assert dotmac_sub._try_acquire_incremental_sync_lock(db, organization_id) is True
+    db.commit()
+    db.rollback()
     assert dotmac_sub._release_incremental_sync_lock(db, organization_id) is True
 
-    statement = str(db.scalar.call_args.args[0])
+    statement = str(connection.scalar.call_args.args[0])
     assert "pg_advisory_unlock" in statement
-    assert "hashtextextended" in statement
-    assert db.scalar.call_args.args[1] == {
+    assert connection.scalar.call_args.args[1] == {
         "lock_identity": f"dotmac_sub:incremental:{organization_id}"
     }
+    connection.close.assert_called_once_with()
+    db.scalar.assert_not_called()

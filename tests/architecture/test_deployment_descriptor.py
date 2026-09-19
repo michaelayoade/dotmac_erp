@@ -19,6 +19,7 @@ both directions, is `tests/architecture/test_deploy_image_gate.py`.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tomllib
 
@@ -59,8 +60,8 @@ FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 # below. A tag is deliberately absent: the descriptor refuses mutable
 # references, and a `sha-<short>` tag is one.
 IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
-IMAGE_SOURCE_REVISION = "983dbf1634bc3af8bfb276c5521ceed6742d7e06"
-IMAGE_DIGEST = "sha256:38f88505f443a8cf832100c40b28df1e1e7e447e06e8482d50751b66432a12d2"
+IMAGE_SOURCE_REVISION = "b2d0c7f484cf89c173374f429ab7c8f2b71f3195"
+IMAGE_DIGEST = "sha256:67884e903c0b5fa33b6a2b89c45876250c38774caf81c01fded1083bb5313987"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
@@ -155,6 +156,25 @@ def test_public_source_revision_is_projected_into_telemetry() -> None:
 
     rendered = RENDERED_OTEL_PATH.read_text(encoding="utf-8")
     assert f"value: {spec.source_revision}" in rendered
+
+
+def test_descriptor_matches_committed_publication_evidence() -> None:
+    """Preserve the published digest/source/assembly binding when selecting a release."""
+    evidence_path = REPO_ROOT / "deploy/releases/2026-09-18-b2d0c7f4.image-release.json"
+    raw = evidence_path.read_text(encoding="utf-8")
+    evidence = json.loads(raw)
+    spec = _load()
+    assert evidence == {
+        "schema": "dotmac.image-release.v2",
+        "digest": IMAGE_DIGEST,
+        "git_sha": IMAGE_SOURCE_REVISION,
+        "manifest_digest": product_manifest_digest(),
+        "reference": f"{IMAGE_REPOSITORY}@{IMAGE_DIGEST}",
+    }
+    assert evidence["git_sha"] == spec.source_revision
+    assert evidence["reference"] == spec.image
+    assert evidence["manifest_digest"] == spec.manifest_digest
+    assert raw == json.dumps(evidence, separators=(",", ":"), sort_keys=True) + "\n"
 
 
 def test_no_role_holds_the_migration_owner_material() -> None:

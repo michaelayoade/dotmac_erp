@@ -46,8 +46,9 @@ def test_report_router_is_mounted_once_inside_inventory_enablement_gate():
     assert mounts[0] in list(ast.walk(guards[0]))
 
 
-@pytest.mark.parametrize("allowed", [False, True])
-def test_reports_hub_card_respects_stock_read_permission(allowed):
+@pytest.mark.parametrize("stock", [False, True])
+@pytest.mark.parametrize("ap", [False, True])
+def test_reports_hub_card_respects_stock_and_ap_read_permissions(stock, ap):
     hub = (ROOT / "templates/inventory/reports.html").read_text()
     assert '{% include "inventory/_weekly_purchases_card.html" %}' in hub
     env = Environment(
@@ -65,10 +66,10 @@ def test_reports_hub_card_respects_stock_read_permission(allowed):
         ),
         autoescape=True,
     )
+    permissions = {"inventory:stock:read": stock, "ap:invoices:read": ap}
     user = SimpleNamespace(
-        has_permission=lambda permission: (
-            allowed and permission == "inventory:stock:read"
-        )
+        has_permission=lambda permission: permissions.get(permission)
     )
     html = env.get_template("inventory/_weekly_purchases_card.html").render(auth=user)
-    assert ("/inventory/reports/weekly-purchases" in html) is allowed
+    assert ("/inventory/reports/purchases" in html) is (stock and ap)
+    assert "Weekly Purchases" not in html

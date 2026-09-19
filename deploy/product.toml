@@ -56,11 +56,11 @@ manifest_digest = "sha256:90e3eb7b8a7d7bf89e50de0ed7723597a072ec39e5a40fbda411c3
 # `source_revision`. Deliberately NOT a resolution of `:latest` or of a
 # `sha-<short>` tag: those are mutable references, which is the exact shape the
 # first line refuses.
-reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:38f88505f443a8cf832100c40b28df1e1e7e447e06e8482d50751b66432a12d2"
+reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:67884e903c0b5fa33b6a2b89c45876250c38774caf81c01fded1083bb5313987"
 # The exact protected-main revision the bound image was built from. Changing
 # either this or the digest without the other breaks the pairing that makes the
 # image identifiable, so they move together or not at all.
-source_revision = "983dbf1634bc3af8bfb276c5521ceed6742d7e06" # pragma: allowlist secret
+source_revision = "b2d0c7f484cf89c173374f429ab7c8f2b71f3195" # pragma: allowlist secret
 
 # ─────────────────────────────────────────────────────────────────────────
 # Runtime materials — the exact env var NAMES ERP's app/worker/beat services
@@ -390,7 +390,7 @@ owner_material = "MIGRATION_DATABASE_URL"
 # Tax, and People. The architecture gate queries Alembic's composed graph
 # directly; this is not a source-text approximation.
 expected_heads = [
-    "20260915_merge_workforce_kpi",
+    "20260918_push_delivery_outcomes",
     "fi_0002_selectable_planes",
     "im_0001_import_runs",
     "ac_0001_accounting",

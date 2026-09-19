@@ -63,7 +63,7 @@ def _fix_patched_types():
     in the change that found it: it alters the type state of every existing
     integration test, which is a separate decision with its own blast radius.
     """
-    from tests.postgresql_types import native_postgresql_type
+    from tests.postgresql_types import native_postgresql_type, set_column_type
 
     previous_uuid_type = _pg_dialect.UUID
     previous_jsonb_type = getattr(_pg_dialect, "JSONB", None)
@@ -85,14 +85,14 @@ def _fix_patched_types():
         for col in table.columns:
             # Repair both direct stand-ins and JSON().with_variant(JSONB, ...).
             # Keep each original type intact so teardown restores the unit suite.
-            col.type = native_postgresql_type(col.type)
+            set_column_type(col, native_postgresql_type(col.type))
 
     def _restore() -> None:
         _pg_dialect.UUID = previous_uuid_type  # type: ignore[misc]
         if previous_jsonb_type is not None:
             _pg_dialect.JSONB = previous_jsonb_type  # type: ignore[misc]
         for col, col_type in previous_column_types.items():
-            col.type = col_type
+            set_column_type(col, col_type)
 
     return _restore
 

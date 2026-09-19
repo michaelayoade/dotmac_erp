@@ -467,6 +467,35 @@ class DisciplineService:
 
         return case
 
+    def issue_queries(
+        self,
+        case_ids: list[UUID],
+        data: IssueQueryRequest,
+        issued_by_id: UUID | None = None,
+        organization_id: UUID | None = None,
+    ) -> list[DisciplinaryCase]:
+        """Issue the same query to several draft cases atomically."""
+        unique_case_ids = list(dict.fromkeys(case_ids))
+        if not unique_case_ids:
+            raise ValidationError("Select at least one disciplinary case")
+        if data.response_due_date < date.today():
+            raise ValidationError("Response due date cannot be in the past")
+
+        cases = [self.get_case_or_404(case_id) for case_id in unique_case_ids]
+        if organization_id is not None and any(
+            case.organization_id != organization_id for case in cases
+        ):
+            raise ValidationError(
+                "One or more cases do not belong to this organization"
+            )
+        if any(case.status != CaseStatus.DRAFT for case in cases):
+            raise ValidationError("Bulk queries can only be issued to DRAFT cases")
+
+        return [
+            self.issue_query(case.case_id, data, issued_by_id=issued_by_id)
+            for case in cases
+        ]
+
     def record_response(
         self,
         case_id: UUID,

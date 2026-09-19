@@ -146,4 +146,9 @@ repos:
         # arbitrary value can pass the envelope verifier. Exclude exactly that
         # machine record from this heuristic; readiness.json and every other
         # JSON/YAML/Markdown file remain scanned.
-        exclude: (\.env\.example|tests/|alembic/|scripts/|docs/kernel-runtime-composition\.json|\.py$)
+        # The release evidence is a machine-generated public integrity record:
+        # it contains only the immutable image digest and source/manifest IDs.
+        # It is verified by the deployment descriptor tests and carries no
+        # credential, so entropy scanning it would create a new suppression on
+        # every release.
+        exclude: (\.env\.example|tests/|alembic/|scripts/|deploy/releases/.*\.image-release\.json$|docs/kernel-runtime-composition\.json|\.py$)

@@ -10876,10 +10876,6 @@ a.stat-hero-link:active { transform: scale(0.98); }
     background-color: rgb(240 253 250 / var(--tw-bg-opacity, 1));
 }
 
-.dark\:block:is(.dark *) {
-    display: block;
-}
-
 .dark\:flex:is(.dark *) {
     display: flex;
 }

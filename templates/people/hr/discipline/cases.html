@@ -85,6 +85,21 @@
     </div>
 
     {% if cases %}
+    <form id="bulkIssueForm" method="post" action="/people/hr/discipline/bulk-issue-query" class="card p-4 space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div class="flex-1">
+                <label for="bulk-query-text" class="form-label required">Bulk query text</label>
+                <textarea id="bulk-query-text" name="query_text" class="form-input w-full" rows="2" minlength="10" required placeholder="Explain the reported violation..."></textarea>
+            </div>
+            <div>
+                <label for="bulk-response-due-date" class="form-label required">Response due date</label>
+                <input id="bulk-response-due-date" name="response_due_date" type="date" class="form-input" required>
+            </div>
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Issue this query to all selected draft cases?')">Issue queries</button>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Select draft cases below. Each employee keeps a separate case and response record.</p>
+    </form>
     <div id="results-container">
 
     <div class="card overflow-hidden">
@@ -92,6 +107,9 @@
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th scope="col" class="px-4 py-3 w-10">
+                            <span class="sr-only">Select</span>
+                        </th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Case #</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Employee</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Violation</th>
@@ -104,6 +122,11 @@
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for case in cases %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group" onclick="window.location='/people/hr/discipline/{{ case.case_id }}'">
+                        <td class="px-4 py-3">
+                            {% if case.status.value == 'DRAFT' %}
+                            <input type="checkbox" name="case_ids" value="{{ case.case_id }}" form="bulkIssueForm" class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500" onclick="event.stopPropagation()" aria-label="Select {{ case.case_number }} for bulk query">
+                            {% endif %}
+                        </td>
                         <td class="px-4 py-3">
                             <span class="text-sm font-mono font-medium text-slate-900 dark:text-white">{{ case.case_number }}</span>
                         </td>
