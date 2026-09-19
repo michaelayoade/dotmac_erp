@@ -9,12 +9,14 @@ from datetime import UTC, date, datetime, time, timedelta
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
+    CalendarEventScope,
     CalendarSyncStatus,
     OrganizationCalendarAudit,
     OrganizationCalendarEvent,
@@ -27,6 +29,7 @@ from app.models.organization_calendar import (
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.services.finance.platform.outbox_publisher import OutboxPublisher
+from app.services.notification import NotificationService
 
 CALENDAR_UPSERTED = "organization.calendar.upserted"
 CALENDAR_CANCELLED = "organization.calendar.cancelled"
@@ -147,7 +150,11 @@ class OrganizationCalendarService:
         return None
 
     def get_event(
-        self, event_id: uuid.UUID, *, for_update: bool = False
+        self,
+        event_id: uuid.UUID,
+        *,
+        for_update: bool = False,
+        event_scope: str | None = CalendarEventScope.ORGANIZATIONAL.value,
     ) -> OrganizationCalendarEvent:
         stmt = (
             select(OrganizationCalendarEvent)
@@ -161,6 +168,8 @@ class OrganizationCalendarService:
                 OrganizationCalendarEvent.event_id == event_id,
             )
         )
+        if event_scope is not None:
+            stmt = stmt.where(OrganizationCalendarEvent.event_scope == event_scope)
         if for_update:
             stmt = stmt.with_for_update()
         event = self.db.scalar(stmt)
@@ -182,6 +191,8 @@ class OrganizationCalendarService:
                 )
                 .where(
                     OrganizationCalendarEvent.organization_id == self.organization_id,
+                    OrganizationCalendarEvent.event_scope
+                    == CalendarEventScope.ORGANIZATIONAL.value,
                     OrganizationCalendarEvent.business_status
                     != CalendarBusinessStatus.CANCELLED.value,
                     or_(
@@ -205,6 +216,161 @@ class OrganizationCalendarService:
             ).all()
         )
 
+    def list_visible_events_for_person(
+        self,
+        person_id: uuid.UUID,
+        range_start: datetime,
+        range_end: datetime,
+    ) -> list[OrganizationCalendarEvent]:
+        """Return only published events the employee owns or participates in."""
+        start_date = range_start.date()
+        end_date = range_end.date()
+        active_participation = exists().where(
+            OrganizationCalendarParticipant.event_id
+            == OrganizationCalendarEvent.event_id,
+            OrganizationCalendarParticipant.organization_id == self.organization_id,
+            OrganizationCalendarParticipant.person_id == person_id,
+            OrganizationCalendarParticipant.membership_status
+            == ParticipantMembershipStatus.ACTIVE.value,
+        )
+        return list(
+            self.db.scalars(
+                select(OrganizationCalendarEvent)
+                .options(
+                    selectinload(OrganizationCalendarEvent.participants),
+                    selectinload(OrganizationCalendarEvent.reminders),
+                )
+                .where(
+                    OrganizationCalendarEvent.organization_id == self.organization_id,
+                    OrganizationCalendarEvent.business_status
+                    == CalendarBusinessStatus.PUBLISHED.value,
+                    or_(
+                        active_participation,
+                        and_(
+                            OrganizationCalendarEvent.event_scope
+                            == CalendarEventScope.PERSONAL.value,
+                            OrganizationCalendarEvent.created_by_id == person_id,
+                        ),
+                    ),
+                    or_(
+                        and_(
+                            OrganizationCalendarEvent.all_day.is_(False),
+                            OrganizationCalendarEvent.start_at < range_end,
+                            OrganizationCalendarEvent.end_at > range_start,
+                        ),
+                        and_(
+                            OrganizationCalendarEvent.all_day.is_(True),
+                            OrganizationCalendarEvent.start_date < end_date,
+                            OrganizationCalendarEvent.end_date_exclusive > start_date,
+                        ),
+                    ),
+                )
+                .order_by(
+                    OrganizationCalendarEvent.start_date,
+                    OrganizationCalendarEvent.start_at,
+                    OrganizationCalendarEvent.title,
+                )
+            )
+            .unique()
+            .all()
+        )
+
+    def get_visible_event_for_person(
+        self, event_id: uuid.UUID, person_id: uuid.UUID
+    ) -> OrganizationCalendarEvent:
+        """Fetch an assigned/owned event without granting role-based bypasses."""
+        active_participation = exists().where(
+            OrganizationCalendarParticipant.event_id
+            == OrganizationCalendarEvent.event_id,
+            OrganizationCalendarParticipant.organization_id == self.organization_id,
+            OrganizationCalendarParticipant.person_id == person_id,
+            OrganizationCalendarParticipant.membership_status
+            == ParticipantMembershipStatus.ACTIVE.value,
+        )
+        event = self.db.scalar(
+            select(OrganizationCalendarEvent)
+            .options(
+                selectinload(OrganizationCalendarEvent.participants),
+                selectinload(OrganizationCalendarEvent.reminders),
+            )
+            .where(
+                OrganizationCalendarEvent.organization_id == self.organization_id,
+                OrganizationCalendarEvent.event_id == event_id,
+                OrganizationCalendarEvent.business_status
+                != CalendarBusinessStatus.CANCELLED.value,
+                or_(
+                    active_participation,
+                    and_(
+                        OrganizationCalendarEvent.event_scope
+                        == CalendarEventScope.PERSONAL.value,
+                        OrganizationCalendarEvent.created_by_id == person_id,
+                    ),
+                ),
+            )
+        )
+        if event is None:
+            raise CalendarNotFoundError("Calendar event was not found.")
+        return event
+
+    def create_personal_event(
+        self,
+        data: CalendarEventData,
+        *,
+        actor_person_id: uuid.UUID,
+        participant_person_ids: list[uuid.UUID],
+        reminder_offsets: list[int],
+    ) -> OrganizationCalendarEvent:
+        """Create a published personal event owned by the self-service user."""
+        participants = list(dict.fromkeys([actor_person_id, *participant_person_ids]))
+        return self.create_event(
+            data,
+            actor_person_id=actor_person_id,
+            participant_person_ids=participants,
+            reminder_offsets=reminder_offsets,
+            publish=True,
+            _event_scope=CalendarEventScope.PERSONAL.value,
+        )
+
+    def update_personal_event(
+        self,
+        event_id: uuid.UUID,
+        data: CalendarEventData,
+        *,
+        expected_version: int,
+        actor_person_id: uuid.UUID,
+        participant_person_ids: list[uuid.UUID],
+        reminder_offsets: list[int],
+    ) -> OrganizationCalendarEvent:
+        """Update only a personal event owned by the self-service user."""
+        participants = list(dict.fromkeys([actor_person_id, *participant_person_ids]))
+        return self.update_event(
+            event_id,
+            data,
+            expected_version=expected_version,
+            actor_person_id=actor_person_id,
+            participant_person_ids=participants,
+            reminder_offsets=reminder_offsets,
+            publish=True,
+            _event_scope=CalendarEventScope.PERSONAL.value,
+            _owner_person_id=actor_person_id,
+        )
+
+    def cancel_personal_event(
+        self,
+        event_id: uuid.UUID,
+        *,
+        expected_version: int,
+        actor_person_id: uuid.UUID,
+    ) -> OrganizationCalendarEvent:
+        """Cancel only a personal event owned by the self-service user."""
+        return self.cancel_event(
+            event_id,
+            expected_version=expected_version,
+            actor_person_id=actor_person_id,
+            _event_scope=CalendarEventScope.PERSONAL.value,
+            _owner_person_id=actor_person_id,
+        )
+
     def list_sync_issues(
         self, *, stale_after_minutes: int = 15, limit: int = 200
     ) -> list[OrganizationCalendarEvent]:
@@ -219,6 +385,8 @@ class OrganizationCalendarService:
                 )
                 .where(
                     OrganizationCalendarEvent.organization_id == self.organization_id,
+                    OrganizationCalendarEvent.event_scope
+                    == CalendarEventScope.ORGANIZATIONAL.value,
                     OrganizationCalendarEvent.business_status
                     != CalendarBusinessStatus.DRAFT.value,
                     or_(
@@ -253,6 +421,7 @@ class OrganizationCalendarService:
         reminder_offsets: list[int],
         publish: bool,
         add_everyone: bool = False,
+        _event_scope: str = CalendarEventScope.ORGANIZATIONAL.value,
     ) -> OrganizationCalendarEvent:
         self._validate_data(data)
         event_id = uuid.uuid4()
@@ -272,6 +441,7 @@ class OrganizationCalendarService:
             start_date=data.start_date,
             end_date_exclusive=data.end_date_exclusive,
             color=data.color.upper(),
+            event_scope=_event_scope,
             business_status=(
                 CalendarBusinessStatus.PUBLISHED.value
                 if publish
@@ -292,11 +462,15 @@ class OrganizationCalendarService:
         candidates = self._resolve_candidates(participant_person_ids, add_everyone)
         if publish and not candidates:
             raise CalendarError("A published event must have at least one participant.")
-        self._replace_participants(event, candidates, published=publish)
+        newly_added = self._replace_participants(event, candidates, published=publish)
         self._replace_reminders(event, reminder_offsets)
         self._audit(event, actor_person_id, "PUBLISHED" if publish else "CREATED")
         if publish:
             self._publish_command(event, CALENDAR_UPSERTED, actor_person_id)
+            if _event_scope == CalendarEventScope.ORGANIZATIONAL.value:
+                self._notify_organizational_participants(
+                    event, newly_added, actor_person_id
+                )
         self.db.flush()
         return event
 
@@ -311,9 +485,13 @@ class OrganizationCalendarService:
         reminder_offsets: list[int],
         publish: bool,
         add_everyone: bool = False,
+        _event_scope: str = CalendarEventScope.ORGANIZATIONAL.value,
+        _owner_person_id: uuid.UUID | None = None,
     ) -> OrganizationCalendarEvent:
         self._validate_data(data)
-        event = self.get_event(event_id, for_update=True)
+        event = self.get_event(event_id, for_update=True, event_scope=_event_scope)
+        if _owner_person_id is not None and event.created_by_id != _owner_person_id:
+            raise CalendarNotFoundError("Calendar event was not found.")
         if event.version != expected_version:
             raise CalendarConflictError(
                 "This event was updated by another user. Reload it before saving."
@@ -322,6 +500,7 @@ class OrganizationCalendarService:
             raise CalendarConflictError("A cancelled event cannot be edited.")
 
         old = self._event_snapshot(event)
+        was_published = event.business_status == CalendarBusinessStatus.PUBLISHED.value
         candidates = self._resolve_candidates(participant_person_ids, add_everyone)
         target_published = publish or (
             event.business_status == CalendarBusinessStatus.PUBLISHED.value
@@ -350,11 +529,22 @@ class OrganizationCalendarService:
                 event.published_at = datetime.now(UTC)
                 event.published_by_id = actor_person_id
 
-        self._replace_participants(event, candidates, published=target_published)
+        newly_added = self._replace_participants(
+            event, candidates, published=target_published
+        )
         self._replace_reminders(event, reminder_offsets)
         self._audit(event, actor_person_id, "UPDATED", old_values=old)
         if target_published:
             self._publish_command(event, CALENDAR_UPSERTED, actor_person_id)
+            if _event_scope == CalendarEventScope.ORGANIZATIONAL.value:
+                recipients = (
+                    newly_added
+                    if was_published
+                    else {candidate.person_id for candidate in candidates}
+                )
+                self._notify_organizational_participants(
+                    event, recipients, actor_person_id
+                )
         self.db.flush()
         return event
 
@@ -364,8 +554,12 @@ class OrganizationCalendarService:
         *,
         expected_version: int,
         actor_person_id: uuid.UUID,
+        _event_scope: str = CalendarEventScope.ORGANIZATIONAL.value,
+        _owner_person_id: uuid.UUID | None = None,
     ) -> OrganizationCalendarEvent:
-        event = self.get_event(event_id, for_update=True)
+        event = self.get_event(event_id, for_update=True, event_scope=_event_scope)
+        if _owner_person_id is not None and event.created_by_id != _owner_person_id:
+            raise CalendarNotFoundError("Calendar event was not found.")
         if event.version != expected_version:
             raise CalendarConflictError(
                 "This event was updated by another user. Reload it before deleting."
@@ -535,7 +729,7 @@ class OrganizationCalendarService:
         correlation_id: str | None = None,
     ) -> bool:
         """Apply an Integrator callback; return False for a stale result."""
-        event = self.get_event(event_id, for_update=True)
+        event = self.get_event(event_id, for_update=True, event_scope=None)
         if event_version < event.version:
             return False
         if event_version > event.version:
@@ -611,7 +805,7 @@ class OrganizationCalendarService:
         event version, so this method uses the same stale-version guard as the
         Integrator callback.
         """
-        event = self.get_event(event_id, for_update=True)
+        event = self.get_event(event_id, for_update=True, event_scope=None)
         if event_version < event.version:
             return False
         if event_version > event.version:
@@ -668,12 +862,13 @@ class OrganizationCalendarService:
         candidates: list[ParticipantCandidate],
         *,
         published: bool,
-    ) -> None:
+    ) -> set[uuid.UUID]:
         desired = {candidate.person_id: candidate for candidate in candidates}
         existing = {
             participant.person_id: participant for participant in event.participants
         }
         now = datetime.now(UTC)
+        newly_added: set[uuid.UUID] = set()
         for person_id, participant in existing.items():
             candidate = desired.get(person_id)
             if candidate is None:
@@ -691,6 +886,11 @@ class OrganizationCalendarService:
                         else ParticipantSyncStatus.NOT_REQUIRED.value
                     )
                 continue
+            if (
+                participant.membership_status
+                != ParticipantMembershipStatus.ACTIVE.value
+            ):
+                newly_added.add(person_id)
             participant.employee_id = candidate.employee_id
             participant.participant_name = candidate.name
             participant.participant_email = candidate.email
@@ -706,6 +906,7 @@ class OrganizationCalendarService:
         for person_id, candidate in desired.items():
             if person_id in existing:
                 continue
+            newly_added.add(person_id)
             event.participants.append(
                 OrganizationCalendarParticipant(
                     organization_id=self.organization_id,
@@ -723,6 +924,28 @@ class OrganizationCalendarService:
                     ),
                 )
             )
+        return newly_added
+
+    def _notify_organizational_participants(
+        self,
+        event: OrganizationCalendarEvent,
+        recipient_ids: set[uuid.UUID],
+        actor_person_id: uuid.UUID,
+    ) -> None:
+        """Create an ERP in-app alert for each newly involved participant."""
+        NotificationService().create_many(
+            self.db,
+            organization_id=self.organization_id,
+            recipient_ids=sorted(recipient_ids, key=str),
+            entity_type=EntityType.SYSTEM,
+            entity_id=event.event_id,
+            notification_type=NotificationType.ASSIGNED,
+            title=f"New calendar event: {event.title}",
+            message="You have been added to an event on the Organizational Calendar.",
+            channel=NotificationChannel.IN_APP,
+            action_url=f"/people/self/calendar/events/{event.event_id}",
+            actor_id=actor_person_id,
+        )
 
     def _replace_reminders(
         self, event: OrganizationCalendarEvent, reminder_offsets: list[int]
@@ -818,6 +1041,7 @@ class OrganizationCalendarService:
             "event_version": event.version,
             "uid": event.ical_uid,
             "business_status": event.business_status,
+            "event_scope": event.event_scope,
             "title": event.title,
             "description": event.description,
             "event_details": event.event_details,
@@ -866,6 +1090,7 @@ class OrganizationCalendarService:
     def _event_snapshot(event: OrganizationCalendarEvent) -> dict[str, object]:
         return {
             "title": event.title,
+            "event_scope": event.event_scope,
             "business_status": event.business_status,
             "sync_status": event.sync_status,
             "version": event.version,

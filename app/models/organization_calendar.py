@@ -1,9 +1,9 @@
-"""Tenant-scoped organization calendar models.
+"""Tenant-scoped organizational and self-service calendar models.
 
 ERP owns organizational intent.  Nextcloud receives a synchronized
 representation through the platform outbox and never becomes the authority for
-these records.  Personal Nextcloud calendars are intentionally not represented
-here.
+these records. Personal ERP events remain visible only to their creator and
+explicit participants at the application boundary.
 """
 
 from __future__ import annotations
@@ -38,6 +38,11 @@ class CalendarBusinessStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     PUBLISHED = "PUBLISHED"
     CANCELLED = "CANCELLED"
+
+
+class CalendarEventScope(str, enum.Enum):
+    ORGANIZATIONAL = "ORGANIZATIONAL"
+    PERSONAL = "PERSONAL"
 
 
 class CalendarSyncStatus(str, enum.Enum):
@@ -87,6 +92,10 @@ class OrganizationCalendarEvent(Base):
             name="ck_org_calendar_event_business_status",
         ),
         CheckConstraint(
+            "event_scope IN ('ORGANIZATIONAL', 'PERSONAL')",
+            name="ck_org_calendar_event_scope",
+        ),
+        CheckConstraint(
             "sync_status IN ('NOT_REQUIRED', 'PENDING', 'SYNCING', 'SYNCED', "
             "'PARTIAL_FAILURE', 'FAILED')",
             name="ck_org_calendar_event_sync_status",
@@ -103,6 +112,13 @@ class OrganizationCalendarEvent(Base):
             "organization_id",
             "business_status",
             "sync_status",
+        ),
+        Index(
+            "idx_org_calendar_event_org_scope_start",
+            "organization_id",
+            "event_scope",
+            "start_at",
+            "start_date",
         ),
         {"schema": "public"},
     )
@@ -140,6 +156,12 @@ class OrganizationCalendarEvent(Base):
         nullable=False,
         default="Africa/Lagos",
         server_default="Africa/Lagos",
+    )
+    event_scope: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=CalendarEventScope.ORGANIZATIONAL.value,
+        server_default=CalendarEventScope.ORGANIZATIONAL.value,
     )
 
     business_status: Mapped[str] = mapped_column(
@@ -417,6 +439,7 @@ class OrganizationCalendarAudit(Base):
 
 __all__ = [
     "CalendarBusinessStatus",
+    "CalendarEventScope",
     "CalendarSyncStatus",
     "OrganizationCalendarAudit",
     "OrganizationCalendarEvent",

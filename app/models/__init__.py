@@ -55,6 +55,7 @@ from app.models.notification import (  # noqa: F401
 )
 from app.models.organization_calendar import (  # noqa: F401
     CalendarBusinessStatus,
+    CalendarEventScope,
     CalendarSyncStatus,
     OrganizationCalendarAudit,
     OrganizationCalendarEvent,

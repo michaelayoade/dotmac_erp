@@ -48,6 +48,30 @@ class TestNotificationServiceCreate:
 
         assert notification.channel == NotificationChannel.IN_APP
 
+    def test_create_many_deduplicates_recipients_and_flushes_once(self):
+        db = MagicMock()
+        service = NotificationService()
+        recipient_a = uuid.uuid4()
+        recipient_b = uuid.uuid4()
+
+        notifications = service.create_many(
+            db=db,
+            organization_id=uuid.uuid4(),
+            recipient_ids=[recipient_a, recipient_b, recipient_a],
+            entity_type=EntityType.SYSTEM,
+            entity_id=uuid.uuid4(),
+            notification_type=NotificationType.ASSIGNED,
+            title="New calendar event",
+            message="You were added to an event.",
+        )
+
+        assert [item.recipient_id for item in notifications] == [
+            recipient_a,
+            recipient_b,
+        ]
+        db.add_all.assert_called_once_with(notifications)
+        db.flush.assert_called_once()
+
 
 class TestNotificationServiceMarkRead:
     """Tests for NotificationService.mark_read."""
