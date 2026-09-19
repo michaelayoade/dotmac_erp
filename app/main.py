@@ -66,6 +66,9 @@ from app.api.support import router as support_router
 from app.api.sync.dotmac_sub import router as sub_sync_router
 from app.api.sync.backoffice_people import router as backoffice_people_router
 from app.api.sync.staff_access import router as staff_access_router
+from app.api.sync.organization_calendar import (
+    router as organization_calendar_sync_router,
+)
 from app.api.sync.sub_attendance import router as sub_attendance_router
 from app.api.workflow_tasks import router as workflow_tasks_router
 from app.config import settings
@@ -110,6 +113,7 @@ from app.web.help import router as help_web_router
 from app.web.inventory import router as inventory_web_router
 from app.web.inventory_weekly_purchases import router as weekly_purchases_web_router
 from app.web.notifications import router as notifications_web_router
+from app.web.organization_calendar import router as organization_calendar_web_router
 from app.web.onboarding_portal import router as onboarding_portal_router
 from app.web.payroll_alias import router as payroll_alias_web_router
 from app.web.people import router as people_web_router
@@ -719,6 +723,7 @@ app.include_router(auth_web_router)
 app.include_router(admin_web_router)
 app.include_router(admin_sla_policies_web_router)
 app.include_router(admin_batch_operations_router)
+app.include_router(organization_calendar_web_router)
 app.include_router(automation_web_router)
 app.include_router(legacy_automation_web_router)
 app.include_router(profile_web_router)
@@ -747,6 +752,7 @@ if is_module_enabled("people"):
     _include_api_router(sub_attendance_router)
     app.include_router(staff_access_router, prefix="/api/v1")
     app.include_router(backoffice_people_router, prefix="/api/v1")
+    app.include_router(organization_calendar_sync_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Finance module

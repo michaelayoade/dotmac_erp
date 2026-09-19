@@ -780,6 +780,33 @@ COACH_PERMISSIONS = [
     ("coach:admin:manage", "Configure coaching settings, token budget"),
 ]
 
+CALENDAR_PERMISSIONS = [
+    ("calendar:events:access", "Access the ERP organization calendar"),
+    (
+        "calendar:events:read_assigned",
+        "View organization events assigned to the employee",
+    ),
+    ("calendar:events:read_all", "View all organization calendar events"),
+    ("calendar:events:create", "Create organization calendar events"),
+    (
+        "calendar:events:update_own",
+        "Update organization calendar events created by the user",
+    ),
+    ("calendar:events:update_all", "Update all organization calendar events"),
+    (
+        "calendar:events:cancel_own",
+        "Cancel organization calendar events created by the user",
+    ),
+    ("calendar:events:cancel_all", "Cancel all organization calendar events"),
+    ("calendar:participants:manage", "Select organization calendar participants"),
+    (
+        "calendar:participants:add_all",
+        "Add every eligible employee to an event",
+    ),
+    ("calendar:sync:retry", "Retry failed organization calendar synchronization"),
+    ("calendar:audit:read", "Read organization calendar audit history"),
+]
+
 
 # =============================================================================
 # Combined Permission List
@@ -791,6 +818,7 @@ DEFAULT_PERMISSIONS = (
     + EXPENSE_PERMISSIONS
     + MODULE_PERMISSIONS
     + COACH_PERMISSIONS
+    + CALENDAR_PERMISSIONS
 )
 
 
@@ -961,6 +989,13 @@ ROLE_PERMISSIONS = {
     # Finance Roles
     # -------------------------------------------------------------------------
     "finance_director": [
+        "calendar:events:access",
+        "calendar:events:read_all",
+        "calendar:events:create",
+        "calendar:events:update_own",
+        "calendar:events:cancel_own",
+        "calendar:participants:manage",
+        "calendar:participants:add_all",
         "finance:access",
         "finance:dashboard",
         # Coach (org-wide)
@@ -1285,6 +1320,13 @@ ROLE_PERMISSIONS = {
         "org:segments:manage",
     ],
     "finance_manager": [
+        "calendar:events:access",
+        "calendar:events:read_all",
+        "calendar:events:create",
+        "calendar:events:update_own",
+        "calendar:events:cancel_own",
+        "calendar:participants:manage",
+        "calendar:participants:add_all",
         "finance:access",
         "finance:dashboard",
         "discipline:access",
@@ -2605,6 +2647,7 @@ ROLE_PERMISSIONS = {
         "tasks:assign",
     ],
     "employee": [
+        "calendar:events:read_assigned",
         # Coach (self-only)
         "coach:insights:read",
         "coach:insights:feedback",

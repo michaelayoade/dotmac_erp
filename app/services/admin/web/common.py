@@ -426,6 +426,7 @@ class AdminWebCommonMixin:
             "page_title": page_title,
             "brand": self._resolve_admin_brand_context(request, db, auth),
             "user": auth.user,
+            "auth": auth,
             "active_page": active_page,
             "csrf_token": csrf_token,
             **(context or {}),

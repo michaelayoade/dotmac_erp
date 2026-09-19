@@ -237,6 +237,70 @@ def handle_staff_access_projection_changed(db: Session, event: Any) -> None:
     )
 
 
+def handle_organization_calendar_changed(db: Session, event: Any) -> None:
+    """Send only the current ERP calendar version to Dotmac Integrator hooks.
+
+    The outbox can legitimately deliver version N after version N+1.  Checking
+    the authoritative row here prevents that stale command from ever leaving
+    ERP.  A service-hook delivery receipt is transport evidence only; the
+    calendar remains PENDING until the Integrator result callback is applied.
+    """
+    from app.models.organization_calendar import (
+        CalendarSyncStatus,
+        OrganizationCalendarEvent,
+        ParticipantSyncStatus,
+    )
+    from app.services.hooks.registry import emit_hook_event
+    from sqlalchemy import select
+
+    payload = event.payload or {}
+    org_raw = payload.get("organization_id")
+    event_raw = payload.get("event_id")
+    version_raw = payload.get("event_version")
+    if not org_raw or not event_raw or not isinstance(version_raw, int):
+        raise NonRetryableEventError(
+            f"calendar event {event.event_id} has an invalid integration payload"
+        )
+    calendar_event = db.scalar(
+        select(OrganizationCalendarEvent).where(
+            OrganizationCalendarEvent.organization_id == UUID(str(org_raw)),
+            OrganizationCalendarEvent.event_id == UUID(str(event_raw)),
+        )
+    )
+    if calendar_event is None:
+        raise NonRetryableEventError(
+            f"calendar event {event_raw} no longer exists in organization {org_raw}"
+        )
+    if version_raw < calendar_event.version:
+        logger.info(
+            "Skipping stale calendar command %s version %s; current version is %s",
+            event.event_id,
+            version_raw,
+            calendar_event.version,
+        )
+        return
+    if version_raw > calendar_event.version:
+        raise NonRetryableEventError(
+            f"calendar command version {version_raw} is ahead of ERP version "
+            f"{calendar_event.version}"
+        )
+
+    calendar_event.sync_status = CalendarSyncStatus.SYNCING.value
+    for participant in calendar_event.participants:
+        if participant.sync_status == ParticipantSyncStatus.PENDING.value:
+            participant.sync_status = ParticipantSyncStatus.SYNCING.value
+    actor_raw = (event.headers or {}).get("user_id")
+    emit_hook_event(
+        db,
+        event_name=event.event_name,
+        organization_id=UUID(str(org_raw)),
+        entity_type=event.aggregate_type,
+        entity_id=UUID(str(event_raw)),
+        actor_user_id=UUID(str(actor_raw)) if actor_raw else None,
+        payload=payload,
+    )
+
+
 def handle_automation_workflow_requested(db: Session, event: Any) -> None:
     """Execute one workflow action inside the outbox settlement transaction."""
     payload = event.payload or {}
@@ -284,6 +348,10 @@ register_handler(
     handle_staff_access_projection_changed,
 )
 register_handler("automation.workflow.requested", handle_automation_workflow_requested)
+register_handler("organization.calendar.upserted", handle_organization_calendar_changed)
+register_handler(
+    "organization.calendar.cancelled", handle_organization_calendar_changed
+)
 
 
 # ---------------------------------------------------------------------------
