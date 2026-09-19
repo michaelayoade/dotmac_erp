@@ -226,6 +226,42 @@ def execute_async_hook(
             execution.error_message = str(exc)[:500]
             execution.duration_ms = int((time.monotonic() - started) * 1000)
             execution.executed_at = datetime.now(UTC)
+            if (
+                execution.status in TERMINAL_FAILURE_STATUSES
+                and execution.event_name
+                in {
+                    "organization.calendar.upserted",
+                    "organization.calendar.cancelled",
+                }
+                and isinstance(payload, dict)
+                and isinstance(payload.get("event_version"), int)
+            ):
+                from app.services.organization_calendar import (
+                    CalendarError,
+                    OrganizationCalendarService,
+                )
+
+                try:
+                    OrganizationCalendarService(
+                        db, org_id
+                    ).record_transport_failure(
+                        entity_id,
+                        event_version=payload["event_version"],
+                        error_code="INTEGRATOR_DELIVERY_FAILED",
+                        safe_error_message=(
+                            "The Integrator could not accept this calendar event. "
+                            "Review the connector and retry the event."
+                        ),
+                        retryable=retryable,
+                        correlation_id=str(payload.get("correlation_id") or "") or None,
+                    )
+                except CalendarError:
+                    logger.warning(
+                        "Calendar hook failure result was stale or unavailable "
+                        "(event=%s version=%s)",
+                        entity_id,
+                        payload.get("event_version"),
+                    )
             db.flush()
             db.commit()
 

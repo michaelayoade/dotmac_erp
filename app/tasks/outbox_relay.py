@@ -127,6 +127,10 @@ class NonRetryableEventError(Exception):
     instead of burning the retry ladder."""
 
 
+class CalendarIntegratorUnavailableError(RuntimeError):
+    """Raised when no usable calendar webhook accepted the ERP command."""
+
+
 # ---------------------------------------------------------------------------
 # Built-in handlers
 # ---------------------------------------------------------------------------
@@ -245,6 +249,11 @@ def handle_organization_calendar_changed(db: Session, event: Any) -> None:
     ERP.  A service-hook delivery receipt is transport evidence only; the
     calendar remains PENDING until the Integrator result callback is applied.
     """
+    from app.models.finance.platform.service_hook import HookHandlerType, ServiceHook
+    from app.models.finance.platform.service_hook_execution import (
+        ExecutionStatus,
+        ServiceHookExecution,
+    )
     from app.models.organization_calendar import (
         CalendarSyncStatus,
         OrganizationCalendarEvent,
@@ -285,12 +294,8 @@ def handle_organization_calendar_changed(db: Session, event: Any) -> None:
             f"{calendar_event.version}"
         )
 
-    calendar_event.sync_status = CalendarSyncStatus.SYNCING.value
-    for participant in calendar_event.participants:
-        if participant.sync_status == ParticipantSyncStatus.PENDING.value:
-            participant.sync_status = ParticipantSyncStatus.SYNCING.value
     actor_raw = (event.headers or {}).get("user_id")
-    emit_hook_event(
+    execution_ids = emit_hook_event(
         db,
         event_name=event.event_name,
         organization_id=UUID(str(org_raw)),
@@ -299,6 +304,39 @@ def handle_organization_calendar_changed(db: Session, event: Any) -> None:
         actor_user_id=UUID(str(actor_raw)) if actor_raw else None,
         payload=payload,
     )
+    if not execution_ids:
+        raise CalendarIntegratorUnavailableError(
+            "No active service hook accepted the organization calendar command"
+        )
+
+    webhook_statuses = list(
+        db.scalars(
+            select(ServiceHookExecution.status)
+            .join(ServiceHook, ServiceHook.hook_id == ServiceHookExecution.hook_id)
+            .where(
+                ServiceHookExecution.execution_id.in_(execution_ids),
+                ServiceHookExecution.organization_id == UUID(str(org_raw)),
+                ServiceHook.handler_type == HookHandlerType.WEBHOOK,
+            )
+        ).all()
+    )
+    accepted_statuses = {
+        ExecutionStatus.PENDING,
+        ExecutionStatus.RETRYING,
+        ExecutionStatus.SUCCESS,
+    }
+    if not any(status in accepted_statuses for status in webhook_statuses):
+        raise CalendarIntegratorUnavailableError(
+            "No calendar webhook delivery was queued or completed successfully"
+        )
+
+    calendar_event.sync_status = CalendarSyncStatus.SYNCING.value
+    for participant in calendar_event.participants:
+        if participant.sync_status in {
+            ParticipantSyncStatus.PENDING.value,
+            ParticipantSyncStatus.FAILED_RETRYABLE.value,
+        }:
+            participant.sync_status = ParticipantSyncStatus.SYNCING.value
 
 
 def handle_automation_workflow_requested(db: Session, event: Any) -> None:
@@ -494,7 +532,45 @@ def _settle_failure(
     transaction on the same session (handler mutations already rolled
     back; the outbox table is not org-scoped, so the cleared RLS GUC after
     rollback does not affect this write)."""
-    from app.models.finance.platform.event_outbox import EventStatus, TerminalReason
+    from app.models.finance.platform.event_outbox import (
+        EventOutbox,
+        EventStatus,
+        TerminalReason,
+    )
+
+    def record_calendar_failure() -> None:
+        if claimed.event_name not in {
+            "organization.calendar.upserted",
+            "organization.calendar.cancelled",
+        }:
+            return
+        outbox_event = db.get(EventOutbox, claimed.event_id)
+        payload = outbox_event.payload if outbox_event else {}
+        event_raw = payload.get("event_id") if isinstance(payload, dict) else None
+        version_raw = (
+            payload.get("event_version") if isinstance(payload, dict) else None
+        )
+        if not event_raw or not isinstance(version_raw, int):
+            return
+        from app.services.organization_calendar import OrganizationCalendarService
+
+        OrganizationCalendarService(
+            db, UUID(str(claimed.organization_id))
+        ).record_transport_failure(
+            UUID(str(event_raw)),
+            event_version=version_raw,
+            error_code=(
+                "INTEGRATOR_HOOK_UNAVAILABLE"
+                if isinstance(exc, CalendarIntegratorUnavailableError)
+                else "ERP_RELAY_FAILED"
+            ),
+            safe_error_message=(
+                "ERP could not queue this event for calendar synchronization. "
+                "The delivery will be retried automatically."
+            ),
+            retryable=not isinstance(exc, NonRetryableEventError),
+            correlation_id=outbox_event.correlation_id,
+        )
 
     try:
         if isinstance(exc, NonRetryableEventError):
@@ -506,6 +582,7 @@ def _settle_failure(
                 error_class=type(exc).__name__,
                 terminal_reason=TerminalReason.INVALID_PAYLOAD,
             )
+            record_calendar_failure()
             db.commit()
             _log_outbox_final_status(claimed, "dead")
             counts["dead"] += 1
@@ -518,6 +595,7 @@ def _settle_failure(
                 error_message=str(exc),
                 error_class=type(exc).__name__,
             )
+            record_calendar_failure()
             db.commit()
             if event.status == EventStatus.DEAD:
                 _log_outbox_final_status(claimed, "dead")

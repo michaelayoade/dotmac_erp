@@ -29,8 +29,10 @@ from app.tasks.outbox_relay import (
     _HANDLERS,
     _ClaimedEvent,
     _get_handler,
+    CalendarIntegratorUnavailableError,
     NonRetryableEventError,
     handle_ledger_posting_completed,
+    handle_organization_calendar_changed,
     register_handler,
 )
 
@@ -53,6 +55,90 @@ def test_register_and_get_handler() -> None:
 
 def test_get_handler_returns_none_for_unknown() -> None:
     assert _get_handler("nonexistent.event.name") is None
+
+
+def test_calendar_handler_retries_when_no_integrator_hook_accepts_command() -> None:
+    from app.models.organization_calendar import (
+        CalendarSyncStatus,
+        ParticipantSyncStatus,
+    )
+
+    organization_id = uuid4()
+    event_id = uuid4()
+    participant = SimpleNamespace(sync_status=ParticipantSyncStatus.PENDING.value)
+    calendar_event = SimpleNamespace(
+        event_id=event_id,
+        version=3,
+        sync_status=CalendarSyncStatus.PENDING.value,
+        participants=[participant],
+    )
+    db = MagicMock()
+    db.scalar.return_value = calendar_event
+    outbox_event = SimpleNamespace(
+        event_id=uuid4(),
+        event_name="organization.calendar.upserted",
+        aggregate_type="OrganizationCalendarEvent",
+        aggregate_id=str(event_id),
+        headers={"organization_id": str(organization_id)},
+        payload={
+            "organization_id": str(organization_id),
+            "event_id": str(event_id),
+            "event_version": 3,
+        },
+    )
+
+    with patch(
+        "app.services.hooks.registry.emit_hook_event", return_value=[]
+    ):
+        with pytest.raises(CalendarIntegratorUnavailableError):
+            handle_organization_calendar_changed(db, outbox_event)
+
+    assert calendar_event.sync_status == CalendarSyncStatus.PENDING.value
+    assert participant.sync_status == ParticipantSyncStatus.PENDING.value
+
+
+def test_calendar_handler_marks_syncing_only_after_webhook_is_accepted() -> None:
+    from app.models.finance.platform.service_hook_execution import ExecutionStatus
+    from app.models.organization_calendar import (
+        CalendarSyncStatus,
+        ParticipantSyncStatus,
+    )
+
+    organization_id = uuid4()
+    event_id = uuid4()
+    execution_id = uuid4()
+    participant = SimpleNamespace(
+        sync_status=ParticipantSyncStatus.FAILED_RETRYABLE.value
+    )
+    calendar_event = SimpleNamespace(
+        event_id=event_id,
+        version=4,
+        sync_status=CalendarSyncStatus.FAILED.value,
+        participants=[participant],
+    )
+    db = MagicMock()
+    db.scalar.return_value = calendar_event
+    db.scalars.return_value.all.return_value = [ExecutionStatus.PENDING]
+    outbox_event = SimpleNamespace(
+        event_id=uuid4(),
+        event_name="organization.calendar.upserted",
+        aggregate_type="OrganizationCalendarEvent",
+        aggregate_id=str(event_id),
+        headers={"organization_id": str(organization_id)},
+        payload={
+            "organization_id": str(organization_id),
+            "event_id": str(event_id),
+            "event_version": 4,
+        },
+    )
+
+    with patch(
+        "app.services.hooks.registry.emit_hook_event", return_value=[execution_id]
+    ):
+        handle_organization_calendar_changed(db, outbox_event)
+
+    assert calendar_event.sync_status == CalendarSyncStatus.SYNCING.value
+    assert participant.sync_status == ParticipantSyncStatus.SYNCING.value
 
 
 # ---------------------------------------------------------------------------

@@ -117,7 +117,10 @@ def test_integrator_payload_carries_stable_identity_version_and_desired_membersh
     ]
 
     payload = OrganizationCalendarService(None, org_id)._contract_payload(
-        event, CALENDAR_UPSERTED
+        event,
+        CALENDAR_UPSERTED,
+        correlation_id="calendar-correlation",
+        idempotency_key="calendar-delivery-v7",
     )
 
     assert payload["event_version"] == 7
@@ -125,6 +128,8 @@ def test_integrator_payload_carries_stable_identity_version_and_desired_membersh
     assert payload["action"] == "UPSERT_EVENT"
     assert payload["participants"][0]["membership_status"] == "REMOVED"
     assert payload["reminders"] == [60]
+    assert payload["correlation_id"] == "calendar-correlation"
+    assert payload["idempotency_key"] == "calendar-delivery-v7"
 
 
 def test_cancel_contract_is_a_distinct_action() -> None:
@@ -162,6 +167,18 @@ def test_integrator_result_schema_fails_closed_on_unknown_fields() -> None:
         )
 
 
+def test_integrator_result_schema_accepts_correlation_id() -> None:
+    result = CalendarSyncResultRequest.model_validate(
+        {
+            "event_version": 1,
+            "correlation_id": "calendar-correlation",
+            "result": "SYNCED",
+            "participant_results": [],
+        }
+    )
+    assert result.correlation_id == "calendar-correlation"
+
+
 def test_calendar_permissions_and_roles_are_provisioned_by_migration() -> None:
     migration = (
         ROOT / "alembic" / "versions" / "20260919_organization_calendar.py"
@@ -197,6 +214,8 @@ def test_calendar_ui_keeps_month_grid_detail_and_sidebar_actions() -> None:
     assert "Add everyone" in form
     assert 'name="participant_ids"' in form
     assert 'name="reminder_offsets"' in form
+    assert "/admin/calendar/sync-issues" in index
+    assert (ROOT / "templates" / "admin" / "calendar" / "sync_issues.html").exists()
 
 
 def test_release_one_recurrence_boundary_is_documented() -> None:

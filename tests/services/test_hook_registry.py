@@ -274,6 +274,50 @@ class TestHookRegistry:
 
     @patch("app.services.hooks.registry._validate_webhook_target")
     @patch("httpx.Client")
+    def test_execute_webhook_handler_supports_calendar_integrator_secret(
+        self, mock_client_cls, mock_validate, monkeypatch
+    ):
+        monkeypatch.setenv("ERP_INTEGRATOR_CALENDAR_SECRET", "calendar-secret")
+        mock_validate.return_value = (True, None)
+        event_id = uuid4()
+        event = HookEvent(
+            event_name="organization.calendar.upserted",
+            organization_id=uuid4(),
+            entity_type="OrganizationCalendarEvent",
+            entity_id=event_id,
+            actor_user_id=None,
+            payload={
+                "event_id": str(event_id),
+                "event_version": 8,
+                "idempotency_key": f"organization-calendar:{event_id}:v8",
+            },
+        )
+        response = MagicMock(status_code=202, text="accepted")
+        response.raise_for_status.return_value = None
+        client = MagicMock()
+        client.post.return_value = response
+        mock_client_cls.return_value.__enter__.return_value = client
+        hook = _hook(
+            handler_type=HookHandlerType.WEBHOOK,
+            handler_config={
+                "url": "https://integrator.example.com/calendar/events",
+                "method": "POST",
+                "payload_only": True,
+                "signing_secret_env": "ERP_INTEGRATOR_CALENDAR_SECRET",
+            },
+        )
+
+        _execute_hook_handler(MagicMock(), hook, event)
+
+        kwargs = client.post.call_args.kwargs
+        expected_delivery = hashlib.sha256(
+            event.payload["idempotency_key"].encode("utf-8")
+        ).hexdigest()
+        assert kwargs["headers"]["X-Dotmac-Delivery"] == expected_delivery
+        assert kwargs["headers"]["X-Dotmac-Signature"].startswith("sha256=")
+
+    @patch("app.services.hooks.registry._validate_webhook_target")
+    @patch("httpx.Client")
     def test_execute_webhook_handler_surfaces_http_errors(
         self, mock_client_cls, mock_validate
     ):

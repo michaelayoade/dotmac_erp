@@ -50,6 +50,7 @@ def record_calendar_sync_result(
             etag=payload.etag,
             error_code=payload.error_code,
             error_message=payload.safe_error_message,
+            correlation_id=payload.correlation_id,
         )
     except CalendarNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -58,6 +59,7 @@ def record_calendar_sync_result(
     return CalendarSyncResultResponse(
         event_id=event_id,
         event_version=payload.event_version,
+        correlation_id=payload.correlation_id,
         applied=applied,
         stale=not applied,
     )

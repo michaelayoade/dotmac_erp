@@ -26,6 +26,7 @@ class CalendarSyncResultRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     event_version: int = Field(ge=1)
+    correlation_id: str | None = Field(default=None, max_length=100)
     result: Literal["SYNCED", "PARTIAL_FAILURE", "FAILED"]
     nextcloud_event_url: str | None = Field(default=None, max_length=2000)
     calendar_uri: str | None = Field(default=None, max_length=1000)
@@ -40,6 +41,7 @@ class CalendarSyncResultRequest(BaseModel):
 class CalendarSyncResultResponse(BaseModel):
     event_id: UUID
     event_version: int
+    correlation_id: str | None = None
     applied: bool
     stale: bool
 
