@@ -57,6 +57,7 @@ class EmployeeOffboardingResult:
     mailcow_password_reset: bool = False
     nextcloud_user_id: str | None = None
     nextcloud_account_disabled: bool = False
+    calendar_events_removed: int = 0
     sieve_offboarding_script_updated: bool = False
     sogo_inactive_forward_updated: bool = False
     sogo_cleanup_request_queued: bool = False
@@ -137,6 +138,11 @@ class EmployeeOffboardingService:
             self.db, str(person.id)
         )
         result.person_deactivated = self._deactivate_person(person)
+        from app.services.organization_calendar import OrganizationCalendarService
+
+        result.calendar_events_removed = OrganizationCalendarService(
+            self.db, organization_id
+        ).remove_offboarded_employee_from_future_events(person.id)
         self._disable_nextcloud_account(person, result)
 
         if not self.config.enabled:

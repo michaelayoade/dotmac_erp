@@ -53,6 +53,14 @@ from app.models.notification import (  # noqa: F401
     NotificationChannel,
     NotificationType,
 )
+from app.models.organization_calendar import (  # noqa: F401
+    CalendarBusinessStatus,
+    OrganizationCalendarAudit,
+    OrganizationCalendarEvent,
+    OrganizationCalendarParticipant,
+    OrganizationCalendarReminder,
+    ParticipantMembershipStatus,
+)
 from app.models.person import ContactMethod, Gender, Person, PersonStatus  # noqa: F401
 from app.models.rbac import Permission, PersonRole, Role, RolePermission  # noqa: F401
 from app.models.scheduler import ScheduledTask, ScheduleType  # noqa: F401

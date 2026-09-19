@@ -37,7 +37,9 @@ from app.models.finance.platform.service_hook_execution import (
 from app.services.feature_flags import FEATURE_SERVICE_HOOKS, is_feature_enabled
 
 logger = logging.getLogger(__name__)
-_ALLOWED_SIGNING_ENV_NAMES = frozenset({"ERP_SUB_WEBHOOK_SECRET"})
+_ALLOWED_SIGNING_ENV_NAMES = frozenset(
+    {"ERP_SUB_WEBHOOK_SECRET", "ERP_INTEGRATOR_CALENDAR_SECRET"}
+)
 
 
 @dataclass(frozen=True)
@@ -442,16 +444,23 @@ def _execute_hook_handler(
                 raise ValueError("Unsupported webhook signing secret reference")
             signing_secret = os.getenv(signing_secret_env, "")
             if not signing_secret:
-                raise ValueError("ERP Sub webhook signing secret is unavailable")
+                raise ValueError(
+                    f"Webhook signing secret {signing_secret_env} is unavailable"
+                )
             headers["X-Dotmac-Signature"] = (
                 "sha256="
                 + hmac.new(
                     signing_secret.encode("utf-8"), encoded_body, hashlib.sha256
                 ).hexdigest()
             )
-            delivery_seed = (
-                f"{event.event_name}:{event.entity_id}:"
-                f"{event.payload.get('new_status')}:{event.payload.get('updated_at')}"
+            delivery_seed = str(
+                event.payload.get("idempotency_key")
+                or (
+                    f"{event.event_name}:{event.entity_id}:"
+                    f"{event.payload.get('event_version')}:"
+                    f"{event.payload.get('new_status')}:"
+                    f"{event.payload.get('updated_at')}"
+                )
             )
             headers["X-Dotmac-Delivery"] = hashlib.sha256(
                 delivery_seed.encode("utf-8")

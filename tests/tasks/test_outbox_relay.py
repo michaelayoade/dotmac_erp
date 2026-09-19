@@ -29,8 +29,10 @@ from app.tasks.outbox_relay import (
     _HANDLERS,
     _ClaimedEvent,
     _get_handler,
+    CalendarIntegratorUnavailableError,
     NonRetryableEventError,
     handle_ledger_posting_completed,
+    handle_organization_calendar_changed,
     register_handler,
 )
 
@@ -53,6 +55,69 @@ def test_register_and_get_handler() -> None:
 
 def test_get_handler_returns_none_for_unknown() -> None:
     assert _get_handler("nonexistent.event.name") is None
+
+
+def test_calendar_handler_retries_when_no_integrator_hook_accepts_command() -> None:
+    organization_id = uuid4()
+    event_id = uuid4()
+    calendar_event = SimpleNamespace(
+        event_id=event_id,
+        version=3,
+    )
+    db = MagicMock()
+    db.scalar.return_value = calendar_event
+    outbox_event = SimpleNamespace(
+        event_id=uuid4(),
+        event_name="organization.calendar.upserted",
+        aggregate_type="OrganizationCalendarEvent",
+        aggregate_id=str(event_id),
+        headers={"organization_id": str(organization_id)},
+        payload={
+            "organization_id": str(organization_id),
+            "event_id": str(event_id),
+            "event_version": 3,
+        },
+    )
+
+    with patch("app.services.hooks.registry.emit_hook_event", return_value=[]):
+        with pytest.raises(CalendarIntegratorUnavailableError):
+            handle_organization_calendar_changed(db, outbox_event)
+
+    assert calendar_event.version == 3
+
+
+def test_calendar_handler_leaves_delivery_state_on_outbox_after_hook_accepts() -> None:
+    from app.models.finance.platform.service_hook_execution import ExecutionStatus
+
+    organization_id = uuid4()
+    event_id = uuid4()
+    execution_id = uuid4()
+    calendar_event = SimpleNamespace(
+        event_id=event_id,
+        version=4,
+    )
+    db = MagicMock()
+    db.scalar.return_value = calendar_event
+    db.scalars.return_value.all.return_value = [ExecutionStatus.PENDING]
+    outbox_event = SimpleNamespace(
+        event_id=uuid4(),
+        event_name="organization.calendar.upserted",
+        aggregate_type="OrganizationCalendarEvent",
+        aggregate_id=str(event_id),
+        headers={"organization_id": str(organization_id)},
+        payload={
+            "organization_id": str(organization_id),
+            "event_id": str(event_id),
+            "event_version": 4,
+        },
+    )
+
+    with patch(
+        "app.services.hooks.registry.emit_hook_event", return_value=[execution_id]
+    ):
+        handle_organization_calendar_changed(db, outbox_event)
+
+    assert calendar_event.version == 4
 
 
 # ---------------------------------------------------------------------------

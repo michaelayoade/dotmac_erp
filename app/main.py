@@ -111,6 +111,7 @@ from app.web.help import router as help_web_router
 from app.web.inventory import router as inventory_web_router
 from app.web.inventory_weekly_purchases import router as weekly_purchases_web_router
 from app.web.notifications import router as notifications_web_router
+from app.web.organization_calendar import router as organization_calendar_web_router
 from app.web.onboarding_portal import router as onboarding_portal_router
 from app.web.payroll_alias import router as payroll_alias_web_router
 from app.web.people import router as people_web_router
@@ -720,6 +721,7 @@ app.include_router(auth_web_router)
 app.include_router(admin_web_router)
 app.include_router(admin_sla_policies_web_router)
 app.include_router(admin_batch_operations_router)
+app.include_router(organization_calendar_web_router)
 app.include_router(automation_web_router)
 app.include_router(legacy_automation_web_router)
 app.include_router(profile_web_router)

@@ -127,6 +127,10 @@ class NonRetryableEventError(Exception):
     instead of burning the retry ladder."""
 
 
+class CalendarIntegratorUnavailableError(RuntimeError):
+    """Raised when no usable calendar webhook accepted the ERP command."""
+
+
 # ---------------------------------------------------------------------------
 # Built-in handlers
 # ---------------------------------------------------------------------------
@@ -237,6 +241,92 @@ def handle_staff_access_projection_changed(db: Session, event: Any) -> None:
     )
 
 
+def handle_organization_calendar_changed(db: Session, event: Any) -> None:
+    """Send only the current ERP calendar version to Dotmac Integrator hooks.
+
+    The outbox can legitimately deliver version N after version N+1.  Checking
+    the authoritative row here prevents that stale command from ever leaving
+    ERP. Delivery state remains on the outbox and service-hook execution
+    records; calendar rows do not maintain a second transport state.
+    """
+    from app.models.finance.platform.service_hook import HookHandlerType, ServiceHook
+    from app.models.finance.platform.service_hook_execution import (
+        ExecutionStatus,
+        ServiceHookExecution,
+    )
+    from app.models.organization_calendar import OrganizationCalendarEvent
+    from app.services.hooks.registry import emit_hook_event
+    from sqlalchemy import select
+
+    payload = event.payload or {}
+    org_raw = payload.get("organization_id")
+    event_raw = payload.get("event_id")
+    version_raw = payload.get("event_version")
+    if not org_raw or not event_raw or not isinstance(version_raw, int):
+        raise NonRetryableEventError(
+            f"calendar event {event.event_id} has an invalid integration payload"
+        )
+    calendar_event = db.scalar(
+        select(OrganizationCalendarEvent).where(
+            OrganizationCalendarEvent.organization_id == UUID(str(org_raw)),
+            OrganizationCalendarEvent.event_id == UUID(str(event_raw)),
+        )
+    )
+    if calendar_event is None:
+        raise NonRetryableEventError(
+            f"calendar event {event_raw} no longer exists in organization {org_raw}"
+        )
+    if version_raw < calendar_event.version:
+        logger.info(
+            "Skipping stale calendar command %s version %s; current version is %s",
+            event.event_id,
+            version_raw,
+            calendar_event.version,
+        )
+        return
+    if version_raw > calendar_event.version:
+        raise NonRetryableEventError(
+            f"calendar command version {version_raw} is ahead of ERP version "
+            f"{calendar_event.version}"
+        )
+
+    actor_raw = (event.headers or {}).get("user_id")
+    execution_ids = emit_hook_event(
+        db,
+        event_name=event.event_name,
+        organization_id=UUID(str(org_raw)),
+        entity_type=event.aggregate_type,
+        entity_id=UUID(str(event_raw)),
+        actor_user_id=UUID(str(actor_raw)) if actor_raw else None,
+        payload=payload,
+    )
+    if not execution_ids:
+        raise CalendarIntegratorUnavailableError(
+            "No active service hook accepted the organization calendar command"
+        )
+
+    webhook_statuses = list(
+        db.scalars(
+            select(ServiceHookExecution.status)
+            .join(ServiceHook, ServiceHook.hook_id == ServiceHookExecution.hook_id)
+            .where(
+                ServiceHookExecution.execution_id.in_(execution_ids),
+                ServiceHookExecution.organization_id == UUID(str(org_raw)),
+                ServiceHook.handler_type == HookHandlerType.WEBHOOK,
+            )
+        ).all()
+    )
+    accepted_statuses = {
+        ExecutionStatus.PENDING,
+        ExecutionStatus.RETRYING,
+        ExecutionStatus.SUCCESS,
+    }
+    if not any(status in accepted_statuses for status in webhook_statuses):
+        raise CalendarIntegratorUnavailableError(
+            "No calendar webhook delivery was queued or completed successfully"
+        )
+
+
 def handle_automation_workflow_requested(db: Session, event: Any) -> None:
     """Execute one workflow action inside the outbox settlement transaction."""
     payload = event.payload or {}
@@ -284,6 +374,10 @@ register_handler(
     handle_staff_access_projection_changed,
 )
 register_handler("automation.workflow.requested", handle_automation_workflow_requested)
+register_handler("organization.calendar.upserted", handle_organization_calendar_changed)
+register_handler(
+    "organization.calendar.cancelled", handle_organization_calendar_changed
+)
 
 
 # ---------------------------------------------------------------------------
@@ -426,7 +520,10 @@ def _settle_failure(
     transaction on the same session (handler mutations already rolled
     back; the outbox table is not org-scoped, so the cleared RLS GUC after
     rollback does not affect this write)."""
-    from app.models.finance.platform.event_outbox import EventStatus, TerminalReason
+    from app.models.finance.platform.event_outbox import (
+        EventStatus,
+        TerminalReason,
+    )
 
     try:
         if isinstance(exc, NonRetryableEventError):

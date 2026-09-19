@@ -338,6 +338,13 @@ public	help_user_progress	person_id	public	people	id	explicit	app/models/help/mo
 public	mfa_methods	person_id	public	people	id	explicit	app/models/auth.py:171
 public	notification	actor_id	public	people	id	explicit	app/models/notification.py:204
 public	notification	recipient_id	public	people	id	explicit	app/models/notification.py:122
+public	organization_calendar_audit	actor_person_id	public	people	id	explicit	app/models/organization_calendar.py:309
+public	organization_calendar_events	cancelled_by_id	public	people	id	explicit	app/models/organization_calendar.py:140
+public	organization_calendar_events	created_by_id	public	people	id	explicit	app/models/organization_calendar.py:131
+public	organization_calendar_events	published_by_id	public	people	id	explicit	app/models/organization_calendar.py:137
+public	organization_calendar_events	updated_by_id	public	people	id	explicit	app/models/organization_calendar.py:134
+public	organization_calendar_participants	employee_id	hr	employee	employee_id	explicit	app/models/organization_calendar.py:212
+public	organization_calendar_participants	person_id	public	people	id	explicit	app/models/organization_calendar.py:209
 public	person_roles	person_id	public	people	id	explicit	app/models/rbac.py:95
 public	sessions	person_id	public	people	id	explicit	app/models/auth.py:209
 public	user_credentials	person_id	public	people	id	explicit	app/models/auth.py:69

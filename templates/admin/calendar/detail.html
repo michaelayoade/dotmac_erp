@@ -1,0 +1,92 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Event Details{% endblock %}
+
+{% block admin_breadcrumbs %}
+<ol class="flex flex-wrap items-center gap-2">
+    <li><a href="/admin/calendar" class="hover:text-slate-700 dark:hover:text-slate-300">Organization Calendar</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">{{ event.title }}</span></li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-5">
+    {% if created or updated or retried %}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" role="status">{{ 'Event created successfully.' if created else 'Event updated successfully.' if updated else 'Synchronization retry queued.' }}</div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" role="alert">{{ request.query_params.get('error') }}</div>
+    {% endif %}
+
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <a href="/admin/calendar" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">{{ icon_svg("arrow-left", "h-4 w-4") }} Back to calendar</a>
+        <div class="flex flex-wrap gap-2">
+            {% if can_edit and event.business_status != 'CANCELLED' %}
+            <a href="/admin/calendar/events/{{ event.event_id }}/edit" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">{{ icon_svg("edit", "h-4 w-4") }} Edit</a>
+            {% endif %}
+            {% if can_cancel and event.business_status != 'CANCELLED' %}
+            <form action="/admin/calendar/events/{{ event.event_id }}/delete" method="post" onsubmit="return confirm('Delete this event? Published participant copies will be cancelled.');">
+                {{ request.state.csrf_form | safe }}<input type="hidden" name="version" value="{{ event.version }}">
+                <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">{{ icon_svg("trash", "h-4 w-4") }} Delete</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div class="space-y-5">
+            <section class="admin-card overflow-hidden">
+                <div class="h-2" style="background-color: {{ event.color }}"></div>
+                <div class="p-6">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ event.title }}</h1>
+                            <p class="mt-2 text-sm text-slate-500">
+                                {% if event.all_day %}{{ event.start_date.strftime('%A, %d %B %Y') }}{% if event_end_date_inclusive and event_end_date_inclusive > event.start_date %} – {{ event_end_date_inclusive.strftime('%A, %d %B %Y') }}{% endif %} · All day
+                                {% else %}{{ event_start_local.strftime('%A, %d %B %Y · %H:%M') }} – {{ event_end_local.strftime('%d %B %Y · %H:%M') }} {{ event.timezone }}{% endif %}
+                            </p>
+                        </div>
+                        <span class="rounded-full px-3 py-1 text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' if event.business_status == 'PUBLISHED' else 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' if event.business_status == 'CANCELLED' else 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300' }}">{{ event.business_status | title }}</span>
+                    </div>
+                    {% if event.description %}<div class="mt-6"><h2 class="text-sm font-semibold text-slate-900 dark:text-white">Description</h2><p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">{{ event.description }}</p></div>{% endif %}
+                    {% if event.event_details %}<div class="mt-6"><h2 class="text-sm font-semibold text-slate-900 dark:text-white">Additional details</h2><p class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">{{ event.event_details }}</p></div>{% endif %}
+                    {% if event.location or event.meeting_url %}
+                    <dl class="mt-6 grid gap-4 border-t border-slate-100 pt-5 text-sm dark:border-slate-800 sm:grid-cols-2">
+                        {% if event.location %}<div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Location</dt><dd class="mt-1 text-slate-700 dark:text-slate-300">{{ event.location }}</dd></div>{% endif %}
+                        {% if event.meeting_url %}<div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Meeting link</dt><dd class="mt-1"><a href="{{ event.meeting_url }}" rel="noopener noreferrer" class="break-all text-accent-600 hover:underline">{{ event.meeting_url }}</a></dd></div>{% endif %}
+                    </dl>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="admin-card p-6">
+                <div class="flex items-center justify-between"><h2 class="text-base font-semibold text-slate-900 dark:text-white">Participants</h2><span class="text-xs text-slate-500">{{ active_participants | length }} total</span></div>
+                <div class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for participant in active_participants %}
+                    <div class="flex items-center justify-between gap-3 py-3">
+                        <div class="min-w-0"><p class="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{{ participant.participant_name }}</p><p class="truncate text-xs text-slate-500">{{ participant.participant_email }}</p></div>
+                    </div>
+                    {% else %}<p class="py-8 text-center text-sm text-slate-500">No active participants.</p>{% endfor %}
+                </div>
+            </section>
+        </div>
+
+        <aside class="space-y-5">
+            <section class="admin-card p-5">
+                <h2 class="text-base font-semibold text-slate-900 dark:text-white">Delivery identity</h2>
+                <dl class="mt-4 space-y-3 text-sm">
+                    <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Version</dt><dd class="font-mono text-slate-700 dark:text-slate-300">{{ event.version }}</dd></div>
+                    <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">UID</dt><dd class="max-w-44 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title="{{ event.ical_uid }}">{{ event.ical_uid }}</dd></div>
+                </dl>
+            </section>
+            <section class="admin-card p-5">
+                <h2 class="text-base font-semibold text-slate-900 dark:text-white">Reminders</h2>
+                <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                    {% for reminder in event.reminders %}<li class="flex items-center gap-2">{{ icon_svg("clock", "h-4 w-4 text-accent-500") }} {{ reminder.offset_minutes }} minutes before</li>{% else %}<li class="text-slate-500">No reminders configured</li>{% endfor %}
+                </ul>
+            </section>
+        </aside>
+    </div>
+</div>
+{% endblock %}

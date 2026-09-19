@@ -209,6 +209,64 @@ class TestExecuteAsyncHook:
         assert hook.is_active is False
         mock_retry.assert_not_called()
 
+    def test_terminal_calendar_hook_failure_stays_on_delivery_execution(self) -> None:
+        execution_id = uuid4()
+        hook_id = uuid4()
+        org_id = uuid4()
+        event_id = uuid4()
+        hook = ServiceHook(
+            hook_id=hook_id,
+            organization_id=org_id,
+            event_name="organization.calendar.upserted",
+            handler_type=HookHandlerType.WEBHOOK,
+            execution_mode=HookExecutionMode.ASYNC,
+            name="Calendar Integrator Hook",
+            max_retries=1,
+            retry_backoff_seconds=30,
+            handler_config={"url": "https://integrator.example.com/calendar"},
+            conditions={},
+        )
+        execution = ServiceHookExecution(
+            execution_id=execution_id,
+            hook_id=hook_id,
+            organization_id=org_id,
+            event_name="organization.calendar.upserted",
+            event_payload={
+                "event_version": 5,
+                "correlation_id": "calendar-correlation",
+                "_hook_meta": {
+                    "entity_type": "OrganizationCalendarEvent",
+                    "entity_id": str(event_id),
+                },
+            },
+            status=ExecutionStatus.PENDING,
+            retry_count=0,
+            created_at=datetime.now(UTC),
+        )
+        mock_db = MagicMock()
+        mock_db.get.side_effect = [execution, hook]
+        mock_db.scalars.return_value.all.return_value = [ExecutionStatus.DEAD]
+        request = httpx.Request("POST", "https://integrator.example.com/calendar")
+        error = httpx.ConnectError("boom", request=request)
+
+        with (
+            patch("app.tasks.hooks.session_for_org") as mock_org_session,
+            patch("app.tasks.hooks._execute_hook_handler", side_effect=error),
+        ):
+            mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
+            from app.tasks.hooks import execute_async_hook
+
+            result = execute_async_hook.run(
+                execution_id=str(execution_id),
+                hook_id=str(hook_id),
+                organization_id=str(org_id),
+            )
+
+        assert result["ok"] is False
+        assert execution.status == ExecutionStatus.DEAD
+        assert execution.error_message == "boom"
+
     def test_webhook_client_error_fails_without_retry(self) -> None:
         execution_id = uuid4()
         hook_id = uuid4()
