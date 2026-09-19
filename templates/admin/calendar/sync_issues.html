@@ -1,0 +1,87 @@
+{% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import icon_svg %}
+
+{% block page_title %}Calendar Synchronization Issues{% endblock %}
+
+{% block admin_breadcrumbs %}
+<ol class="flex flex-wrap items-center gap-2">
+    <li><a href="/admin/calendar" class="hover:text-slate-700 dark:hover:text-slate-300">Organization Calendar</a></li>
+    <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">Synchronization Issues</span></li>
+</ol>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-4" data-testid="calendar-sync-issues-page">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-xl font-semibold text-slate-900 dark:text-white">Synchronization Issues</h1>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Failed, partially failed, or unusually old calendar deliveries that need attention.</p>
+        </div>
+        <a href="/admin/calendar" class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+            {{ icon_svg("calendar", "h-4 w-4") }} Back to calendar
+        </a>
+    </div>
+
+    <section class="grid gap-3 sm:grid-cols-3" aria-label="Identity readiness">
+        <div class="admin-card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">ERP-ready identities</p>
+            <p class="mt-2 text-2xl font-semibold text-emerald-600">{{ eligible_count }}</p>
+        </div>
+        <div class="admin-card p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Excluded identities</p>
+            <p class="mt-2 text-2xl font-semibold text-amber-600">{{ excluded_count }}</p>
+        </div>
+        <div class="admin-card p-4 sm:col-span-1">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Exclusion reasons</p>
+            <div class="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                {% for item in excluded_reasons %}<p>{{ item.count }} · {{ item.reason }}</p>{% else %}<p>None</p>{% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="admin-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+                <thead class="bg-slate-50 dark:bg-slate-800/60">
+                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <th class="px-4 py-3">Event</th>
+                        <th class="px-4 py-3">Status</th>
+                        <th class="px-4 py-3">Participants</th>
+                        <th class="px-4 py-3">Last remote sync</th>
+                        <th class="px-4 py-3">Safe error</th>
+                        <th class="px-4 py-3 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for row in rows %}
+                    <tr class="align-top">
+                        <td class="px-4 py-4">
+                            <a href="/admin/calendar/events/{{ row.event.event_id }}" class="font-semibold text-slate-900 hover:text-accent-600 dark:text-white">{{ row.event.title }}</a>
+                            <p class="mt-1 text-xs text-slate-500">Version {{ row.event.version }} · {{ row.event.business_status }}</p>
+                        </td>
+                        <td class="px-4 py-4"><span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">{{ row.event.sync_status }}</span></td>
+                        <td class="px-4 py-4 text-xs text-slate-600 dark:text-slate-300">
+                            {% for status, count in row.counts.items() %}<p>{{ status }}: {{ count }}</p>{% else %}<p>No participants</p>{% endfor %}
+                        </td>
+                        <td class="px-4 py-4 text-xs text-slate-500">{{ row.last_remote_sync_at.strftime('%d %b %Y %H:%M') if row.last_remote_sync_at else 'Never' }}</td>
+                        <td class="max-w-sm px-4 py-4 text-xs text-slate-600 dark:text-slate-300">
+                            {% for message in row.error_messages %}<p>{{ message }}</p>{% else %}<p>No participant error was returned. Check the Integrator hook logs.</p>{% endfor %}
+                        </td>
+                        <td class="px-4 py-4 text-right">
+                            {% if can_retry and row.event.sync_status in ['FAILED', 'PARTIAL_FAILURE'] %}
+                            <form action="/admin/calendar/events/{{ row.event.event_id }}/retry" method="post">
+                                {{ request.state.csrf_form | safe }}
+                                <button type="submit" class="inline-flex items-center gap-1 rounded-lg bg-accent-500 px-3 py-2 text-xs font-semibold text-white hover:bg-accent-600">{{ icon_svg("refresh", "h-3.5 w-3.5") }} Retry</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="px-4 py-12 text-center text-sm text-slate-500">No calendar synchronization issues were found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

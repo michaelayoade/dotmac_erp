@@ -29,6 +29,9 @@ ERP neither reads nor modifies personal calendars.
 - Up to three reminders per event.
 - Event detail page with participants, reminder configuration, business state,
   synchronization state, stable UID, version, and remote ETag when available.
+- Central synchronization-issues page at `/admin/calendar/sync-issues` with
+  participant-level state counts, safe errors, identity-readiness exclusions,
+  last remote synchronization time, and permission-gated retry actions.
 
 ### Permissions
 
@@ -91,7 +94,11 @@ The ERP outbox relay performs a current-version check before sending a command
 through the existing service-hook boundary. A stale queued version is settled
 without being sent. The payload action is `UPSERT_EVENT` or `CANCEL_EVENT` and
 contains the stable UID, business event version, date/time representation,
-reminders, and the complete desired participant membership.
+reminders, the complete desired participant membership, a correlation ID, and
+an Integrator idempotency key. ERP marks a command `SYNCING` only after an
+active webhook execution accepts it. A missing hook, exhausted async delivery,
+or terminal webhook failure is surfaced as a retryable ERP synchronization
+failure instead of leaving the event indefinitely in flight.
 
 Dotmac Integrator reports outcomes to:
 
@@ -105,6 +112,24 @@ version. Valid results can update event and participant synchronization states,
 the organizer-side Nextcloud event URL, calendar URI, ETag, and last sync time.
 
 ERP never stores the Nextcloud calendar service-account password.
+
+### Required ERP service-hook configuration
+
+The existing callback endpoint does not need to be replaced. The Integrator
+needs a tenant-bound API key carrying only `calendar:sync:write`, while ERP
+needs one active `WEBHOOK` service hook for each calendar event name above.
+Configure the hooks as asynchronous, use `payload_only: true`, and point them
+to the Integrator calendar receiver. Store the shared signing value in the ERP
+runtime environment as `ERP_INTEGRATOR_CALENDAR_SECRET`; the hook configuration
+must reference the environment-variable name and must never contain the secret
+itself. The Integrator hostname must also be present in the platform outbound
+webhook allowlist before the hook can send commands.
+
+The Integrator must verify `X-Dotmac-Signature`, deduplicate on
+`X-Dotmac-Delivery` and the payload `idempotency_key`, and return the same
+`correlation_id` in its result callback. The existing `erp-employees` account
+may continue employee provisioning, but its Nextcloud credentials must not be
+placed in ERP or used directly by this webhook path.
 
 ## Explicit release-one scope
 

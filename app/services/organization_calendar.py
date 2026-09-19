@@ -205,6 +205,45 @@ class OrganizationCalendarService:
             ).all()
         )
 
+    def list_sync_issues(
+        self, *, stale_after_minutes: int = 15, limit: int = 200
+    ) -> list[OrganizationCalendarEvent]:
+        """Return failed or unusually old in-flight calendar deliveries."""
+        stale_before = datetime.now(UTC) - timedelta(minutes=stale_after_minutes)
+        return list(
+            self.db.scalars(
+                select(OrganizationCalendarEvent)
+                .options(
+                    selectinload(OrganizationCalendarEvent.participants),
+                    selectinload(OrganizationCalendarEvent.remote_state),
+                )
+                .where(
+                    OrganizationCalendarEvent.organization_id == self.organization_id,
+                    OrganizationCalendarEvent.business_status
+                    != CalendarBusinessStatus.DRAFT.value,
+                    or_(
+                        OrganizationCalendarEvent.sync_status.in_(
+                            [
+                                CalendarSyncStatus.PARTIAL_FAILURE.value,
+                                CalendarSyncStatus.FAILED.value,
+                            ]
+                        ),
+                        and_(
+                            OrganizationCalendarEvent.sync_status.in_(
+                                [
+                                    CalendarSyncStatus.PENDING.value,
+                                    CalendarSyncStatus.SYNCING.value,
+                                ]
+                            ),
+                            OrganizationCalendarEvent.updated_at < stale_before,
+                        ),
+                    ),
+                )
+                .order_by(OrganizationCalendarEvent.updated_at.desc())
+                .limit(max(1, min(limit, 500)))
+            ).all()
+        )
+
     def create_event(
         self,
         data: CalendarEventData,
@@ -493,6 +532,7 @@ class OrganizationCalendarService:
         etag: str | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
+        correlation_id: str | None = None,
     ) -> bool:
         """Apply an Integrator callback; return False for a stale result."""
         event = self.get_event(event_id, for_update=True)
@@ -526,7 +566,10 @@ class OrganizationCalendarService:
         event.sync_status = result
         if error_code or error_message:
             for participant in event.participants:
-                if participant.sync_status == ParticipantSyncStatus.PENDING.value:
+                if participant.sync_status in {
+                    ParticipantSyncStatus.PENDING.value,
+                    ParticipantSyncStatus.SYNCING.value,
+                }:
                     participant.last_error_code = error_code
                     participant.last_error_message = self._clean(error_message)
         if nextcloud_event_url or calendar_uri or etag:
@@ -547,6 +590,56 @@ class OrganizationCalendarService:
             if result == CalendarSyncStatus.SYNCED.value
             else "SYNC_FAILED",
             old_values=old,
+            correlation_id=correlation_id,
+        )
+        self.db.flush()
+        return True
+
+    def record_transport_failure(
+        self,
+        event_id: uuid.UUID,
+        *,
+        event_version: int,
+        error_code: str,
+        safe_error_message: str,
+        retryable: bool = True,
+        correlation_id: str | None = None,
+    ) -> bool:
+        """Record an ERP-to-Integrator delivery failure for the current version.
+
+        A late failure from an older queued command must never downgrade a newer
+        event version, so this method uses the same stale-version guard as the
+        Integrator callback.
+        """
+        event = self.get_event(event_id, for_update=True)
+        if event_version < event.version:
+            return False
+        if event_version > event.version:
+            raise CalendarConflictError(
+                f"Transport failure version {event_version} is ahead of ERP version "
+                f"{event.version}."
+            )
+        old = self._event_snapshot(event)
+        event.sync_status = CalendarSyncStatus.FAILED.value
+        failed_status = (
+            ParticipantSyncStatus.FAILED_RETRYABLE.value
+            if retryable
+            else ParticipantSyncStatus.FAILED_PERMANENT.value
+        )
+        for participant in event.participants:
+            if participant.sync_status in {
+                ParticipantSyncStatus.PENDING.value,
+                ParticipantSyncStatus.SYNCING.value,
+            }:
+                participant.sync_status = failed_status
+                participant.last_error_code = error_code[:100]
+                participant.last_error_message = safe_error_message[:500]
+        self._audit(
+            event,
+            None,
+            "SYNC_FAILED",
+            old_values=old,
+            correlation_id=correlation_id,
         )
         self.db.flush()
         return True
@@ -661,7 +754,16 @@ class OrganizationCalendarService:
         retry: bool = False,
     ) -> None:
         self.db.flush()
-        payload = self._contract_payload(event, event_name)
+        correlation_id = str(uuid.uuid4())
+        delivery_idempotency_key = (
+            f"organization-calendar:{event.event_id}:v{event.version}:{event_name}"
+        )
+        payload = self._contract_payload(
+            event,
+            event_name,
+            correlation_id=correlation_id,
+            idempotency_key=delivery_idempotency_key,
+        )
         suffix = f":retry:{uuid.uuid4()}" if retry else ""
         OutboxPublisher.publish_event(
             self.db,
@@ -678,14 +780,19 @@ class OrganizationCalendarService:
                 "source": "erp.organization_calendar",
             },
             producer_module="organization_calendar",
-            correlation_id=str(uuid.uuid4()),
+            correlation_id=correlation_id,
             idempotency_key=(
                 f"organization-calendar:{event.event_id}:v{event.version}{suffix}"
             ),
         )
 
     def _contract_payload(
-        self, event: OrganizationCalendarEvent, event_name: str
+        self,
+        event: OrganizationCalendarEvent,
+        event_name: str,
+        *,
+        correlation_id: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         participants = [
             {
@@ -700,6 +807,8 @@ class OrganizationCalendarService:
         ]
         return {
             "contract_version": CALENDAR_CONTRACT_VERSION,
+            "correlation_id": correlation_id,
+            "idempotency_key": idempotency_key,
             "event_type": event_name,
             "action": "CANCEL_EVENT"
             if event_name == CALENDAR_CANCELLED
@@ -739,6 +848,7 @@ class OrganizationCalendarService:
         action: str,
         *,
         old_values: dict[str, object] | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         self.db.add(
             OrganizationCalendarAudit(
@@ -748,7 +858,7 @@ class OrganizationCalendarService:
                 action=action,
                 old_values=old_values,
                 new_values=self._event_snapshot(event),
-                correlation_id=str(uuid.uuid4()),
+                correlation_id=correlation_id or str(uuid.uuid4()),
             )
         )
 

@@ -23,12 +23,20 @@
             <p class="text-sm text-slate-500 dark:text-slate-400">Create ERP-controlled events for selected employees and synchronize them through the Integrator.</p>
             <p class="mt-1 text-xs text-slate-400">{{ eligible_count }} eligible employee{{ 's' if eligible_count != 1 else '' }} · {{ excluded_count }} excluded by identity or employment rules</p>
         </div>
-        {% if can_create %}
-        <a href="/admin/calendar/events/new"
-           class="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent-500/20 transition hover:bg-accent-600">
-            {{ icon_svg("plus", "h-4 w-4") }} Create event
-        </a>
-        {% endif %}
+        <div class="flex flex-wrap items-center gap-2">
+            {% if can_view_sync_issues %}
+            <a href="/admin/calendar/sync-issues"
+               class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                {{ icon_svg("warning", "h-4 w-4") }} Sync issues
+            </a>
+            {% endif %}
+            {% if can_create %}
+            <a href="/admin/calendar/events/new"
+               class="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent-500/20 transition hover:bg-accent-600">
+                {{ icon_svg("plus", "h-4 w-4") }} Create event
+            </a>
+            {% endif %}
+        </div>
     </div>
 
     <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
