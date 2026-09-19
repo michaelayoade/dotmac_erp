@@ -288,6 +288,13 @@ public	federated_identities	person_id	public	people	id	NO ACTION	CASCADE	SIMPLE	
 public	mfa_methods	person_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 public	notification	actor_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 public	notification	recipient_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
+public	organization_calendar_audit	actor_person_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
+public	organization_calendar_events	cancelled_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
+public	organization_calendar_events	created_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
+public	organization_calendar_events	published_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
+public	organization_calendar_events	updated_by_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
+public	organization_calendar_participants	employee_id	hr	employee	employee_id	NO ACTION	NO ACTION	SIMPLE	false	false
+public	organization_calendar_participants	person_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 public	person_roles	person_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 public	sessions	person_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false
 public	user_credentials	person_id	public	people	id	NO ACTION	NO ACTION	SIMPLE	false	false

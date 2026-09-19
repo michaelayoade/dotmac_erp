@@ -55,14 +55,11 @@ from app.models.notification import (  # noqa: F401
 )
 from app.models.organization_calendar import (  # noqa: F401
     CalendarBusinessStatus,
-    CalendarSyncStatus,
     OrganizationCalendarAudit,
     OrganizationCalendarEvent,
     OrganizationCalendarParticipant,
     OrganizationCalendarReminder,
-    OrganizationCalendarRemoteEvent,
     ParticipantMembershipStatus,
-    ParticipantSyncStatus,
 )
 from app.models.person import ContactMethod, Gender, Person, PersonStatus  # noqa: F401
 from app.models.rbac import Permission, PersonRole, Role, RolePermission  # noqa: F401

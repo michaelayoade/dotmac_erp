@@ -40,29 +40,10 @@ class CalendarBusinessStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
-class CalendarSyncStatus(str, enum.Enum):
-    NOT_REQUIRED = "NOT_REQUIRED"
-    PENDING = "PENDING"
-    SYNCING = "SYNCING"
-    SYNCED = "SYNCED"
-    PARTIAL_FAILURE = "PARTIAL_FAILURE"
-    FAILED = "FAILED"
-
-
 class ParticipantMembershipStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     REMOVED = "REMOVED"
     CANCELLED = "CANCELLED"
-
-
-class ParticipantSyncStatus(str, enum.Enum):
-    NOT_REQUIRED = "NOT_REQUIRED"
-    PENDING = "PENDING"
-    SYNCING = "SYNCING"
-    SYNCED = "SYNCED"
-    FAILED_RETRYABLE = "FAILED_RETRYABLE"
-    FAILED_PERMANENT = "FAILED_PERMANENT"
-    STALE = "STALE"
 
 
 class OrganizationCalendarEvent(Base):
@@ -86,11 +67,6 @@ class OrganizationCalendarEvent(Base):
             "business_status IN ('DRAFT', 'PUBLISHED', 'CANCELLED')",
             name="ck_org_calendar_event_business_status",
         ),
-        CheckConstraint(
-            "sync_status IN ('NOT_REQUIRED', 'PENDING', 'SYNCING', 'SYNCED', "
-            "'PARTIAL_FAILURE', 'FAILED')",
-            name="ck_org_calendar_event_sync_status",
-        ),
         UniqueConstraint("ical_uid", name="uq_org_calendar_event_ical_uid"),
         Index(
             "idx_org_calendar_event_org_start",
@@ -102,7 +78,6 @@ class OrganizationCalendarEvent(Base):
             "idx_org_calendar_event_org_status",
             "organization_id",
             "business_status",
-            "sync_status",
         ),
         {"schema": "public"},
     )
@@ -148,12 +123,6 @@ class OrganizationCalendarEvent(Base):
         default=CalendarBusinessStatus.DRAFT.value,
         server_default=CalendarBusinessStatus.DRAFT.value,
     )
-    sync_status: Mapped[str] = mapped_column(
-        String(24),
-        nullable=False,
-        default=CalendarSyncStatus.NOT_REQUIRED.value,
-        server_default=CalendarSyncStatus.NOT_REQUIRED.value,
-    )
     version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
     )
@@ -188,9 +157,6 @@ class OrganizationCalendarEvent(Base):
     reminders: Mapped[list[OrganizationCalendarReminder]] = relationship(
         back_populates="event", cascade="all, delete-orphan"
     )
-    remote_state: Mapped[OrganizationCalendarRemoteEvent | None] = relationship(
-        back_populates="event", cascade="all, delete-orphan", uselist=False
-    )
 
 
 class OrganizationCalendarParticipant(Base):
@@ -219,11 +185,6 @@ class OrganizationCalendarParticipant(Base):
         CheckConstraint(
             "membership_status IN ('ACTIVE', 'REMOVED', 'CANCELLED')",
             name="ck_org_calendar_participant_membership_status",
-        ),
-        CheckConstraint(
-            "sync_status IN ('NOT_REQUIRED', 'PENDING', 'SYNCING', 'SYNCED', "
-            "'FAILED_RETRYABLE', 'FAILED_PERMANENT', 'STALE')",
-            name="ck_org_calendar_participant_sync_status",
         ),
         {"schema": "public"},
     )
@@ -262,16 +223,6 @@ class OrganizationCalendarParticipant(Base):
         default=ParticipantMembershipStatus.ACTIVE.value,
         server_default=ParticipantMembershipStatus.ACTIVE.value,
     )
-    sync_status: Mapped[str] = mapped_column(
-        String(24),
-        nullable=False,
-        default=ParticipantSyncStatus.NOT_REQUIRED.value,
-        server_default=ParticipantSyncStatus.NOT_REQUIRED.value,
-    )
-    last_synced_version: Mapped[int | None] = mapped_column(Integer)
-    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_error_code: Mapped[str | None] = mapped_column(String(100))
-    last_error_message: Mapped[str | None] = mapped_column(String(500))
     removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -331,51 +282,6 @@ class OrganizationCalendarReminder(Base):
     event: Mapped[OrganizationCalendarEvent] = relationship(back_populates="reminders")
 
 
-class OrganizationCalendarRemoteEvent(Base):
-    __tablename__ = "organization_calendar_remote_events"
-    __table_args__ = (
-        UniqueConstraint("event_id", name="uq_org_calendar_remote_event"),
-        Index("idx_org_calendar_remote_org_event", "organization_id", "event_id"),
-        {"schema": "public"},
-    )
-
-    remote_event_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4,
-        server_default=text("gen_random_uuid()"),
-    )
-    organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("core_org.organization.organization_id"),
-        nullable=False,
-    )
-    event_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("public.organization_calendar_events.event_id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    calendar_uri: Mapped[str | None] = mapped_column(String(1000))
-    nextcloud_event_url: Mapped[str | None] = mapped_column(String(2000))
-    nextcloud_etag: Mapped[str | None] = mapped_column(String(255))
-    last_remote_sync_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-    event: Mapped[OrganizationCalendarEvent] = relationship(
-        back_populates="remote_state"
-    )
-
-
 class OrganizationCalendarAudit(Base):
     __tablename__ = "organization_calendar_audit"
     __table_args__ = (
@@ -417,12 +323,9 @@ class OrganizationCalendarAudit(Base):
 
 __all__ = [
     "CalendarBusinessStatus",
-    "CalendarSyncStatus",
     "OrganizationCalendarAudit",
     "OrganizationCalendarEvent",
     "OrganizationCalendarParticipant",
     "OrganizationCalendarReminder",
-    "OrganizationCalendarRemoteEvent",
     "ParticipantMembershipStatus",
-    "ParticipantSyncStatus",
 ]

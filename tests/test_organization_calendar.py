@@ -6,19 +6,13 @@ from datetime import UTC, date, time
 from pathlib import Path
 from uuid import uuid4
 
-import pytest
-from pydantic import ValidationError
-
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
-    CalendarSyncStatus,
     OrganizationCalendarEvent,
     OrganizationCalendarParticipant,
     OrganizationCalendarReminder,
     ParticipantMembershipStatus,
-    ParticipantSyncStatus,
 )
-from app.schemas.organization_calendar import CalendarSyncResultRequest
 from app.services.organization_calendar import (
     CALENDAR_CANCELLED,
     CALENDAR_UPSERTED,
@@ -92,7 +86,6 @@ def test_integrator_payload_carries_stable_identity_version_and_desired_membersh
         end_at=None,
         color="#4F46E5",
         business_status=CalendarBusinessStatus.PUBLISHED.value,
-        sync_status=CalendarSyncStatus.PENDING.value,
         version=7,
         created_by_id=uuid4(),
         updated_by_id=uuid4(),
@@ -106,7 +99,6 @@ def test_integrator_payload_carries_stable_identity_version_and_desired_membersh
             participant_email="ada@example.com",
             nextcloud_user_id="ada@example.com",
             membership_status=ParticipantMembershipStatus.REMOVED.value,
-            sync_status=ParticipantSyncStatus.PENDING.value,
         )
     ]
     event.reminders = [
@@ -144,7 +136,6 @@ def test_cancel_contract_is_a_distinct_action() -> None:
         end_date_exclusive=date(2026, 9, 22),
         color="#4F46E5",
         business_status=CalendarBusinessStatus.CANCELLED.value,
-        sync_status=CalendarSyncStatus.PENDING.value,
         version=2,
         created_by_id=uuid4(),
         updated_by_id=uuid4(),
@@ -153,30 +144,6 @@ def test_cancel_contract_is_a_distinct_action() -> None:
         None, event.organization_id
     )._contract_payload(event, CALENDAR_CANCELLED)
     assert payload["action"] == "CANCEL_EVENT"
-
-
-def test_integrator_result_schema_fails_closed_on_unknown_fields() -> None:
-    with pytest.raises(ValidationError):
-        CalendarSyncResultRequest.model_validate(
-            {
-                "event_version": 1,
-                "result": "SYNCED",
-                "participant_results": [],
-                "service_account_password": "must-never-be-accepted",
-            }
-        )
-
-
-def test_integrator_result_schema_accepts_correlation_id() -> None:
-    result = CalendarSyncResultRequest.model_validate(
-        {
-            "event_version": 1,
-            "correlation_id": "calendar-correlation",
-            "result": "SYNCED",
-            "participant_results": [],
-        }
-    )
-    assert result.correlation_id == "calendar-correlation"
 
 
 def test_calendar_permissions_and_roles_are_provisioned_by_migration() -> None:

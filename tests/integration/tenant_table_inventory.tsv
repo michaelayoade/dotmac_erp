@@ -397,7 +397,6 @@ public	organization_calendar_audit	direct	true	true	app_admin	1	false	rw	--
 public	organization_calendar_events	direct	true	true	app_admin	1	false	rw	--
 public	organization_calendar_participants	direct	true	true	app_admin	1	false	rw	--
 public	organization_calendar_reminders	direct	true	true	app_admin	1	false	rw	--
-public	organization_calendar_remote_events	direct	true	true	app_admin	1	false	rw	--
 public	outbox_events	direct	true	true	app_admin	1	false	rw	rw
 public	parties	direct	true	true	app_admin	1	false	rw	--
 public	party_persons	inherited	true	true	app_admin	1	false	rw	--

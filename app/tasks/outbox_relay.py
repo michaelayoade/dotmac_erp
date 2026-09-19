@@ -246,19 +246,15 @@ def handle_organization_calendar_changed(db: Session, event: Any) -> None:
 
     The outbox can legitimately deliver version N after version N+1.  Checking
     the authoritative row here prevents that stale command from ever leaving
-    ERP.  A service-hook delivery receipt is transport evidence only; the
-    calendar remains PENDING until the Integrator result callback is applied.
+    ERP. Delivery state remains on the outbox and service-hook execution
+    records; calendar rows do not maintain a second transport state.
     """
     from app.models.finance.platform.service_hook import HookHandlerType, ServiceHook
     from app.models.finance.platform.service_hook_execution import (
         ExecutionStatus,
         ServiceHookExecution,
     )
-    from app.models.organization_calendar import (
-        CalendarSyncStatus,
-        OrganizationCalendarEvent,
-        ParticipantSyncStatus,
-    )
+    from app.models.organization_calendar import OrganizationCalendarEvent
     from app.services.hooks.registry import emit_hook_event
     from sqlalchemy import select
 
@@ -329,14 +325,6 @@ def handle_organization_calendar_changed(db: Session, event: Any) -> None:
         raise CalendarIntegratorUnavailableError(
             "No calendar webhook delivery was queued or completed successfully"
         )
-
-    calendar_event.sync_status = CalendarSyncStatus.SYNCING.value
-    for participant in calendar_event.participants:
-        if participant.sync_status in {
-            ParticipantSyncStatus.PENDING.value,
-            ParticipantSyncStatus.FAILED_RETRYABLE.value,
-        }:
-            participant.sync_status = ParticipantSyncStatus.SYNCING.value
 
 
 def handle_automation_workflow_requested(db: Session, event: Any) -> None:
@@ -533,44 +521,9 @@ def _settle_failure(
     back; the outbox table is not org-scoped, so the cleared RLS GUC after
     rollback does not affect this write)."""
     from app.models.finance.platform.event_outbox import (
-        EventOutbox,
         EventStatus,
         TerminalReason,
     )
-
-    def record_calendar_failure() -> None:
-        if claimed.event_name not in {
-            "organization.calendar.upserted",
-            "organization.calendar.cancelled",
-        }:
-            return
-        outbox_event = db.get(EventOutbox, claimed.event_id)
-        payload = outbox_event.payload if outbox_event else {}
-        event_raw = payload.get("event_id") if isinstance(payload, dict) else None
-        version_raw = (
-            payload.get("event_version") if isinstance(payload, dict) else None
-        )
-        if not event_raw or not isinstance(version_raw, int):
-            return
-        from app.services.organization_calendar import OrganizationCalendarService
-
-        OrganizationCalendarService(
-            db, UUID(str(claimed.organization_id))
-        ).record_transport_failure(
-            UUID(str(event_raw)),
-            event_version=version_raw,
-            error_code=(
-                "INTEGRATOR_HOOK_UNAVAILABLE"
-                if isinstance(exc, CalendarIntegratorUnavailableError)
-                else "ERP_RELAY_FAILED"
-            ),
-            safe_error_message=(
-                "ERP could not queue this event for calendar synchronization. "
-                "The delivery will be retried automatically."
-            ),
-            retryable=not isinstance(exc, NonRetryableEventError),
-            correlation_id=outbox_event.correlation_id,
-        )
 
     try:
         if isinstance(exc, NonRetryableEventError):
@@ -582,7 +535,6 @@ def _settle_failure(
                 error_class=type(exc).__name__,
                 terminal_reason=TerminalReason.INVALID_PAYLOAD,
             )
-            record_calendar_failure()
             db.commit()
             _log_outbox_final_status(claimed, "dead")
             counts["dead"] += 1
@@ -595,7 +547,6 @@ def _settle_failure(
                 error_message=str(exc),
                 error_class=type(exc).__name__,
             )
-            record_calendar_failure()
             db.commit()
             if event.status == EventStatus.DEAD:
                 _log_outbox_final_status(claimed, "dead")

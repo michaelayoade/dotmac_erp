@@ -58,19 +58,11 @@ def test_get_handler_returns_none_for_unknown() -> None:
 
 
 def test_calendar_handler_retries_when_no_integrator_hook_accepts_command() -> None:
-    from app.models.organization_calendar import (
-        CalendarSyncStatus,
-        ParticipantSyncStatus,
-    )
-
     organization_id = uuid4()
     event_id = uuid4()
-    participant = SimpleNamespace(sync_status=ParticipantSyncStatus.PENDING.value)
     calendar_event = SimpleNamespace(
         event_id=event_id,
         version=3,
-        sync_status=CalendarSyncStatus.PENDING.value,
-        participants=[participant],
     )
     db = MagicMock()
     db.scalar.return_value = calendar_event
@@ -87,34 +79,22 @@ def test_calendar_handler_retries_when_no_integrator_hook_accepts_command() -> N
         },
     )
 
-    with patch(
-        "app.services.hooks.registry.emit_hook_event", return_value=[]
-    ):
+    with patch("app.services.hooks.registry.emit_hook_event", return_value=[]):
         with pytest.raises(CalendarIntegratorUnavailableError):
             handle_organization_calendar_changed(db, outbox_event)
 
-    assert calendar_event.sync_status == CalendarSyncStatus.PENDING.value
-    assert participant.sync_status == ParticipantSyncStatus.PENDING.value
+    assert calendar_event.version == 3
 
 
-def test_calendar_handler_marks_syncing_only_after_webhook_is_accepted() -> None:
+def test_calendar_handler_leaves_delivery_state_on_outbox_after_hook_accepts() -> None:
     from app.models.finance.platform.service_hook_execution import ExecutionStatus
-    from app.models.organization_calendar import (
-        CalendarSyncStatus,
-        ParticipantSyncStatus,
-    )
 
     organization_id = uuid4()
     event_id = uuid4()
     execution_id = uuid4()
-    participant = SimpleNamespace(
-        sync_status=ParticipantSyncStatus.FAILED_RETRYABLE.value
-    )
     calendar_event = SimpleNamespace(
         event_id=event_id,
         version=4,
-        sync_status=CalendarSyncStatus.FAILED.value,
-        participants=[participant],
     )
     db = MagicMock()
     db.scalar.return_value = calendar_event
@@ -137,8 +117,7 @@ def test_calendar_handler_marks_syncing_only_after_webhook_is_accepted() -> None
     ):
         handle_organization_calendar_changed(db, outbox_event)
 
-    assert calendar_event.sync_status == CalendarSyncStatus.SYNCING.value
-    assert participant.sync_status == ParticipantSyncStatus.SYNCING.value
+    assert calendar_event.version == 4
 
 
 # ---------------------------------------------------------------------------
