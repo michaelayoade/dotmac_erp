@@ -996,7 +996,7 @@ def _required_digest_version(
             record=record,
             updated_at=updated_at,
         )
-    return value
+    return cast(int, value)
 
 
 def _required_digest_hex(

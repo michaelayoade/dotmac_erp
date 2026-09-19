@@ -265,7 +265,9 @@ def format_validation_errors(errors: Sequence[Mapping[str, object]]) -> str:
         return "request body failed validation"
     parts = []
     for error in errors:
-        loc = ".".join(str(part) for part in error.get("loc", ()))
+        raw_loc = error.get("loc", ())
+        loc_parts = raw_loc if isinstance(raw_loc, (list, tuple)) else ()
+        loc = ".".join(str(part) for part in loc_parts)
         parts.append(f"{loc}: {error.get('msg', 'invalid')}")
     return "; ".join(parts)
 
