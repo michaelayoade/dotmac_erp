@@ -8947,6 +8947,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
     --tw-shadow: var(--tw-shadow-colored);
 }
 
+.shadow-violet-500\/20 {
+    --tw-shadow-color: rgb(139 92 246 / 0.2);
+    --tw-shadow: var(--tw-shadow-colored);
+}
+
 .shadow-violet-500\/25 {
     --tw-shadow-color: rgb(139 92 246 / 0.25);
     --tw-shadow: var(--tw-shadow-colored);
@@ -10465,6 +10470,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 .focus\:ring-violet-500:focus {
     --tw-ring-opacity: 1;
     --tw-ring-color: rgb(139 92 246 / var(--tw-ring-opacity, 1));
+}
+
+.focus\:ring-violet-500\/20:focus {
+    --tw-ring-color: rgb(139 92 246 / 0.2);
 }
 
 .focus\:ring-white\/50:focus {

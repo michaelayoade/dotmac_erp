@@ -5,12 +5,14 @@ from __future__ import annotations
 import calendar as month_calendar
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
+from typing import cast
 from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from starlette.datastructures import FormData
 
 from app.db.session_context import prime_tenant_context
 from app.models.organization_calendar import (
@@ -79,10 +81,12 @@ def _local_event_bounds(
     event: OrganizationCalendarEvent,
 ) -> tuple[date, date, str]:
     if event.all_day:
-        assert event.start_date is not None and event.end_date_exclusive is not None
+        if event.start_date is None or event.end_date_exclusive is None:
+            raise CalendarError("The all-day event has invalid dates.")
         return event.start_date, event.end_date_exclusive, "All day"
     tz = ZoneInfo(event.timezone or DEFAULT_TIMEZONE)
-    assert event.start_at is not None and event.end_at is not None
+    if event.start_at is None or event.end_at is None:
+        raise CalendarError("The timed event has invalid dates.")
     start = event.start_at.astimezone(tz)
     end = event.end_at.astimezone(tz)
     return start.date(), end.date() + timedelta(days=1), start.strftime("%H:%M")
@@ -235,12 +239,17 @@ def _form_context(
     return context
 
 
+async def _request_form(request: Request) -> FormData:
+    raw = getattr(request.state, "csrf_form", None)
+    if isinstance(raw, FormData):
+        return raw
+    return cast(FormData, await request.form())
+
+
 async def _read_form(
     request: Request,
 ) -> tuple[dict[str, object], list[uuid.UUID], list[int]]:
-    raw = getattr(request.state, "csrf_form", None)
-    if raw is None or isinstance(raw, str):
-        raw = await request.form()
+    raw = await _request_form(request)
     participants: list[uuid.UUID] = []
     for value in raw.getlist("participant_ids"):
         try:
@@ -469,7 +478,7 @@ async def update_personal_event(
                 and participant.membership_status
                 == ParticipantMembershipStatus.ACTIVE.value
             ]
-        raw = getattr(request.state, "csrf_form", None)
+        raw = await _request_form(request)
         expected_version = int(str(raw.get("version")))
         updated = service.update_personal_event(
             event_id,
@@ -503,9 +512,7 @@ async def delete_personal_event(
     auth: WebAuthContext = Depends(require_personal_event_create),
     db: Session = Depends(get_db_for_org),
 ):
-    raw = getattr(request.state, "csrf_form", None)
-    if raw is None or isinstance(raw, str):
-        raw = await request.form()
+    raw = await _request_form(request)
     try:
         OrganizationCalendarService(db, auth.organization_id).cancel_personal_event(
             event_id,
