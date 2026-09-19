@@ -1432,7 +1432,12 @@ def sync_mono_transactions(**_legacy_kwargs: Any) -> dict[str, Any]:
     if not mono_account_ids:
         return {
             "success": True,
-            "accounts_synced": 0,
+            "completed": 0,
+            "pending": 0,
+            "failed": 0,
+            "skipped": 0,
+            "transactions_imported": 0,
+            "duplicates_skipped": 0,
             "message": "No Mono-linked bank accounts found",
         }
 
@@ -1452,38 +1457,60 @@ def sync_mono_transactions(**_legacy_kwargs: Any) -> dict[str, Any]:
             )
         except Exception as exc:  # noqa: BLE001 — one bad account must not
             # abort the sweep; the error is recorded and the next runs.
-            logger.exception("Mono sweep failed for mono_id=%s", mono_account_id)
+            logger.error(
+                "Mono sweep account failed exception_type=%s",
+                exc.__class__.__name__,
+            )
             account_results.append(
                 {
                     "success": False,
-                    "mono_account_id": str(mono_account_id),
-                    "message": str(exc) or exc.__class__.__name__,
+                    "ingestion_state": "failed",
+                    "message": "Mono account synchronization failed.",
+                    "error_code": exc.__class__.__name__,
                 }
             )
 
-    total_errors = sum(0 if result.get("success") else 1 for result in account_results)
+    failed = sum(0 if result.get("success") else 1 for result in account_results)
     results = {
-        "success": total_errors == 0,
-        "accounts_synced": sum(
-            1 for result in account_results if result.get("success")
+        "success": failed == 0,
+        "completed": sum(
+            1
+            for result in account_results
+            if result.get("success") and result.get("ingestion_state") == "completed"
         ),
-        "accounts_failed": total_errors,
-        "total_transactions": sum(
+        "pending": sum(
+            1
+            for result in account_results
+            if result.get("success") and result.get("ingestion_state") == "pending"
+        ),
+        "failed": failed,
+        "skipped": sum(
+            1
+            for result in account_results
+            if result.get("success") and result.get("ingestion_state") == "skipped"
+        ),
+        "transactions_imported": sum(
             int(result.get("transactions_synced") or 0) for result in account_results
         ),
-        "total_errors": total_errors,
+        "duplicates_skipped": sum(
+            int(result.get("duplicates_skipped") or 0) for result in account_results
+        ),
         "errors": [
-            str(result.get("message") or result)
+            str(result.get("error_code") or "mono_sync_failed")
             for result in account_results
             if not result.get("success")
         ],
     }
 
     logger.info(
-        "Mono sync complete: %s accounts synced, %s transactions, %s errors",
-        results.get("accounts_synced", 0),
-        results.get("total_transactions", 0),
-        results.get("total_errors", 0),
+        "Mono sweep outcomes completed=%s pending=%s failed=%s skipped=%s "
+        "transactions_imported=%s duplicates_skipped=%s",
+        results["completed"],
+        results["pending"],
+        results["failed"],
+        results["skipped"],
+        results["transactions_imported"],
+        results["duplicates_skipped"],
     )
 
     return results
@@ -1527,7 +1554,7 @@ def sync_mono_account(
     deadlocks; persistent failures fall through to the next scheduled
     ``sync_mono_transactions`` run.
     """
-    logger.info("Syncing Mono account %s", mono_account_id)
+    logger.info("Starting Mono account synchronization")
 
     # Mode 3 — we have the Mono account ID but not its owning org.
     # Resolve BankAccount.mono_account_id → bank_account.organization_id
@@ -1542,54 +1569,55 @@ def sync_mono_account(
             select(BankAccount).where(BankAccount.mono_account_id == mono_account_id)
         )
         if bank_account is None:
-            logger.warning(
-                "sync_mono_account: no BankAccount linked to mono_id=%s",
-                mono_account_id,
-            )
-            return {"success": True, "skipped": True, "reason": "unlinked"}
+            logger.warning("Mono synchronization requested for an unlinked account")
+            return {
+                "success": True,
+                "skipped": True,
+                "ingestion_state": "skipped",
+                "reason": "unlinked",
+            }
         owning_org_id = bank_account.organization_id
         bank_account_id = bank_account.bank_account_id
 
     with session_for_org(owning_org_id) as db:
-        from app.services.finance.banking.mono_client import MonoError
         from app.services.finance.banking.mono_sync import MonoSyncService
 
         sync_svc = MonoSyncService(db, owning_org_id)
         if not sync_svc.is_configured():
             logger.info("Mono Connect not configured, skipping webhook sync")
-            return {"success": True, "skipped": True}
+            return {
+                "success": True,
+                "skipped": True,
+                "ingestion_state": "skipped",
+            }
 
+        account = db.get(BankAccount, bank_account_id)
+        if account is None:
+            return {
+                "success": True,
+                "skipped": True,
+                "ingestion_state": "skipped",
+                "reason": "unlinked",
+            }
         if refresh_first:
-            account = db.get(BankAccount, bank_account_id)
-            if account is not None:
-                try:
-                    sync_svc.sync_account_via_refresh(account)
-                except (MonoError, ValueError, RuntimeError) as exc:
-                    # A refresh failure must not block the cache pull below —
-                    # there may be lines already indexed that we can still
-                    # ingest. The error is recorded on the account by the
-                    # service; carry on and try to drain the cache.
-                    logger.warning(
-                        "Mono refresh failed for mono_id=%s (%s); "
-                        "continuing to cache pull",
-                        mono_account_id,
-                        exc,
-                    )
-
-        result = sync_svc.sync_by_mono_account_id(mono_account_id)
+            result = sync_svc.sync_account_for_scheduled_sweep(account)
+        else:
+            result = sync_svc.sync_account_incremental(account)
+        integration_health = account.mono_transaction_sync_status
         db.commit()
 
     if not result.success:
         logger.warning(
-            "Mono account sync failed: mono_id=%s message=%s errors=%s",
-            mono_account_id,
-            result.message,
-            result.errors,
+            "Mono account sync failed account_id=%s health=%s",
+            bank_account_id,
+            integration_health,
         )
 
     return {
         "success": result.success,
-        "mono_account_id": mono_account_id,
+        "bank_account_id": str(bank_account_id),
+        "ingestion_state": result.ingestion_state,
+        "integration_health": integration_health,
         "transactions_synced": result.transactions_synced,
         "duplicates_skipped": result.duplicates_skipped,
         "message": result.message,
