@@ -137,7 +137,7 @@
         "path": "tests/services/test_mono_sync.py",
         "symbol": "test_verify_webhook_rejects_empty_secrets",
         "category": "webhook_surface",
-        "fingerprint": "3db300e89674052e47d62060f10e90da27fa084ee070ba39df0a9a577d6bf628"
+        "fingerprint": "4f907fc550796c1b212c1cc8481d78488f55f6345669a1ecd7fe45a7b9c92349"
       },
       {
         "path": "tests/services/test_paystack_relay_resilience.py",

@@ -396,6 +396,8 @@ class BankAccountService:
         bank_account.mono_last_transaction_date = None
         bank_account.mono_last_synced_at = None
         bank_account.mono_last_ingest_at = None
+        bank_account.mono_transaction_sync_status = "never"
+        bank_account.mono_last_transaction_sync_at = None
         bank_account.mono_link_failed = False
         bank_account.mono_last_sync_error = None
         bank_account.updated_by = updated_by
