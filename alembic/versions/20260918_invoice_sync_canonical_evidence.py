@@ -100,6 +100,10 @@ def _protect(table: str) -> None:
 
 
 def upgrade() -> None:
+    # Table grants are unusable without schema visibility. Keep this explicit
+    # because the runtime role does not inherit app_admin's schema privileges.
+    op.execute(f"GRANT USAGE ON SCHEMA {SCHEMA} TO app_user")
+
     # --- A. Archive the live tables (rename only — no data movement) -------
     op.execute(f"ALTER TABLE {SCHEMA}.{OUTCOME_TABLE} RENAME TO {LEGACY_OUTCOME_TABLE}")
     op.execute(f"ALTER TABLE {SCHEMA}.{ISSUE_TABLE} RENAME TO {LEGACY_ISSUE_TABLE}")
@@ -389,3 +393,4 @@ def downgrade() -> None:
 
     op.execute(f"ALTER TABLE {SCHEMA}.{LEGACY_ISSUE_TABLE} RENAME TO {ISSUE_TABLE}")
     op.execute(f"ALTER TABLE {SCHEMA}.{LEGACY_OUTCOME_TABLE} RENAME TO {OUTCOME_TABLE}")
+    op.execute(f"REVOKE USAGE ON SCHEMA {SCHEMA} FROM app_user")

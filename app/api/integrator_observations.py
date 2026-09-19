@@ -46,6 +46,7 @@ from starlette.responses import JSONResponse, Response
 from app.api.idempotency import (
     build_request_hash,
     check_or_reserve_transactional_idempotency,
+    release_transactional_idempotency_reservation,
     update_transactional_idempotency_response,
 )
 from app.api.service_principal import (
@@ -165,7 +166,7 @@ def record_integrator_invoice_sync_observation(
     ),
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
-) -> IntegratorInvoiceSyncReceipt:
+) -> IntegratorInvoiceSyncReceipt | Response:
     _bind(capability_binding_id)
     organization_id = UUID(str(auth["organization_id"]))
     if not idempotency_key.strip():
@@ -218,21 +219,39 @@ def record_integrator_invoice_sync_observation(
             envelope=envelope,
         )
     except InvoiceSyncIdentityCollision as exc:
-        raise HTTPException(
+        release_transactional_idempotency_reservation(
+            db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=IDEMPOTENCY_SCOPE,
+            request_hash=request_hash,
+        )
+        return JSONResponse(
             status_code=409,
-            detail={
-                "code": "invoices.accounting_sync.identity_collision",
-                "message": str(exc),
+            content={
+                "detail": {
+                    "code": "invoices.accounting_sync.identity_collision",
+                    "message": str(exc),
+                }
             },
-        ) from exc
+        )
     except IntegratorObservationValidationError as exc:
-        raise HTTPException(
+        release_transactional_idempotency_reservation(
+            db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=IDEMPOTENCY_SCOPE,
+            request_hash=request_hash,
+        )
+        return JSONResponse(
             status_code=422,
-            detail={
-                "code": "invoices.accounting_sync.schema_rejected",
-                "message": str(exc),
+            content={
+                "detail": {
+                    "code": "invoices.accounting_sync.schema_rejected",
+                    "message": str(exc),
+                }
             },
-        ) from exc
+        )
     replayed = bool(result["replayed"])
     receipt = IntegratorInvoiceSyncReceipt(
         observation_id=str(result["outcome_id"]),

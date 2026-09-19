@@ -95,51 +95,6 @@ def check_or_reserve_idempotency(
     return None
 
 
-def update_idempotency_response(
-    db: Session,
-    *,
-    organization_id: UUID,
-    idempotency_key: str,
-    endpoint: str,
-    response_status: int,
-    response_body: dict[str, Any] | None,
-) -> None:
-    """Finalize a reservation through ERP's existing idempotency owner."""
-    IdempotencyService.update_response(
-        db=db,
-        organization_id=organization_id,
-        idempotency_key=idempotency_key,
-        endpoint=endpoint,
-        response_status=response_status,
-        response_body=response_body,
-    )
-
-
-def release_idempotency_reservation(
-    db: Session,
-    *,
-    organization_id: UUID,
-    idempotency_key: str,
-    endpoint: str,
-    request_hash: str,
-) -> None:
-    """Release this caller's unfinished reservation after a failed operation."""
-    record = IdempotencyService.check(
-        db=db,
-        organization_id=organization_id,
-        idempotency_key=idempotency_key,
-        endpoint=endpoint,
-        request_hash=request_hash,
-    )
-    if (
-        record is None
-        or record.response_status != IdempotencyService.RESERVATION_STATUS
-    ):
-        return
-    db.delete(record)
-    db.commit()
-
-
 def check_or_reserve_transactional_idempotency(
     db: Session,
     *,
@@ -236,6 +191,31 @@ def update_transactional_idempotency_response(
     record.response_status = response_status
     record.response_body = response_body
     db.flush()
+
+
+def release_transactional_idempotency_reservation(
+    db: Session,
+    *,
+    organization_id: UUID,
+    idempotency_key: str,
+    endpoint: str,
+    request_hash: str,
+) -> None:
+    """Discard this request's unfinished reservation without committing."""
+    record = db.scalar(
+        select(IdempotencyRecord).where(
+            IdempotencyRecord.organization_id == organization_id,
+            IdempotencyRecord.idempotency_key == idempotency_key,
+            IdempotencyRecord.endpoint == endpoint,
+        )
+    )
+    if (
+        record is not None
+        and record.request_hash == request_hash
+        and record.response_status == IdempotencyService.RESERVATION_STATUS
+    ):
+        db.delete(record)
+        db.flush()
 
 
 def build_cached_response(replay: IdempotencyReplay) -> Response:
