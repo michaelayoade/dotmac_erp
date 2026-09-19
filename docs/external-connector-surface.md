@@ -115,7 +115,7 @@ revision, so its two entries also preserve that stronger dead-code signal.
 | `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature` | `webhook_surface` | `18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d` |
 | `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature_unconfigured` | `webhook_surface` | `18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d` |
 | `tests/services/test_hook_registry.py` | `TestHookRegistry` | `webhook_surface` | `30d9cf711d1444dd4d20b815ca18b894ef283058e856b1311b252bef5282bac0` |
-| `tests/services/test_mono_sync.py` | `test_verify_webhook_rejects_empty_secrets` | `webhook_surface` | `3db300e89674052e47d62060f10e90da27fa084ee070ba39df0a9a577d6bf628` |
+| `tests/services/test_mono_sync.py` | `test_verify_webhook_rejects_empty_secrets` | `webhook_surface` | `4f907fc550796c1b212c1cc8481d78488f55f6345669a1ecd7fe45a7b9c92349` |
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_circuit_opens_after_transport_failure` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_retries_transient_server_error_with_exact_body` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
 | `tests/tasks/test_hooks_tasks.py` | `TestExecuteAsyncHook` | `delivery_retry` | `ced43bd99de9a2af6ac3d9d4be8e3bb3a254f17d4b7435bb8eedb1c29a399ff6` |
