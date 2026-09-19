@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
+from typing import Final
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -21,6 +22,15 @@ from app.models.finance.ar.dotmac_sub_invoice_sync_outcome import (
 
 CONTRACT_VERSION = "invoice-accounting-sync.v2"
 logger = logging.getLogger(__name__)
+
+# Sub's invoice-accounting-sync.v2 feed publishes ``digest_version`` alongside
+# its canonical ``projection_digest``. This is the ONE place both
+# ``app.schemas.integrator_observation`` and
+# ``app.services.dotmac_sub.invoice_sync_shadow`` import it from — this module
+# is the persistence/contract owner, and both of those already import
+# ``CONTRACT_VERSION`` from here, so this is an existing, acyclic import
+# direction, not a new dependency.
+SUPPORTED_DIGEST_VERSION: Final[int] = 1
 
 
 class InvoiceSyncDisposition(str, Enum):
@@ -63,6 +73,7 @@ class RecordInvoiceSyncOutcome:
     source_kind: InvoiceSyncSourceKind
     disposition: InvoiceSyncDisposition
     projection_fingerprint: str
+    digest_version: int
     issues: tuple[InvoiceSyncIssueEvidence, ...] = ()
     observed_at: datetime | None = None
     contract_version: str = CONTRACT_VERSION
@@ -95,6 +106,14 @@ class InvoiceSyncOutcomeConflictError(InvoiceSyncOutcomeError):
         )
 
 
+class InvoiceSyncRevisionConflict(InvoiceSyncOutcomeConflictError):
+    """The same Self-Care invoice revision produced a genuinely different
+    outcome — a real producer disagreement, not a malformed request. Callers
+    distinguish this from the parent class to escalate to a human (409)
+    rather than treat it as a terminal, dead-letterable validation failure
+    (422)."""
+
+
 def _decimal_text(value: Decimal | None) -> str | None:
     return format(value, "f") if value is not None else None
 
@@ -121,6 +140,11 @@ def _validated(
         raise InvoiceSyncOutcomeError(
             f"unsupported invoice sync contract {command.contract_version!r}"
         )
+    if command.digest_version != SUPPORTED_DIGEST_VERSION:
+        raise InvoiceSyncOutcomeError(
+            f"unsupported digest_version {command.digest_version!r}; this ERP "
+            f"build only accepts {SUPPORTED_DIGEST_VERSION!r}"
+        )
     fingerprint = command.projection_fingerprint
     if len(fingerprint) != 64 or any(
         char not in "0123456789abcdef" for char in fingerprint
@@ -133,13 +157,57 @@ def _validated(
     if command.disposition is not InvoiceSyncDisposition.BLOCKED and command.issues:
         raise InvoiceSyncOutcomeError("only blocked outcomes may carry issue evidence")
 
+    # Sorted by an explicit key of already-comparable primitives, never by
+    # falling through tuple comparison into the `InvoiceSyncIssueEvidence`
+    # instances themselves: that dataclass has no `__lt__` (not
+    # `order=True`), so two entries sharing a fingerprint would raise
+    # `TypeError` on comparison — reachable in practice if a `Decimal("NaN")`
+    # amount (a bare `Decimal` field admits it) ever produced equal
+    # fingerprints for two otherwise-distinct issues.
     normalized = tuple(
-        sorted((_issue_fingerprint(issue), issue) for issue in command.issues)
+        sorted(
+            ((_issue_fingerprint(issue), issue) for issue in command.issues),
+            key=lambda item: (
+                item[0],
+                str(item[1].source_line_id),
+                _decimal_text(item[1].expected_amount) or "",
+                _decimal_text(item[1].actual_amount) or "",
+                item[1].code.value,
+            ),
+        )
     )
     fingerprints = [item[0] for item in normalized]
     if len(fingerprints) != len(set(fingerprints)):
         raise InvoiceSyncOutcomeError("duplicate issue evidence is not allowed")
     return command.observed_at or datetime.now(timezone.utc), normalized
+
+
+def find_existing_outcome(
+    db: Session,
+    *,
+    organization_id: UUID,
+    source_invoice_id: UUID,
+    source_updated_at: datetime,
+    digest_version: int,
+    for_update: bool,
+) -> DotmacSubInvoiceSyncOutcome | None:
+    """The one 4-column identity lookup, shared by the write path's stability
+    check and the mirror route's read-only comparison — so the two can never
+    independently drift on what "the same key" means.
+
+    ``for_update`` controls row locking: the write path locks (``True``,
+    unchanged behavior); the mirror comparison never writes, so it always
+    passes ``False``.
+    """
+    stmt = select(DotmacSubInvoiceSyncOutcome).where(
+        DotmacSubInvoiceSyncOutcome.organization_id == organization_id,
+        DotmacSubInvoiceSyncOutcome.source_invoice_id == source_invoice_id,
+        DotmacSubInvoiceSyncOutcome.source_updated_at == source_updated_at,
+        DotmacSubInvoiceSyncOutcome.digest_version == digest_version,
+    )
+    if for_update:
+        stmt = stmt.with_for_update()
+    return db.scalar(stmt)
 
 
 def record_invoice_sync_outcome(
@@ -148,14 +216,13 @@ def record_invoice_sync_outcome(
     """Record or replay one source revision without committing the caller's transaction."""
 
     observed_at, normalized = _validated(command)
-    existing = db.scalar(
-        select(DotmacSubInvoiceSyncOutcome)
-        .where(
-            DotmacSubInvoiceSyncOutcome.organization_id == command.organization_id,
-            DotmacSubInvoiceSyncOutcome.source_invoice_id == command.source_invoice_id,
-            DotmacSubInvoiceSyncOutcome.source_updated_at == command.source_updated_at,
-        )
-        .with_for_update()
+    existing = find_existing_outcome(
+        db,
+        organization_id=command.organization_id,
+        source_invoice_id=command.source_invoice_id,
+        source_updated_at=command.source_updated_at,
+        digest_version=command.digest_version,
+        for_update=True,
     )
     if existing is not None:
         incoming: dict[str, str | int] = {
@@ -183,7 +250,7 @@ def record_invoice_sync_outcome(
                     "differences": differences,
                 },
             )
-            raise InvoiceSyncOutcomeConflictError(differences)
+            raise InvoiceSyncRevisionConflict(differences)
         existing.occurrence_count += 1
         existing.last_seen_at = observed_at
         db.flush()
@@ -202,6 +269,7 @@ def record_invoice_sync_outcome(
         source_kind=command.source_kind.value,
         disposition=command.disposition.value,
         projection_fingerprint=command.projection_fingerprint,
+        digest_version=command.digest_version,
         issue_count=len(normalized),
         first_seen_at=observed_at,
         last_seen_at=observed_at,

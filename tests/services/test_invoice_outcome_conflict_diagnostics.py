@@ -9,6 +9,7 @@ import pytest
 
 from app.services.dotmac_sub.invoice_sync_outcomes import (
     CONTRACT_VERSION,
+    SUPPORTED_DIGEST_VERSION,
     InvoiceSyncDisposition,
     InvoiceSyncIssueCode,
     InvoiceSyncIssueEvidence,
@@ -30,6 +31,7 @@ def replay():
         source_kind=InvoiceSyncSourceKind.NATIVE,
         disposition=InvoiceSyncDisposition.BLOCKED,
         projection_fingerprint="a" * 64,
+        digest_version=SUPPORTED_DIGEST_VERSION,
         issues=(InvoiceSyncIssueEvidence(InvoiceSyncIssueCode.HEADER_TAX_MISMATCH),),
         observed_at=now,
     )
@@ -39,6 +41,7 @@ def replay():
         source_kind="native",
         disposition="blocked",
         projection_fingerprint="a" * 64,
+        digest_version=SUPPORTED_DIGEST_VERSION,
         issue_count=1,
         occurrence_count=3,
         last_seen_at=now,
@@ -58,7 +61,7 @@ def replay():
         ("issue_count", 2),
     ],
 )
-def test_conflict_identifies_field_and_never_mutates_evidence(
+def test_same_digest_version_conflict_identifies_field_and_never_mutates_evidence(
     replay, caplog, field, previous
 ):
     db, command, existing = replay

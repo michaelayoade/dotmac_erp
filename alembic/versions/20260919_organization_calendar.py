@@ -1,7 +1,7 @@
 """Add the ERP-owned organization calendar foundation.
 
 Revision ID: 20260919_organization_calendar
-Revises: 20260918_push_delivery_outcomes
+Revises: 20260919_merge_invoice_sync_push_delivery
 Create Date: 2026-09-19
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "20260919_organization_calendar"
-down_revision = "20260918_push_delivery_outcomes"
+down_revision = "20260919_merge_invoice_sync_push_delivery"
 branch_labels = None
 depends_on = None
 
