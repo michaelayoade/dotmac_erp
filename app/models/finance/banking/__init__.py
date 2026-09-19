@@ -12,6 +12,7 @@ from app.models.finance.banking.bank_account import (
     BankAccount,
     BankAccountStatus,
     BankAccountType,
+    MonoTransactionSyncStatus,
 )
 from app.models.finance.banking.bank_reconciliation import (
     BankReconciliation,
@@ -51,6 +52,7 @@ __all__ = [
     "BankAccount",
     "BankAccountStatus",
     "BankAccountType",
+    "MonoTransactionSyncStatus",
     # Bank Statement
     "BankStatement",
     "BankStatementLine",
