@@ -123,3 +123,53 @@ class TestSettings:
             assert (
                 config_module.settings.brand_logo_url == "https://example.com/logo.png"
             )
+
+    def test_integrator_invoice_sync_defaults(self):
+        """Default binding id is a clearly-fake placeholder; scope defaults
+        are the documented fallbacks."""
+        with patch.dict(os.environ, {}, clear=True):
+            import importlib
+
+            import app.config as config_module
+
+            importlib.reload(config_module)
+
+            assert (
+                config_module.settings.integrator_invoice_sync_binding_id
+                == "00000000-0000-0000-0000-000000000001"
+            )
+            assert (
+                config_module.settings.integrator_invoice_sync_scope_kind
+                == "organization"
+            )
+            assert (
+                config_module.settings.integrator_invoice_sync_scope_ref
+                == "unconfigured"
+            )
+
+    def test_custom_integrator_invoice_sync_settings_from_env(self):
+        """Test that the integrator invoice-accounting-sync env vars are
+        respected."""
+        custom_binding_id = "11111111-1111-1111-1111-111111111111"
+        with patch.dict(
+            os.environ,
+            {
+                "INTEGRATOR_INVOICE_SYNC_BINDING_ID": custom_binding_id,
+                "INTEGRATOR_INVOICE_SYNC_SCOPE_KIND": "tenant",
+                "INTEGRATOR_INVOICE_SYNC_SCOPE_REF": "acme-corp",
+            },
+        ):
+            import importlib
+
+            import app.config as config_module
+
+            importlib.reload(config_module)
+
+            assert (
+                config_module.settings.integrator_invoice_sync_binding_id
+                == custom_binding_id
+            )
+            assert config_module.settings.integrator_invoice_sync_scope_kind == "tenant"
+            assert (
+                config_module.settings.integrator_invoice_sync_scope_ref == "acme-corp"
+            )

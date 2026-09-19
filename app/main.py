@@ -52,6 +52,7 @@ from app.api.finance import (
 )
 from app.api.fixed_assets import router as fa_api_router
 from app.api.fleet import router as fleet_router
+from app.api.integrator_observations import router as integrator_observations_router
 from app.api.inventory import router as inv_api_router
 from app.api.me import router as me_router
 from app.api.people import router as people_hr_router
@@ -866,6 +867,7 @@ if is_module_enabled("projects"):
 # guards and are independent of every optional ERP feature flag.
 # ---------------------------------------------------------------------------
 _include_api_router(sub_sync_router)
+_include_api_router(integrator_observations_router)
 
 # ---------------------------------------------------------------------------
 # Coach/Intelligence module

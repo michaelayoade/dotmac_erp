@@ -49,6 +49,8 @@ def _payload() -> dict[str, object]:
         "is_proforma": False,
         "updated_at": "2026-09-06T10:00:00Z",
         "disposition": "ready",
+        "digest_version": 1,
+        "projection_digest": "b" * 64,
         "issues": [],
         "lines": [
             {
@@ -83,6 +85,8 @@ def test_accounting_v2_parser_admits_typed_ready_projection() -> None:
     assert record.tax_total == Decimal("75.00")
     assert record.lines[0].tax_application is TaxApplication.EXCLUSIVE
     assert record.lines[0].tax_rate_code == "VAT75"
+    assert record.digest_version == 1
+    assert record.projection_digest == "b" * 64
 
 
 def test_accounting_v2_parser_preserves_blocking_issue_evidence() -> None:
@@ -162,6 +166,66 @@ def test_accounting_v2_parser_rejects_contradictory_disposition_evidence(
     payload["issues"] = issues
 
     with pytest.raises(DotmacSubParseError, match=message):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
+def test_accounting_v2_parser_rejects_missing_digest_version() -> None:
+    payload = _payload()
+    del payload["digest_version"]
+
+    with pytest.raises(DotmacSubParseError, match="digest_version"):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
+@pytest.mark.parametrize("value", [0, -1])
+def test_accounting_v2_parser_rejects_non_positive_digest_version(value: int) -> None:
+    payload = _payload()
+    payload["digest_version"] = value
+
+    with pytest.raises(DotmacSubParseError, match="digest_version"):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
+def test_accounting_v2_parser_rejects_boolean_digest_version() -> None:
+    payload = _payload()
+    payload["digest_version"] = True
+
+    with pytest.raises(DotmacSubParseError, match="digest_version"):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
+def test_accounting_v2_parser_rejects_non_integer_digest_version() -> None:
+    payload = _payload()
+    payload["digest_version"] = "1"
+
+    with pytest.raises(DotmacSubParseError, match="digest_version"):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
+def test_accounting_v2_parser_rejects_missing_projection_digest() -> None:
+    payload = _payload()
+    del payload["projection_digest"]
+
+    with pytest.raises(DotmacSubParseError, match="projection_digest"):
+        _client()._parse_invoice_accounting_sync_v2(payload)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "b" * 63,
+        "B" * 64,
+        "z" * 64,
+        123,
+    ],
+)
+def test_accounting_v2_parser_rejects_malformed_projection_digest(
+    value: object,
+) -> None:
+    payload = _payload()
+    payload["projection_digest"] = value
+
+    with pytest.raises(DotmacSubParseError, match="projection_digest"):
         _client()._parse_invoice_accounting_sync_v2(payload)
 
 
