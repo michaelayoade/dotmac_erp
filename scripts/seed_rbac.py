@@ -2685,6 +2685,7 @@ ROLE_PERMISSIONS = {
     "technician": [
         # Employee-equivalent grants. ERP web navigation applies the UI-only
         # expense restriction, while API integrations retain these permissions.
+        "calendar:events:read_assigned",
         "coach:insights:read",
         "coach:insights:feedback",
         "coach:reports:read",
