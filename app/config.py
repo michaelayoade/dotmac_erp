@@ -395,5 +395,33 @@ class Settings:
     # an unprimed route is found and needs to be fixed before enforcement.
     enforce_org_filter: bool = os.getenv("ENFORCE_ORG_FILTER", "true").lower() == "true"
 
+    # ==========================================================================
+    # Integrator invoice-accounting-sync ProductPort binding
+    # ==========================================================================
+    # The one capability_binding_id this ERP deployment's invoice-accounting-sync
+    # port answers to; the descriptor and write/mirror routes all check the
+    # URL path's capability_binding_id against it. The default is a clearly
+    # fake placeholder UUID and MUST be overridden per real deployment.
+    integrator_invoice_sync_binding_id: str = os.getenv(
+        "INTEGRATOR_INVOICE_SYNC_BINDING_ID",
+        "00000000-0000-0000-0000-000000000001",
+    )
+    # The descriptor's destination_scope — an opaque value the Integrator
+    # carries as provenance but never interprets. Deployment-specific (which
+    # organization this fixed binding routes to), so a config knob rather
+    # than a hardcoded constant.
+    integrator_invoice_sync_scope_kind: str = os.getenv(
+        "INTEGRATOR_INVOICE_SYNC_SCOPE_KIND", "organization"
+    )
+    integrator_invoice_sync_scope_ref: str = os.getenv(
+        "INTEGRATOR_INVOICE_SYNC_SCOPE_REF", "unconfigured"
+    )
+    # The only Integrator installation whose Sub connector this fixed binding
+    # admits. A placeholder fails closed until explicitly configured.
+    integrator_invoice_sync_installation_id: str = os.getenv(
+        "INTEGRATOR_INVOICE_SYNC_INSTALLATION_ID",
+        "00000000-0000-0000-0000-000000000001",
+    )
+
 
 settings = Settings()

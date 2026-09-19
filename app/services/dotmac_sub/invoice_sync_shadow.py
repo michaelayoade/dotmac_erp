@@ -6,14 +6,9 @@ dependency on the ERP invoice posting service.
 
 from __future__ import annotations
 
-import hashlib
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
-from enum import Enum
 from itertools import islice
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -28,6 +23,7 @@ from app.services.dotmac_sub.client import (
     InvoiceAccountingSyncRecord,
 )
 from app.services.dotmac_sub.invoice_sync_outcomes import (
+    SUPPORTED_DIGEST_VERSION,
     InvoiceSyncDisposition,
     InvoiceSyncIssueCode,
     InvoiceSyncIssueEvidence,
@@ -53,40 +49,30 @@ class InvoiceSyncShadowResult:
     truncated: bool
 
 
-def _json_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _json_value(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
-    if isinstance(value, Decimal):
-        return format(value, "f")
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, Enum):
-        return value.value
-    return value
-
-
-def invoice_projection_fingerprint(record: InvoiceAccountingSyncRecord) -> str:
-    """Hash every admitted source fact using a stable JSON representation."""
-    payload = json.dumps(
-        _json_value(asdict(record)),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-    ).encode()
-    return hashlib.sha256(payload).hexdigest()
-
-
-def _latest_position(
+def _latest_canonical_position(
     db: Session, organization_id: UUID
 ) -> tuple[datetime, UUID] | None:
+    """The cursor's latest observed canonical-scheme position, or ``None``.
+
+    Legacy evidence lives only in the renamed ``_legacy`` tables, which this
+    module never imports, so a legacy row can never influence this cursor —
+    the ``digest_version`` predicate below is defensive/explicit rather than
+    strictly required for correctness once the table rename has landed, but
+    it costs nothing and states the invariant at the query site. Returning
+    ``None`` when only legacy rows exist for an organization is intentional:
+    it makes ``observe_invoice_accounting_v2`` re-observe that invoice at its
+    current revision, since legacy evidence is historically unverifiable and
+    was never forwarded from Self-Care's canonical digest.
+    """
     row = db.execute(
         select(
             DotmacSubInvoiceSyncOutcome.source_updated_at,
             DotmacSubInvoiceSyncOutcome.source_invoice_id,
         )
-        .where(DotmacSubInvoiceSyncOutcome.organization_id == organization_id)
+        .where(
+            DotmacSubInvoiceSyncOutcome.organization_id == organization_id,
+            DotmacSubInvoiceSyncOutcome.digest_version == SUPPORTED_DIGEST_VERSION,
+        )
         .order_by(
             DotmacSubInvoiceSyncOutcome.source_updated_at.desc(),
             DotmacSubInvoiceSyncOutcome.source_invoice_id.desc(),
@@ -99,6 +85,12 @@ def _latest_position(
 def _command(
     organization_id: UUID, record: InvoiceAccountingSyncRecord
 ) -> RecordInvoiceSyncOutcome:
+    if record.digest_version != SUPPORTED_DIGEST_VERSION:
+        raise InvoiceSyncShadowContractError(
+            f"invoice {record.source_invoice_id} carries unsupported "
+            f"digest_version {record.digest_version!r}; this ERP build only "
+            f"accepts {SUPPORTED_DIGEST_VERSION!r}"
+        )
     if record.updated_at is None or record.updated_at.tzinfo is None:
         raise InvoiceSyncShadowContractError(
             f"invoice {record.source_invoice_id} has no timezone-aware updated_at"
@@ -126,7 +118,8 @@ def _command(
         source_updated_at=record.updated_at,
         source_kind=source_kind,
         disposition=disposition,
-        projection_fingerprint=invoice_projection_fingerprint(record),
+        projection_fingerprint=record.projection_digest,
+        digest_version=record.digest_version,
         issues=issues,
     )
 
@@ -214,7 +207,11 @@ def observe_invoice_accounting_v2(
     if not 1 <= batch_size <= 2000:
         raise ValueError("batch_size must be between 1 and 2000")
 
-    cursor = None if invoice_id is not None else _latest_position(db, organization_id)
+    cursor = (
+        None
+        if invoice_id is not None
+        else _latest_canonical_position(db, organization_id)
+    )
     parse_errors: list[DotmacSubParseError] = []
     counts = {"ready": 0, "blocked": 0, "not_applicable": 0}
     observed = replayed = resolved_prior = 0
