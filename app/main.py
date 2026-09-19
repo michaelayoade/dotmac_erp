@@ -66,9 +66,6 @@ from app.api.support import router as support_router
 from app.api.sync.dotmac_sub import router as sub_sync_router
 from app.api.sync.backoffice_people import router as backoffice_people_router
 from app.api.sync.staff_access import router as staff_access_router
-from app.api.sync.organization_calendar import (
-    router as organization_calendar_sync_router,
-)
 from app.api.sync.sub_attendance import router as sub_attendance_router
 from app.api.workflow_tasks import router as workflow_tasks_router
 from app.config import settings
@@ -752,7 +749,6 @@ if is_module_enabled("people"):
     _include_api_router(sub_attendance_router)
     app.include_router(staff_access_router, prefix="/api/v1")
     app.include_router(backoffice_people_router, prefix="/api/v1")
-    app.include_router(organization_calendar_sync_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Finance module

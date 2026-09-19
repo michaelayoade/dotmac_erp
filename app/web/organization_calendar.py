@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import calendar as month_calendar
 import uuid
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
@@ -39,6 +39,7 @@ UPDATE_PERMISSIONS = ["calendar:events:update_own", "calendar:events:update_all"
 CANCEL_PERMISSIONS = ["calendar:events:cancel_own", "calendar:events:cancel_all"]
 
 router = APIRouter(prefix="/admin/calendar", tags=["organization-calendar-web"])
+UTC = timezone.utc
 
 
 def _rollback_and_reprime(db: Session, organization_id: uuid.UUID) -> None:
@@ -65,10 +66,12 @@ def _local_event_bounds(
     event: OrganizationCalendarEvent,
 ) -> tuple[date, date, str]:
     if event.all_day:
-        assert event.start_date is not None and event.end_date_exclusive is not None
+        if event.start_date is None or event.end_date_exclusive is None:
+            raise CalendarError("All-day calendar event dates are incomplete.")
         return event.start_date, event.end_date_exclusive, "All day"
     tz = ZoneInfo(event.timezone or DEFAULT_TIMEZONE)
-    assert event.start_at is not None and event.end_at is not None
+    if event.start_at is None or event.end_at is None:
+        raise CalendarError("Timed calendar event dates are incomplete.")
     start = event.start_at.astimezone(tz)
     end = event.end_at.astimezone(tz)
     return start.date(), end.date() + timedelta(days=1), start.strftime("%H:%M")
@@ -294,6 +297,7 @@ async def _read_form(
         "start_time": str(raw.get("start_time") or ""),
         "end_time": str(raw.get("end_time") or ""),
         "color": str(raw.get("color") or "#4F46E5"),
+        "version": str(raw.get("version") or ""),
         "selected_participants": {str(value) for value in participant_ids},
         "reminder_offsets": {str(value) for value in reminder_offsets},
     }
@@ -356,29 +360,17 @@ def sync_issues_page(
     db: Session = Depends(get_db_for_org),
 ):
     service = OrganizationCalendarService(db, auth.organization_id)
-    events = service.list_sync_issues()
+    issues = service.list_delivery_issues()
     eligible, excluded = service.eligible_participants()
     rows: list[dict[str, object]] = []
-    for event in events:
-        counts: dict[str, int] = {}
-        errors: list[str] = []
-        for participant in event.participants:
-            counts[participant.sync_status] = counts.get(participant.sync_status, 0) + 1
-            if (
-                participant.last_error_message
-                and participant.last_error_message not in errors
-            ):
-                errors.append(participant.last_error_message)
+    for issue in issues:
         rows.append(
             {
-                "event": event,
-                "counts": counts,
-                "error_messages": errors[:3],
-                "last_remote_sync_at": (
-                    event.remote_state.last_remote_sync_at
-                    if event.remote_state
-                    else None
-                ),
+                "event": issue.event,
+                "delivery": issue.delivery,
+                "error_messages": [issue.delivery.error_message]
+                if issue.delivery.error_message
+                else [],
             }
         )
     context = base_context(
@@ -555,8 +547,7 @@ async def update_event(
     try:
         submitted, participant_ids, reminders, add_everyone = await _read_form(request)
         _require_participant_management(auth, participant_ids, add_everyone)
-        raw = getattr(request.state, "csrf_form", None)
-        expected_version = int(str(raw.get("version")))
+        expected_version = int(str(submitted["version"]))
         if add_everyone and not auth.has_permission("calendar:participants:add_all"):
             raise HTTPException(
                 status_code=403, detail="Add Everyone permission required"

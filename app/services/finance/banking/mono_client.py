@@ -31,6 +31,10 @@ class MonoError(Exception):
         self.status_code = status_code
 
 
+class MonoTransientError(MonoError):
+    """Mono could not be reached or returned a retryable response."""
+
+
 @dataclass
 class MonoConfig:
     """Configuration for Mono API."""
@@ -249,7 +253,12 @@ class MonoClient:
                 except ValueError:
                     body = {}
                 msg = body.get("message", response.text[:200])
-                raise MonoError(
+                error_type = (
+                    MonoTransientError
+                    if response.status_code == 429 or response.status_code >= 500
+                    else MonoError
+                )
+                raise error_type(
                     f"Mono API error: {msg}",
                     status_code=response.status_code,
                 )
@@ -269,7 +278,7 @@ class MonoClient:
                 "request_error",
                 max(time.perf_counter() - started_at, 0.0),
             )
-            raise MonoError(f"Mono request failed: {exc}") from exc
+            raise MonoTransientError("Mono request failed") from exc
         finally:
             if metric_status == "success":
                 observe_integration_request(
@@ -306,7 +315,7 @@ class MonoClient:
         account_id = data.get("id") or ""
         if not account_id:
             raise MonoError("No account ID returned from Mono")
-        logger.info("Mono token exchanged successfully, account_id=%s", account_id)
+        logger.info("Mono token exchanged successfully")
         return MonoExchangeResult(account_id=account_id)
 
     # ------------------------------------------------------------------
@@ -482,7 +491,12 @@ class MonoClient:
                 except ValueError:
                     body = {}
                 msg = body.get("message", response.text[:200])
-                raise MonoError(
+                error_type = (
+                    MonoTransientError
+                    if response.status_code == 429 or response.status_code >= 500
+                    else MonoError
+                )
+                raise error_type(
                     f"Mono API error: {msg}",
                     status_code=response.status_code,
                 )
@@ -492,9 +506,7 @@ class MonoClient:
             job_status = response.headers.get("x-job-status") or None
 
             logger.info(
-                "Mono data refresh triggered for account_id=%s: "
-                "has_new_data=%s job_id=%s job_status=%s",
-                account_id,
+                "Mono data refresh triggered has_new_data=%s job_id=%s job_status=%s",
                 has_new_data,
                 job_id,
                 job_status,
@@ -519,7 +531,7 @@ class MonoClient:
                 "request_error",
                 max(time.perf_counter() - started_at, 0.0),
             )
-            raise MonoError(f"Mono request failed: {exc}") from exc
+            raise MonoTransientError("Mono request failed") from exc
         finally:
             if metric_status == "success":
                 observe_integration_request(

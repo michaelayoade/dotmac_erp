@@ -25,9 +25,6 @@
             {% if can_edit and event.business_status != 'CANCELLED' %}
             <a href="/admin/calendar/events/{{ event.event_id }}/edit" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">{{ icon_svg("edit", "h-4 w-4") }} Edit</a>
             {% endif %}
-            {% if auth.has_permission('calendar:sync:retry') and event.sync_status in ['FAILED', 'PARTIAL_FAILURE'] %}
-            <form action="/admin/calendar/events/{{ event.event_id }}/retry" method="post">{{ request.state.csrf_form | safe }}<button type="submit" class="inline-flex items-center gap-2 rounded-xl border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300">{{ icon_svg("refresh", "h-4 w-4") }} Retry sync</button></form>
-            {% endif %}
             {% if can_cancel and event.business_status != 'CANCELLED' %}
             <form action="/admin/calendar/events/{{ event.event_id }}/delete" method="post" onsubmit="return confirm('Delete this event? Published participant copies will be cancelled.');">
                 {{ request.state.csrf_form | safe }}<input type="hidden" name="version" value="{{ event.version }}">
@@ -69,7 +66,6 @@
                     {% for participant in active_participants %}
                     <div class="flex items-center justify-between gap-3 py-3">
                         <div class="min-w-0"><p class="truncate text-sm font-medium text-slate-800 dark:text-slate-200">{{ participant.participant_name }}</p><p class="truncate text-xs text-slate-500">{{ participant.participant_email }}</p></div>
-                        <span class="rounded-full px-2 py-1 text-[10px] font-semibold {{ 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' if participant.sync_status == 'SYNCED' else 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' if participant.sync_status in ['PENDING', 'SYNCING'] else 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' if 'FAILED' in participant.sync_status else 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">{{ participant.sync_status | replace('_', ' ') | title }}</span>
                     </div>
                     {% else %}<p class="py-8 text-center text-sm text-slate-500">No active participants.</p>{% endfor %}
                 </div>
@@ -78,12 +74,10 @@
 
         <aside class="space-y-5">
             <section class="admin-card p-5">
-                <h2 class="text-base font-semibold text-slate-900 dark:text-white">Synchronization</h2>
+                <h2 class="text-base font-semibold text-slate-900 dark:text-white">Delivery identity</h2>
                 <dl class="mt-4 space-y-3 text-sm">
-                    <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Status</dt><dd class="font-semibold text-slate-800 dark:text-slate-200">{{ event.sync_status | replace('_', ' ') | title }}</dd></div>
                     <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Version</dt><dd class="font-mono text-slate-700 dark:text-slate-300">{{ event.version }}</dd></div>
                     <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">UID</dt><dd class="max-w-44 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title="{{ event.ical_uid }}">{{ event.ical_uid }}</dd></div>
-                    {% if event.remote_state and event.remote_state.nextcloud_etag %}<div class="flex items-center justify-between gap-3"><dt class="text-slate-500">ETag</dt><dd class="max-w-36 truncate font-mono text-xs text-slate-700 dark:text-slate-300">{{ event.remote_state.nextcloud_etag }}</dd></div>{% endif %}
                 </dl>
             </section>
             <section class="admin-card p-5">

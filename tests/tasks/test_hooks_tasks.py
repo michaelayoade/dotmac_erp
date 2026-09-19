@@ -209,7 +209,7 @@ class TestExecuteAsyncHook:
         assert hook.is_active is False
         mock_retry.assert_not_called()
 
-    def test_terminal_calendar_hook_failure_updates_erp_sync_state(self) -> None:
+    def test_terminal_calendar_hook_failure_stays_on_delivery_execution(self) -> None:
         execution_id = uuid4()
         hook_id = uuid4()
         org_id = uuid4()
@@ -252,9 +252,6 @@ class TestExecuteAsyncHook:
         with (
             patch("app.tasks.hooks.session_for_org") as mock_org_session,
             patch("app.tasks.hooks._execute_hook_handler", side_effect=error),
-            patch(
-                "app.services.organization_calendar.OrganizationCalendarService"
-            ) as mock_calendar_service,
         ):
             mock_org_session.return_value.__enter__ = MagicMock(return_value=mock_db)
             mock_org_session.return_value.__exit__ = MagicMock(return_value=False)
@@ -267,20 +264,8 @@ class TestExecuteAsyncHook:
             )
 
         assert result["ok"] is False
-        record_failure = (
-            mock_calendar_service.return_value.record_transport_failure
-        )
-        record_failure.assert_called_once_with(
-            event_id,
-            event_version=5,
-            error_code="INTEGRATOR_DELIVERY_FAILED",
-            safe_error_message=(
-                "The Integrator could not accept this calendar event. "
-                "Review the connector and retry the event."
-            ),
-            retryable=True,
-            correlation_id="calendar-correlation",
-        )
+        assert execution.status == ExecutionStatus.DEAD
+        assert execution.error_message == "boom"
 
     def test_webhook_client_error_fails_without_retry(self) -> None:
         execution_id = uuid4()

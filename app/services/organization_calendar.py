@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -13,18 +13,19 @@ from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+from app.models.finance.platform.service_hook_execution import (
+    ExecutionStatus,
+    ServiceHookExecution,
+)
 from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
     CalendarEventScope,
-    CalendarSyncStatus,
     OrganizationCalendarAudit,
     OrganizationCalendarEvent,
     OrganizationCalendarParticipant,
     OrganizationCalendarReminder,
-    OrganizationCalendarRemoteEvent,
     ParticipantMembershipStatus,
-    ParticipantSyncStatus,
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
@@ -38,6 +39,7 @@ DEFAULT_TIMEZONE = "Africa/Lagos"
 MAX_REMINDERS = 3
 MAX_PARTICIPANTS = 1000
 _HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
+UTC = timezone.utc
 
 
 class CalendarError(ValueError):
@@ -83,6 +85,14 @@ class CalendarEventData:
     start_date: date | None
     end_date_exclusive: date | None
     color: str = "#4F46E5"
+
+
+@dataclass(frozen=True)
+class CalendarDeliveryIssue:
+    """A failed calendar delivery projected from its canonical execution log."""
+
+    event: OrganizationCalendarEvent
+    delivery: ServiceHookExecution
 
 
 class OrganizationCalendarService:
@@ -161,7 +171,6 @@ class OrganizationCalendarService:
             .options(
                 selectinload(OrganizationCalendarEvent.participants),
                 selectinload(OrganizationCalendarEvent.reminders),
-                selectinload(OrganizationCalendarEvent.remote_state),
             )
             .where(
                 OrganizationCalendarEvent.organization_id == self.organization_id,
@@ -371,46 +380,36 @@ class OrganizationCalendarService:
             _owner_person_id=actor_person_id,
         )
 
-    def list_sync_issues(
-        self, *, stale_after_minutes: int = 15, limit: int = 200
-    ) -> list[OrganizationCalendarEvent]:
-        """Return failed or unusually old in-flight calendar deliveries."""
-        stale_before = datetime.now(UTC) - timedelta(minutes=stale_after_minutes)
-        return list(
+    def list_delivery_issues(self, *, limit: int = 200) -> list[CalendarDeliveryIssue]:
+        """Project failed calendar deliveries from the hook execution owner."""
+        deliveries = list(
             self.db.scalars(
-                select(OrganizationCalendarEvent)
-                .options(
-                    selectinload(OrganizationCalendarEvent.participants),
-                    selectinload(OrganizationCalendarEvent.remote_state),
-                )
+                select(ServiceHookExecution)
                 .where(
-                    OrganizationCalendarEvent.organization_id == self.organization_id,
-                    OrganizationCalendarEvent.event_scope
-                    == CalendarEventScope.ORGANIZATIONAL.value,
-                    OrganizationCalendarEvent.business_status
-                    != CalendarBusinessStatus.DRAFT.value,
-                    or_(
-                        OrganizationCalendarEvent.sync_status.in_(
-                            [
-                                CalendarSyncStatus.PARTIAL_FAILURE.value,
-                                CalendarSyncStatus.FAILED.value,
-                            ]
-                        ),
-                        and_(
-                            OrganizationCalendarEvent.sync_status.in_(
-                                [
-                                    CalendarSyncStatus.PENDING.value,
-                                    CalendarSyncStatus.SYNCING.value,
-                                ]
-                            ),
-                            OrganizationCalendarEvent.updated_at < stale_before,
-                        ),
+                    ServiceHookExecution.organization_id == self.organization_id,
+                    ServiceHookExecution.event_name.in_(
+                        [CALENDAR_UPSERTED, CALENDAR_CANCELLED]
+                    ),
+                    ServiceHookExecution.status.in_(
+                        [ExecutionStatus.FAILED, ExecutionStatus.DEAD]
                     ),
                 )
-                .order_by(OrganizationCalendarEvent.updated_at.desc())
+                .order_by(ServiceHookExecution.created_at.desc())
                 .limit(max(1, min(limit, 500)))
             ).all()
         )
+        issues: list[CalendarDeliveryIssue] = []
+        for delivery in deliveries:
+            payload = delivery.event_payload or {}
+            metadata = payload.get("_hook_meta")
+            event_id = metadata.get("entity_id") if isinstance(metadata, dict) else None
+            event_id = event_id or payload.get("event_id")
+            try:
+                event = self.get_event(uuid.UUID(str(event_id)))
+            except (CalendarNotFoundError, TypeError, ValueError):
+                continue
+            issues.append(CalendarDeliveryIssue(event=event, delivery=delivery))
+        return issues
 
     def create_event(
         self,
@@ -447,11 +446,6 @@ class OrganizationCalendarService:
                 if publish
                 else CalendarBusinessStatus.DRAFT.value
             ),
-            sync_status=(
-                CalendarSyncStatus.PENDING.value
-                if publish
-                else CalendarSyncStatus.NOT_REQUIRED.value
-            ),
             created_by_id=actor_person_id,
             updated_by_id=actor_person_id,
             published_by_id=actor_person_id if publish else None,
@@ -462,7 +456,7 @@ class OrganizationCalendarService:
         candidates = self._resolve_candidates(participant_person_ids, add_everyone)
         if publish and not candidates:
             raise CalendarError("A published event must have at least one participant.")
-        newly_added = self._replace_participants(event, candidates, published=publish)
+        newly_added = self._replace_participants(event, candidates)
         self._replace_reminders(event, reminder_offsets)
         self._audit(event, actor_person_id, "PUBLISHED" if publish else "CREATED")
         if publish:
@@ -524,14 +518,11 @@ class OrganizationCalendarService:
         event.version += 1
         if target_published:
             event.business_status = CalendarBusinessStatus.PUBLISHED.value
-            event.sync_status = CalendarSyncStatus.PENDING.value
             if event.published_at is None:
                 event.published_at = datetime.now(UTC)
                 event.published_by_id = actor_person_id
 
-        newly_added = self._replace_participants(
-            event, candidates, published=target_published
-        )
+        newly_added = self._replace_participants(event, candidates)
         self._replace_reminders(event, reminder_offsets)
         self._audit(event, actor_person_id, "UPDATED", old_values=old)
         if target_published:
@@ -569,11 +560,6 @@ class OrganizationCalendarService:
         was_published = event.business_status == CalendarBusinessStatus.PUBLISHED.value
         old = self._event_snapshot(event)
         event.business_status = CalendarBusinessStatus.CANCELLED.value
-        event.sync_status = (
-            CalendarSyncStatus.PENDING.value
-            if was_published
-            else CalendarSyncStatus.NOT_REQUIRED.value
-        )
         event.cancelled_at = datetime.now(UTC)
         event.cancelled_by_id = actor_person_id
         event.updated_by_id = actor_person_id
@@ -585,11 +571,6 @@ class OrganizationCalendarService:
             ):
                 participant.membership_status = (
                     ParticipantMembershipStatus.CANCELLED.value
-                )
-                participant.sync_status = (
-                    ParticipantSyncStatus.PENDING.value
-                    if was_published
-                    else ParticipantSyncStatus.NOT_REQUIRED.value
                 )
         self._audit(event, actor_person_id, "CANCELLED", old_values=old)
         if was_published:
@@ -603,32 +584,27 @@ class OrganizationCalendarService:
         event = self.get_event(event_id, for_update=True)
         if event.business_status == CalendarBusinessStatus.DRAFT.value:
             raise CalendarError("Draft events do not require synchronization.")
-        if any(
-            participant.sync_status == ParticipantSyncStatus.FAILED_PERMANENT.value
-            for participant in event.participants
-        ):
-            raise CalendarError(
-                "A participant has a permanent identity or payload failure. "
-                "Correct it before retrying."
-            )
         active = self.db.scalar(
-            select(EventOutbox).where(
+            select(EventOutbox)
+            .where(
                 EventOutbox.aggregate_type == "OrganizationCalendarEvent",
                 EventOutbox.aggregate_id == str(event.event_id),
-                EventOutbox.status.in_([EventStatus.PENDING, EventStatus.FAILED]),
+                EventOutbox.event_name.in_([CALENDAR_UPSERTED, CALENDAR_CANCELLED]),
+                EventOutbox.status.in_(
+                    [EventStatus.PENDING, EventStatus.FAILED, EventStatus.DEAD]
+                ),
             )
+            .order_by(EventOutbox.occurred_at.desc())
         )
-        if active is None:
+        if active is not None and active.status == EventStatus.DEAD:
+            OutboxPublisher.requeue_dead_event(self.db, active.event_id)
+        elif active is None:
             action = (
                 CALENDAR_CANCELLED
                 if event.business_status == CalendarBusinessStatus.CANCELLED.value
                 else CALENDAR_UPSERTED
             )
             self._publish_command(event, action, actor_person_id, retry=True)
-        event.sync_status = CalendarSyncStatus.PENDING.value
-        for participant in event.participants:
-            if participant.sync_status == ParticipantSyncStatus.FAILED_RETRYABLE.value:
-                participant.sync_status = ParticipantSyncStatus.PENDING.value
         self._audit(event, actor_person_id, "RETRY_REQUESTED")
         self.db.flush()
         return event
@@ -690,17 +666,7 @@ class OrganizationCalendarService:
             published = event.business_status == CalendarBusinessStatus.PUBLISHED.value
             participant.membership_status = ParticipantMembershipStatus.REMOVED.value
             participant.removed_at = now
-            participant.sync_status = (
-                ParticipantSyncStatus.PENDING.value
-                if published
-                else ParticipantSyncStatus.NOT_REQUIRED.value
-            )
             event.version += 1
-            event.sync_status = (
-                CalendarSyncStatus.PENDING.value
-                if published
-                else CalendarSyncStatus.NOT_REQUIRED.value
-            )
             if actor_person_id:
                 event.updated_by_id = actor_person_id
             self._audit(
@@ -713,130 +679,6 @@ class OrganizationCalendarService:
             changed += 1
         self.db.flush()
         return changed
-
-    def apply_sync_result(
-        self,
-        event_id: uuid.UUID,
-        *,
-        event_version: int,
-        result: str,
-        participant_results: list[dict[str, str | int | None]],
-        nextcloud_event_url: str | None = None,
-        calendar_uri: str | None = None,
-        etag: str | None = None,
-        error_code: str | None = None,
-        error_message: str | None = None,
-        correlation_id: str | None = None,
-    ) -> bool:
-        """Apply an Integrator callback; return False for a stale result."""
-        event = self.get_event(event_id, for_update=True, event_scope=None)
-        if event_version < event.version:
-            return False
-        if event_version > event.version:
-            raise CalendarConflictError(
-                f"Integrator result version {event_version} is ahead of ERP version "
-                f"{event.version}."
-            )
-        now = datetime.now(UTC)
-        old = self._event_snapshot(event)
-        by_person = {str(item.person_id): item for item in event.participants}
-        for participant_result in participant_results:
-            participant = by_person.get(str(participant_result.get("person_id")))
-            if participant is None:
-                continue
-            participant.sync_status = str(
-                participant_result.get("sync_status")
-                or ParticipantSyncStatus.FAILED_PERMANENT.value
-            )
-            participant.last_error_code = self._clean(
-                str(participant_result.get("error_code") or "")
-            )
-            participant.last_error_message = self._clean(
-                str(participant_result.get("safe_error_message") or "")
-            )
-            if participant.sync_status == ParticipantSyncStatus.SYNCED.value:
-                participant.last_synced_version = event_version
-                participant.last_synced_at = now
-        event.sync_status = result
-        if error_code or error_message:
-            for participant in event.participants:
-                if participant.sync_status in {
-                    ParticipantSyncStatus.PENDING.value,
-                    ParticipantSyncStatus.SYNCING.value,
-                }:
-                    participant.last_error_code = error_code
-                    participant.last_error_message = self._clean(error_message)
-        if nextcloud_event_url or calendar_uri or etag:
-            remote = event.remote_state
-            if remote is None:
-                remote = OrganizationCalendarRemoteEvent(
-                    organization_id=self.organization_id, event_id=event.event_id
-                )
-                self.db.add(remote)
-            remote.nextcloud_event_url = nextcloud_event_url
-            remote.calendar_uri = calendar_uri
-            remote.nextcloud_etag = etag
-            remote.last_remote_sync_at = now
-        self._audit(
-            event,
-            None,
-            "SYNC_RECOVERED"
-            if result == CalendarSyncStatus.SYNCED.value
-            else "SYNC_FAILED",
-            old_values=old,
-            correlation_id=correlation_id,
-        )
-        self.db.flush()
-        return True
-
-    def record_transport_failure(
-        self,
-        event_id: uuid.UUID,
-        *,
-        event_version: int,
-        error_code: str,
-        safe_error_message: str,
-        retryable: bool = True,
-        correlation_id: str | None = None,
-    ) -> bool:
-        """Record an ERP-to-Integrator delivery failure for the current version.
-
-        A late failure from an older queued command must never downgrade a newer
-        event version, so this method uses the same stale-version guard as the
-        Integrator callback.
-        """
-        event = self.get_event(event_id, for_update=True, event_scope=None)
-        if event_version < event.version:
-            return False
-        if event_version > event.version:
-            raise CalendarConflictError(
-                f"Transport failure version {event_version} is ahead of ERP version "
-                f"{event.version}."
-            )
-        old = self._event_snapshot(event)
-        event.sync_status = CalendarSyncStatus.FAILED.value
-        failed_status = (
-            ParticipantSyncStatus.FAILED_RETRYABLE.value
-            if retryable
-            else ParticipantSyncStatus.FAILED_PERMANENT.value
-        )
-        for participant in event.participants:
-            if participant.sync_status in {
-                ParticipantSyncStatus.PENDING.value,
-                ParticipantSyncStatus.SYNCING.value,
-            }:
-                participant.sync_status = failed_status
-                participant.last_error_code = error_code[:100]
-                participant.last_error_message = safe_error_message[:500]
-        self._audit(
-            event,
-            None,
-            "SYNC_FAILED",
-            old_values=old,
-            correlation_id=correlation_id,
-        )
-        self.db.flush()
-        return True
 
     def _resolve_candidates(
         self, person_ids: list[uuid.UUID], add_everyone: bool
@@ -860,8 +702,6 @@ class OrganizationCalendarService:
         self,
         event: OrganizationCalendarEvent,
         candidates: list[ParticipantCandidate],
-        *,
-        published: bool,
     ) -> set[uuid.UUID]:
         desired = {candidate.person_id: candidate for candidate in candidates}
         existing = {
@@ -880,11 +720,6 @@ class OrganizationCalendarService:
                         ParticipantMembershipStatus.REMOVED.value
                     )
                     participant.removed_at = now
-                    participant.sync_status = (
-                        ParticipantSyncStatus.PENDING.value
-                        if published
-                        else ParticipantSyncStatus.NOT_REQUIRED.value
-                    )
                 continue
             if (
                 participant.membership_status
@@ -898,11 +733,6 @@ class OrganizationCalendarService:
             participant.identity_status = "VERIFIED"
             participant.membership_status = ParticipantMembershipStatus.ACTIVE.value
             participant.removed_at = None
-            participant.sync_status = (
-                ParticipantSyncStatus.PENDING.value
-                if published
-                else ParticipantSyncStatus.NOT_REQUIRED.value
-            )
         for person_id, candidate in desired.items():
             if person_id in existing:
                 continue
@@ -917,11 +747,6 @@ class OrganizationCalendarService:
                     nextcloud_user_id=candidate.nextcloud_user_id,
                     identity_status="VERIFIED",
                     membership_status=ParticipantMembershipStatus.ACTIVE.value,
-                    sync_status=(
-                        ParticipantSyncStatus.PENDING.value
-                        if published
-                        else ParticipantSyncStatus.NOT_REQUIRED.value
-                    ),
                 )
             )
         return newly_added
@@ -1092,7 +917,6 @@ class OrganizationCalendarService:
             "title": event.title,
             "event_scope": event.event_scope,
             "business_status": event.business_status,
-            "sync_status": event.sync_status,
             "version": event.version,
             "all_day": event.all_day,
             "start": event.start_at.isoformat() if event.start_at else None,
@@ -1203,6 +1027,7 @@ __all__ = [
     "CALENDAR_CONTRACT_VERSION",
     "CALENDAR_UPSERTED",
     "CalendarConflictError",
+    "CalendarDeliveryIssue",
     "CalendarError",
     "CalendarEventData",
     "CalendarNotFoundError",

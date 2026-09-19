@@ -20,7 +20,6 @@ TABLES = (
     "organization_calendar_events",
     "organization_calendar_participants",
     "organization_calendar_reminders",
-    "organization_calendar_remote_events",
     "organization_calendar_audit",
 )
 
@@ -72,9 +71,6 @@ def upgrade() -> None:
         sa.Column(
             "business_status", sa.String(20), nullable=False, server_default="DRAFT"
         ),
-        sa.Column(
-            "sync_status", sa.String(24), nullable=False, server_default="NOT_REQUIRED"
-        ),
         sa.Column("version", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("created_by_id", _uuid(), nullable=False),
         sa.Column("updated_by_id", _uuid(), nullable=False),
@@ -108,10 +104,6 @@ def upgrade() -> None:
             "business_status IN ('DRAFT', 'PUBLISHED', 'CANCELLED')",
             name="ck_org_calendar_event_business_status",
         ),
-        sa.CheckConstraint(
-            "sync_status IN ('NOT_REQUIRED', 'PENDING', 'SYNCING', 'SYNCED', 'PARTIAL_FAILURE', 'FAILED')",
-            name="ck_org_calendar_event_sync_status",
-        ),
         sa.ForeignKeyConstraint(
             ["organization_id"], ["core_org.organization.organization_id"]
         ),
@@ -131,7 +123,7 @@ def upgrade() -> None:
     op.create_index(
         "idx_org_calendar_event_org_status",
         "organization_calendar_events",
-        ["organization_id", "business_status", "sync_status"],
+        ["organization_id", "business_status"],
         schema="public",
     )
 
@@ -156,13 +148,6 @@ def upgrade() -> None:
         sa.Column(
             "membership_status", sa.String(20), nullable=False, server_default="ACTIVE"
         ),
-        sa.Column(
-            "sync_status", sa.String(24), nullable=False, server_default="NOT_REQUIRED"
-        ),
-        sa.Column("last_synced_version", sa.Integer()),
-        sa.Column("last_synced_at", sa.DateTime(timezone=True)),
-        sa.Column("last_error_code", sa.String(100)),
-        sa.Column("last_error_message", sa.String(500)),
         sa.Column("removed_at", sa.DateTime(timezone=True)),
         sa.Column(
             "created_at",
@@ -183,10 +168,6 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "membership_status IN ('ACTIVE', 'REMOVED', 'CANCELLED')",
             name="ck_org_calendar_participant_membership_status",
-        ),
-        sa.CheckConstraint(
-            "sync_status IN ('NOT_REQUIRED', 'PENDING', 'SYNCING', 'SYNCED', 'FAILED_RETRYABLE', 'FAILED_PERMANENT', 'STALE')",
-            name="ck_org_calendar_participant_sync_status",
         ),
         sa.ForeignKeyConstraint(
             ["organization_id"], ["core_org.organization.organization_id"]
@@ -258,50 +239,6 @@ def upgrade() -> None:
     op.create_index(
         "idx_org_calendar_reminder_org_event",
         "organization_calendar_reminders",
-        ["organization_id", "event_id"],
-        schema="public",
-    )
-
-    op.create_table(
-        "organization_calendar_remote_events",
-        sa.Column(
-            "remote_event_id",
-            _uuid(),
-            primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column("organization_id", _uuid(), nullable=False),
-        sa.Column("event_id", _uuid(), nullable=False),
-        sa.Column("calendar_uri", sa.String(1000)),
-        sa.Column("nextcloud_event_url", sa.String(2000)),
-        sa.Column("nextcloud_etag", sa.String(255)),
-        sa.Column("last_remote_sync_at", sa.DateTime(timezone=True)),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            nullable=False,
-            server_default=sa.func.now(),
-        ),
-        sa.ForeignKeyConstraint(
-            ["organization_id"], ["core_org.organization.organization_id"]
-        ),
-        sa.ForeignKeyConstraint(
-            ["event_id"],
-            ["public.organization_calendar_events.event_id"],
-            ondelete="CASCADE",
-        ),
-        sa.UniqueConstraint("event_id", name="uq_org_calendar_remote_event"),
-        schema="public",
-    )
-    op.create_index(
-        "idx_org_calendar_remote_org_event",
-        "organization_calendar_remote_events",
         ["organization_id", "event_id"],
         schema="public",
     )
