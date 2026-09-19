@@ -633,9 +633,7 @@ class MonoSyncService:
             "Fix the bank row (or pick the correct one) and retry."
         )
 
-    def _resolve_webhook_bank_account(
-        self, mono_account_id: str
-    ) -> BankAccount | None:
+    def _resolve_webhook_bank_account(self, mono_account_id: str) -> BankAccount | None:
         """Resolve the tenant owner for one provider account identifier."""
         from app.db.session_context import allow_cross_org
 
