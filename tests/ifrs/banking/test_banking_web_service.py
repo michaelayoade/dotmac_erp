@@ -51,6 +51,22 @@ def test_rule_duplicate_form_context_not_found(mock_db):
     assert excinfo.value.status_code == 404
 
 
+def test_mono_account_health_detail_preserves_tenant_isolation(mock_db):
+    requested_org = uuid4()
+    account = SimpleNamespace(organization_id=uuid4())
+    mock_db.get.return_value = account
+
+    context = BankingWebService().account_detail_context(
+        mock_db,
+        str(requested_org),
+        str(uuid4()),
+    )
+
+    assert context["account"] is None
+    assert context["transactions"] == []
+    mock_db.execute.assert_not_called()
+
+
 def test_duplicate_rule_response_redirects_with_copy_count(mock_db):
     service = BankingWebService()
     auth = WebAuthContext(

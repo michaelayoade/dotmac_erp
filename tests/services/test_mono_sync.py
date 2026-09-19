@@ -43,6 +43,8 @@ def _account(**overrides):
         "last_statement_balance": None,
         "mono_last_synced_at": None,
         "mono_last_ingest_at": None,
+        "mono_transaction_sync_status": "never",
+        "mono_last_transaction_sync_at": None,
         "mono_link_failed": False,
         "mono_last_sync_error": None,
         "currency_code": "NGN",
@@ -81,6 +83,28 @@ def _capture_window(svc, **cursors):
         return MonoSyncResult(success=True)
 
     return captured, _sync_window
+
+
+def test_banking_templates_separate_mono_freshness_and_surface_health() -> None:
+    from pathlib import Path
+
+    detail = Path("templates/finance/banking/account_detail.html").read_text(
+        encoding="utf-8"
+    )
+    accounts = Path("templates/finance/banking/accounts.html").read_text(
+        encoding="utf-8"
+    )
+
+    transaction_section = detail.split("Last transaction", 1)[1][:350]
+    assert "account.mono_last_transaction_date" in transaction_section
+    assert "account.last_statement_date" not in transaction_section
+    assert "Balance as of" in detail
+    assert "account.last_statement_date" in detail
+    assert "Last provider contact" in detail
+    assert "Last healthy bank pull" in detail
+    assert "Mono Health" in accounts
+    assert "account.mono_health_status" in accounts
+    assert "account.mono_account_id" not in detail
 
 
 def test_incremental_sync_rewinds_by_buffer_days() -> None:
@@ -380,6 +404,8 @@ def test_link_account_clears_stale_sync_health_on_success() -> None:
         mono_sync_from_date=date(2026, 1, 1),
         mono_last_transaction_date=date(2026, 3, 31),
         mono_last_synced_at=datetime(2026, 4, 1, 9, 0, 0),
+        mono_transaction_sync_status="failed",
+        mono_last_transaction_sync_at=datetime(2026, 4, 1, 8, 0, 0),
         mono_last_sync_error="provider down",
     )
     db.get.return_value = account
@@ -410,6 +436,8 @@ def test_link_account_clears_stale_sync_health_on_success() -> None:
     assert result["status"] == "success"
     assert account.mono_account_id == "new-mono-account"
     assert account.mono_last_synced_at is None
+    assert account.mono_transaction_sync_status == "never"
+    assert account.mono_last_transaction_sync_at is None
     assert account.mono_last_sync_error is None
     db.flush.assert_called_once()
 
@@ -566,6 +594,8 @@ def test_unlink_mono_clears_all_tracking_fields() -> None:
         mono_sync_from_date=date(2026, 1, 1),
         mono_last_transaction_date=date(2026, 3, 31),
         mono_last_synced_at=datetime(2026, 4, 1, 9, 0, 0),
+        mono_transaction_sync_status="failed",
+        mono_last_transaction_sync_at=datetime(2026, 4, 1, 8, 0, 0),
         mono_last_sync_error="provider down",
     )
     db.get.return_value = account
@@ -583,6 +613,8 @@ def test_unlink_mono_clears_all_tracking_fields() -> None:
     assert account.mono_sync_from_date is None
     assert account.mono_last_transaction_date is None
     assert account.mono_last_synced_at is None
+    assert account.mono_transaction_sync_status == "never"
+    assert account.mono_last_transaction_sync_at is None
     assert account.mono_last_sync_error is None
     assert account.updated_by == user_id
     db.flush.assert_called_once()
@@ -620,6 +652,7 @@ def test_webhook_logs_redact_sensitive_account_payload(caplog) -> None:
                 "sync_status": "SUCCESSFUL",
                 "job_id": "job-1",
                 "has_new_data": True,
+                "retrieved_data": ["raw-secret-value"],
             },
         },
     }
@@ -646,6 +679,7 @@ def test_webhook_logs_redact_sensitive_account_payload(caplog) -> None:
     enqueue.assert_called_once_with("mono-account-1")
     assert "22000000003" not in caplog.text
     assert "0100000062" not in caplog.text
+    assert "raw-secret-value" not in caplog.text
 
 
 def test_webhook_failed_status_records_error_on_linked_account() -> None:
@@ -701,13 +735,8 @@ def test_webhook_sync_status_failed_with_data_status_available_records_error() -
     the bank scrape failed but Mono is still serving cached data from a prior
     successful scrape.
 
-    Current behavior (post-2026-05-16 rework):
-    - Record the error so operators see the bank-side scrape failed.
-    - ALSO enqueue an ingest task — the indexer still has transactions for
-      us to pull. The race-wipe the earlier design protected against is
-      neutralised by the recent-success suppression inside
-      ``_record_webhook_failure``: once a sync clears the error, subsequent
-      webhooks within 5 minutes do not overwrite it.
+    Record the provider-final error and also enqueue cache ingestion. The
+    cached rows remain useful, but ingesting them cannot clear the failure.
 
     Exact shape observed for the UBA account on 2026-04-20: ``data_status=AVAILABLE
     sync_status=FAILED retrieved_data=['balance','transactions']``.
@@ -716,7 +745,7 @@ def test_webhook_sync_status_failed_with_data_status_available_records_error() -
     linked_account = _account(
         mono_account_id="mono-uba-failed",
         mono_last_sync_error=None,
-        mono_last_synced_at=None,  # no recent success → don't suppress
+        mono_last_synced_at=None,
     )
     db.scalar.return_value = linked_account
     payload = {
@@ -749,9 +778,8 @@ def test_webhook_sync_status_failed_with_data_status_available_records_error() -
         )
 
     assert result["status"] == "success"
-    # Ingest IS queued — there are transactions to pull. The
-    # recent-success suppression in ``_record_webhook_failure`` is what
-    # keeps stale-cache reads from wiping a legitimate error banner.
+    # Ingest is queued because cached transactions are available, while the
+    # provider-final failure remains authoritative for integration health.
     enqueue.assert_called_once_with("mono-uba-failed")
     assert linked_account.mono_last_sync_error is not None
     assert "Mono data refresh failed" in linked_account.mono_last_sync_error
@@ -759,24 +787,8 @@ def test_webhook_sync_status_failed_with_data_status_available_records_error() -
     db.flush.assert_called()
 
 
-def test_webhook_failure_suppressed_when_recent_ingest_succeeded() -> None:
-    """Successful *ingest* wins. If we actually landed transactions within the
-    last 5 minutes, a follow-up ``sync_status=FAILED`` webhook is treated as a
-    stale signal about the same refresh attempt that already drove that ingest.
-
-    Regression for the 2026-05-16 UBA report where the integration health
-    banner stayed red ("Mono data refresh failed... data_request_id=…")
-    for hours after a manual reauth + sync had already landed the new
-    transactions.
-
-    Note this keys on ``mono_last_ingest_at``, not ``mono_last_synced_at``.
-    The latter advances on any successful API call — including the
-    refresh-first path, which ingests nothing and exists precisely to provoke
-    this webhook ~30s later. Keying on it meant a *genuine* failure always
-    arrived inside a 5-minute window we had just opened ourselves, and was
-    silently discarded; see
-    ``test_webhook_failure_not_suppressed_by_a_zero_ingest_refresh``.
-    """
+def test_webhook_failure_overrides_recent_cached_ingest() -> None:
+    """A final failure outranks a recent read from Mono's cached endpoint."""
     db = MagicMock()
     linked_account = _account(
         mono_account_id="mono-uba-fresh",
@@ -816,13 +828,13 @@ def test_webhook_failure_suppressed_when_recent_ingest_succeeded() -> None:
             json.dumps(payload).encode(),
         )
 
-    # Suppressed — error stays cleared because the recent successful ingest
-    # has authoritative news the webhook can't override.
-    assert linked_account.mono_last_sync_error is None
+    assert linked_account.mono_last_sync_error is not None
+    assert linked_account.mono_transaction_sync_status == "failed"
+    assert linked_account.mono_link_failed is True
 
 
 def test_webhook_failure_not_suppressed_by_a_zero_ingest_refresh() -> None:
-    """A refresh that ingested NOTHING must not suppress the failure it caused.
+    """A refresh request must not suppress the later failure it caused.
 
     The silent-failure path this guards against:
 
@@ -837,8 +849,8 @@ def test_webhook_failure_not_suppressed_by_a_zero_ingest_refresh() -> None:
        ingest was queued (there were no transactions to pull).
 
     Net effect: the account rendered "Healthy — synced 30 seconds ago" while
-    ingesting nothing, forever. Suppression now requires evidence of a real
-    ingest (``mono_last_ingest_at``), which a refresh never produces.
+    ingesting nothing, forever. Provider-final failure now always wins over
+    trigger responses, provider contact, and cache ingestion.
     """
     db = MagicMock()
     linked_account = _account(
@@ -929,17 +941,141 @@ def test_cache_read_does_not_clear_a_dead_link_error() -> None:
     assert "Reauthorise" in account.mono_last_sync_error
 
 
+def test_reauthorization_survives_available_cached_duplicate_response() -> None:
+    """HTTP 200, AVAILABLE metadata, cached rows, and duplicate skips are not recovery."""
+    db = MagicMock()
+    svc = MonoSyncService(db)
+    account = _account(
+        mono_transaction_sync_status="reauthorization_required",
+        mono_link_failed=True,
+        mono_last_sync_error="Bank connection expired. Reauthorise this account.",
+    )
+    transaction = MonoTransaction(
+        id="cached-transaction",
+        narration="Cached transaction",
+        amount=1000,
+        type="credit",
+        balance=5000,
+        date="2026-04-10T12:00:00Z",
+    )
+    client = MagicMock()
+    client.get_account_info.return_value = _mono_account_info(
+        data_status="AVAILABLE",
+        retrieved_data=["balance", "transactions"],
+    )
+    client.get_all_transactions.return_value = [transaction]
+    client_cm = MagicMock()
+    client_cm.__enter__.return_value = client
+
+    with (
+        patch.object(
+            svc,
+            "_get_mono_config",
+            return_value=MonoConfig(secret_key="secret", public_key="public"),
+        ),
+        patch(
+            "app.services.finance.banking.mono_sync.MonoClient",
+            return_value=client_cm,
+        ),
+        patch.object(
+            svc,
+            "_get_existing_transaction_ids",
+            return_value={"mono_cached-transaction"},
+        ),
+    ):
+        result = svc._sync_window(
+            account,
+            date(2026, 4, 1),
+            date(2026, 4, 15),
+        )
+
+    assert result.success is True
+    assert result.duplicates_skipped == 1
+    assert account.mono_transaction_sync_status == "reauthorization_required"
+    assert account.mono_link_failed is True
+    assert "Reauthorise" in (account.mono_last_sync_error or "")
+
+
+def test_confirmed_successful_post_reauthorization_webhook_clears_state() -> None:
+    db = MagicMock()
+    account = _account(
+        mono_account_id="mono-reauthorized",
+        mono_transaction_sync_status="reauthorization_required",
+        mono_link_failed=True,
+        mono_last_sync_error="Bank connection expired. Reauthorise this account.",
+    )
+    db.scalar.return_value = account
+    payload = {
+        "event": "mono.events.account_updated",
+        "data": {
+            "account": {"_id": "mono-reauthorized"},
+            "meta": {
+                "data_status": "AVAILABLE",
+                "sync_status": "SUCCESS",
+                "retrieved_data": ["balance", "transactions"],
+                "job_id": "job-recovered",
+            },
+        },
+    }
+
+    with (
+        patch(
+            "app.services.finance.banking.mono_sync.resolve_value",
+            return_value="webhook-secret",
+        ),
+        patch("app.services.finance.banking.mono_sync.MonoClient") as mono_client,
+        patch("app.tasks.finance.sync_mono_account.delay") as enqueue,
+    ):
+        mono_client.return_value.verify_webhook.return_value = True
+        MonoSyncService(db).process_webhook(
+            "webhook-secret",
+            json.dumps(payload).encode(),
+        )
+
+    enqueue.assert_called_once_with("mono-reauthorized")
+    assert account.mono_transaction_sync_status == "healthy"
+    assert account.mono_link_failed is False
+    assert account.mono_last_sync_error is None
+    assert account.mono_last_transaction_sync_at is not None
+
+
+def test_transient_failure_cannot_replace_reauthorization_state() -> None:
+    svc = MonoSyncService(MagicMock())
+    account = _account(
+        mono_transaction_sync_status="reauthorization_required",
+        mono_link_failed=True,
+        mono_last_sync_error="Bank connection expired. Reauthorise this account.",
+    )
+
+    svc._record_transient_failure(
+        account,
+        operation="cache read",
+        status_code=503,
+    )
+    svc._settle_sync_health(
+        account,
+        _mono_account_info(
+            data_status="AVAILABLE",
+            retrieved_data=["transactions"],
+        ),
+        ingested=2,
+    )
+
+    assert account.mono_transaction_sync_status == "reauthorization_required"
+    assert account.mono_link_failed is True
+    assert "Reauthorise" in (account.mono_last_sync_error or "")
+
+
 def test_webhook_reauthorisation_required_is_never_suppressed() -> None:
     """REAUTHORISATION_REQUIRED is structural — the bank link is dead and
     the user must act, regardless of whether cached data is still flowing.
-    The recent-success suppression must NOT apply to it, otherwise users
-    silently miss the actionable banner that tells them how to recover.
+    Recent provider contact must not hide the actionable recovery banner.
     """
     db = MagicMock()
     linked_account = _account(
         mono_account_id="mono-zenith-fresh-reauth",
         mono_last_sync_error=None,
-        # Recent enough that the FAILED-with-data suppression would fire.
+        # Recent contact is not evidence that the bank link recovered.
         mono_last_synced_at=datetime.now(UTC) - timedelta(seconds=10),
     )
     db.scalar.return_value = linked_account
@@ -971,8 +1107,7 @@ def test_webhook_reauthorisation_required_is_never_suppressed() -> None:
             json.dumps(payload).encode(),
         )
 
-    # Structural reauth-required is recorded even with a fresh successful
-    # sync — the user must see it.
+    # Structural reauth-required is recorded even after fresh provider contact.
     assert linked_account.mono_last_sync_error is not None
     assert "Reauthorise" in linked_account.mono_last_sync_error
 
@@ -1029,9 +1164,7 @@ def test_webhook_sync_status_reauthorisation_required_records_actionable_error()
     assert result["status"] == "success"
     # Ingest IS queued — cached transactions remain usable up to the point
     # of expiry, even though the connection needs renewal. The error
-    # message persists regardless: REAUTHORISATION_REQUIRED is structural
-    # and exempt from the recent-success suppression in
-    # ``_record_webhook_failure``.
+    # message persists regardless: REAUTHORISATION_REQUIRED is structural.
     enqueue.assert_called_once_with("mono-zenith-reauth")
     assert linked_account.mono_last_sync_error is not None
     # Actionable copy: the user can fix this themselves by reauthorising
@@ -1308,7 +1441,7 @@ def test_webhook_reauthorized_event_is_logged_not_unhandled(caplog) -> None:
 
     assert "Unhandled" not in caplog.text
     assert "account_reauthorized" in caplog.text
-    assert "mono-zenith-usd" in caplog.text
+    assert "mono-zenith-usd" not in caplog.text
 
 
 def test_webhook_failed_status_unlinked_account_is_noop() -> None:
@@ -1439,8 +1572,9 @@ def test_sync_by_mono_account_id_warns_when_unlinked(caplog) -> None:
     result = MonoSyncService(db).sync_by_mono_account_id("mono-missing")
 
     assert result.success is False
-    assert "No bank account linked" in result.message
-    assert "Mono webhook for unlinked account mono-missing" in caplog.text
+    assert "No bank account is linked" in result.message
+    assert "Mono webhook received for an unlinked account" in caplog.text
+    assert "mono-missing" not in caplog.text
 
 
 def test_parse_date_rejects_missing_or_invalid_dates() -> None:
@@ -1509,17 +1643,12 @@ def test_invalid_mono_transaction_date_marks_sync_failed_without_watermark_move(
 
     assert result.success is False
     assert result.transactions_synced == 0
-    assert "invalid transaction date" in result.message
-    assert "transaction_id=txn-bad-date" in result.message
-    assert result.errors == [
-        "Mono transaction has invalid transaction date: 'not-a-date' "
-        "(transaction_id=txn-bad-date)"
-    ]
+    assert result.message == "Mono returned invalid transaction data."
+    assert result.errors == ["invalid Mono transaction data"]
     assert account.mono_last_transaction_date == date(2026, 4, 1)
     assert account.last_statement_date == date(2026, 4, 1)
     assert account.last_statement_balance is None
-    assert "invalid transaction date" in account.mono_last_sync_error
-    assert "transaction_id=txn-bad-date" in account.mono_last_sync_error
+    assert account.mono_last_sync_error == "Mono returned invalid transaction data."
     db.add.assert_not_called()
 
 
@@ -1847,7 +1976,7 @@ def test_sync_logs_when_narration_is_truncated(caplog) -> None:
     added_line = db.add.call_args.args[0]
     assert added_line.description == "x" * 500
     assert "Truncated Mono narration" in caplog.text
-    assert "txn-long-narration" in caplog.text
+    assert "txn-long-narration" not in caplog.text
 
 
 def test_sync_counts_only_inserted_lines_when_duplicate_insert_races() -> None:
@@ -1926,12 +2055,14 @@ def test_sync_counts_only_inserted_lines_when_duplicate_insert_races() -> None:
     assert statement.closing_balance is None
 
 
-def test_mono_error_sets_error_and_success_clears_it() -> None:
+def test_transient_mono_error_recovers_after_provider_contact() -> None:
+    from app.services.finance.banking.mono_client import MonoTransientError
+
     db = MagicMock()
     svc = MonoSyncService(db)
     account = _account(mono_last_sync_error=None)
     failing_client = MagicMock()
-    failing_client.get_account_info.side_effect = MonoError("provider down")
+    failing_client.get_account_info.side_effect = MonoTransientError("provider down")
     failing_cm = MagicMock()
     failing_cm.__enter__.return_value = failing_client
 
@@ -1949,7 +2080,8 @@ def test_mono_error_sets_error_and_success_clears_it() -> None:
         failed = svc._sync_window(account, date(2026, 4, 1), date(2026, 4, 15))
 
     assert failed.success is False
-    assert account.mono_last_sync_error == "provider down"
+    assert "temporarily unavailable" in (account.mono_last_sync_error or "")
+    assert account.mono_transaction_sync_status == "transient_failure"
 
     successful_client = MagicMock()
     successful_client.get_account_info.return_value = MonoAccountInfo(
@@ -1978,6 +2110,7 @@ def test_mono_error_sets_error_and_success_clears_it() -> None:
 
     assert succeeded.success is True
     assert account.mono_last_sync_error is None
+    assert account.mono_transaction_sync_status == "never"
 
 
 def _refresh_client(
@@ -2052,11 +2185,80 @@ def test_via_refresh_defers_to_webhook_on_processing() -> None:
     assert account.mono_last_sync_error is None
 
 
-def test_via_refresh_finished_with_no_new_data_reports_up_to_date() -> None:
-    """``finished`` + ``has_new_data=false`` means the bank genuinely has
-    nothing new. No webhook is coming, so the sync must still advance
-    balance + freshness here and surface a clear "up to date" message.
-    """
+def test_via_refresh_keeps_reauthorization_sticky_while_request_is_pending() -> None:
+    db = MagicMock()
+    svc = MonoSyncService(db)
+    account = _account(
+        mono_transaction_sync_status="reauthorization_required",
+        mono_link_failed=True,
+        mono_last_sync_error="Bank connection expired. Reauthorise this account.",
+    )
+    client, client_cm = _refresh_client(
+        has_new_data=True,
+        job_status="processing",
+    )
+    client.get_account_info.return_value = _mono_account_info(
+        data_status="AVAILABLE",
+        retrieved_data=["balance", "transactions"],
+    )
+
+    with (
+        patch.object(
+            svc,
+            "_get_mono_config",
+            return_value=MonoConfig(secret_key="s", public_key="p"),
+        ),
+        patch(
+            "app.services.finance.banking.mono_sync.MonoClient",
+            return_value=client_cm,
+        ),
+    ):
+        result = svc.sync_account_via_refresh(account)
+
+    assert result.success is True
+    assert result.ingestion_state == "pending"
+    assert account.mono_transaction_sync_status == "reauthorization_required"
+    assert account.mono_link_failed is True
+    assert "Reauthorise" in (account.mono_last_sync_error or "")
+
+
+def test_scheduled_sync_keeps_refresh_pending_while_draining_cache() -> None:
+    db = MagicMock()
+    svc = MonoSyncService(db)
+    account = _account()
+    with (
+        patch.object(
+            svc,
+            "sync_account_via_refresh",
+            return_value=MonoSyncResult(
+                success=True,
+                bank_account_id=account.bank_account_id,
+                ingestion_state="pending",
+                message="awaiting webhook",
+            ),
+        ),
+        patch.object(
+            svc,
+            "sync_account_incremental",
+            return_value=MonoSyncResult(
+                success=True,
+                bank_account_id=account.bank_account_id,
+                transactions_synced=2,
+                duplicates_skipped=3,
+                ingestion_state="completed",
+            ),
+        ),
+    ):
+        result = svc.sync_account_for_scheduled_sweep(account)
+
+    assert result.success is True
+    assert result.ingestion_state == "pending"
+    assert result.transactions_synced == 2
+    assert result.duplicates_skipped == 3
+
+
+def test_via_refresh_finished_header_still_awaits_webhook() -> None:
+    """A finished trigger response is not the bank-pull completion signal."""
     db = MagicMock()
     svc = MonoSyncService(db)
     account = _account()
@@ -2079,18 +2281,14 @@ def test_via_refresh_finished_with_no_new_data_reports_up_to_date() -> None:
         result = svc.sync_account_via_refresh(account)
 
     assert result.success is True
-    assert result.ingestion_state == "current"
-    assert "up to date" in result.message.lower()
+    assert result.ingestion_state == "pending"
+    assert "awaiting" in result.message.lower()
     client.get_all_transactions.assert_not_called()
     assert account.last_statement_balance == Decimal("5000.00")
 
 
-def test_via_refresh_failed_job_records_reauth_error() -> None:
-    """Mono's ``failed`` job_status usually means the linked bank
-    credentials need reauthorisation. Record the error but still
-    refresh the balance so users can see the last-known value while
-    they fix the link.
-    """
+def test_via_refresh_failed_job_records_generic_failure() -> None:
+    """A failed trigger is distinct from explicit reauthorization evidence."""
     db = MagicMock()
     svc = MonoSyncService(db)
     account = _account()
@@ -2114,25 +2312,27 @@ def test_via_refresh_failed_job_records_reauth_error() -> None:
 
     assert result.success is False
     assert result.ingestion_state == "failed"
-    assert "reauthorisation" in (account.mono_last_sync_error or "").lower()
+    assert account.mono_transaction_sync_status == "failed"
+    assert account.mono_last_sync_error == (
+        "Mono reported that the latest bank refresh failed."
+    )
     client.get_all_transactions.assert_not_called()
     # Balance update happens *before* the failure short-circuit so
     # operators still see the latest-known balance.
     assert account.last_statement_balance == Decimal("5000.00")
 
 
-def test_via_refresh_falls_back_to_direct_pull_on_rate_limit() -> None:
-    """Mono caps refresh at 1/5min/account — a 429 must NOT drop the
-    cycle. Fall through to sync_account_incremental so any lines
-    already sitting in Mono's cache still get ingested.
-    """
+def test_via_refresh_reports_skipped_on_rate_limit() -> None:
+    """The refresh result is skipped; the scheduled wrapper drains cache."""
+    from app.services.finance.banking.mono_client import MonoTransientError
+
     db = MagicMock()
     svc = MonoSyncService(db)
     account = _account()
     _client, client_cm = _refresh_client(
         has_new_data=False,
         job_status=None,
-        refresh_error=MonoError("rate limited", status_code=429),
+        refresh_error=MonoTransientError("rate limited", status_code=429),
     )
 
     with (
@@ -2158,9 +2358,39 @@ def test_via_refresh_falls_back_to_direct_pull_on_rate_limit() -> None:
     ):
         result = svc.sync_account_via_refresh(account)
 
-    fallback.assert_called_once_with(account, user_id=None)
-    assert result.transactions_synced == 3
-    assert result.message == "fallback ran"
+    fallback.assert_not_called()
+    assert result.transactions_synced == 0
+    assert result.ingestion_state == "skipped"
+
+
+def test_via_refresh_treats_invalid_access_as_structural_failure() -> None:
+    db = MagicMock()
+    svc = MonoSyncService(db)
+    account = _account()
+    _client, client_cm = _refresh_client(
+        has_new_data=False,
+        job_status=None,
+        refresh_error=MonoError("invalid access token", status_code=401),
+    )
+
+    with (
+        patch.object(
+            svc,
+            "_get_mono_config",
+            return_value=MonoConfig(secret_key="s", public_key="p"),
+        ),
+        patch(
+            "app.services.finance.banking.mono_sync.MonoClient",
+            return_value=client_cm,
+        ),
+    ):
+        result = svc.sync_account_via_refresh(account)
+
+    assert result.success is False
+    assert result.ingestion_state == "failed"
+    assert account.mono_transaction_sync_status == "failed"
+    assert account.mono_last_sync_error == "Mono rejected the bank refresh request."
+    assert "invalid access token" not in result.message
 
 
 def test_sync_all_persists_uncaught_account_failure() -> None:
@@ -2170,16 +2400,20 @@ def test_sync_all_persists_uncaught_account_failure() -> None:
 
     with (
         patch.object(svc, "get_linked_accounts", return_value=[account]),
-        patch.object(svc, "sync_account_via_refresh", side_effect=KeyError("boom")),
+        patch.object(
+            svc,
+            "sync_account_for_scheduled_sweep",
+            side_effect=KeyError("boom"),
+        ),
         patch.object(svc, "_record_account_sync_error") as record_error,
     ):
         result = svc.sync_all_linked_accounts(commit_per_account=True)
 
     assert result["success"] is False
-    assert result["accounts_failed"] == 1
+    assert result["failed"] == 1
     record_error.assert_called_once_with(
         account.bank_account_id,
-        "'boom'",
+        "KeyError",
         commit=True,
     )
     db.rollback.assert_called_once()

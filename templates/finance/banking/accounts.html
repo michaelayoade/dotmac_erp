@@ -61,6 +61,7 @@
                         <th scope="col">Currency</th>
                         <th scope="col" class="text-right">Last Statement</th>
                         <th scope="col">Last Reconciled</th>
+                        <th scope="col">Mono Health</th>
                         {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
@@ -88,6 +89,28 @@
                             {% endif %}
                         </td>
                         <td class="text-slate-600 dark:text-slate-300">{{ account.last_reconciled_date if account.last_reconciled_date else 'Never' }}</td>
+                        <td>
+                            {% if not account.mono_connected %}
+                            <span class="text-xs text-slate-500 dark:text-slate-400">Not connected</span>
+                            {% elif account.mono_health_status in ['reauthorization_required', 'provider_limited', 'failed'] %}
+                            <span class="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/20 dark:text-rose-400">
+                                {{ icon_svg("warning", "h-3.5 w-3.5") }}
+                                {{ account.mono_health_label }}
+                            </span>
+                            {% elif account.mono_health_status in ['pending', 'stale', 'transient_failure'] %}
+                            <span class="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                                {{ icon_svg("warning", "h-3.5 w-3.5") }}
+                                {{ account.mono_health_label }}
+                            </span>
+                            {% elif account.mono_health_status == 'healthy' %}
+                            <span class="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+                                {{ icon_svg("check-circle", "h-3.5 w-3.5") }}
+                                Healthy
+                            </span>
+                            {% else %}
+                            <span class="text-xs text-slate-500 dark:text-slate-400">{{ account.mono_health_label }}</span>
+                            {% endif %}
+                        </td>
                         <td class="text-center">
                             {{ status_badge(account.status | default('active'), 'sm') }}
                         </td>
@@ -109,7 +132,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="9" class="py-12">
+                        <td colspan="10" class="py-12">
                             {{ empty_state(
                                 'No bank accounts found',
                                 'Get started by adding your first bank account' if not (search or status) else 'Try adjusting your search or filter criteria',

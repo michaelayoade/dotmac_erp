@@ -12,7 +12,7 @@ import csv
 import json
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta, timezone
 from datetime import datetime as _datetime
 from decimal import Decimal
 from io import BytesIO, StringIO
@@ -199,6 +199,45 @@ def _parse_reconciliation_status(
 
 def _account_view(account: BankAccount) -> dict:
     currency = account.currency_code
+    health_status = str(
+        getattr(account, "mono_transaction_sync_status", "never") or "never"
+    )
+    last_healthy_at = getattr(account, "mono_last_transaction_sync_at", None)
+    stale_reference = None
+    if health_status == "healthy":
+        stale_reference = last_healthy_at
+    elif health_status == "pending":
+        stale_reference = getattr(account, "mono_last_synced_at", None)
+    if stale_reference is not None:
+        comparable = stale_reference
+        if comparable.tzinfo is None:
+            comparable = comparable.replace(tzinfo=timezone.utc)
+        if _datetime.now(timezone.utc) - comparable > timedelta(hours=36):
+            health_status = "stale"
+
+    health_labels = {
+        "never": "Never synchronized",
+        "pending": "Refresh pending",
+        "healthy": "Healthy",
+        "stale": "Stale",
+        "reauthorization_required": "Reauthorization required",
+        "provider_limited": "Provider limitation",
+        "transient_failure": "Provider temporarily unavailable",
+        "failed": "Refresh failed",
+    }
+    health_messages = {
+        "pending": "Mono is still processing the latest bank refresh.",
+        "stale": "No successful bank pull has been confirmed in the last 36 hours.",
+        "reauthorization_required": (
+            "This bank connection must be reauthorized before fresh "
+            "transactions can be retrieved."
+        ),
+        "provider_limited": (
+            "The bank is providing balance data without transaction history."
+        ),
+        "transient_failure": "Mono is temporarily unavailable. Try again later.",
+        "failed": "The latest bank refresh did not complete successfully.",
+    }
     return {
         "bank_account_id": account.bank_account_id,
         "bank_name": account.bank_name,
@@ -228,11 +267,15 @@ def _account_view(account: BankAccount) -> dict:
         "overdraft_limit": _format_currency(account.overdraft_limit, currency)
         if account.overdraft_limit
         else None,
-        "mono_account_id": account.mono_account_id,
+        "mono_connected": bool(account.mono_account_id),
         "mono_sync_from_date": _format_date(account.mono_sync_from_date),
         "mono_last_transaction_date": _format_date(account.mono_last_transaction_date),
         "mono_last_synced_at": account.mono_last_synced_at,
-        "mono_last_sync_error": account.mono_last_sync_error,
+        "mono_last_ingest_at": account.mono_last_ingest_at,
+        "mono_last_transaction_sync_at": last_healthy_at,
+        "mono_health_status": health_status,
+        "mono_health_label": health_labels.get(health_status, "Unknown"),
+        "mono_health_message": health_messages.get(health_status),
         "mono_sync_buffer_days": account.mono_sync_buffer_days,
     }
 

@@ -58,6 +58,18 @@ class BankAccountStatus(str, enum.Enum):
     suspended = "suspended"
 
 
+class MonoTransactionSyncStatus(str, enum.Enum):
+    """Health of the upstream Mono bank pull, not of Mono's local cache."""
+
+    never = "never"
+    pending = "pending"
+    healthy = "healthy"
+    reauthorization_required = "reauthorization_required"
+    provider_limited = "provider_limited"
+    transient_failure = "transient_failure"
+    failed = "failed"
+
+
 class BankAccount(Base):
     """
     Bank Account entity.
@@ -176,6 +188,18 @@ class BankAccount(Base):
     # returns 200 with zero rows. Anything deciding "is this link alive?"
     # must read this, not ``mono_last_synced_at``.
     mono_last_ingest_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # These columns were introduced by 20260506_mono_txn_status but were not
+    # mapped on the ORM model.  They describe the bank-pull outcome separately
+    # from ``mono_last_synced_at`` (which only proves provider contact).
+    mono_transaction_sync_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default=MonoTransactionSyncStatus.never.value,
+        server_default=MonoTransactionSyncStatus.never.value,
+    )
+    mono_last_transaction_sync_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     # True when Mono reports the *bank link itself* is broken (reauth needed,

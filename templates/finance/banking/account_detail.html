@@ -194,7 +194,7 @@
                 {{ icon_svg("building", "h-5 w-5 text-blue-600 dark:text-blue-400") }}
                 <h3 class="text-lg font-medium text-slate-900 dark:text-white">Mono Connect</h3>
             </div>
-            {% if account.mono_account_id %}
+            {% if account.mono_connected %}
             <span class="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
                 {{ icon_svg("check-circle", "h-3.5 w-3.5") }}
                 Connected
@@ -206,47 +206,61 @@
             {% endif %}
         </div>
 
-        {% if account.mono_account_id %}
-        <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 text-sm">
+        {% if account.mono_connected %}
+        <dl class="grid grid-cols-1 gap-4 mb-4 text-sm sm:grid-cols-2 xl:grid-cols-5">
             <div>
                 <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Last transaction</dt>
+                <dd class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
+                    {{ account.mono_last_transaction_date if account.mono_last_transaction_date else '—' }}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Balance as of</dt>
                 <dd class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
                     {{ account.last_statement_date if account.last_statement_date else '—' }}
                 </dd>
             </div>
             <div>
-                <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Current balance</dt>
+                <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Last provider contact</dt>
                 <dd class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
-                    {{ account.last_statement_balance if account.last_statement_balance else '—' }}
+                    {{ account.mono_last_synced_at.strftime('%d %b %Y %H:%M') if account.mono_last_synced_at else '—' }}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Last healthy bank pull</dt>
+                <dd class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
+                    {{ account.mono_last_transaction_sync_at.strftime('%d %b %Y %H:%M') if account.mono_last_transaction_sync_at else '—' }}
                 </dd>
             </div>
             <div>
                 <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Integration health</dt>
                 <dd class="mt-1">
-                    {% if account.mono_last_sync_error %}
+                    {% if account.mono_health_status in ['reauthorization_required', 'provider_limited', 'failed'] %}
                     <span class="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700 dark:bg-rose-900/20 dark:text-rose-400">
                         {{ icon_svg("warning", "h-3.5 w-3.5") }}
-                        Error
+                        {{ account.mono_health_label }}
                     </span>
-                    {% elif account.mono_last_synced_at %}
+                    {% elif account.mono_health_status in ['pending', 'stale', 'transient_failure'] %}
+                    <span class="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                        {{ icon_svg("warning", "h-3.5 w-3.5") }}
+                        {{ account.mono_health_label }}
+                    </span>
+                    {% elif account.mono_health_status == 'healthy' %}
                     <span class="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
                         {{ icon_svg("check-circle", "h-3.5 w-3.5") }}
-                        Healthy
+                        {{ account.mono_health_label }}
                     </span>
-                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Synced {{ account.mono_last_synced_at.strftime('%d %b %Y %H:%M') }}
-                    </div>
                     {% else %}
                     <span class="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                        Never synced
+                        {{ account.mono_health_label }}
                     </span>
                     {% endif %}
                 </dd>
             </div>
         </dl>
-        {% if account.mono_last_sync_error %}
+        {% if account.mono_health_message %}
         <div class="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
-            <strong>Last sync failed:</strong> {{ account.mono_last_sync_error }}
+            <strong>Mono status:</strong> {{ account.mono_health_message }}
         </div>
         {% endif %}
         <div class="flex items-center gap-3">
@@ -366,7 +380,7 @@
                             .then(function(r) { return r.json(); })
                             .then(function(data) {
                                 if (data.status === 'success') {
-                                    window.showToast('{{ "Bank account reauthorised successfully!" if account.mono_account_id else "Bank account connected successfully!" }}', 'success');
+                                    window.showToast('{{ "Bank account reauthorised successfully!" if account.mono_connected else "Bank account connected successfully!" }}', 'success');
                                     setTimeout(function() { location.reload(); }, 1500);
                                 } else {
                                     window.showToast(data.detail || 'Failed to link account', 'error');

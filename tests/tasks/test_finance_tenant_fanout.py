@@ -279,7 +279,12 @@ def test_mono_accounts_are_listed_inside_each_tenants_session(
 
     def fake_sync_account(mono_account_id, *, refresh_first=False, **_):
         synced.append((mono_account_id, refresh_first))
-        return {"success": True, "transactions_synced": 3}
+        return {
+            "success": True,
+            "ingestion_state": "pending",
+            "transactions_synced": 3,
+            "duplicates_skipped": 2,
+        }
 
     monkeypatch.setattr(finance, "sync_mono_account", fake_sync_account)
 
@@ -291,8 +296,11 @@ def test_mono_accounts_are_listed_inside_each_tenants_session(
         ("mono-a2", True),
         ("mono-b1", True),
     ]
-    assert result["accounts_synced"] == 3
-    assert result["total_transactions"] == 9
+    assert result["completed"] == 0
+    assert result["pending"] == 3
+    assert result["failed"] == 0
+    assert result["transactions_imported"] == 9
+    assert result["duplicates_skipped"] == 6
 
 
 def test_mono_sweep_reports_nothing_to_do_only_when_there_is_nothing(
@@ -314,7 +322,12 @@ def test_mono_sweep_reports_nothing_to_do_only_when_there_is_nothing(
     assert opened == [ORG_A, ORG_B], "every tenant was asked before concluding"
     assert result == {
         "success": True,
-        "accounts_synced": 0,
+        "completed": 0,
+        "pending": 0,
+        "failed": 0,
+        "skipped": 0,
+        "transactions_imported": 0,
+        "duplicates_skipped": 0,
         "message": "No Mono-linked bank accounts found",
     }
     finance.sync_mono_account.assert_not_called()
@@ -331,15 +344,19 @@ def test_one_bad_account_does_not_starve_the_rest_of_the_sweep(
     def fake_sync_account(mono_account_id, **_):
         if mono_account_id == "mono-a1":
             raise RuntimeError("Mono is down")
-        return {"success": True, "transactions_synced": 1}
+        return {
+            "success": True,
+            "ingestion_state": "pending",
+            "transactions_synced": 1,
+        }
 
     monkeypatch.setattr(finance, "sync_mono_account", fake_sync_account)
 
     result = finance.sync_mono_transactions()
 
-    assert result["accounts_synced"] == 1
-    assert result["accounts_failed"] == 1
-    assert result["errors"] == ["Mono is down"]
+    assert result["pending"] == 1
+    assert result["failed"] == 1
+    assert result["errors"] == ["RuntimeError"]
 
 
 # ── The retired seam ─────────────────────────────────────────────────
