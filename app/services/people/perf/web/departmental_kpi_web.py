@@ -292,10 +292,22 @@ class DepartmentalKPIWebService:
             state="all",
             employee_search=employee_search,
         )
-        counts = {key: 0 for key in ("missing", "draft", "awaiting_approval", "returned", "automatic", "recorded")}
+        counts = {
+            key: 0
+            for key in (
+                "missing",
+                "draft",
+                "awaiting_approval",
+                "returned",
+                "automatic",
+                "recorded",
+            )
+        }
         for row in rows:
             counts[row["state"]] += 1
-        filtered_rows = rows if state == "all" else [row for row in rows if row["state"] == state]
+        filtered_rows = (
+            rows if state == "all" else [row for row in rows if row["state"] == state]
+        )
         per_page = 25
         total = len(filtered_rows)
         total_pages = max(1, (total + per_page - 1) // per_page)

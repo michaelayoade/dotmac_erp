@@ -143,9 +143,7 @@ class KPIDashboardWebService:
 
         context = base_context(request, auth, "KPI Dashboard", "perf", db=db)
         health_service = DepartmentalKPIService(db)
-        scoped_department_ids = {
-            UUID(item["id"]) for item in scope.departments
-        }
+        scoped_department_ids = {UUID(item["id"]) for item in scope.departments}
         configuration_health = health_service.configuration_health_summary(
             scope.organization_id,
             department_ids=scoped_department_ids,

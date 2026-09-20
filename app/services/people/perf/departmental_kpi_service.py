@@ -351,9 +351,7 @@ class DepartmentalKPIService:
             ]
         weight_summaries = {
             department_id: self.weight_summary(org_id, department_id)
-            for department_id in {
-                config.department_id for config in configurations
-            }
+            for department_id in {config.department_id for config in configurations}
         }
         health = self.configuration_health(
             org_id,
