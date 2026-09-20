@@ -128,13 +128,13 @@ def test_calendar_ui_keeps_month_grid_detail_and_sidebar_actions() -> None:
         encoding="utf-8"
     )
     assert "grid-cols-7" in index
-    assert "/admin/calendar/events/{{ row.event.event_id }}" in index
+    assert "/people/calendar/events/{{ row.event.event_id }}" in index
     assert "}} Edit" in index
     assert "}} Delete" in index
     assert "Add everyone" in form
     assert 'name="participant_ids"' in form
     assert 'name="reminder_offsets"' in form
-    assert "notify selected employees through Nextcloud Talk" in index
+    assert '{% extends "people/base_people.html" %}' in index
 
 
 def test_talk_notification_boundary_is_documented() -> None:
@@ -263,11 +263,15 @@ def test_published_organizational_event_notifies_only_selected_participants() ->
     )
 
     notifications = [item for item in database.added if isinstance(item, Notification)]
-    assert len(notifications) == 1
-    assert notifications[0].recipient_id == participant_id
-    assert notifications[0].channel == NotificationChannel.NEXTCLOUD
-    assert notifications[0].action_url == (
-        f"/people/self/calendar/events/{event.event_id}"
+    assert len(notifications) == 2
+    assert {item.channel for item in notifications} == {
+        NotificationChannel.IN_APP,
+        NotificationChannel.NEXTCLOUD,
+    }
+    assert all(item.recipient_id == participant_id for item in notifications)
+    assert all(
+        item.action_url == (f"/people/self/calendar/events/{event.event_id}")
+        for item in notifications
     )
 
 
@@ -322,6 +326,7 @@ def test_admin_calendar_is_named_organizational_and_remains_permission_gated() -
         encoding="utf-8"
     )
     assert "Organizational Calendar" in index
+    assert 'prefix="/people/calendar"' in route
     assert 'require_web_permission("calendar:events:create")' in route
     assert "Finance Manager" not in route
     assert "Admin" not in route

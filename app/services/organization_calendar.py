@@ -51,8 +51,12 @@ class ParticipantCandidate:
     employee_id: uuid.UUID
     name: str
     email: str
-    nextcloud_user_id: str
+    nextcloud_user_id: str | None
     department_name: str | None
+
+    @property
+    def has_nextcloud_identity(self) -> bool:
+        return bool(self.nextcloud_user_id)
 
 
 @dataclass(frozen=True)
@@ -113,7 +117,7 @@ class OrganizationCalendarService:
                     employee_id=employee.employee_id,
                     name=person.name or employee.employee_code,
                     email=person.email.strip().lower(),
-                    nextcloud_user_id=person.nextcloud_user_id.strip(),
+                    nextcloud_user_id=(person.nextcloud_user_id or "").strip() or None,
                     department_name=department_name,
                 )
             )
@@ -131,15 +135,6 @@ class OrganizationCalendarService:
             return "Person record is inactive"
         if not (person.email or "").strip() or "@" not in person.email:
             return "Work email is missing or invalid"
-        if not (person.nextcloud_user_id or "").strip():
-            return "Nextcloud identity is not mapped"
-        state = employee.workforce_provisioning_state or {}
-        nextcloud_state = state.get("nextcloud") if isinstance(state, dict) else None
-        if (
-            isinstance(nextcloud_state, dict)
-            and nextcloud_state.get("status") == "failed"
-        ):
-            return "Nextcloud identity requires reconciliation"
         return None
 
     def get_event(
@@ -651,8 +646,8 @@ class OrganizationCalendarService:
         invalid = [person_id for person_id in requested if person_id not in by_id]
         if invalid:
             raise CalendarError(
-                "One or more selected employees are inactive or do not have a verified "
-                "Nextcloud identity. Refresh the participant list and try again."
+                "One or more selected employees are not eligible for the ERP calendar. "
+                "Refresh the participant list and try again."
             )
         if len(requested) > MAX_PARTICIPANTS:
             raise CalendarError(
@@ -694,7 +689,11 @@ class OrganizationCalendarService:
             participant.participant_name = candidate.name
             participant.participant_email = candidate.email
             participant.nextcloud_user_id = candidate.nextcloud_user_id
-            participant.identity_status = "VERIFIED"
+            participant.identity_status = (
+                "VERIFIED"
+                if candidate.has_nextcloud_identity
+                else "MISSING_NEXTCLOUD_ACCOUNT"
+            )
             participant.membership_status = ParticipantMembershipStatus.ACTIVE.value
             participant.removed_at = None
         for person_id, candidate in desired.items():
@@ -709,7 +708,11 @@ class OrganizationCalendarService:
                     participant_name=candidate.name,
                     participant_email=candidate.email,
                     nextcloud_user_id=candidate.nextcloud_user_id,
-                    identity_status="VERIFIED",
+                    identity_status=(
+                        "VERIFIED"
+                        if candidate.has_nextcloud_identity
+                        else "MISSING_NEXTCLOUD_ACCOUNT"
+                    ),
                     membership_status=ParticipantMembershipStatus.ACTIVE.value,
                 )
             )
@@ -726,8 +729,14 @@ class OrganizationCalendarService:
         message: str,
         action_url: str | None = None,
     ) -> None:
-        """Queue Talk delivery while retaining the notification in ERP."""
-        NotificationService().create_many(
+        """Create an ERP alert for everyone and Talk delivery when available."""
+        notification_service = NotificationService()
+        action_url = (
+            action_url
+            if action_url is not None
+            else f"/people/self/calendar/events/{event.event_id}"
+        )
+        notification_service.create_many(
             self.db,
             organization_id=self.organization_id,
             recipient_ids=sorted(recipient_ids, key=str),
@@ -736,14 +745,32 @@ class OrganizationCalendarService:
             notification_type=notification_type,
             title=f"{title_prefix}: {event.title}",
             message=message,
-            channel=NotificationChannel.NEXTCLOUD,
-            action_url=(
-                action_url
-                if action_url is not None
-                else f"/people/self/calendar/events/{event.event_id}"
-            ),
+            channel=NotificationChannel.IN_APP,
+            action_url=action_url,
             actor_id=actor_person_id,
         )
+        talk_recipients = {
+            participant.person_id
+            for participant in event.participants
+            if participant.person_id in recipient_ids
+            and participant.membership_status
+            == ParticipantMembershipStatus.ACTIVE.value
+            and participant.nextcloud_user_id
+        }
+        if talk_recipients:
+            notification_service.create_many(
+                self.db,
+                organization_id=self.organization_id,
+                recipient_ids=sorted(talk_recipients, key=str),
+                entity_type=EntityType.SYSTEM,
+                entity_id=event.event_id,
+                notification_type=notification_type,
+                title=f"{title_prefix}: {event.title}",
+                message=message,
+                channel=NotificationChannel.NEXTCLOUD,
+                action_url=action_url,
+                actor_id=actor_person_id,
+            )
 
     def _replace_reminders(
         self, event: OrganizationCalendarEvent, reminder_offsets: list[int]

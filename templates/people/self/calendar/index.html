@@ -32,6 +32,24 @@
         {% endif %}
     </div>
 
+    <div class="grid gap-3 sm:grid-cols-3">
+        <div class="card border-l-4 border-l-violet-500 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">This month</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ event_rows | length }}</p>
+            <p class="text-xs text-slate-500">events in view</p>
+        </div>
+        <div class="card border-l-4 border-l-sky-500 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Shared with you</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ event_rows | selectattr('is_personal', 'equalto', false) | list | length }}</p>
+            <p class="text-xs text-slate-500">organization events</p>
+        </div>
+        <div class="card border-l-4 border-l-emerald-500 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Your events</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ event_rows | selectattr('is_personal', 'equalto', true) | list | length }}</p>
+            <p class="text-xs text-slate-500">personal events</p>
+        </div>
+    </div>
+
     <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
         <section class="card overflow-hidden" aria-label="Monthly calendar">
             <div class="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
@@ -54,7 +72,7 @@
                     {% for week in weeks %}
                     <div class="grid grid-cols-7 border-b border-slate-200 last:border-b-0 dark:border-slate-700">
                         {% for day in week %}
-                        <div class="min-h-32 border-r border-slate-200 p-1.5 last:border-r-0 dark:border-slate-700 {{ 'bg-slate-50/70 dark:bg-slate-900/35' if day.month != month_start.month else 'bg-white dark:bg-slate-900' }}">
+                        <div class="min-h-36 border-r border-slate-200 p-2 last:border-r-0 dark:border-slate-700 {{ 'bg-slate-50/70 dark:bg-slate-900/35' if day.month != month_start.month else 'bg-white dark:bg-slate-900' }}">
                             <div class="mb-1 flex items-center justify-between">
                                 <span class="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold {{ 'bg-violet-600 text-white' if day == today else 'text-slate-700 dark:text-slate-300' if day.month == month_start.month else 'text-slate-400 dark:text-slate-600' }}">{{ day.day }}</span>
                             </div>
