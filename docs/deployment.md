@@ -76,11 +76,26 @@ script writes it automatically. `docker-compose.yml` declares it with no
 default, so a bare `docker compose up -d` on a host whose `.env` has no pin
 refuses to start instead of floating onto `:latest`.
 
-To redeploy an exact earlier release, pass its digest to the deploy script —
-which holds it to the same gate as the rendered file:
+Normal production deployments run from the deployment controller. The wrapper
+logs in to OpenBao with its scoped AppRole, reads the canonical `app_admin`
+credential over loopback, and streams it through SSH without putting it in
+`.env`, argv, or a runtime container:
 
 ```bash
-MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh sha256:<64 hex>
+python scripts/deploy_production.py --host erp.dotmac.io
+```
+
+The host is mandatory so a production target is never inferred. See
+`docs/runbooks/production-deployment-credential.md` for the policy, local
+credential pointers, and verification contract.
+
+To redeploy an exact earlier release, pass its digest to the controller wrapper
+— which holds it to the same gate as the rendered file:
+
+```bash
+python scripts/deploy_production.py \
+  --host erp.dotmac.io \
+  sha256:<64 hex>
 ```
 
 A tag is not an accepted selector anywhere on this path. `sha-abc1234` looks
