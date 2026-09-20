@@ -1,10 +1,12 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg %}
+{% from "people/perf/_kpi_workspace_nav.html" import kpi_workspace_nav %}
 {% block page_title %}{{ 'Edit KPI Configuration' if configuration else 'New KPI Configuration' }}{% endblock %}
 {% block breadcrumbs %}<nav aria-label="Breadcrumb" class="text-sm text-slate-500"><ol class="flex items-center gap-2"><li><a href="/people/perf/kpi-dashboard/configurations" class="hover:text-violet-600">KPI Definitions</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li aria-current="page">{{ 'Edit definition' if configuration else 'New definition' }}</li></ol></nav>{% endblock %}
 {% block content %}
 {% set value = form_data %}
 <div class="max-w-5xl">
+    {{ kpi_workspace_nav('definitions') }}
     {% if error %}<div class="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ error }}</div>{% endif %}
     <form method="post" action="{{ '/people/perf/kpi-dashboard/configurations/' ~ configuration.template_id ~ '/edit' if configuration else '/people/perf/kpi-dashboard/configurations/new' }}" class="space-y-6">
         {{ request.state.csrf_form | safe }}

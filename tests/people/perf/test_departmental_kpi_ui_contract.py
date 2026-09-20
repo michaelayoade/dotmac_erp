@@ -58,7 +58,7 @@ def test_routes_use_existing_permission_and_tenant_dependencies() -> None:
     assert '@router.get("/department"' in routes
     assert '@router.get("/measurements"' in routes
     assert '@router.get("/definitions"' in routes
-    assert '@router.get("/assignments"' in routes
+    assert '@router.get("/kpi-dashboard/assignments"' in _read("app/web/people/perf.py")
     assert '@router.get("/scorecards"' in routes
     assert '"/export.csv"' in routes
 

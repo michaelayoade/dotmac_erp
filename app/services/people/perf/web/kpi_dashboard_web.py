@@ -22,6 +22,7 @@ from app.services.people.perf.kpi_dashboard_contract import (
     SavedViewNotFound,
     view_name,
 )
+from app.services.people.perf.departmental_kpi_service import DepartmentalKPIService
 from app.services.people.perf.kpi_dashboard_service import KPIDashboardService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -141,6 +142,16 @@ class KPIDashboardWebService:
             raise _http_error(exc) from exc
 
         context = base_context(request, auth, "KPI Dashboard", "perf", db=db)
+        health_service = DepartmentalKPIService(db)
+        scoped_department_ids = {
+            UUID(item["id"]) for item in scope.departments
+        }
+        configuration_health = health_service.configuration_health_summary(
+            scope.organization_id,
+            department_ids=scoped_department_ids,
+            period_start=data["period_start"],
+            period_end=data["period_end"],
+        )
         pairs = _pairs(config)
         navigation_pairs = pairs + ([("view_id", selected_id)] if selected_id else [])
 
@@ -197,6 +208,13 @@ class KPIDashboardWebService:
                 "can_manage_kpi_configurations": scope.organization_wide
                 and not auth.leave_write_restricted
                 and auth.has_permission("performance:kpi:manage"),
+                "can_view_definitions": auth.has_permission("performance:kpi:manage"),
+                "can_view_assignments": True,
+                "can_view_measurements": auth.has_permission("performance:kpi:measure")
+                or auth.has_permission("performance:kpi:approve"),
+                "can_view_scorecards": True,
+                "can_view_reports": True,
+                "configuration_health": configuration_health,
             }
         )
         response = templates.TemplateResponse(

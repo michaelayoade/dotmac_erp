@@ -43,35 +43,26 @@ def _semantic_target(path: str, request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"{path}{query}", status_code=307)
 
 
-@router.get("/definitions")
-def definitions_alias(
+@router.get("/definitions", response_class=HTMLResponse)
+def definitions(
     request: Request,
+    department_id: str | None = None,
+    include_inactive: bool = False,
     auth: WebAuthContext = Depends(require_kpi_read),
-) -> RedirectResponse:
-    """Semantic KPI Definitions entry point preserving the legacy handler URL."""
-    return _semantic_target("/people/perf/kpi-dashboard/configurations", request)
+    db: Session = Depends(get_db_for_org),
+):
+    """Canonical KPI Definitions entry point."""
+    return departmental_kpi_web_service.configuration_list_response(
+        request,
+        auth,
+        db,
+        department_id=department_id,
+        include_inactive=include_inactive,
+    )
 
 
-@router.get("/assignments")
-def assignments_alias(
-    request: Request,
-    auth: WebAuthContext = Depends(require_kpi_read),
-) -> RedirectResponse:
-    """Semantic KPI Assignments entry point preserving the legacy handler URL."""
-    return _semantic_target("/people/perf/goals", request)
-
-
-@router.get("/scorecards")
-def scorecards_alias(
-    request: Request,
-    auth: WebAuthContext = Depends(require_kpi_read),
-) -> RedirectResponse:
-    """Semantic Department Scorecards entry point preserving the legacy handler URL."""
-    return _semantic_target("/people/perf/kpi-dashboard/department", request)
-
-
-@router.get("/department", response_class=HTMLResponse)
-def dashboard(
+@router.get("/scorecards", response_class=HTMLResponse)
+def scorecards(
     request: Request,
     department_id: UUID | None = None,
     period_start: date | None = None,
@@ -82,6 +73,7 @@ def dashboard(
     auth: WebAuthContext = Depends(require_kpi_read),
     db: Session = Depends(get_db_for_org),
 ):
+    """Canonical Department Scorecards entry point."""
     return departmental_kpi_web_service.dashboard_response(
         request,
         auth,
@@ -93,6 +85,18 @@ def dashboard(
         category=category,
         status=status,
     )
+
+
+@router.get("/department")
+def legacy_department_redirect(request: Request) -> RedirectResponse:
+    """Keep existing scorecard bookmarks working while making the semantic URL canonical."""
+    return _semantic_target("/people/perf/kpi-dashboard/scorecards", request)
+
+
+@router.get("/configurations")
+def legacy_definitions_redirect(request: Request) -> RedirectResponse:
+    """Keep the former configuration list URL as a compatibility redirect."""
+    return _semantic_target("/people/perf/kpi-dashboard/definitions", request)
 
 
 @router.get("/export.csv")
@@ -126,23 +130,6 @@ async def instantiate_period(
 ):
     return await departmental_kpi_web_service.instantiate_period_response(
         request, auth, db
-    )
-
-
-@router.get("/configurations", response_class=HTMLResponse)
-def configurations(
-    request: Request,
-    department_id: str | None = None,
-    include_inactive: bool = False,
-    auth: WebAuthContext = Depends(require_kpi_manage),
-    db: Session = Depends(get_db_for_org),
-):
-    return departmental_kpi_web_service.configuration_list_response(
-        request,
-        auth,
-        db,
-        department_id=department_id,
-        include_inactive=include_inactive,
     )
 
 
@@ -222,6 +209,7 @@ def measurements(
     request: Request,
     period_start: date | None = None,
     period_end: date | None = None,
+    department_id: UUID | None = None,
     state: str = "all",
     employee_search: str = "",
     page: int = Query(default=1, ge=1, le=100_000),
@@ -234,6 +222,7 @@ def measurements(
         db,
         period_start=period_start,
         period_end=period_end,
+        department_id=department_id,
         state=state,
         employee_search=employee_search,
         page=page,

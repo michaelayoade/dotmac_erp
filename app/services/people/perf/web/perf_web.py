@@ -1946,6 +1946,8 @@ class PerfWebService:
                 "deletable_kpi_ids": deletable_kpi_ids,
                 "success": success,
                 "error": error,
+                "can_view_definitions": auth.has_permission("performance:kpi:manage"),
+                "can_measure_kpis": auth.has_permission("performance:kpi:measure"),
             }
         )
         return templates.TemplateResponse(request, "people/perf/kpis.html", context)

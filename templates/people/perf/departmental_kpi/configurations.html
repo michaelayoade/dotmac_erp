@@ -1,10 +1,12 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import empty_state, icon_svg, status_badge %}
+{% from "people/perf/_kpi_workspace_nav.html" import kpi_workspace_nav %}
 {% block page_title %}KPI Definitions{% endblock %}
 {% block breadcrumbs %}<nav aria-label="Breadcrumb" class="text-sm text-slate-500"><ol class="flex items-center gap-2"><li><a href="/people/perf/kpi-dashboard" class="hover:text-violet-600">KPI Overview</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li aria-current="page" class="text-slate-900 dark:text-white">KPI Definitions</li></ol></nav>{% endblock %}
 {% block header_actions %}<a href="/people/perf/kpi-dashboard/configurations/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} New KPI definition</a>{% endblock %}
 {% block content %}
 <div class="space-y-6">
+    {{ kpi_workspace_nav('definitions', true, true, can_measure_kpis, true, true) }}
     {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{{ success }}</div>{% endif %}
     {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{{ error }}</div>{% endif %}
     <form method="get" class="card flex flex-col gap-4 p-4 sm:flex-row sm:items-end">

@@ -310,7 +310,9 @@ class DepartmentalKPIService:
                 and config.metric_source_key not in AUTOMATIC_DATA_SOURCES
             ):
                 issues.append("Unsupported source")
-            if config.target_value is None or config.target_value <= 0:
+            if config.target_value is None or (
+                config.target_value <= 0 and config.direction != "LOWER_IS_BETTER"
+            ):
                 issues.append("Missing target")
             if config.direction == "TARGET_BAND" and (
                 config.band_min_value is None or config.band_max_value is None
@@ -330,6 +332,49 @@ class DepartmentalKPIService:
                 "ready": not issues,
             }
         return health
+
+    def configuration_health_summary(
+        self,
+        org_id: UUID,
+        *,
+        department_ids: set[UUID] | None = None,
+        period_start: date | None = None,
+        period_end: date | None = None,
+    ) -> dict[str, Any]:
+        """Summarize definition readiness for the Overview health panel."""
+        configurations = self.list_configurations(org_id, include_inactive=True)
+        if department_ids is not None:
+            configurations = [
+                config
+                for config in configurations
+                if config.department_id in department_ids
+            ]
+        weight_summaries = {
+            department_id: self.weight_summary(org_id, department_id)
+            for department_id in {
+                config.department_id for config in configurations
+            }
+        }
+        health = self.configuration_health(
+            org_id,
+            configurations,
+            period_start=period_start,
+            period_end=period_end,
+            weight_summaries=weight_summaries,
+        )
+        issue_counts: dict[str, int] = defaultdict(int)
+        for item in health.values():
+            for issue in item["issues"]:
+                issue_counts[issue] += 1
+        return {
+            "definitions": len(configurations),
+            "ready": sum(1 for item in health.values() if item["ready"]),
+            "not_ready": sum(1 for item in health.values() if not item["ready"]),
+            "issue_counts": dict(sorted(issue_counts.items())),
+            "incomplete_weights": issue_counts.get("Department weights incomplete", 0),
+            "unsupported_sources": issue_counts.get("Unsupported source", 0),
+            "not_instantiated": issue_counts.get("Not instantiated", 0),
+        }
 
     def get_configuration(
         self, org_id: UUID, template_id: UUID
@@ -1861,7 +1906,23 @@ class DepartmentalKPIService:
                             else None
                         )
                     ),
-                    "last_refreshed_at": history.recorded_at if history else None,
+                    "last_refreshed_at": (
+                        history.recorded_at
+                        if history and history.measurement_mode == "AUTOMATIC"
+                        else None
+                    ),
+                    "source_state": (
+                        "manual"
+                        if not (
+                            record.department_template
+                            and record.department_template.metric_source_key
+                        )
+                        else (
+                            "available"
+                            if history and history.measurement_mode == "AUTOMATIC"
+                            else "unavailable"
+                        )
+                    ),
                 }
             )
         return rows

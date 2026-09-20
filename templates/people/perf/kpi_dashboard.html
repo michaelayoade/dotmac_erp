@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import stats_card, status_badge, empty_state, icon_svg, progress_bar %}
+{% from "people/perf/_kpi_workspace_nav.html" import kpi_workspace_nav %}
 
 {% block page_title %}KPI Overview{% endblock %}
 {% block breadcrumbs %}
@@ -20,6 +21,13 @@
 
 {% block content %}
 <div id="kpi-workspace" class="space-y-6">
+    {{ kpi_workspace_nav('overview', can_view_definitions, can_view_assignments, can_view_measurements, can_view_scorecards, can_view_reports) }}
+    {% if configuration_health.not_ready %}
+    <section class="card border-amber-200 bg-amber-50/70 p-5 dark:border-amber-800 dark:bg-amber-900/20" aria-labelledby="configuration-health-heading">
+        <div class="flex flex-wrap items-start justify-between gap-4"><div><h2 id="configuration-health-heading" class="font-semibold text-amber-900 dark:text-amber-200">Configuration health needs attention</h2><p class="mt-1 text-sm text-amber-800 dark:text-amber-300">{{ configuration_health.not_ready }} of {{ configuration_health.definitions }} definitions have readiness issues for this reporting period.</p></div>{% if can_view_definitions %}<a href="/people/perf/kpi-dashboard/definitions" class="btn btn-secondary">Review definitions</a>{% endif %}</div>
+        <div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-amber-900 dark:text-amber-200">{% if configuration_health.incomplete_weights %}<span>{{ configuration_health.incomplete_weights }} incomplete weight sets</span>{% endif %}{% if configuration_health.unsupported_sources %}<span>{{ configuration_health.unsupported_sources }} unsupported sources</span>{% endif %}{% if configuration_health.not_instantiated %}<span>{{ configuration_health.not_instantiated }} not instantiated</span>{% endif %}</div>
+    </section>
+    {% endif %}
     <section class="card p-6" aria-labelledby="kpi-heading">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -28,11 +36,11 @@
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Access: {{ 'all departments in your organization' if organization_wide else 'only the active departments you head' }}. Saved views are private to your account.</p>
             </div>
             <div class="flex flex-wrap gap-2">
-                {% if can_manage_kpi_configurations %}<a class="btn btn-primary" href="/people/perf/kpi-dashboard/configurations">New KPI definition</a>{% endif %}
-                <a class="btn btn-secondary" href="/people/perf/kpi-dashboard/configurations">KPI definitions</a>
-                <a class="btn btn-secondary" href="/people/perf/goals">Assignments</a>
-                <a class="btn btn-secondary" href="/people/perf/kpi-dashboard/measurements">Measurements</a>
-                <a class="btn btn-secondary" href="/people/perf/kpi-dashboard/department">Department scorecards</a>
+                {% if can_manage_kpi_configurations %}<a class="btn btn-primary" href="/people/perf/kpi-dashboard/configurations/new">New KPI definition</a>{% endif %}
+                {% if can_view_definitions %}<a class="btn btn-secondary" href="/people/perf/kpi-dashboard/definitions">KPI definitions</a>{% endif %}
+                {% if can_view_assignments %}<a class="btn btn-secondary" href="/people/perf/kpi-dashboard/assignments">Assignments</a>{% endif %}
+                {% if can_view_measurements %}<a class="btn btn-secondary" href="/people/perf/kpi-dashboard/measurements">Measurements</a>{% endif %}
+                {% if can_view_scorecards %}<a class="btn btn-secondary" href="/people/perf/kpi-dashboard/scorecards">Department scorecards</a>{% endif %}
             </div>
         </div>
         <form method="get" action="{{ dashboard_url }}" class="mt-5 flex flex-wrap items-end gap-3">
