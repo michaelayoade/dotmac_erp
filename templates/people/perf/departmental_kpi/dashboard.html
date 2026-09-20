@@ -1,0 +1,162 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import chart_canvas, empty_state, icon_svg, stats_card, status_badge %}
+
+{% block page_title %}Departmental KPI Dashboard{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb" class="text-sm text-slate-500 dark:text-slate-400">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people/perf" class="hover:text-violet-600">Performance</a></li>
+        <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li aria-current="page" class="text-slate-900 dark:text-white">KPI Dashboard</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+{% if can_export_kpis and selected_department_id %}
+<a href="/people/perf/kpi-dashboard/export.csv?department_id={{ selected_department_id }}&period_start={{ period_start }}&period_end={{ period_end }}{% if selected_employee_id %}&employee_id={{ selected_employee_id }}{% endif %}{% if selected_category %}&category={{ selected_category | urlencode }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}" class="btn btn-secondary">{{ icon_svg("download", "h-4 w-4 mr-1.5") }} Export CSV</a>
+{% endif %}
+{% if can_manage_kpis %}
+<a href="/people/perf/kpi-dashboard/configurations" class="btn btn-secondary">Manage KPIs</a>
+<a href="/people/perf/kpi-dashboard/configurations/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} New KPI</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{{ success }}</div>{% endif %}
+    {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300">{{ error }}</div>{% endif %}
+
+    <form method="get" class="card grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-6">
+        <div class="lg:col-span-2">
+            <label for="department_id" class="form-label">Department</label>
+            <select id="department_id" name="department_id" class="form-select w-full" required>
+                {% for department in departments %}
+                <option value="{{ department.department_id }}" {% if selected_department_id == department.department_id %}selected{% endif %}>{{ department.department_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="period_start" class="form-label">Period start</label>
+            <input id="period_start" name="period_start" type="date" value="{{ period_start }}" class="form-input w-full">
+        </div>
+        <div>
+            <label for="period_end" class="form-label">Period end</label>
+            <input id="period_end" name="period_end" type="date" value="{{ period_end }}" class="form-input w-full">
+        </div>
+        <div>
+            <label for="employee_id" class="form-label">Employee</label>
+            <select id="employee_id" name="employee_id" class="form-select w-full">
+                <option value="">All employees</option>
+                {% if dashboard %}{% for employee in dashboard.employees %}
+                <option value="{{ employee.employee_id }}" {% if selected_employee_id == employee.employee_id %}selected{% endif %}>{{ employee.full_name }}</option>
+                {% endfor %}{% endif %}
+            </select>
+        </div>
+        <div class="flex items-end"><button type="submit" class="btn btn-primary w-full">Apply filters</button></div>
+        {% if dashboard and dashboard.categories %}
+        <div class="lg:col-span-2">
+            <label for="category" class="form-label">Category</label>
+            <select id="category" name="category" class="form-select w-full">
+                <option value="">All categories</option>
+                {% for item in dashboard.categories %}<option value="{{ item }}" {% if selected_category == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <div>
+            <label for="status" class="form-label">Status</label>
+            <select id="status" name="status" class="form-select w-full">
+                <option value="">All statuses</option>
+                {% for item in ['GREEN', 'AMBER', 'RED', 'NO_DATA'] %}<option value="{{ item }}" {% if selected_status == item %}selected{% endif %}>{{ item | replace('_', ' ') | title }}</option>{% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if dashboard %}
+    <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Department KPI summary">
+        {{ stats_card("Overall KPI Score", ((dashboard.overall_score | format_number(1)) ~ '%') if dashboard.overall_score is not none else 'No data', "chart", "violet", subtitle="Target: " ~ (dashboard.overall_target | format_number(1)) ~ "% · " ~ (dashboard.overall_status | replace('_', ' ') | title)) }}
+        {{ stats_card("Average Assigned Weight", (dashboard.weight_summary.total | format_number(1)) ~ '%', "clipboard-list", "blue", subtitle="All staff complete" if dashboard.weight_summary.is_complete else "Review staff assignments") }}
+        {{ stats_card("Department KPIs", dashboard.rows | length, "target", "teal", subtitle="Active for selected period") }}
+        {{ stats_card("Active Staff", dashboard.staff_rows | length, "users", "amber", subtitle="From HR employee records") }}
+    </section>
+
+    {% if can_manage_kpis and selected_department_id %}
+    <form method="post" action="/people/perf/kpi-dashboard/periods" class="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+        {{ request.state.csrf_form | safe }}
+        <input type="hidden" name="department_id" value="{{ selected_department_id }}">
+        <div><label for="prepare_start" class="form-label">Period start</label><input id="prepare_start" name="period_start" type="date" value="{{ period_start }}" class="form-input" required></div>
+        <div><label for="prepare_end" class="form-label">Period end</label><input id="prepare_end" name="period_end" type="date" value="{{ period_end }}" class="form-input" required></div>
+        <button type="submit" class="btn btn-secondary">Prepare employee KPI records</button>
+    </form>
+    {% endif %}
+
+    {% if dashboard.rows %}
+    <section class="card p-6">
+        <div class="mb-4"><h2 class="text-lg font-semibold text-slate-900 dark:text-white">Department performance trend</h2><p class="text-sm text-slate-500">Weighted KPI score by measurement period</p></div>
+        {% if dashboard.trend %}
+        {{ chart_canvas("trendLine", {
+            "labels": dashboard.trend | map(attribute="label") | list,
+            "currency": false,
+            "format": "number",
+            "datasets": [{"label": "KPI score", "data": dashboard.trend | map(attribute="score_float") | list, "color": "rgba(124, 58, 237, 1)", "fill": "rgba(124, 58, 237, 0.1)"}]
+        }, id="department-kpi-trend") }}
+        {% else %}{{ empty_state("No performance trend yet", "Record measurements across periods to see the department trend.") }}{% endif %}
+    </section>
+
+    <section>
+        <h2 class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">KPI summary</h2>
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {% set status_colors = {'GREEN': 'emerald', 'AMBER': 'amber', 'RED': 'rose', 'NO_DATA': 'slate'} %}
+            {% for row in dashboard.rows %}
+            {{ stats_card(
+                row.config.kpi_name,
+                ((row.actual | format_number(2)) ~ (' ' ~ row.unit_of_measure if row.unit_of_measure else '')) if row.actual is not none else 'No data',
+                "chart",
+                status_colors.get(row.status, 'slate'),
+                href="/people/perf/kpi-dashboard/configurations/" ~ row.config.template_id,
+                subtitle="Target: " ~ (row.target_value | format_number(2)) ~ " · Weight: " ~ row.weightage ~ "%"
+            ) }}
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="card overflow-hidden">
+        <div class="card-header"><h2 class="text-lg font-semibold">Department KPIs</h2></div>
+        <div class="table-container">
+            <table class="table min-w-full">
+                <thead><tr><th scope="col">KPI</th><th scope="col" class="text-right">Target</th><th scope="col" class="text-right">Actual</th><th scope="col" class="text-right">Score</th><th scope="col" class="text-right">Weight</th><th scope="col" class="text-center">Status</th><th scope="col" class="text-center">Trend</th></tr></thead>
+                <tbody>
+                    {% for row in dashboard.rows %}
+                    <tr class="group">
+                        <td><a href="/people/perf/kpi-dashboard/configurations/{{ row.config.template_id }}" class="font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400">{{ row.config.kpi_name }}</a><div class="text-xs text-slate-500">{{ row.config.category if row.config.category else 'Uncategorised' }}</div></td>
+                        <td class="text-right font-mono tabular-nums">{{ row.target_value | format_number(2) }} {{ row.unit_of_measure if row.unit_of_measure else '' }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ row.actual | format_number(2) if row.actual is not none else '—' }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ (row.score | format_number(1)) ~ '%' if row.score is not none else '—' }}</td>
+                        <td class="text-right font-mono tabular-nums">{{ row.weightage }}%</td>
+                        <td class="text-center">{{ status_badge(row.status, 'sm') }}</td>
+                        <td class="text-center font-mono tabular-nums">{% if row.trend_delta is none %}—{% elif row.trend_delta > 0 %}↑ {{ row.trend_delta | format_number(1) }}{% elif row.trend_delta < 0 %}↓ {{ (row.trend_delta | abs) | format_number(1) }}{% else %}→{% endif %}</td>
+                    </tr>
+                    {% else %}<tr><td colspan="7" class="p-0">{{ empty_state("No KPIs configured", "Configure KPIs for this department before preparing a measurement period.", cta_text="Configure Department KPIs" if can_manage_kpis else none, cta_href="/people/perf/kpi-dashboard/configurations/new" if can_manage_kpis else none) }}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% else %}
+    {{ empty_state("No KPIs configured for this department", "Create a database-managed KPI definition and assignment to begin.", cta_text="Configure Department KPIs" if can_manage_kpis else none, cta_href="/people/perf/kpi-dashboard/configurations/new" if can_manage_kpis else none) }}
+    {% endif %}
+
+    <section class="card overflow-hidden">
+        <div class="card-header"><h2 class="text-lg font-semibold">Department staff performance</h2></div>
+        <div class="table-container">
+            <table class="table min-w-full">
+                <thead><tr><th scope="col">Employee</th><th scope="col" class="text-right">KPI score</th><th scope="col" class="text-center">Status</th><th scope="col" class="text-right">Measured</th></tr></thead>
+                <tbody>{% for row in dashboard.staff_rows %}<tr class="group"><td><a href="/people/perf/kpi-dashboard/employees/{{ row.employee.employee_id }}?period_start={{ period_start }}&period_end={{ period_end }}" class="font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400">{{ row.employee.full_name }}</a><div class="text-xs text-slate-500">{{ row.employee.employee_code }}</div></td><td class="text-right font-mono tabular-nums">{{ (row.score | format_number(1)) ~ '%' if row.score is not none else '—' }}</td><td class="text-center">{{ status_badge(row.status, 'sm') }}</td><td class="text-right font-mono">{{ row.measured_kpis }}/{{ row.assigned_kpis }}</td></tr>{% else %}<tr><td colspan="4" class="p-0">{{ empty_state("No staff in this department", "Active employees will appear from the HR department relationship.") }}</td></tr>{% endfor %}</tbody>
+            </table>
+        </div>
+    </section>
+    {% else %}
+    {{ empty_state("No accessible departments", "You do not currently have a department available in your KPI scope.") }}
+    {% endif %}
+</div>
+{% endblock %}

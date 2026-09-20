@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal as D
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
@@ -17,10 +18,7 @@ from app.services.people.perf.kpi_dashboard_service import (
     DashboardScope,
     KPIDashboardService,
 )
-from app.services.people.perf.perf_service import (
-    PerformanceService,
-    DEPARTMENT_TEMPLATE_LIBRARY,
-)
+from app.services.people.perf.perf_service import PerformanceService
 
 
 def kpi(**kwargs):
@@ -132,13 +130,18 @@ def test_support_sync_preserves_existing_perspective_notes():
     assert item.status == KPIStatus.PENDING
 
 
-def test_new_resolution_rate_default_does_not_claim_sla_compliance():
-    metric = next(
-        item
-        for item in DEPARTMENT_TEMPLATE_LIBRARY["customer_experience"]
-        if item["metric_source_key"] == "support.resolution_rate"
+def test_configured_support_source_is_used_without_name_inference():
+    item = SimpleNamespace(
+        department_template=SimpleNamespace(
+            metric_source_key="support.resolution_rate"
+        ),
+        kpi_name="Ticket SLA",
+        description=None,
+        notes=None,
     )
-    assert "SLA" not in metric["kpi_name"]
+    assert (
+        PerformanceService._support_ticket_metric_key(item) == "support.resolution_rate"
+    )
 
 
 @pytest.mark.parametrize(

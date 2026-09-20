@@ -26,6 +26,10 @@ from app.models.people.perf.institutional_performance import (
     InstitutionalPerformance,
 )
 from app.models.people.perf.kpi import KPI, KPIStatus
+from app.models.people.perf.kpi_measurement_history import (
+    KPIConfigurationAudit,
+    KPIMeasurementHistory,
+)
 from app.models.people.perf.kra import KRA
 from app.models.people.perf.monthly_review import MonthlyReview
 from app.models.people.perf.performance_contract import PerformanceContract
@@ -74,6 +78,8 @@ __all__ = [
     "KRA",
     "KPI",
     "KPIStatus",
+    "KPIMeasurementHistory",
+    "KPIConfigurationAudit",
     "Appraisal",
     "AppraisalStatus",
     "AppraisalKRAScore",

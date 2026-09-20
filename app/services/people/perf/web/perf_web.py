@@ -2278,7 +2278,14 @@ class PerfWebService:
                 org_id,
                 coerce_uuid(kpi_id),
                 actual_value=actual_value,
-                notes=_get_form_str(form_data, "progress_notes") or None,
+                evidence=_get_form_str(form_data, "evidence") or None,
+                notes=(
+                    _get_form_str(form_data, "notes")
+                    or _get_form_str(form_data, "progress_notes")
+                    or None
+                ),
+                actor_id=coerce_uuid(auth.person_id) if auth.person_id else None,
+                approve=auth.has_permission("performance:kpi:approve"),
             )
             db.commit()
         except Exception:
