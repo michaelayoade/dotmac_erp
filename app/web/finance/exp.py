@@ -8,7 +8,7 @@ import logging
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.services.expense.dashboard_web import expense_dashboard_service
@@ -44,6 +44,7 @@ _require_claim_reimburse = require_web_permission("expense:claims:reimburse")
 _require_category_manage = require_web_permission("expense:categories:manage")
 _require_advance_disburse = require_web_permission("expense:advances:disburse")
 _require_advance_settle = require_web_permission("expense:advances:settle")
+_require_report_export = require_web_permission("expense:reports:export")
 
 router = APIRouter(prefix="/expense", tags=["expense-web"])
 
@@ -183,6 +184,7 @@ def expense_claims_list(
     search: str | None = None,
     employee_id: str | None = None,
     approver_id: str | None = None,
+    category_id: str | None = None,
     page: int | None = Query(None, ge=1),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
@@ -203,6 +205,7 @@ def expense_claims_list(
         search=search,
         employee_id=employee_id,
         approver_id=approver_id,
+        category_id=category_id,
         offset=offset,
         limit=limit,
     )
@@ -217,6 +220,7 @@ def expense_claims_export(
     search: str | None = None,
     employee_id: str | None = None,
     approver_id: str | None = None,
+    category_id: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db_for_org),
 ):
@@ -231,6 +235,7 @@ def expense_claims_export(
         search=search,
         employee_id=employee_id,
         approver_id=approver_id,
+        category_id=category_id,
     )
 
 
@@ -918,6 +923,22 @@ def expense_summary_report(
     )
 
 
+@router.get("/reports/summary/export")
+def expense_summary_export(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    auth: WebAuthContext = Depends(_require_report_export),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Export the filtered expense summary report as CSV."""
+    return expense_claims_web_service.expense_summary_export_response(
+        auth=auth,
+        db=db,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
 @router.get("/reports/by-category", response_class=HTMLResponse)
 def expense_by_category_report(
     request: Request,
@@ -929,6 +950,22 @@ def expense_by_category_report(
     """Expense by category report page."""
     return expense_claims_web_service.expense_by_category_report_response(
         request=request,
+        auth=auth,
+        db=db,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/reports/by-category/export")
+def expense_by_category_export(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    auth: WebAuthContext = Depends(_require_report_export),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Export the filtered expense by category report as CSV."""
+    return expense_claims_web_service.expense_by_category_export_response(
         auth=auth,
         db=db,
         start_date=start_date,
@@ -956,10 +993,30 @@ def expense_by_employee_report(
     )
 
 
+@router.get("/reports/by-employee/export")
+def expense_by_employee_export(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    department_id: str | None = None,
+    auth: WebAuthContext = Depends(_require_report_export),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Export the filtered expense by employee report as CSV."""
+    return expense_claims_web_service.expense_by_employee_export_response(
+        auth=auth,
+        db=db,
+        start_date=start_date,
+        end_date=end_date,
+        department_id=department_id,
+    )
+
+
 @router.get("/reports/trends", response_class=HTMLResponse)
 def expense_trends_report(
     request: Request,
     months: int = Query(default=12, ge=3, le=24),
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db_for_org),
 ):
@@ -969,6 +1026,26 @@ def expense_trends_report(
         auth=auth,
         db=db,
         months=months,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+
+@router.get("/reports/trends/export")
+def expense_trends_export(
+    months: int = Query(default=12, ge=3, le=24),
+    start_date: str | None = None,
+    end_date: str | None = None,
+    auth: WebAuthContext = Depends(_require_report_export),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Export the selected expense trends report as CSV."""
+    return expense_claims_web_service.expense_trends_export_response(
+        auth=auth,
+        db=db,
+        months=months,
+        start_date=start_date,
+        end_date=end_date,
     )
 
 

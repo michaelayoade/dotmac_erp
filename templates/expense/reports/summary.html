@@ -6,15 +6,24 @@
     {% set current_report_view = "summary" %}
     {% include "expense/reports/_loading_skeleton.html" %}
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Expense Summary Report</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">Overview of expense claims by status</p>
         </div>
-        <a href="/expense" class="btn btn-secondary">
-            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
-            Back
-        </a>
+        <div class="flex flex-wrap items-center gap-2 print:hidden">
+            <a href="/expense" class="btn btn-secondary h-9 px-3">
+                {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
+                Back
+            </a>
+            {% if auth.has_permission("expense:reports:export") %}
+            <a href="/expense/reports/summary/export?start_date={{ start_date }}&end_date={{ end_date }}"
+               class="btn btn-secondary h-9 px-3">
+                {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+                Export CSV
+            </a>
+            {% endif %}
+        </div>
     </div>
 
     {% include "expense/reports/_report_tabs.html" %}
@@ -26,7 +35,8 @@
         start_date=start_date,
         end_date=end_date,
         auto_submit=false,
-        show_apply_button=true
+        show_apply_button=true,
+        htmx_apply=false
     ) %}{% endcall %}
 
     <div id="results-container" class="space-y-6">

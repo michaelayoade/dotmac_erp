@@ -309,6 +309,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.notifications.process_pending_nextcloud_notifications",
             "schedule": timedelta(minutes=1),  # Every minute
         },
+        "calendar-reminder-dispatch": {
+            "task": "app.tasks.notifications.process_due_calendar_reminders",
+            "schedule": timedelta(minutes=1),
+        },
         "notification-push-dispatch": {
             "task": "app.tasks.notifications.process_pending_push_notifications",
             "schedule": timedelta(minutes=1),  # Every minute

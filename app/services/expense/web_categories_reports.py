@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import date as date_type
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 
 from app.services.common import PaginationParams, coerce_uuid
@@ -19,6 +22,34 @@ from app.web.deps import base_context
 
 
 class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
+    @staticmethod
+    def _report_csv_text(value: object) -> str:
+        """Return a CSV-safe text cell, including spreadsheet formula escaping."""
+        text = "" if value is None else str(value)
+        if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+            return f"'{text}"
+        return text
+
+    @staticmethod
+    def _report_csv_response(filename: str, rows: list[list[object]]) -> Response:
+        output = io.StringIO(newline="")
+        csv.writer(output).writerows(rows)
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @staticmethod
+    def _safe_report_uuid(value: str | None) -> UUID | None:
+        if not value:
+            return None
+        try:
+            parsed = coerce_uuid(value, raise_http=False)
+            return parsed if isinstance(parsed, UUID) else None
+        except (TypeError, ValueError):
+            return None
+
     @staticmethod
     def _load_allowed_expense_accounts(db, org_id):
         """Load GL expense accounts filtered by admin-configured allowed list."""
@@ -354,6 +385,62 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         )
 
     @staticmethod
+    def expense_summary_export_response(
+        auth,
+        db,
+        start_date: str | None,
+        end_date: str | None,
+    ) -> Response:
+        """Export the filtered summary metrics and status breakdown as CSV."""
+        org_id = coerce_uuid(auth.organization_id)
+        parsed_start = ExpenseCategoriesReportsWebMixin._safe_iso_date(start_date)
+        parsed_end = ExpenseCategoriesReportsWebMixin._safe_iso_date(end_date)
+        report_data = ExpenseService(db).get_expense_summary_report(
+            org_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+        )
+        effective_start = report_data["start_date"].isoformat()
+        effective_end = report_data["end_date"].isoformat()
+
+        rows: list[list[object]] = [
+            ["Metric", "Value", "", ""],
+            ["Start Date", effective_start, "", ""],
+            ["End Date", effective_end, "", ""],
+            ["Total Claims", report_data["total_claims"], "", ""],
+            ["Total Claimed", f"{report_data['total_claimed']:.2f}", "", ""],
+            ["Approved Claims", report_data["approved_count"], "", ""],
+            ["Reimbursed Amount", f"{report_data['approved_amount']:.2f}", "", ""],
+            ["Rejected Claims", report_data["rejected_count"], "", ""],
+            [],
+            ["Status", "Claims", "Amount", "Percent of Total"],
+        ]
+        for item in report_data["status_breakdown"]:
+            percentage = (
+                item["amount"] / report_data["total_claimed"] * 100
+                if report_data["total_claimed"] > 0
+                else 0
+            )
+            rows.append(
+                [
+                    ExpenseCategoriesReportsWebMixin._report_csv_text(item["status"]),
+                    item["count"],
+                    f"{item['amount']:.2f}",
+                    f"{percentage:.1f}",
+                ]
+            )
+        rows.append(
+            [
+                "TOTAL",
+                report_data["total_claims"],
+                f"{report_data['total_claimed']:.2f}",
+                "100.0" if report_data["status_breakdown"] else "0.0",
+            ]
+        )
+        filename = f"expense_summary_{effective_start}_to_{effective_end}.csv"
+        return ExpenseCategoriesReportsWebMixin._report_csv_response(filename, rows)
+
+    @staticmethod
     def expense_by_category_report_response(
         request: Request, auth, db, start_date: str | None, end_date: str | None
     ) -> HTMLResponse:
@@ -395,6 +482,65 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         )
 
     @staticmethod
+    def expense_by_category_export_response(
+        auth,
+        db,
+        start_date: str | None,
+        end_date: str | None,
+    ) -> Response:
+        """Export the same filtered category rows and totals shown in the report."""
+        org_id = coerce_uuid(auth.organization_id)
+        parsed_start = ExpenseCategoriesReportsWebMixin._safe_iso_date(start_date)
+        parsed_end = ExpenseCategoriesReportsWebMixin._safe_iso_date(end_date)
+        report_data = ExpenseService(db).get_expense_by_category_report(
+            org_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+        )
+
+        rows: list[list[object]] = [
+            [
+                "Category Code",
+                "Category Name",
+                "Items",
+                "Claimed Amount",
+                "Reimbursed Amount",
+                "Percent of Total",
+            ]
+        ]
+        for category in report_data["categories"]:
+            rows.append(
+                [
+                    ExpenseCategoriesReportsWebMixin._report_csv_text(
+                        category["category_code"]
+                    ),
+                    ExpenseCategoriesReportsWebMixin._report_csv_text(
+                        category["category_name"]
+                    ),
+                    category["item_count"],
+                    f"{category['claimed_amount']:.2f}",
+                    f"{category['approved_amount']:.2f}",
+                    f"{category['percentage']:.1f}",
+                ]
+            )
+
+        rows.append(
+            [
+                "TOTAL",
+                "",
+                sum(category["item_count"] for category in report_data["categories"]),
+                f"{report_data['total_claimed']:.2f}",
+                f"{report_data['total_approved']:.2f}",
+                "100.0" if report_data["categories"] else "0.0",
+            ]
+        )
+
+        effective_start = report_data["start_date"].isoformat()
+        effective_end = report_data["end_date"].isoformat()
+        filename = f"expense_by_category_{effective_start}_to_{effective_end}.csv"
+        return ExpenseCategoriesReportsWebMixin._report_csv_response(filename, rows)
+
+    @staticmethod
     def expense_by_employee_report_response(
         request: Request,
         auth,
@@ -410,10 +556,7 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         org_svc = OrganizationService(db, org_id)
         parsed_start = ExpenseCategoriesReportsWebMixin._safe_iso_date(start_date)
         parsed_end = ExpenseCategoriesReportsWebMixin._safe_iso_date(end_date)
-        try:
-            parsed_dept = coerce_uuid(department_id) if department_id else None
-        except Exception:
-            parsed_dept = None
+        parsed_dept = ExpenseCategoriesReportsWebMixin._safe_report_uuid(department_id)
         report_data = svc.get_expense_by_employee_report(
             org_id,
             start_date=parsed_start,
@@ -446,18 +589,186 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
         )
 
     @staticmethod
+    def expense_by_employee_export_response(
+        auth,
+        db,
+        start_date: str | None,
+        end_date: str | None,
+        department_id: str | None,
+    ) -> Response:
+        """Export the filtered employee breakdown and totals as CSV."""
+        org_id = coerce_uuid(auth.organization_id)
+        parsed_start = ExpenseCategoriesReportsWebMixin._safe_iso_date(start_date)
+        parsed_end = ExpenseCategoriesReportsWebMixin._safe_iso_date(end_date)
+        parsed_dept = ExpenseCategoriesReportsWebMixin._safe_report_uuid(department_id)
+        report_data = ExpenseService(db).get_expense_by_employee_report(
+            org_id,
+            start_date=parsed_start,
+            end_date=parsed_end,
+            department_id=parsed_dept,
+        )
+
+        rows: list[list[object]] = [
+            [
+                "Employee",
+                "Department",
+                "Claims",
+                "Claimed Amount",
+                "Reimbursed Amount",
+                "Approval Rate",
+            ]
+        ]
+        for employee in report_data["employees"]:
+            approval_rate = (
+                employee["approved_amount"] / employee["claimed_amount"] * 100
+                if employee["claimed_amount"] > 0
+                else 0
+            )
+            rows.append(
+                [
+                    ExpenseCategoriesReportsWebMixin._report_csv_text(
+                        employee["employee_name"]
+                    ),
+                    ExpenseCategoriesReportsWebMixin._report_csv_text(
+                        employee["department_name"]
+                    ),
+                    employee["claim_count"],
+                    f"{employee['claimed_amount']:.2f}",
+                    f"{employee['approved_amount']:.2f}",
+                    f"{approval_rate:.0f}",
+                ]
+            )
+
+        overall_rate = (
+            report_data["total_approved"] / report_data["total_claimed"] * 100
+            if report_data["total_claimed"] > 0
+            else 0
+        )
+        rows.append(
+            [
+                "TOTAL",
+                "",
+                sum(employee["claim_count"] for employee in report_data["employees"]),
+                f"{report_data['total_claimed']:.2f}",
+                f"{report_data['total_approved']:.2f}",
+                f"{overall_rate:.0f}",
+            ]
+        )
+
+        effective_start = report_data["start_date"].isoformat()
+        effective_end = report_data["end_date"].isoformat()
+        department_suffix = f"_department_{parsed_dept}" if parsed_dept else ""
+        filename = (
+            f"expense_by_employee_{effective_start}_to_{effective_end}"
+            f"{department_suffix}.csv"
+        )
+        return ExpenseCategoriesReportsWebMixin._report_csv_response(filename, rows)
+
+    @staticmethod
     def expense_trends_report_response(
-        request: Request, auth, db, months: int
+        request: Request,
+        auth,
+        db,
+        months: int,
+        start_date: str | None,
+        end_date: str | None,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
+        parsed_start = ExpenseCategoriesReportsWebMixin._safe_iso_date(start_date)
+        parsed_end = ExpenseCategoriesReportsWebMixin._safe_iso_date(end_date)
         report_data = ExpenseService(db).get_expense_trends_report(
-            org_id, months=months
+            org_id,
+            months=months,
+            start_date=parsed_start,
+            end_date=parsed_end,
         )
         context = base_context(request, auth, "Expense Trends Report", "expense")
-        context.update({"report": report_data, "months": months})
+        context.update(
+            {
+                "report": report_data,
+                "start_date": report_data["start_date"].isoformat(),
+                "end_date": report_data["end_date"].isoformat(),
+                "active_filters": build_active_filters(
+                    params={
+                        "start_date": parsed_start.isoformat()
+                        if parsed_start
+                        else None,
+                        "end_date": parsed_end.isoformat() if parsed_end else None,
+                    },
+                    labels={"start_date": "From", "end_date": "To"},
+                ),
+            }
+        )
         return templates.TemplateResponse(
             request, "expense/reports/trends.html", context
         )
+
+    @staticmethod
+    def expense_trends_export_response(
+        auth,
+        db,
+        months: int,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> Response:
+        """Export the selected monthly trend window and totals as CSV."""
+        org_id = coerce_uuid(auth.organization_id)
+        parsed_start = ExpenseCategoriesReportsWebMixin._safe_iso_date(start_date)
+        parsed_end = ExpenseCategoriesReportsWebMixin._safe_iso_date(end_date)
+        report_data = ExpenseService(db).get_expense_trends_report(
+            org_id,
+            months=months,
+            start_date=parsed_start,
+            end_date=parsed_end,
+        )
+        rows: list[list[object]] = [
+            [
+                "Month",
+                "Claims",
+                "Claimed Amount",
+                "Reimbursed Amount",
+                "Variance vs Average",
+            ]
+        ]
+        for month in report_data["months"]:
+            variance = (
+                (month["claimed_amount"] - report_data["average_monthly"])
+                / report_data["average_monthly"]
+                * 100
+                if report_data["average_monthly"] > 0
+                else 0
+            )
+            rows.append(
+                [
+                    month["month_label"],
+                    month["claim_count"],
+                    f"{month['claimed_amount']:.2f}",
+                    f"{month['approved_amount']:.2f}",
+                    f"{variance:.0f}",
+                ]
+            )
+        rows.extend(
+            [
+                [
+                    "TOTAL",
+                    sum(month["claim_count"] for month in report_data["months"]),
+                    f"{report_data['total_claimed']:.2f}",
+                    f"{report_data['total_approved']:.2f}",
+                    "",
+                ],
+                [
+                    "AVERAGE MONTHLY",
+                    "",
+                    f"{report_data['average_monthly']:.2f}",
+                    "",
+                    "",
+                ],
+            ]
+        )
+        effective_start = report_data["start_date"].isoformat()
+        effective_end = report_data["end_date"].isoformat()
+        filename = f"expense_trends_{effective_start}_to_{effective_end}.csv"
+        return ExpenseCategoriesReportsWebMixin._report_csv_response(filename, rows)
 
     @staticmethod
     def my_approvals_report_response(

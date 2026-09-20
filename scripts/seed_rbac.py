@@ -477,6 +477,18 @@ HR_PERMISSIONS = [
     # -------------------------------------------------------------------------
     ("hr:access", "Access HR/People module"),
     ("hr:dashboard", "View HR dashboard"),
+    (
+        "performance:kpi:dashboard:view",
+        "View the departmental KPI dashboard",
+    ),
+    (
+        "performance:kpi:dashboard:view_all_departments",
+        "View KPI dashboards for every department",
+    ),
+    ("performance:kpi:manage", "Create and maintain KPI configurations"),
+    ("performance:kpi:measure", "Submit KPI measurements"),
+    ("performance:kpi:approve", "Approve KPI measurements"),
+    ("performance:kpi:export", "Export KPI reports"),
     ("discipline:access", "Access discipline management"),
     ("discipline:cases:read", "View disciplinary cases"),
     ("discipline:cases:create", "Create disciplinary cases"),
@@ -803,7 +815,6 @@ CALENDAR_PERMISSIONS = [
         "calendar:participants:add_all",
         "Add every eligible employee to an event",
     ),
-    ("calendar:sync:retry", "Retry failed organization calendar synchronization"),
     ("calendar:audit:read", "Read organization calendar audit history"),
 ]
 
@@ -2055,6 +2066,12 @@ ROLE_PERMISSIONS = {
     "hr_director": [
         "hr:access",
         "hr:dashboard",
+        "performance:kpi:dashboard:view",
+        "performance:kpi:dashboard:view_all_departments",
+        "performance:kpi:manage",
+        "performance:kpi:measure",
+        "performance:kpi:approve",
+        "performance:kpi:export",
         # Coach (org-wide people insights)
         "coach:insights:read",
         "coach:insights:read_all",
@@ -2210,6 +2227,12 @@ ROLE_PERMISSIONS = {
     "hr_manager": [
         "hr:access",
         "hr:dashboard",
+        "performance:kpi:dashboard:view",
+        "performance:kpi:dashboard:view_all_departments",
+        "performance:kpi:manage",
+        "performance:kpi:measure",
+        "performance:kpi:approve",
+        "performance:kpi:export",
         # Coach (team-scoped people insights)
         "coach:insights:read",
         "coach:insights:read_team",
@@ -2619,6 +2642,8 @@ ROLE_PERMISSIONS = {
     # Cross-Functional Roles
     # -------------------------------------------------------------------------
     "department_manager": [
+        "performance:kpi:dashboard:view",
+        "performance:kpi:measure",
         "discipline:access",
         "discipline:cases:read",
         "discipline:cases:create",

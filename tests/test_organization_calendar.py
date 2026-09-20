@@ -10,14 +10,9 @@ from app.models.organization_calendar import (
     CalendarBusinessStatus,
     CalendarEventScope,
     OrganizationCalendarEvent,
-    OrganizationCalendarParticipant,
-    OrganizationCalendarReminder,
-    ParticipantMembershipStatus,
 )
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationChannel
 from app.services.organization_calendar import (
-    CALENDAR_CANCELLED,
-    CALENDAR_UPSERTED,
     CalendarEventData,
     OrganizationCalendarService,
     ParticipantCandidate,
@@ -71,85 +66,38 @@ def test_all_day_event_uses_an_exclusive_date_end() -> None:
     assert result.end_at is None
 
 
-def test_integrator_payload_carries_stable_identity_version_and_desired_membership() -> (
-    None
-):
-    org_id = uuid4()
-    event_id = uuid4()
-    person_id = uuid4()
-    event = OrganizationCalendarEvent(
-        event_id=event_id,
-        organization_id=org_id,
-        ical_uid=f"erp-event-{org_id}-{event_id}@dotmac.ng",
-        title="Review",
-        timezone="Africa/Lagos",
-        all_day=True,
-        start_date=date(2026, 9, 21),
-        end_date_exclusive=date(2026, 9, 22),
-        start_at=None,
-        end_at=None,
-        color="#4F46E5",
-        event_scope=CalendarEventScope.ORGANIZATIONAL.value,
-        business_status=CalendarBusinessStatus.PUBLISHED.value,
-        version=7,
-        created_by_id=uuid4(),
-        updated_by_id=uuid4(),
-    )
-    event.participants = [
-        OrganizationCalendarParticipant(
-            organization_id=org_id,
-            person_id=person_id,
-            employee_id=uuid4(),
-            participant_name="Ada Employee",
-            participant_email="ada@example.com",
-            nextcloud_user_id="ada@example.com",
-            membership_status=ParticipantMembershipStatus.REMOVED.value,
-        )
-    ]
-    event.reminders = [
-        OrganizationCalendarReminder(
-            organization_id=org_id,
-            offset_minutes=60,
-        )
-    ]
-
-    payload = OrganizationCalendarService(None, org_id)._contract_payload(
-        event,
-        CALENDAR_UPSERTED,
-        correlation_id="calendar-correlation",
-        idempotency_key="calendar-delivery-v7",
-    )
-
-    assert payload["event_version"] == 7
-    assert payload["event_scope"] == CalendarEventScope.ORGANIZATIONAL.value
-    assert payload["uid"] == event.ical_uid
-    assert payload["action"] == "UPSERT_EVENT"
-    assert payload["participants"][0]["membership_status"] == "REMOVED"
-    assert payload["reminders"] == [60]
-    assert payload["correlation_id"] == "calendar-correlation"
-    assert payload["idempotency_key"] == "calendar-delivery-v7"
-
-
-def test_cancel_contract_is_a_distinct_action() -> None:
+def test_all_day_reminder_uses_event_timezone() -> None:
     event = OrganizationCalendarEvent(
         event_id=uuid4(),
         organization_id=uuid4(),
         ical_uid="erp-event-test@dotmac.ng",
-        title="Review",
+        title="Company day",
         timezone="Africa/Lagos",
         all_day=True,
         start_date=date(2026, 9, 21),
         end_date_exclusive=date(2026, 9, 22),
         color="#4F46E5",
-        business_status=CalendarBusinessStatus.CANCELLED.value,
-        version=2,
+        business_status=CalendarBusinessStatus.PUBLISHED.value,
+        version=1,
         created_by_id=uuid4(),
         updated_by_id=uuid4(),
     )
-    payload = OrganizationCalendarService(
-        None, event.organization_id
-    )._contract_payload(event, CALENDAR_CANCELLED)
-    assert payload["action"] == "CANCEL_EVENT"
+
+    scheduled = OrganizationCalendarService._reminder_time(event, 60)
+
+    assert scheduled.isoformat() == "2026-09-20T22:00:00+00:00"
+
+
+def test_talk_reminder_migration_is_the_erp_head() -> None:
+    migration = (
+        ROOT / "alembic" / "versions" / "20260920_calendar_talk_notifications.py"
+    ).read_text(encoding="utf-8")
+    descriptor = (ROOT / "deploy" / "product.toml").read_text(encoding="utf-8")
+    assert 'down_revision = "20260919_self_calendar"' in migration
+    assert 'revision = "20260920_calendar_talk"' in migration
+    assert '"20260920_calendar_talk"' in descriptor
+    assert "scheduled_for" in migration
+    assert "dispatched_at" in migration
 
 
 def test_calendar_permissions_and_roles_are_provisioned_by_migration() -> None:
@@ -164,7 +112,6 @@ def test_calendar_permissions_and_roles_are_provisioned_by_migration() -> None:
         "calendar:events:cancel_own",
         "calendar:events:cancel_all",
         "calendar:participants:add_all",
-        "calendar:sync:retry",
     ):
         assert permission in migration
     assert "finance_manager" in migration
@@ -187,18 +134,17 @@ def test_calendar_ui_keeps_month_grid_detail_and_sidebar_actions() -> None:
     assert "Add everyone" in form
     assert 'name="participant_ids"' in form
     assert 'name="reminder_offsets"' in form
-    assert "/admin/calendar/sync-issues" in index
-    assert (ROOT / "templates" / "admin" / "calendar" / "sync_issues.html").exists()
+    assert "notify selected employees through Nextcloud Talk" in index
 
 
-def test_release_one_recurrence_boundary_is_documented() -> None:
+def test_talk_notification_boundary_is_documented() -> None:
     plan = (ROOT / "docs" / "organization-calendar-implementation.md").read_text(
         encoding="utf-8"
     )
     assert "Recurrence is intentionally excluded from release 1" in plan
-    assert "HTTP 412" in plan
-    assert "30 seconds, 2 minutes, 10 minutes, 1 hour" in plan
-    assert "automatic attendee appearance" in plan.lower()
+    assert "Nextcloud Calendar receives no copy" in plan
+    assert "No deployment address, account, credential, or employee identity" in plan
+    assert "APP_URL" in plan
 
 
 class _CalendarUnitOfWork:
@@ -224,9 +170,6 @@ class _PersonalCalendarService(OrganizationCalendarService):
         return self._candidates, []
 
     def _audit(self, *args, **kwargs) -> None:
-        pass
-
-    def _publish_command(self, *args, **kwargs) -> None:
         pass
 
 
@@ -322,6 +265,7 @@ def test_published_organizational_event_notifies_only_selected_participants() ->
     notifications = [item for item in database.added if isinstance(item, Notification)]
     assert len(notifications) == 1
     assert notifications[0].recipient_id == participant_id
+    assert notifications[0].channel == NotificationChannel.NEXTCLOUD
     assert notifications[0].action_url == (
         f"/people/self/calendar/events/{event.event_id}"
     )

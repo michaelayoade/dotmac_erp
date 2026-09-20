@@ -7,15 +7,24 @@
     {% set current_report_view = "employee" %}
     {% include "expense/reports/_loading_skeleton.html" %}
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Expenses by Employee</h1>
             <p class="text-sm text-slate-500 dark:text-slate-400">Breakdown of expenses by employee</p>
         </div>
-        <a href="/expense/reports/summary" class="btn btn-secondary">
-            {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
-            Back to Summary
-        </a>
+        <div class="flex flex-wrap items-center gap-2 print:hidden">
+            <a href="/expense/reports/summary" class="btn btn-secondary h-9 px-3">
+                {{ icon_svg("arrow-left", "h-4 w-4 mr-1") }}
+                Back to Summary
+            </a>
+            {% if auth.has_permission("expense:reports:export") %}
+            <a href="/expense/reports/by-employee/export?start_date={{ start_date }}&end_date={{ end_date }}{% if department_id %}&department_id={{ department_id }}{% endif %}"
+               class="btn btn-secondary h-9 px-3">
+                {{ icon_svg("download", "h-4 w-4 mr-1.5") }}
+                Export CSV
+            </a>
+            {% endif %}
+        </div>
     </div>
 
     {% include "expense/reports/_report_tabs.html" %}
@@ -27,7 +36,10 @@
         active_filters=active_filters | default([]),
         date_range=true,
         start_date=start_date | default('', true),
-        end_date=end_date | default('', true)
+        end_date=end_date | default('', true),
+        auto_submit=false,
+        show_apply_button=true,
+        htmx_apply=false
     ) %}
     <div>
                 <div class="w-56">
@@ -36,7 +48,7 @@
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>
-                            {{ dept.name }}
+                            {{ dept.department_name }}
                         </option>
                         {% endfor %}
                     </select>

@@ -24,8 +24,22 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.db.session_context import cross_org_session, session_for_org
+from app.config import settings
 from app.models.email_profile import EmailModule
-from app.models.notification import EntityType, Notification, NotificationChannel
+from app.models.notification import (
+    EntityType,
+    Notification,
+    NotificationChannel,
+    NotificationType,
+)
+from app.models.organization_calendar import (
+    CalendarBusinessStatus,
+    OrganizationCalendarEvent,
+    OrganizationCalendarParticipant,
+    OrganizationCalendarReminder,
+    ParticipantMembershipStatus,
+)
+from app.services.notification import NotificationService
 from app.services.email import person_can_receive_email, send_email
 from app.tenant_catalog import active_organization_ids
 
@@ -50,6 +64,94 @@ _EMAIL_RETRY_DELAYS = (
     timedelta(hours=6),
 )
 _EMAIL_MAX_ATTEMPTS = len(_EMAIL_RETRY_DELAYS)
+
+
+def _erp_action_url(action_url: str | None) -> str | None:
+    """Build a safe absolute ERP link for messages rendered outside ERP."""
+    if not action_url:
+        return None
+    parsed_action = urlparse(action_url)
+    if parsed_action.scheme or parsed_action.netloc or not action_url.startswith("/"):
+        raise ValueError("Notification action URL must be an ERP-relative path")
+    base = settings.app_url.rstrip("/")
+    parsed_base = urlparse(base)
+    if parsed_base.scheme not in {"http", "https"} or not parsed_base.netloc:
+        raise ValueError("APP_URL must be an absolute HTTP(S) URL")
+    return f"{base}{action_url}"
+
+
+class CalendarReminderDispatchResults(TypedDict):
+    processed: int
+    notifications_queued: int
+
+
+@shared_task
+def process_due_calendar_reminders(
+    batch_size: int = 100,
+) -> CalendarReminderDispatchResults:
+    """Atomically turn due ERP calendar reminders into Talk notifications."""
+    results: CalendarReminderDispatchResults = {
+        "processed": 0,
+        "notifications_queued": 0,
+    }
+    now = datetime.now(UTC)
+    with _task_db_session() as db:
+        reminders = list(
+            db.scalars(
+                select(OrganizationCalendarReminder)
+                .join(
+                    OrganizationCalendarEvent,
+                    OrganizationCalendarEvent.event_id
+                    == OrganizationCalendarReminder.event_id,
+                )
+                .where(
+                    OrganizationCalendarReminder.dispatched_at.is_(None),
+                    OrganizationCalendarReminder.scheduled_for <= now,
+                    OrganizationCalendarEvent.business_status
+                    == CalendarBusinessStatus.PUBLISHED.value,
+                )
+                .order_by(OrganizationCalendarReminder.scheduled_for.asc())
+                .limit(max(1, min(batch_size, 500)))
+                .with_for_update(
+                    of=OrganizationCalendarReminder,
+                    skip_locked=True,
+                )
+            ).all()
+        )
+        notification_service = NotificationService()
+        for reminder in reminders:
+            event = db.get(OrganizationCalendarEvent, reminder.event_id)
+            if event is None:
+                reminder.dispatched_at = now
+                continue
+            recipient_ids = list(
+                db.scalars(
+                    select(OrganizationCalendarParticipant.person_id).where(
+                        OrganizationCalendarParticipant.organization_id
+                        == event.organization_id,
+                        OrganizationCalendarParticipant.event_id == event.event_id,
+                        OrganizationCalendarParticipant.membership_status
+                        == ParticipantMembershipStatus.ACTIVE.value,
+                    )
+                ).all()
+            )
+            notifications = notification_service.create_many(
+                db,
+                organization_id=event.organization_id,
+                recipient_ids=recipient_ids,
+                entity_type=EntityType.SYSTEM,
+                entity_id=event.event_id,
+                notification_type=NotificationType.REMINDER,
+                title=f"Calendar reminder: {event.title}",
+                message="This event is approaching.",
+                channel=NotificationChannel.NEXTCLOUD,
+                action_url=f"/people/self/calendar/events/{event.event_id}",
+            )
+            reminder.dispatched_at = now
+            results["processed"] += 1
+            results["notifications_queued"] += len(notifications)
+        db.commit()
+    return results
 
 
 class NotificationEmailDispatchResults(TypedDict):
@@ -439,8 +541,9 @@ def process_pending_nextcloud_notifications(
 
                     try:
                         message = f"**{notification.title}**\n{notification.message}"
-                        if notification.action_url:
-                            message += f"\n\n{notification.action_url}"
+                        action_url = _erp_action_url(notification.action_url)
+                        if action_url:
+                            message += f"\n\n[View in ERP]({action_url})"
 
                         client.send_to_user(nc_user_id, message)
                         notification.nextcloud_sent = True

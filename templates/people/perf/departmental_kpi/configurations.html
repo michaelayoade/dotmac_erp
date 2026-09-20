@@ -1,0 +1,23 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import empty_state, icon_svg, status_badge %}
+{% block page_title %}KPI Management{% endblock %}
+{% block breadcrumbs %}<nav aria-label="Breadcrumb" class="text-sm text-slate-500"><ol class="flex items-center gap-2"><li><a href="/people/perf/kpi-dashboard" class="hover:text-violet-600">KPI Dashboard</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li aria-current="page" class="text-slate-900 dark:text-white">Management</li></ol></nav>{% endblock %}
+{% block header_actions %}<a href="/people/perf/kpi-dashboard/configurations/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} New KPI</a>{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{{ success }}</div>{% endif %}
+    {% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{{ error }}</div>{% endif %}
+    <form method="get" class="card flex flex-col gap-4 p-4 sm:flex-row sm:items-end">
+        <div class="flex-1"><label for="department_id" class="form-label">Department</label><select id="department_id" name="department_id" class="form-select w-full"><option value="">All departments</option>{% for department in departments %}<option value="{{ department.department_id }}" {% if selected_department_id == department.department_id %}selected{% endif %}>{{ department.department_name }}</option>{% endfor %}</select></div>
+        <label class="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" name="include_inactive" value="true" {% if include_inactive %}checked{% endif %}> Include inactive</label>
+        <button type="submit" class="btn btn-secondary">Filter</button>
+    </form>
+    <div id="results-container" class="card overflow-hidden">
+        <div class="table-container"><table class="table min-w-full"><thead><tr><th scope="col">Code / KPI</th><th scope="col">Department</th><th scope="col">Assignment</th><th scope="col" class="text-right">Target</th><th scope="col" class="text-right">Weight</th><th scope="col" class="text-center">Status</th></tr></thead><tbody>
+        {% for config in configurations %}<tr class="group"><td><a href="/people/perf/kpi-dashboard/configurations/{{ config.template_id }}" class="font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400">{{ config.kpi_name }}</a><div class="font-mono text-xs text-slate-500">{{ config.kpi_code }}</div></td><td>{{ config.department.department_name }}</td><td>{{ config.assignment_scope | replace('_', ' ') | title }}{% if config.employee %}: {{ config.employee.full_name }}{% elif config.designation %}: {{ config.designation.designation_name }}{% elif config.position %}: {{ config.position.position_name }}{% endif %}</td><td class="text-right font-mono tabular-nums">{{ config.target_value | format_number(2) }} {{ config.unit_of_measure if config.unit_of_measure else '' }}</td><td class="text-right font-mono tabular-nums">{{ config.weightage }}%</td><td class="text-center">{{ status_badge('ACTIVE' if config.is_active else 'INACTIVE', 'sm') }}</td></tr>
+        {% else %}<tr><td colspan="6" class="p-0">{{ empty_state("No KPI configurations", "Create the first configurable KPI for a department.", cta_text="New KPI", cta_href="/people/perf/kpi-dashboard/configurations/new") }}</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div>
+    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{% for department in departments %}{% set summary = weight_summaries.get(department.department_id) %}<div class="card p-4"><h2 class="font-medium text-slate-900 dark:text-white">{{ department.department_name }}</h2><p class="mt-2 font-mono text-xl font-bold">{{ summary.total | format_number(1) }}%</p><p class="text-xs text-slate-500">Average assigned weight · {{ summary.minimum | format_number(1) }}–{{ summary.maximum | format_number(1) }}%</p><p class="text-xs {{ 'text-emerald-600' if summary.is_complete else 'text-amber-600' }}">{{ 'All staff weighting complete' if summary.is_complete else 'Review staff assignment totals' }}</p></div>{% endfor %}</section>
+</div>
+{% endblock %}

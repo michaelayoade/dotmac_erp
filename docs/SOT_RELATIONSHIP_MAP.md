@@ -37,6 +37,7 @@ semantics.
 | `commercial_licensing` | license gates | Gates module availability, never data integrity (placeholder-key finding 3 pending) |
 | `external_sync` | Sub AR ingestion, durable invoice disposition evidence, Sub operational-context projections, ERP material support and source-qualified correlations | External systems are transports or contracted authorities; mirrors are rebuildable; an observed blocked invoice is evidence, not a transport failure |
 | `bulk_imports` | durable run/partition ledger; customer field, validation and mutation port | Shared mechanics own progress and evidence; ERP owns what a row means |
+| `calendar_events` | organizational/personal ERP events, participant visibility, reminder and notification intent | ERP owns the event and recipient decision; Nextcloud Talk only transports a link back to ERP and receives no calendar copy |
 | `platform_services` | storage, secrets (OpenBao pointers), notifications | One owner per capability |
 
 The database-backed `ScheduledTask` row is the sole schedule owner for

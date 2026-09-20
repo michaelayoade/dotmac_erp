@@ -194,6 +194,9 @@ class KPIDashboardWebService:
                 "can_save_view": not auth.leave_write_restricted,
                 "can_manage_kpis": scope.organization_wide
                 and not auth.leave_write_restricted,
+                "can_manage_kpi_configurations": scope.organization_wide
+                and not auth.leave_write_restricted
+                and auth.has_permission("performance:kpi:manage"),
             }
         )
         response = templates.TemplateResponse(

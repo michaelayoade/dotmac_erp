@@ -386,11 +386,11 @@ heads_command = ["alembic", "current"]
 owner_material = "MIGRATION_DATABASE_URL"
 
 # `alembic heads` against the exact locked environment must equal
-# these seven heads: ERP's lineage plus Files, Accounting, Imports, Numbering,
+# these seven heads: ERP's lineage includes "20260920_calendar_talk" plus Files, Accounting, Imports, Numbering,
 # Tax, and People. The architecture gate queries Alembic's composed graph
 # directly; this is not a source-text approximation.
 expected_heads = [
-    "20260919_self_calendar",
+    "20260920_departmental_kpis",
     "fi_0002_selectable_planes",
     "im_0001_import_runs",
     "ac_0001_accounting",

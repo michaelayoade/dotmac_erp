@@ -25,6 +25,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.domain_settings import SettingDomain
 from app.models.expense import (
+    ExpenseCategory,
     ExpenseClaim,
     ExpenseClaimApprovalStep,
     ExpenseClaimItem,
@@ -107,10 +108,12 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         search: str | None = None,
         employee_id: str | None = None,
         approver_id: str | None = None,
+        category_id: str | None = None,
     ):
         auth_employee_id = coerce_uuid(auth.employee_id)
         filter_employee_id = coerce_uuid(employee_id) if employee_id else None
         filter_approver_id = coerce_uuid(approver_id) if approver_id else None
+        filter_category_id = coerce_uuid(category_id) if category_id else None
         filter_view = "submitted_to_me" if view == "submitted_to_me" else "all"
         status_value = ExpenseClaimsWebMixin._claim_status_filter(status)
         start = ExpenseClaimsWebMixin._parse_claim_filter_date(start_date)
@@ -197,7 +200,23 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                     ExpenseClaim.purpose.ilike(term),
                 )
             )
-        return stmt, filter_view, filter_employee_id, filter_approver_id
+        if filter_category_id:
+            stmt = stmt.where(
+                exists(
+                    select(1).where(
+                        ExpenseClaimItem.organization_id == org_id,
+                        ExpenseClaimItem.claim_id == ExpenseClaim.claim_id,
+                        ExpenseClaimItem.category_id == filter_category_id,
+                    )
+                )
+            )
+        return (
+            stmt,
+            filter_view,
+            filter_employee_id,
+            filter_approver_id,
+            filter_category_id,
+        )
 
     @staticmethod
     def _claim_query_options():
@@ -297,22 +316,28 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         search: str | None = None,
         employee_id: str | None = None,
         approver_id: str | None = None,
+        category_id: str | None = None,
         offset: int = 0,
         limit: int = 25,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
-        stmt, filter_view, filter_employee_id, filter_approver_id = (
-            ExpenseClaimsWebMixin._filtered_claims_stmt(
-                auth=auth,
-                org_id=org_id,
-                view=view,
-                status=status,
-                start_date=start_date,
-                end_date=end_date,
-                search=search,
-                employee_id=employee_id,
-                approver_id=approver_id,
-            )
+        (
+            stmt,
+            filter_view,
+            filter_employee_id,
+            filter_approver_id,
+            filter_category_id,
+        ) = ExpenseClaimsWebMixin._filtered_claims_stmt(
+            auth=auth,
+            org_id=org_id,
+            view=view,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            search=search,
+            employee_id=employee_id,
+            approver_id=approver_id,
+            category_id=category_id,
         )
         total = db.scalar(select(func.count()).select_from(stmt.subquery()))
 
@@ -379,10 +404,24 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
             .unique()
             .all()
         )
+        claim_categories = list(
+            db.scalars(
+                select(ExpenseCategory)
+                .where(
+                    ExpenseCategory.organization_id == org_id,
+                    ExpenseCategory.is_active.is_(True),
+                )
+                .order_by(ExpenseCategory.category_name.asc())
+            ).all()
+        )
         selected_employee = None
         selected_approver = None
         employee_options: dict[str, str] = {}
         approver_options: dict[str, str] = {}
+        category_options = {
+            str(category.category_id): category.category_name
+            for category in claim_categories
+        }
         if filter_employee_id:
             selected_employee = db.scalars(
                 select(Employee)
@@ -451,6 +490,7 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "search": search,
                 "employee_id": employee_id,
                 "approver_id": approver_id,
+                "category_id": category_id,
             }.items()
             if value
         }
@@ -472,8 +512,10 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 "filter_end_date": end_date or "",
                 "filter_employee_id": employee_id or "",
                 "filter_approver_id": approver_id or "",
+                "filter_category_id": category_id or "",
                 "claim_employees": claim_employees,
                 "claim_approvers": claim_approvers,
+                "claim_categories": claim_categories,
                 "selected_employee": selected_employee,
                 "selected_approver": selected_approver,
                 "export_url": export_url,
@@ -491,16 +533,19 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                         "end_date": end_date,
                         "employee_id": employee_id,
                         "approver_id": approver_id,
+                        "category_id": category_id,
                     },
                     labels={
                         "start_date": "From",
                         "end_date": "To",
                         "employee_id": "Employee",
                         "approver_id": "Approver",
+                        "category_id": "Category",
                     },
                     options={
                         "employee_id": employee_options,
                         "approver_id": approver_options,
+                        "category_id": category_options,
                     },
                 ),
             }
@@ -538,20 +583,26 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         search: str | None = None,
         employee_id: str | None = None,
         approver_id: str | None = None,
+        category_id: str | None = None,
     ) -> Response:
         org_id = coerce_uuid(auth.organization_id)
-        stmt, _filter_view, _filter_employee_id, _filter_approver_id = (
-            ExpenseClaimsWebMixin._filtered_claims_stmt(
-                auth=auth,
-                org_id=org_id,
-                view=view,
-                status=status,
-                start_date=start_date,
-                end_date=end_date,
-                search=search,
-                employee_id=employee_id,
-                approver_id=approver_id,
-            )
+        (
+            stmt,
+            _filter_view,
+            _filter_employee_id,
+            _filter_approver_id,
+            _filter_category_id,
+        ) = ExpenseClaimsWebMixin._filtered_claims_stmt(
+            auth=auth,
+            org_id=org_id,
+            view=view,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            search=search,
+            employee_id=employee_id,
+            approver_id=approver_id,
+            category_id=category_id,
         )
         claims = list(
             db.scalars(

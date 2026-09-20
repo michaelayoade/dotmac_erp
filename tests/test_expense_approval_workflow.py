@@ -36,6 +36,7 @@ from app.services.expense import (
     ExpenseService,
     ExpenseServiceError,
 )
+from app.services.common import ValidationError
 from app.web.deps import WebAuthContext
 
 
@@ -295,6 +296,98 @@ def test_approve_claim_requires_employee_backed_approver(db_session, engine):
         svc.approve_claim(
             org_id, claim.claim_id, approver_id=None, send_notification=False
         )
+
+
+@pytest.mark.parametrize("approved_amount", [Decimal("-1.00"), Decimal("100.01")])
+def test_approve_claim_rejects_invalid_item_approved_amount(
+    db_session,
+    engine,
+    approved_amount,
+):
+    _ensure_hr_tables(engine)
+    org_id = uuid.uuid4()
+    person = _make_person(
+        org_id,
+        f"invalid-approval-{uuid.uuid4().hex}@example.com",
+    )
+    employee = _make_employee(org_id, person, "EMP-INVALID-AMOUNT")
+    category = _make_category(org_id)
+    claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-INVALID-AMOUNT",
+        status=ExpenseClaimStatus.SUBMITTED,
+    )
+    item = _make_item(
+        org_id,
+        claim.claim_id,
+        category.category_id,
+        Decimal("100.00"),
+    )
+    db_session.add_all([person, employee, category, claim, item])
+    db_session.commit()
+
+    with pytest.raises(ValidationError):
+        ExpenseService(db_session).approve_claim(
+            org_id,
+            claim.claim_id,
+            corrections=[
+                {
+                    "item_id": item.item_id,
+                    "approved_amount": approved_amount,
+                    "category_id": category.category_id,
+                }
+            ],
+            send_notification=False,
+        )
+
+    assert claim.status == ExpenseClaimStatus.SUBMITTED
+    assert item.approved_amount is None
+
+
+def test_approve_claim_rejects_category_from_another_organization(
+    db_session,
+    engine,
+):
+    _ensure_hr_tables(engine)
+    org_id = uuid.uuid4()
+    other_org_id = uuid.uuid4()
+    person = _make_person(org_id, "invalid-category@example.com")
+    employee = _make_employee(org_id, person, "EMP-INVALID-CATEGORY")
+    category = _make_category(org_id)
+    other_category = _make_category(other_org_id)
+    other_category.category_code = "OTHER"
+    claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-INVALID-CATEGORY",
+        status=ExpenseClaimStatus.SUBMITTED,
+    )
+    item = _make_item(
+        org_id,
+        claim.claim_id,
+        category.category_id,
+        Decimal("100.00"),
+    )
+    db_session.add_all([person, employee, category, other_category, claim, item])
+    db_session.commit()
+
+    with pytest.raises(ExpenseServiceError, match="not found"):
+        ExpenseService(db_session).approve_claim(
+            org_id,
+            claim.claim_id,
+            corrections=[
+                {
+                    "item_id": item.item_id,
+                    "approved_amount": Decimal("90.00"),
+                    "category_id": other_category.category_id,
+                }
+            ],
+            send_notification=False,
+        )
+
+    assert claim.status == ExpenseClaimStatus.SUBMITTED
+    assert item.category_id == category.category_id
 
 
 def test_multi_approval_claim_remains_pending_until_all_steps_complete(

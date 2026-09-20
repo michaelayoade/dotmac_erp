@@ -256,8 +256,9 @@ perf	contract_amendment_workflow	created_by_id	public	people	id	mixin_expansion	
 perf	contract_amendment_workflow	hod_id	hr	employee	employee_id	explicit	app/models/people/perf/contract_amendment.py:76
 perf	contract_amendment_workflow	hr_head_id	hr	employee	employee_id	explicit	app/models/people/perf/contract_amendment.py:81
 perf	contract_amendment_workflow	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/contract_amendment.py:24 via app/models/people/base.py:66
-perf	department_performance_template	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/department_template.py:30 via app/models/people/base.py:61
-perf	department_performance_template	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/department_template.py:30 via app/models/people/base.py:66
+perf	department_performance_template	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/department_template.py:33 via app/models/people/base.py:61
+perf	department_performance_template	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/department_template.py:146
+perf	department_performance_template	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/department_template.py:33 via app/models/people/base.py:66
 perf	institutional_governance_action	actor_employee_id	hr	employee	employee_id	explicit	app/models/people/perf/pms_governance.py:64
 perf	institutional_governance_action	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:36 via app/models/people/base.py:61
 perf	institutional_governance_action	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/pms_governance.py:36 via app/models/people/base.py:66
@@ -268,9 +269,15 @@ perf	institutional_performance	reconciled_by_id	hr	employee	employee_id	explicit
 perf	institutional_performance	reviewed_by_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:112
 perf	institutional_performance	reviewer_id	hr	employee	employee_id	explicit	app/models/people/perf/institutional_performance.py:138
 perf	institutional_performance	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/institutional_performance.py:43 via app/models/people/base.py:66
-perf	kpi	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:52 via app/models/people/base.py:61
-perf	kpi	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/kpi.py:84
-perf	kpi	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:52 via app/models/people/base.py:66
+perf	kpi	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:53 via app/models/people/base.py:61
+perf	kpi	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/kpi.py:85
+perf	kpi	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi.py:53 via app/models/people/base.py:66
+perf	kpi_configuration_audit	changed_by_id	public	people	id	explicit	app/models/people/perf/kpi_measurement_history.py:163
+perf	kpi_measurement_history	approved_by_id	public	people	id	explicit	app/models/people/perf/kpi_measurement_history.py:104
+perf	kpi_measurement_history	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi_measurement_history.py:31 via app/models/people/base.py:61
+perf	kpi_measurement_history	employee_id	hr	employee	employee_id	explicit	app/models/people/perf/kpi_measurement_history.py:79
+perf	kpi_measurement_history	submitted_by_id	public	people	id	explicit	app/models/people/perf/kpi_measurement_history.py:101
+perf	kpi_measurement_history	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kpi_measurement_history.py:31 via app/models/people/base.py:66
 perf	kra	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/kra.py:32 via app/models/people/base.py:61
 perf	kra	updated_by_id	public	people	id	mixin_expansion	app/models/people/perf/kra.py:32 via app/models/people/base.py:66
 perf	monthly_review	created_by_id	public	people	id	mixin_expansion	app/models/people/perf/monthly_review.py:36 via app/models/people/base.py:61
@@ -338,7 +345,7 @@ public	help_user_progress	person_id	public	people	id	explicit	app/models/help/mo
 public	mfa_methods	person_id	public	people	id	explicit	app/models/auth.py:171
 public	notification	actor_id	public	people	id	explicit	app/models/notification.py:204
 public	notification	recipient_id	public	people	id	explicit	app/models/notification.py:122
-public	organization_calendar_audit	actor_person_id	public	people	id	explicit	app/models/organization_calendar.py:331
+public	organization_calendar_audit	actor_person_id	public	people	id	explicit	app/models/organization_calendar.py:340
 public	organization_calendar_events	cancelled_by_id	public	people	id	explicit	app/models/organization_calendar.py:162
 public	organization_calendar_events	created_by_id	public	people	id	explicit	app/models/organization_calendar.py:153
 public	organization_calendar_events	published_by_id	public	people	id	explicit	app/models/organization_calendar.py:159

@@ -1,9 +1,9 @@
 """Tenant-scoped organizational and self-service calendar models.
 
-ERP owns organizational intent.  Nextcloud receives a synchronized
-representation through the platform outbox and never becomes the authority for
-these records. Personal ERP events remain visible only to their creator and
-explicit participants at the application boundary.
+ERP owns organizational intent and event records. Nextcloud Talk transports
+notifications with links back to ERP; Nextcloud Calendar receives no copy.
+Personal ERP events remain visible only to their creator and explicit
+participants at the application boundary.
 """
 
 from __future__ import annotations
@@ -271,6 +271,11 @@ class OrganizationCalendarReminder(Base):
             "offset_minutes >= 0", name="ck_org_calendar_reminder_nonnegative"
         ),
         Index("idx_org_calendar_reminder_org_event", "organization_id", "event_id"),
+        Index(
+            "idx_org_calendar_reminder_due",
+            "scheduled_for",
+            "dispatched_at",
+        ),
         {"schema": "public"},
     )
 
@@ -291,6 +296,10 @@ class OrganizationCalendarReminder(Base):
         nullable=False,
     )
     offset_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    scheduled_for: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

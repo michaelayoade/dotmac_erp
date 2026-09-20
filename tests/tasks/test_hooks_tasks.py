@@ -209,7 +209,7 @@ class TestExecuteAsyncHook:
         assert hook.is_active is False
         mock_retry.assert_not_called()
 
-    def test_terminal_calendar_hook_failure_stays_on_delivery_execution(self) -> None:
+    def test_terminal_webhook_failure_stays_on_delivery_execution(self) -> None:
         execution_id = uuid4()
         hook_id = uuid4()
         org_id = uuid4()
@@ -217,20 +217,20 @@ class TestExecuteAsyncHook:
         hook = ServiceHook(
             hook_id=hook_id,
             organization_id=org_id,
-            event_name="organization.calendar.upserted",
+            event_name="test.terminal.webhook",
             handler_type=HookHandlerType.WEBHOOK,
             execution_mode=HookExecutionMode.ASYNC,
-            name="Calendar Integrator Hook",
+            name="Terminal Webhook",
             max_retries=1,
             retry_backoff_seconds=30,
-            handler_config={"url": "https://integrator.example.com/calendar"},
+            handler_config={"url": "https://integrator.example.com/events"},
             conditions={},
         )
         execution = ServiceHookExecution(
             execution_id=execution_id,
             hook_id=hook_id,
             organization_id=org_id,
-            event_name="organization.calendar.upserted",
+            event_name="test.terminal.webhook",
             event_payload={
                 "event_version": 5,
                 "correlation_id": "calendar-correlation",
@@ -246,7 +246,7 @@ class TestExecuteAsyncHook:
         mock_db = MagicMock()
         mock_db.get.side_effect = [execution, hook]
         mock_db.scalars.return_value.all.return_value = [ExecutionStatus.DEAD]
-        request = httpx.Request("POST", "https://integrator.example.com/calendar")
+        request = httpx.Request("POST", "https://integrator.example.com/events")
         error = httpx.ConnectError("boom", request=request)
 
         with (
