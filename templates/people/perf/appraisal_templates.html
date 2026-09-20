@@ -2,7 +2,7 @@
 {% from "components/macros.html" import compact_filters, filter_select_field, pagination, icon_svg %}
 {% set templates_base = templates_base_url | default("/people/perf/templates") %}
 
-{% block page_title %}Appraisal Templates{% endblock %}
+{% block page_title %}Appraisal Forms{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -10,7 +10,7 @@
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/perf/appraisals" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ performance_nav_label }}</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Templates</span></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Appraisal Forms</span></li>
     </ol>
 </nav>
 {% endblock %}
@@ -18,7 +18,7 @@
 {% block header_actions %}
 <a href="{{ templates_base }}/new" class="btn btn-primary">
     {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-    New Template
+    New Appraisal Form
 </a>
 {% endblock %}
 
@@ -38,7 +38,7 @@
         active_filters=active_filters | default([]),
         show_search=true,
         search=search,
-        search_placeholder="Search appraisal templates..."
+        search_placeholder="Search appraisal forms..."
     ) %}
         <select aria-label="Filter by department" name="department_id" class="form-select" {{ filter_attrs }}>
             <option value="">All Departments</option>
@@ -125,8 +125,8 @@
     {% else %}
     <div class="card p-8 text-center">
         {{ icon_svg("document", "w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4") }}
-        <p class="text-slate-500 dark:text-slate-400 mb-4">No appraisal templates found.</p>
-        <a href="{{ templates_base }}/new" class="btn btn-primary">Create First Template</a>
+        <p class="text-slate-500 dark:text-slate-400 mb-4">No appraisal forms found.</p>
+        <a href="{{ templates_base }}/new" class="btn btn-primary">Create First Appraisal Form</a>
     </div>
     {% endif %}
 

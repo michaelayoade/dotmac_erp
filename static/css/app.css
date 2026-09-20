@@ -5272,6 +5272,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
     min-width: 100%;
 }
 
+.min-w-max {
+    min-width: -moz-max-content;
+    min-width: max-content;
+}
+
 .max-w-12 {
     max-width: 3rem;
 }

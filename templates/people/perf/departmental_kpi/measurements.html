@@ -1,0 +1,71 @@
+{% extends "people/base_people.html" %}
+{% from "components/macros.html" import empty_state, icon_svg, stats_card, status_badge %}
+{% from "people/perf/_kpi_workspace_nav.html" import kpi_workspace_nav %}
+
+{% block page_title %}Measurements{% endblock %}
+{% block breadcrumbs %}
+<nav aria-label="Breadcrumb" class="text-sm text-slate-500 dark:text-slate-400">
+    <ol class="flex items-center gap-2">
+        <li><a href="/people/perf/kpi-dashboard" class="hover:text-violet-600">KPI Overview</a></li>
+        <li aria-hidden="true">{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
+        <li aria-current="page" class="font-medium text-slate-900 dark:text-white">Measurements</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block header_actions %}
+<a href="/people/perf/kpi-dashboard" class="btn btn-secondary">KPI overview</a>
+<a href="/people/perf/kpi-dashboard/department" class="btn btn-secondary">Department scorecards</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {{ kpi_workspace_nav('measurements', can_manage_kpis, true, can_measure_kpis or can_approve_kpis, true, true) }}
+    <section class="card p-6">
+        <h2 class="font-display text-xl font-semibold text-slate-900 dark:text-white">Measurement work queue</h2>
+        <p class="mt-2 max-w-3xl text-sm text-slate-600 dark:text-slate-300">Record evidence, review submitted measurements, and identify stale or unavailable automatic sources. This queue does not change KPI definitions or calculate a second score.</p>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Reporting period: {{ period_start | format_date }} — {{ period_end | format_date }}. Source and last refresh are shown per assignment when available.</p>
+    </section>
+
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {{ stats_card("Missing actuals", counts.missing, "exclamation-circle", "amber", href="/people/perf/kpi-dashboard/measurements?state=missing") }}
+        {{ stats_card("Draft measurements", counts.draft, "document", "slate", href="/people/perf/kpi-dashboard/measurements?state=draft") }}
+        {{ stats_card("Awaiting approval", counts.awaiting_approval, "clock", "blue", href="/people/perf/kpi-dashboard/measurements?state=awaiting_approval") }}
+        {{ stats_card("Returned", counts.returned, "refresh", "rose", href="/people/perf/kpi-dashboard/measurements?state=returned") }}
+        {{ stats_card("Automatic refreshes", counts.automatic, "refresh", "teal", href="/people/perf/kpi-dashboard/measurements?state=automatic") }}
+        {{ stats_card("Recorded", counts.recorded, "check", "emerald", href="/people/perf/kpi-dashboard/measurements?state=recorded") }}
+    </div>
+
+    <form method="get" action="/people/perf/kpi-dashboard/measurements" class="card grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-6">
+        <div><label for="measurement-period-start" class="form-label">Period start</label><input id="measurement-period-start" name="period_start" type="date" value="{{ period_start }}" class="form-input w-full"></div>
+        <div><label for="measurement-period-end" class="form-label">Period end</label><input id="measurement-period-end" name="period_end" type="date" value="{{ period_end }}" class="form-input w-full"></div>
+        <div><label for="measurement-department" class="form-label">Department</label><select id="measurement-department" name="department_id" class="form-select w-full"><option value="">All departments</option>{% for department in departments %}<option value="{{ department.department_id }}" {% if selected_department_id == department.department_id %}selected{% endif %}>{{ department.department_name }}</option>{% endfor %}</select></div>
+        <div><label for="measurement-state" class="form-label">Queue state</label><select id="measurement-state" name="state" class="form-select w-full"><option value="all" {% if state == 'all' %}selected{% endif %}>All work</option><option value="missing" {% if state == 'missing' %}selected{% endif %}>Missing actuals</option><option value="draft" {% if state == 'draft' %}selected{% endif %}>Draft measurements</option><option value="awaiting_approval" {% if state == 'awaiting_approval' %}selected{% endif %}>Awaiting approval</option><option value="returned" {% if state == 'returned' %}selected{% endif %}>Returned</option><option value="automatic" {% if state == 'automatic' %}selected{% endif %}>Automatic refreshes</option><option value="recorded" {% if state == 'recorded' %}selected{% endif %}>Recorded</option></select></div>
+        <div><label for="measurement-employee" class="form-label">Employee code</label><input id="measurement-employee" name="employee_search" value="{{ employee_search }}" maxlength="100" class="form-input w-full" placeholder="Search employee code"></div>
+        <div class="flex items-end"><button type="submit" class="btn btn-primary w-full">Apply filters</button></div>
+    </form>
+
+    <div id="results-container" class="card overflow-hidden">
+        <div class="table-container">
+            <table class="table min-w-full">
+                <caption class="sr-only">KPI measurement work queue</caption>
+                <thead><tr><th scope="col">Employee / KPI</th><th scope="col">Department</th><th scope="col">Period</th><th scope="col">Target / actual</th><th scope="col">Source / freshness</th><th scope="col">State</th><th scope="col">Next action</th></tr></thead>
+                <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td><a href="/people/perf/kpi-dashboard/configurations/{{ row.config.template_id }}" class="font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400">{{ row.kpi.kpi_name }}</a><div class="text-xs text-slate-500">{{ row.employee.full_name if row.employee else row.kpi.employee_id }} · {{ row.employee.employee_code if row.employee else '' }}</div></td>
+                    <td>{{ row.config.department.department_name if row.config and row.config.department else 'Unassigned' }}</td>
+                    <td class="whitespace-nowrap">{{ row.kpi.period_start | format_date }} — {{ row.kpi.period_end | format_date }}</td>
+                    <td class="font-mono">{{ row.kpi.target_value }}{% if row.kpi.unit_of_measure %} {{ row.kpi.unit_of_measure }}{% endif %}<div class="text-xs text-slate-500">Actual: {{ row.kpi.actual_value if row.kpi.actual_value is not none else '—' }}</div></td>
+                    <td>{% if row.source_key %}<span class="font-mono text-xs">{{ row.source_key }}</span>{% else %}Manual entry{% endif %}<div class="text-xs text-slate-500">{% if row.last_refreshed_at %}Last automatic refresh {{ row.last_refreshed_at | format_datetime }}{% elif row.source_state == 'unavailable' %}Source unavailable or not refreshed{% else %}Evidence required{% endif %}</div></td>
+                    <td>{% set state_status = {'missing': 'PENDING', 'draft': 'DRAFT', 'awaiting_approval': 'PENDING', 'returned': 'REJECTED', 'automatic': 'ACTIVE', 'recorded': 'COMPLETED'} %}{{ status_badge(state_status.get(row.state, 'PENDING'), 'sm') }}<div class="mt-1 text-xs">{{ row.state | replace('_', ' ') | title }}</div></td>
+                    <td>{% if row.state == 'awaiting_approval' and can_approve_kpis and row.history %}<form method="post" action="/people/perf/kpi-dashboard/measurement-history/{{ row.history.history_id }}/approve">{{ request.state.csrf_form | safe }}<button type="submit" class="btn btn-sm btn-secondary">Approve</button></form>{% elif can_measure_kpis and not row.source_key %}<a href="/people/perf/kpi-dashboard/measurements/{{ row.kpi.kpi_id }}" class="btn btn-sm btn-primary">Record measurement</a>{% elif row.source_key %}<a href="/people/perf/kpi-dashboard/configurations/{{ row.config.template_id }}" class="btn btn-sm btn-secondary">Review source</a>{% else %}<a href="/people/perf/kpi-dashboard/configurations/{{ row.config.template_id }}" class="btn btn-sm btn-secondary">Review assignment</a>{% endif %}</td>
+                </tr>
+                {% else %}<tr><td colspan="7" class="p-0">{{ empty_state("No measurements in this queue", "Try another period or state, or prepare employee KPI assignments from a Department Scorecard.", cta_text="Open KPI overview", cta_href="/people/perf/kpi-dashboard") }}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <nav aria-label="Measurement pages" class="flex flex-wrap items-center justify-between gap-3 p-5"><p class="text-sm text-slate-500 dark:text-slate-400">Page {{ page }} of {{ total_pages }} · {{ total }} assignments</p><div class="flex gap-2">{% if previous_url %}<a href="{{ previous_url }}" class="btn btn-secondary">Previous</a>{% endif %}{% if next_url %}<a href="{{ next_url }}" class="btn btn-secondary">Next</a>{% endif %}</div></nav>
+    </div>
+</div>
+{% endblock %}

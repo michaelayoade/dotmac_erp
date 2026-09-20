@@ -260,6 +260,122 @@ class DepartmentalKPIService:
             .all()
         )
 
+    def configuration_health(
+        self,
+        org_id: UUID,
+        configurations: list[DepartmentPerformanceTemplate],
+        *,
+        period_start: date | None = None,
+        period_end: date | None = None,
+        weight_summaries: dict[UUID, dict[str, Any]] | None = None,
+    ) -> dict[UUID, dict[str, Any]]:
+        """Build visible readiness issues for KPI definitions.
+
+        Health is a projection only. It never changes a definition or creates
+        an assignment, and all assignment checks remain tenant-scoped.
+        """
+        if not configurations:
+            return {}
+        today = date.today()
+        start = period_start or date(today.year, 1, 1)
+        end = period_end or date(today.year, 12, 31)
+        ids = [config.template_id for config in configurations]
+        coverage = {
+            template_id: (employee_count, record_count)
+            for template_id, employee_count, record_count in self.db.execute(
+                select(
+                    KPI.department_template_id,
+                    func.count(func.distinct(KPI.employee_id)),
+                    func.count(KPI.kpi_id),
+                )
+                .where(
+                    KPI.organization_id == org_id,
+                    KPI.department_template_id.in_(ids),
+                    KPI.period_start <= end,
+                    KPI.period_end >= start,
+                )
+                .group_by(KPI.department_template_id)
+            ).all()
+        }
+        health: dict[UUID, dict[str, Any]] = {}
+        for config in configurations:
+            employee_count, record_count = coverage.get(config.template_id, (0, 0))
+            issues: list[str] = []
+            if not config.is_active:
+                issues.append("Inactive")
+            if config.effective_end and config.effective_end < today:
+                issues.append("Expired")
+            if (
+                config.metric_source_key
+                and config.metric_source_key not in AUTOMATIC_DATA_SOURCES
+            ):
+                issues.append("Unsupported source")
+            if config.target_value is None or (
+                config.target_value <= 0 and config.direction != "LOWER_IS_BETTER"
+            ):
+                issues.append("Missing target")
+            if config.direction == "TARGET_BAND" and (
+                config.band_min_value is None or config.band_max_value is None
+            ):
+                issues.append("Missing thresholds")
+            if employee_count == 0:
+                issues.append("No employee coverage")
+            if record_count == 0:
+                issues.append("Not instantiated")
+            summary = (weight_summaries or {}).get(config.department_id)
+            if summary and not summary.get("is_complete"):
+                issues.append("Department weights incomplete")
+            health[config.template_id] = {
+                "issues": issues,
+                "employee_count": employee_count,
+                "record_count": record_count,
+                "ready": not issues,
+            }
+        return health
+
+    def configuration_health_summary(
+        self,
+        org_id: UUID,
+        *,
+        department_ids: set[UUID] | None = None,
+        period_start: date | None = None,
+        period_end: date | None = None,
+    ) -> dict[str, Any]:
+        """Summarize definition readiness for the Overview health panel."""
+        configurations = self.list_configurations(org_id, include_inactive=True)
+        if department_ids is not None:
+            configurations = [
+                config
+                for config in configurations
+                if config.department_id in department_ids
+            ]
+        weight_summaries = {
+            department_id: self.weight_summary(org_id, department_id)
+            for department_id in {
+                config.department_id for config in configurations
+            }
+        }
+        health = self.configuration_health(
+            org_id,
+            configurations,
+            period_start=period_start,
+            period_end=period_end,
+            weight_summaries=weight_summaries,
+        )
+        issue_counts: dict[str, int] = defaultdict(int)
+        for item in health.values():
+            for issue in item["issues"]:
+                issue_counts[issue] += 1
+        return {
+            "definitions": len(configurations),
+            "ready": sum(1 for item in health.values() if item["ready"]),
+            "not_ready": sum(1 for item in health.values() if not item["ready"]),
+            "issue_counts": dict(sorted(issue_counts.items())),
+            "incomplete_weights": issue_counts.get("Department weights incomplete", 0),
+            "unsupported_sources": issue_counts.get("Unsupported source", 0),
+            "not_instantiated": issue_counts.get("Not instantiated", 0),
+        }
+
     def get_configuration(
         self, org_id: UUID, template_id: UUID
     ) -> DepartmentPerformanceTemplate:
@@ -1677,6 +1793,139 @@ class DepartmentalKPIService:
             "configuration_audit": configuration_audit,
             "trend": trend,
         }
+
+    def measurement_queue(
+        self,
+        org_id: UUID,
+        *,
+        period_start: date,
+        period_end: date,
+        department_ids: set[UUID] | None = None,
+        state: str = "all",
+        employee_search: str = "",
+    ) -> list[dict[str, Any]]:
+        """Return the operational measurement work queue.
+
+        This is a read-only projection over employee KPI assignments and their
+        latest measurement revision. It deliberately delegates all writes to
+        ``record_measurement`` and ``approve_measurement``.
+        """
+        query = (
+            select(KPI)
+            .options(
+                joinedload(KPI.employee).joinedload(Employee.person),
+                joinedload(KPI.department_template).joinedload(
+                    DepartmentPerformanceTemplate.department
+                ),
+            )
+            .where(
+                KPI.organization_id == org_id,
+                KPI.period_start <= period_end,
+                KPI.period_end >= period_start,
+                KPI.department_template_id.is_not(None),
+            )
+            .order_by(KPI.period_end, KPI.kpi_name, KPI.employee_id)
+        )
+        if department_ids:
+            query = query.join(
+                DepartmentPerformanceTemplate,
+                KPI.department_template_id == DepartmentPerformanceTemplate.template_id,
+            ).where(DepartmentPerformanceTemplate.department_id.in_(department_ids))
+        if employee_search.strip():
+            query = query.join(Employee, KPI.employee_id == Employee.employee_id)
+            query = query.where(
+                func.lower(Employee.employee_code).contains(
+                    employee_search.strip().lower()
+                )
+            )
+        records = list(self.db.scalars(query).unique().all())
+        if not records:
+            return []
+
+        histories = list(
+            self.db.scalars(
+                select(KPIMeasurementHistory)
+                .where(
+                    KPIMeasurementHistory.organization_id == org_id,
+                    KPIMeasurementHistory.kpi_id.in_(
+                        [record.kpi_id for record in records]
+                    ),
+                )
+                .order_by(
+                    KPIMeasurementHistory.kpi_id,
+                    KPIMeasurementHistory.revision.desc(),
+                    KPIMeasurementHistory.recorded_at.desc(),
+                )
+            ).all()
+        )
+        latest: dict[UUID, KPIMeasurementHistory] = {}
+        for measurement in histories:
+            latest.setdefault(measurement.kpi_id, measurement)
+
+        allowed_states = {
+            "missing",
+            "draft",
+            "awaiting_approval",
+            "returned",
+            "automatic",
+            "recorded",
+        }
+        if state not in {"all", *allowed_states}:
+            raise DepartmentalKPIError("Choose a valid measurement queue state")
+
+        rows: list[dict[str, Any]] = []
+        for record in records:
+            history: KPIMeasurementHistory | None = latest.get(record.kpi_id)
+            if history and history.approval_status in {"REJECTED", "RETURNED"}:
+                queue_state = "returned"
+            elif history and history.approval_status == "SUBMITTED":
+                queue_state = "awaiting_approval"
+            elif history and history.measurement_mode == "AUTOMATIC":
+                queue_state = "automatic"
+            elif record.actual_value is None:
+                queue_state = "missing"
+            elif record.status == KPIStatus.DRAFT:
+                queue_state = "draft"
+            else:
+                queue_state = "recorded"
+            if state != "all" and state != queue_state:
+                continue
+            rows.append(
+                {
+                    "kpi": record,
+                    "config": record.department_template,
+                    "employee": record.employee,
+                    "history": history,
+                    "state": queue_state,
+                    "source_key": (
+                        history.source_key
+                        if history and history.source_key
+                        else (
+                            record.department_template.metric_source_key
+                            if record.department_template
+                            else None
+                        )
+                    ),
+                    "last_refreshed_at": (
+                        history.recorded_at
+                        if history and history.measurement_mode == "AUTOMATIC"
+                        else None
+                    ),
+                    "source_state": (
+                        "manual"
+                        if not (
+                            record.department_template
+                            and record.department_template.metric_source_key
+                        )
+                        else (
+                            "available"
+                            if history and history.measurement_mode == "AUTOMATIC"
+                            else "unavailable"
+                        )
+                    ),
+                }
+            )
+        return rows
 
     def employee_dashboard(
         self,

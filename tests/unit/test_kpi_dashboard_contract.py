@@ -28,6 +28,7 @@ from app.services.people.perf.kpi_dashboard_contract import (
         ("this_month", "2024-02-15", "2024-02-01", "2024-02-29"),
         ("this_month", "2026-12-31", "2026-12-01", "2026-12-31"),
         ("this_quarter", "2026-12-31", "2026-10-01", "2026-12-31"),
+        ("this_year", "2026-09-20", "2026-01-01", "2026-12-31"),
         ("last_month", "2027-01-10", "2026-12-01", "2026-12-31"),
     ],
 )
@@ -42,6 +43,8 @@ def test_period_boundaries(period, today, start, end):
 
 def test_defaults_and_round_trip():
     config = DashboardConfig.parse({})
+    assert config.period == "this_year"
+    assert config.cohort == "active"
     assert config.widgets == DEFAULT_WIDGETS
     assert config.statuses == DEFAULT_STATUSES
     assert DashboardConfig.parse(config.to_dict()) == config

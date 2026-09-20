@@ -6,7 +6,7 @@ All business logic is delegated to the perf_web_service.
 """
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.perf.web import perf_web_service
@@ -39,6 +39,18 @@ def perf_index(
 ):
     """Performance landing page."""
     context = base_context(request, auth, "Performance", "perf", db=db)
+    context.update(
+        {
+            "can_view_kpi_definitions": auth.has_permission("performance:kpi:manage"),
+            "can_view_kpi_measurements": auth.has_permission("performance:kpi:measure")
+            or auth.has_permission("performance:kpi:approve"),
+            "can_view_kpi_scorecards": auth.has_permission(
+                "performance:kpi:dashboard:view"
+            )
+            or auth.has_permission("performance:kpi:dashboard:view_all_departments"),
+            "can_view_kpi_reports": True,
+        }
+    )
     return templates.TemplateResponse(request, "people/perf/index.html", context)
 
 
@@ -466,7 +478,7 @@ def delete_feedback(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/goals", response_class=HTMLResponse)
+@router.get("/kpi-dashboard/assignments", response_class=HTMLResponse)
 def list_kpis(
     request: Request,
     status: str | None = None,
@@ -481,6 +493,15 @@ def list_kpis(
     """KPIs list page."""
     return perf_web_service.list_goals_response(
         request, auth, db, status, search, employee_id, start_date, end_date, page
+    )
+
+
+@router.get("/goals")
+def legacy_goals_list(request: Request) -> RedirectResponse:
+    """Keep the legacy Goals URL as a compatibility redirect."""
+    query = f"?{request.url.query}" if request.url.query else ""
+    return RedirectResponse(
+        url=f"/people/perf/kpi-dashboard/assignments{query}", status_code=307
     )
 
 
