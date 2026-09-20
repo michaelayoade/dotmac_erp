@@ -138,7 +138,7 @@ class DashboardConfig:
     widgets: tuple[str, ...] = DEFAULT_WIDGETS
     search: str = ""
     employee_search: str = ""
-    cohort: str = "due"
+    cohort: str = "active"
     attention: str = "all"
     show_charts: bool = True
 
@@ -195,7 +195,9 @@ class DashboardConfig:
             raise DashboardValidationError(
                 "Employee search must be no longer than 100 characters."
             )
-        cohort = payload.get("cohort", "due")
+        # Saved views created before the date-scope filter existed represented
+        # the due cohort. Fresh dashboard configuration defaults to active.
+        cohort = payload.get("cohort", "due" if "widgets" in payload else "active")
         if not isinstance(cohort, str) or cohort not in {"due", "active", "overdue"}:
             raise DashboardValidationError("Choose a valid KPI date scope.")
         attention = payload.get("attention", "all")
