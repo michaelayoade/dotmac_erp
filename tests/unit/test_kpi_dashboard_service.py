@@ -40,7 +40,9 @@ def db():
 
 def test_query_tenant_constrains_source_and_both_joins(db, scope):
     stmt = KPIDashboardService(db)._base_query(
-        scope, DashboardConfig(), date(2026, 9, 15)
+        scope,
+        DashboardConfig(period="this_month", cohort="due"),
+        date(2026, 9, 15),
     )
     compiled = stmt.compile(dialect=postgresql.dialect())
     sql = str(compiled)

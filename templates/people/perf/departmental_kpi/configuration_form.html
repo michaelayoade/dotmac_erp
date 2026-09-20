@@ -1,7 +1,7 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg %}
 {% block page_title %}{{ 'Edit KPI Configuration' if configuration else 'New KPI Configuration' }}{% endblock %}
-{% block breadcrumbs %}<nav aria-label="Breadcrumb" class="text-sm text-slate-500"><ol class="flex items-center gap-2"><li><a href="/people/perf/kpi-dashboard/configurations" class="hover:text-violet-600">KPI Management</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li aria-current="page">{{ 'Edit' if configuration else 'New' }}</li></ol></nav>{% endblock %}
+{% block breadcrumbs %}<nav aria-label="Breadcrumb" class="text-sm text-slate-500"><ol class="flex items-center gap-2"><li><a href="/people/perf/kpi-dashboard/configurations" class="hover:text-violet-600">KPI Definitions</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li aria-current="page">{{ 'Edit definition' if configuration else 'New definition' }}</li></ol></nav>{% endblock %}
 {% block content %}
 {% set value = form_data %}
 <div class="max-w-5xl">

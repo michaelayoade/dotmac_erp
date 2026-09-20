@@ -1,14 +1,14 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import chart_canvas, empty_state, icon_svg, stats_card, status_badge %}
 
-{% block page_title %}Departmental KPI Dashboard{% endblock %}
+{% block page_title %}Department Scorecard{% endblock %}
 
 {% block breadcrumbs %}
 <nav aria-label="Breadcrumb" class="text-sm text-slate-500 dark:text-slate-400">
     <ol class="flex items-center gap-2">
         <li><a href="/people/perf" class="hover:text-violet-600">Performance</a></li>
         <li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
-        <li aria-current="page" class="text-slate-900 dark:text-white">KPI Dashboard</li>
+        <li aria-current="page" class="text-slate-900 dark:text-white">Department Scorecard</li>
     </ol>
 </nav>
 {% endblock %}
@@ -18,8 +18,9 @@
 <a href="/people/perf/kpi-dashboard/export.csv?department_id={{ selected_department_id }}&period_start={{ period_start }}&period_end={{ period_end }}{% if selected_employee_id %}&employee_id={{ selected_employee_id }}{% endif %}{% if selected_category %}&category={{ selected_category | urlencode }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}" class="btn btn-secondary">{{ icon_svg("download", "h-4 w-4 mr-1.5") }} Export CSV</a>
 {% endif %}
 {% if can_manage_kpis %}
-<a href="/people/perf/kpi-dashboard/configurations" class="btn btn-secondary">Manage KPIs</a>
-<a href="/people/perf/kpi-dashboard/configurations/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} New KPI</a>
+<a href="/people/perf/kpi-dashboard" class="btn btn-secondary">KPI overview</a>
+<a href="/people/perf/kpi-dashboard/configurations" class="btn btn-secondary">KPI definitions</a>
+<a href="/people/perf/kpi-dashboard/configurations/new" class="btn btn-primary">{{ icon_svg("plus", "h-4 w-4 mr-1.5") }} New KPI definition</a>
 {% endif %}
 {% endblock %}
 
@@ -87,7 +88,7 @@
         <input type="hidden" name="department_id" value="{{ selected_department_id }}">
         <div><label for="prepare_start" class="form-label">Period start</label><input id="prepare_start" name="period_start" type="date" value="{{ period_start }}" class="form-input" required></div>
         <div><label for="prepare_end" class="form-label">Period end</label><input id="prepare_end" name="period_end" type="date" value="{{ period_end }}" class="form-input" required></div>
-        <button type="submit" class="btn btn-secondary">Prepare employee KPI records</button>
+        <button type="submit" class="btn btn-secondary">Prepare reporting period</button>
     </form>
     {% endif %}
 
@@ -137,13 +138,13 @@
                         <td class="text-center">{{ status_badge(row.status, 'sm') }}</td>
                         <td class="text-center font-mono tabular-nums">{% if row.trend_delta is none %}—{% elif row.trend_delta > 0 %}↑ {{ row.trend_delta | format_number(1) }}{% elif row.trend_delta < 0 %}↓ {{ (row.trend_delta | abs) | format_number(1) }}{% else %}→{% endif %}</td>
                     </tr>
-                    {% else %}<tr><td colspan="7" class="p-0">{{ empty_state("No KPIs configured", "Configure KPIs for this department before preparing a measurement period.", cta_text="Configure Department KPIs" if can_manage_kpis else none, cta_href="/people/perf/kpi-dashboard/configurations/new" if can_manage_kpis else none) }}</td></tr>{% endfor %}
+                    {% else %}<tr><td colspan="7" class="p-0">{{ empty_state("No KPI definitions", "Create KPI definitions for this department before preparing a measurement period.", cta_text="New KPI definition" if can_manage_kpis else none, cta_href="/people/perf/kpi-dashboard/configurations/new" if can_manage_kpis else none) }}</td></tr>{% endfor %}
                 </tbody>
             </table>
         </div>
     </section>
     {% else %}
-    {{ empty_state("No KPIs configured for this department", "Create a database-managed KPI definition and assignment to begin.", cta_text="Configure Department KPIs" if can_manage_kpis else none, cta_href="/people/perf/kpi-dashboard/configurations/new" if can_manage_kpis else none) }}
+    {{ empty_state("No KPI definitions for this department", "Create a KPI definition and assignment to begin.", cta_text="New KPI definition" if can_manage_kpis else none, cta_href="/people/perf/kpi-dashboard/configurations/new" if can_manage_kpis else none) }}
     {% endif %}
 
     <section class="card overflow-hidden">

@@ -1,7 +1,7 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import stats_card, status_badge, empty_state, icon_svg, progress_bar %}
 
-{% block page_title %}KPI Dashboard{% endblock %}
+{% block page_title %}KPI Overview{% endblock %}
 {% block breadcrumbs %}
 <nav aria-label="Breadcrumb" class="text-sm text-slate-500 dark:text-slate-400">
     <ol class="flex flex-wrap items-center gap-2">
@@ -9,7 +9,7 @@
         <li aria-hidden="true">{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
         <li><a href="/people/perf" class="hover:text-violet-600">Performance</a></li>
         <li aria-hidden="true">{{ icon_svg("chevron-right", "h-4 w-4") }}</li>
-        <li aria-current="page" class="font-medium text-slate-900 dark:text-white">KPI Dashboard</li>
+        <li aria-current="page" class="font-medium text-slate-900 dark:text-white">KPI Overview</li>
     </ol>
 </nav>
 {% endblock %}
@@ -23,14 +23,16 @@
     <section class="card p-6" aria-labelledby="kpi-heading">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-                <h2 id="kpi-heading" class="font-display text-xl font-semibold text-slate-900 dark:text-white">Department KPI overview</h2>
-                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Choose departments, reporting dates and summary cards. Save your preferred combinations as personal views.</p>
+                <h2 id="kpi-heading" class="font-display text-xl font-semibold text-slate-900 dark:text-white">KPIs &amp; Goals — Overview</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Review KPI health, employee follow-up, measurement coverage and department comparison from one reporting period.</p>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Access: {{ 'all departments in your organization' if organization_wide else 'only the active departments you head' }}. Saved views are private to your account.</p>
             </div>
             <div class="flex flex-wrap gap-2">
-                {% if can_manage_kpi_configurations %}<a class="btn btn-primary" href="/people/perf/kpi-dashboard/configurations">Configure departmental KPIs</a>{% endif %}
-                {% if can_manage_kpi_configurations %}<a class="btn btn-secondary" href="/people/perf/kpi-dashboard/department">Configured department view</a>{% endif %}
-                {% if can_manage_kpis %}<a class="btn btn-secondary" href="/people/perf/goals">Manage Goals &amp; KPIs</a>{% endif %}
+                {% if can_manage_kpi_configurations %}<a class="btn btn-primary" href="/people/perf/kpi-dashboard/configurations">New KPI definition</a>{% endif %}
+                <a class="btn btn-secondary" href="/people/perf/kpi-dashboard/configurations">KPI definitions</a>
+                <a class="btn btn-secondary" href="/people/perf/goals">Assignments</a>
+                <a class="btn btn-secondary" href="/people/perf/kpi-dashboard/measurements">Measurements</a>
+                <a class="btn btn-secondary" href="/people/perf/kpi-dashboard/department">Department scorecards</a>
             </div>
         </div>
         <form method="get" action="{{ dashboard_url }}" class="mt-5 flex flex-wrap items-end gap-3">
@@ -84,8 +86,8 @@
             <div>
                 <label for="kpi-cohort" class="form-label">KPI date scope</label>
                 <select id="kpi-cohort" name="cohort" class="form-select">
-                    <option value="due" {% if config.cohort == 'due' %}selected{% endif %}>Due in reporting period</option>
                     <option value="active" {% if config.cohort == 'active' %}selected{% endif %}>Active during reporting period</option>
+                    <option value="due" {% if config.cohort == 'due' %}selected{% endif %}>Due in reporting period</option>
                     <option value="overdue" {% if config.cohort == 'overdue' %}selected{% endif %}>All overdue open KPIs</option>
                 </select>
             </div>
@@ -258,7 +260,7 @@
                     </tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
                         {% for row in department_rows %}<tr>
-                            <th scope="row" class="px-5 py-3 text-left font-medium">{{ row.department_name if row.department_name else 'Unassigned' }}</th>
+                            <th scope="row" class="px-5 py-3 text-left font-medium">{% if row.department_id %}<a href="/people/perf/kpi-dashboard/department?department_id={{ row.department_id }}&amp;period_start={{ period_start }}&amp;period_end={{ period_end }}" class="text-violet-700 hover:text-violet-800 dark:text-violet-300">{{ row.department_name if row.department_name else 'Unassigned' }}</a>{% else %}{{ row.department_name if row.department_name else 'Unassigned' }}{% endif %}</th>
                             <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.tracked }}</td>
                             <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.achieved }}</td>
                             <td class="px-5 py-3 text-right font-mono tabular-nums">{{ row.at_risk }}</td>

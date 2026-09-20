@@ -3,7 +3,7 @@
 {% set goals_base = goals_base_url | default("/people/perf/goals") %}
 {% set perf_home = "/people/perf/pms/dashboard" if active_module and active_module.startswith("pms-") else "/people/perf/appraisals" %}
 
-{% block page_title %}Goals & KPIs{% endblock %}
+{% block page_title %}KPI Assignments{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -11,7 +11,7 @@
         <li><a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="/people/hr/employees" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">People</a></li>
         <li class="flex items-center"><span class="mx-2">/</span> <a href="{{ perf_home }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">{{ performance_nav_label }}</a></li>
-        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">Goals & KPIs</span></li>
+        <li class="flex items-center"><span class="mx-2">/</span> <span class="text-slate-900 dark:text-white" aria-current="page">KPI Assignments</span></li>
     </ol>
 </nav>
 {% endblock %}
@@ -21,15 +21,12 @@
 <div class="flex items-center gap-2">
     <a href="/people/perf/kpi-dashboard" class="btn btn-secondary">
         {{ icon_svg("chart", "h-4 w-4 mr-1.5") }}
-        Department Dashboard
+        KPI Overview
     </a>
-    <form method="post" action="{{ goals_base }}/generate-from-department-templates">
-        {{ request.state.csrf_form | safe }}
-        <button type="submit" class="btn btn-secondary">
-            {{ icon_svg("users", "h-4 w-4 mr-1.5") }}
-            Generate Employee KPIs
-        </button>
-    </form>
+    <a href="/people/perf/kpi-dashboard/configurations" class="btn btn-secondary">
+        {{ icon_svg("target", "h-4 w-4 mr-1.5") }}
+        KPI Definitions
+    </a>
     <form method="post" action="{{ goals_base }}/sync-support-metrics{% if employee_id %}?employee_id={{ employee_id }}{% endif %}">
         {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary">
@@ -39,7 +36,7 @@
     </form>
     <a href="{{ goals_base }}/new" class="btn btn-primary">
         {{ icon_svg("plus", "h-4 w-4 mr-1.5") }}
-        New KPI
+        New KPI assignment
     </a>
 </div>
 {% else %}
@@ -72,7 +69,7 @@
         active_filters=active_filters | default([]),
         show_search=true,
         search=search,
-        search_placeholder="Search KPIs..."
+        search_placeholder="Search KPI assignments..."
     ) %}
         <select aria-label="Filter by status" name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Status</option>

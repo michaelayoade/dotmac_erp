@@ -4,7 +4,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.perf.web.departmental_kpi_web import (
@@ -36,6 +36,38 @@ router = APIRouter(
     tags=["departmental-kpi"],
     dependencies=[Depends(require_private_performance_mode)],
 )
+
+
+def _semantic_target(path: str, request: Request) -> RedirectResponse:
+    query = f"?{request.url.query}" if request.url.query else ""
+    return RedirectResponse(url=f"{path}{query}", status_code=307)
+
+
+@router.get("/definitions")
+def definitions_alias(
+    request: Request,
+    auth: WebAuthContext = Depends(require_kpi_read),
+) -> RedirectResponse:
+    """Semantic KPI Definitions entry point preserving the legacy handler URL."""
+    return _semantic_target("/people/perf/kpi-dashboard/configurations", request)
+
+
+@router.get("/assignments")
+def assignments_alias(
+    request: Request,
+    auth: WebAuthContext = Depends(require_kpi_read),
+) -> RedirectResponse:
+    """Semantic KPI Assignments entry point preserving the legacy handler URL."""
+    return _semantic_target("/people/perf/goals", request)
+
+
+@router.get("/scorecards")
+def scorecards_alias(
+    request: Request,
+    auth: WebAuthContext = Depends(require_kpi_read),
+) -> RedirectResponse:
+    """Semantic Department Scorecards entry point preserving the legacy handler URL."""
+    return _semantic_target("/people/perf/kpi-dashboard/department", request)
 
 
 @router.get("/department", response_class=HTMLResponse)
@@ -182,6 +214,29 @@ async def refresh_configuration(
         auth,
         db,
         template_id=template_id,
+    )
+
+
+@router.get("/measurements", response_class=HTMLResponse)
+def measurements(
+    request: Request,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    state: str = "all",
+    employee_search: str = "",
+    page: int = Query(default=1, ge=1, le=100_000),
+    auth: WebAuthContext = Depends(require_kpi_read),
+    db: Session = Depends(get_db_for_org),
+):
+    return departmental_kpi_web_service.measurement_queue_response(
+        request,
+        auth,
+        db,
+        period_start=period_start,
+        period_end=period_end,
+        state=state,
+        employee_search=employee_search,
+        page=page,
     )
 
 

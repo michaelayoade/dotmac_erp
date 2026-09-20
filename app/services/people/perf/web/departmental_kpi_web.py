@@ -257,6 +257,89 @@ class DepartmentalKPIWebService:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
+    def measurement_queue_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        period_start: date | None,
+        period_end: date | None,
+        state: str,
+        employee_search: str,
+        page: int,
+    ) -> HTMLResponse:
+        org_id = UUID(str(auth.organization_id))
+        service = DepartmentalKPIService(db)
+        allowed = self._allowed_departments(service, auth, org_id)
+        allowed_ids = {department.department_id for department in allowed}
+        today = date.today()
+        selected_start = period_start or date(today.year, 1, 1)
+        selected_end = period_end or date(today.year, 12, 31)
+        if selected_end < selected_start:
+            raise HTTPException(status_code=400, detail="Measurement period is invalid")
+        rows = service.measurement_queue(
+            org_id,
+            period_start=selected_start,
+            period_end=selected_end,
+            department_ids=None if self._can_manage(auth) else allowed_ids,
+            state=state,
+            employee_search=employee_search,
+        )
+        per_page = 25
+        total = len(rows)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = min(max(page, 1), total_pages)
+        start = (page - 1) * per_page
+        page_rows = rows[start : start + per_page]
+        counts = {
+            key: 0
+            for key in (
+                "missing",
+                "draft",
+                "awaiting_approval",
+                "returned",
+                "automatic",
+                "recorded",
+            )
+        }
+        for row in rows:
+            counts[row["state"]] += 1
+        context = base_context(request, auth, "Measurements", "perf", db=db)
+        search_param = quote_plus(employee_search)
+        context.update(
+            {
+                "request": request,
+                "rows": page_rows,
+                "counts": counts,
+                "total": total,
+                "page": page,
+                "total_pages": total_pages,
+                "period_start": selected_start,
+                "period_end": selected_end,
+                "state": state,
+                "employee_search": employee_search,
+                "departments": allowed,
+                "can_measure_kpis": auth.has_permission("performance:kpi:measure"),
+                "can_approve_kpis": self._can_approve(auth),
+                "previous_url": (
+                    f"/people/perf/kpi-dashboard/measurements?period_start={selected_start}&period_end={selected_end}&state={state}&employee_search={search_param}&page={page - 1}"
+                    if page > 1
+                    else None
+                ),
+                "next_url": (
+                    f"/people/perf/kpi-dashboard/measurements?period_start={selected_start}&period_end={selected_end}&state={state}&employee_search={search_param}&page={page + 1}"
+                    if page < total_pages
+                    else None
+                ),
+            }
+        )
+        response = templates.TemplateResponse(
+            request, "people/perf/departmental_kpi/measurements.html", context
+        )
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+
     def configuration_list_response(
         self,
         request: Request,
@@ -280,7 +363,12 @@ class DepartmentalKPIWebService:
             )
             for department in service.list_departments(org_id)
         }
-        context = base_context(request, auth, "KPI Management", "perf", db=db)
+        health_by_template = service.configuration_health(
+            org_id,
+            configurations,
+            weight_summaries=weight_summaries,
+        )
+        context = base_context(request, auth, "KPI Definitions", "perf", db=db)
         context.update(
             {
                 "configurations": configurations,
@@ -288,6 +376,7 @@ class DepartmentalKPIWebService:
                 "selected_department_id": selected_department,
                 "include_inactive": include_inactive,
                 "weight_summaries": weight_summaries,
+                "health_by_template": health_by_template,
                 "success": request.query_params.get("success"),
                 "error": request.query_params.get("error"),
             }

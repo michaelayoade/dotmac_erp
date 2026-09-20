@@ -1,7 +1,7 @@
 {% extends "people/base_people.html" %}
 {% from "components/macros.html" import chart_canvas, empty_state, icon_svg, status_badge %}
-{% block page_title %}{{ config.kpi_name }}{% endblock %}
-{% block breadcrumbs %}<nav aria-label="Breadcrumb" class="text-sm text-slate-500"><ol class="flex items-center gap-2"><li><a href="/people/perf/kpi-dashboard" class="hover:text-violet-600">KPI Dashboard</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li><a href="/people/perf/kpi-dashboard/configurations" class="hover:text-violet-600">Management</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li aria-current="page">{{ config.kpi_code }}</li></ol></nav>{% endblock %}
+{% block page_title %}{{ config.kpi_name }} — KPI Definition{% endblock %}
+{% block breadcrumbs %}<nav aria-label="Breadcrumb" class="text-sm text-slate-500"><ol class="flex items-center gap-2"><li><a href="/people/perf/kpi-dashboard" class="hover:text-violet-600">KPI Overview</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li><a href="/people/perf/kpi-dashboard/configurations" class="hover:text-violet-600">KPI Definitions</a></li><li>{{ icon_svg("chevron-right", "h-4 w-4") }}</li><li aria-current="page">{{ config.kpi_code }}</li></ol></nav>{% endblock %}
 {% block header_actions %}{% if can_manage_kpis %}<a href="/people/perf/kpi-dashboard/configurations/{{ config.template_id }}/edit" class="btn btn-secondary">{{ icon_svg("edit", "h-4 w-4 mr-1.5") }} Edit</a>{% endif %}{% endblock %}
 {% block content %}<div class="space-y-6">
 {% if success %}<div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{{ success }}</div>{% endif %}{% if error %}<div class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{{ error }}</div>{% endif %}

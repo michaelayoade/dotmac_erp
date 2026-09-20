@@ -33,7 +33,7 @@ def _read_configuration(values) -> DashboardConfig:
     explicit = values.get("configured") == "1"
     return DashboardConfig.parse(
         {
-            "period": values.get("period", "this_month"),
+            "period": values.get("period", "this_year"),
             "start_date": values.get("start_date", ""),
             "end_date": values.get("end_date", ""),
             "department_ids": values.getlist("department_id"),
@@ -45,7 +45,7 @@ def _read_configuration(values) -> DashboardConfig:
             else list(DEFAULT_WIDGETS),
             "search": values.get("search", ""),
             "employee_search": values.get("employee_search", ""),
-            "cohort": values.get("cohort", "due"),
+            "cohort": values.get("cohort", "active"),
             "attention": values.get("attention", "all"),
             "show_charts": _chart_setting(values.get("show_charts", "1")),
         }
