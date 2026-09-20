@@ -114,11 +114,11 @@ revision, so its two entries also preserve that stronger dead-code signal.
 | `tests/services/test_dotmac_sub_incremental_sync.py` | `test_customer_feeds_forward_their_watermarks` | `sync_checkpoint` | `ced5e1214b2e8731e79f877ec620f2d3333f80244fc07284dabdf7aa91b99ef3` |
 | `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature` | `webhook_surface` | `18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d` |
 | `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature_unconfigured` | `webhook_surface` | `18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d` |
-| `tests/services/test_hook_registry.py` | `TestHookRegistry` | `webhook_surface` | `b2fdbebb552c2c453eac54f781d2245930e098b4f53eb2d66609e7542ba7d3de` |
+| `tests/services/test_hook_registry.py` | `TestHookRegistry` | `webhook_surface` | `30d9cf711d1444dd4d20b815ca18b894ef283058e856b1311b252bef5282bac0` |
 | `tests/services/test_mono_sync.py` | `test_verify_webhook_rejects_empty_secrets` | `webhook_surface` | `4f907fc550796c1b212c1cc8481d78488f55f6345669a1ecd7fe45a7b9c92349` |
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_circuit_opens_after_transport_failure` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_retries_transient_server_error_with_exact_body` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
-| `tests/tasks/test_hooks_tasks.py` | `TestExecuteAsyncHook` | `delivery_retry` | `4a00c2c10da2b59355d210a3b3546f392fb83890ead8a799c36f7a4579deaf85` |
+| `tests/tasks/test_hooks_tasks.py` | `TestExecuteAsyncHook` | `delivery_retry` | `2b429df85fe39fe006f8bf5c79a2038cbddefd5ff91c2388910fa6f17eba1597` |
 | `tests/test_email_services.py` | `TestSendEmail` | `outbound_transport` | `5691ef206ab4756c077e82cda323498492adcb4195916005f4eef6fe185868a8` |
 
 ## Review rule
