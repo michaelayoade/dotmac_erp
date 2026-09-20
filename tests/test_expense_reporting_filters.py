@@ -1,6 +1,9 @@
+import csv
+import io
 import uuid
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 from app.models.expense import (
     ExpenseCategory,
@@ -13,6 +16,8 @@ from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person
 from app.services.expense.dashboard_web import expense_dashboard_service
 from app.services.expense.expense_service import ExpenseService
+from app.services.expense.web import expense_claims_web_service
+from app.templates import templates
 
 
 def _ensure_hr_tables(engine) -> None:
@@ -102,6 +107,16 @@ def _make_item(
     )
 
 
+def test_by_employee_department_filter_uses_department_display_name() -> None:
+    source, _, _ = templates.env.loader.get_source(
+        templates.env,
+        "expense/reports/by_employee.html",
+    )
+
+    assert "{{ dept.department_name }}" in source
+    assert "{{ dept.name }}" not in source
+
+
 def test_expense_reports_exclude_rejected_claims_from_spend_totals(db_session, engine):
     _ensure_hr_tables(engine)
     org_id = uuid.uuid4()
@@ -179,6 +194,48 @@ def test_expense_reports_exclude_rejected_claims_from_spend_totals(db_session, e
     assert by_category["categories"][0]["claimed_amount"] == Decimal("100.00")
     assert by_category["categories"][0]["item_count"] == 1
 
+    report_date = approved_claim.claim_date.isoformat()
+    export_response = expense_claims_web_service.expense_by_category_export_response(
+        auth=SimpleNamespace(organization_id=org_id),
+        db=db_session,
+        start_date=report_date,
+        end_date=report_date,
+    )
+    export_rows = list(csv.reader(io.StringIO(export_response.body.decode("utf-8"))))
+    assert export_rows == [
+        [
+            "Category Code",
+            "Category Name",
+            "Items",
+            "Claimed Amount",
+            "Reimbursed Amount",
+            "Percent of Total",
+        ],
+        ["TRAVEL", "Travel", "1", "100.00", "90.00", "100.0"],
+        ["TOTAL", "", "1", "100.00", "90.00", "100.0"],
+    ]
+    assert export_response.media_type == "text/csv"
+    assert (
+        f"expense_by_category_{report_date}_to_{report_date}.csv"
+        in export_response.headers["Content-Disposition"]
+    )
+
+    summary_export = expense_claims_web_service.expense_summary_export_response(
+        auth=SimpleNamespace(organization_id=org_id),
+        db=db_session,
+        start_date=report_date,
+        end_date=report_date,
+    )
+    summary_rows = list(csv.reader(io.StringIO(summary_export.body.decode("utf-8"))))
+    assert ["Total Claims", "1", "", ""] in summary_rows
+    assert ["Total Claimed", "100.00", "", ""] in summary_rows
+    assert ["Approved Claims", "1", "", ""] in summary_rows
+    assert ["Reimbursed Amount", "90.00", "", ""] in summary_rows
+    assert ["Rejected Claims", "1", "", ""] in summary_rows
+    assert ["APPROVED", "1", "100.00", "100.0"] in summary_rows
+    assert ["REJECTED", "1", "200.00", "200.0"] in summary_rows
+    assert summary_rows[-1] == ["TOTAL", "1", "100.00", "100.0"]
+
     by_employee = svc.get_expense_by_employee_report(org_id)
     assert by_employee["total_claimed"] == Decimal("100.00")
     assert by_employee["total_approved"] == Decimal("90.00")
@@ -188,11 +245,99 @@ def test_expense_reports_exclude_rejected_claims_from_spend_totals(db_session, e
     )
     assert by_employee["employees"][0]["claimed_amount"] == Decimal("100.00")
 
+    employee_export = expense_claims_web_service.expense_by_employee_export_response(
+        auth=SimpleNamespace(organization_id=org_id),
+        db=db_session,
+        start_date=report_date,
+        end_date=report_date,
+        department_id=None,
+    )
+    employee_rows = list(csv.reader(io.StringIO(employee_export.body.decode("utf-8"))))
+    assert employee_rows[1] == [
+        by_employee["employees"][0]["employee_name"],
+        "No Department",
+        "1",
+        "100.00",
+        "90.00",
+        "90",
+    ]
+    assert employee_rows[-1] == ["TOTAL", "", "1", "100.00", "90.00", "90"]
+
     trends = svc.get_expense_trends_report(org_id, months=1)
     assert trends["total_claimed"] == Decimal("100.00")
     assert trends["total_approved"] == Decimal("90.00")
     assert trends["months"][0]["claim_count"] == 1
     assert trends["months"][0]["claimed_amount"] == Decimal("100.00")
+
+    trends_export = expense_claims_web_service.expense_trends_export_response(
+        auth=SimpleNamespace(organization_id=org_id),
+        db=db_session,
+        months=3,
+    )
+    trends_rows = list(csv.reader(io.StringIO(trends_export.body.decode("utf-8"))))
+    assert trends_rows[-2] == ["TOTAL", "1", "100.00", "90.00", ""]
+    assert trends_rows[-1] == ["AVERAGE MONTHLY", "", "33.33", "", ""]
+
+
+def test_expense_trends_respects_explicit_date_range(db_session, engine):
+    _ensure_hr_tables(engine)
+    org_id = uuid.uuid4()
+    person = _make_person(org_id, "trends@example.com")
+    employee = _make_employee(org_id, person, "EMP-TREND")
+
+    claims = []
+    for claim_date, claim_number, amount in (
+        (date(2026, 1, 15), "CLM-BEFORE", Decimal("10.00")),
+        (date(2026, 1, 25), "CLM-JAN", Decimal("20.00")),
+        (date(2026, 2, 5), "CLM-FEB", Decimal("30.00")),
+        (date(2026, 2, 15), "CLM-AFTER", Decimal("40.00")),
+    ):
+        claim = _make_claim(
+            org_id,
+            employee.employee_id,
+            claim_number,
+            amount,
+            ExpenseClaimStatus.PAID,
+            approved_amount=amount,
+        )
+        claim.claim_date = claim_date
+        claims.append(claim)
+
+    db_session.add_all([person, employee, *claims])
+    db_session.commit()
+
+    start_date = date(2026, 1, 20)
+    end_date = date(2026, 2, 10)
+    report = ExpenseService(db_session).get_expense_trends_report(
+        org_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    assert report["start_date"] == start_date
+    assert report["end_date"] == end_date
+    assert report["total_claimed"] == Decimal("50.00")
+    assert report["total_approved"] == Decimal("50.00")
+    assert [month["claim_count"] for month in report["months"]] == [1, 1]
+    assert report["months"][0]["start_date"] == start_date
+    assert report["months"][0]["end_date"] == date(2026, 1, 31)
+    assert report["months"][1]["start_date"] == date(2026, 2, 1)
+    assert report["months"][1]["end_date"] == end_date
+
+    export = expense_claims_web_service.expense_trends_export_response(
+        auth=SimpleNamespace(organization_id=org_id),
+        db=db_session,
+        months=12,
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+    )
+    rows = list(csv.reader(io.StringIO(export.body.decode("utf-8"))))
+    assert rows[-2] == ["TOTAL", "2", "50.00", "50.00", ""]
+    assert rows[-1] == ["AVERAGE MONTHLY", "", "25.00", "", ""]
+    assert (
+        "expense_trends_2026-01-20_to_2026-02-10.csv"
+        in export.headers["Content-Disposition"]
+    )
 
 
 def test_expense_dashboard_spend_helpers_exclude_rejected_claims(db_session, engine):
