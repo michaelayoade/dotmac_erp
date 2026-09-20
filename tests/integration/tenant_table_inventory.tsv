@@ -327,6 +327,8 @@ perf	institutional_criteria_template	direct	false	false	app_admin	0	false	--	--
 perf	institutional_governance_action	direct	false	false	app_admin	0	false	--	--
 perf	institutional_performance	direct	false	false	app_admin	0	false	--	--
 perf	kpi	direct	true	false	app_admin	1	false	--	--
+perf	kpi_configuration_audit	direct	true	true	app_admin	1	false	--	--
+perf	kpi_measurement_history	direct	true	true	app_admin	1	false	--	--
 perf	kra	direct	true	false	app_admin	1	false	--	--
 perf	monthly_review	direct	false	false	app_admin	0	false	--	--
 perf	performance_contract	direct	false	false	app_admin	0	false	--	--
