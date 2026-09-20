@@ -235,7 +235,7 @@ class OrganizationCalendarParticipant(Base):
     )
     participant_name: Mapped[str] = mapped_column(String(160), nullable=False)
     participant_email: Mapped[str] = mapped_column(String(255), nullable=False)
-    nextcloud_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    nextcloud_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     identity_status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="VERIFIED", server_default="VERIFIED"
     )

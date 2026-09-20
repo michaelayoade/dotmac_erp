@@ -103,6 +103,14 @@ regression back to a placeholder. `deploy/product.toml` also declares
 value is projected into `deployment.environment` in the rendered collector
 config, so the mislabel followed every span and metric.
 
+Production operators normally enter this deploy path through
+`python scripts/deploy_production.py --host erp.dotmac.io`. The controller
+wrapper obtains `MIGRATION_DATABASE_URL` from the canonical OpenBao path using
+the read-only AppRole described in
+`docs/runbooks/production-deployment-credential.md`, then streams it over SSH.
+The direct environment-variable form below remains the break-glass entrypoint;
+it is not the normal custody path.
+
 The Employment Type authority revision is declared
 `maintenance_required`, not online-compatible. An existing database may cross
 that boundary only through:

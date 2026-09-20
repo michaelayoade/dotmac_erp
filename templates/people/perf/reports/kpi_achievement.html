@@ -1,6 +1,7 @@
 {% extends "people/base_people.html" %}
 
 {% from "components/macros.html" import empty_state, compact_filters, icon_svg %}
+{% from "people/perf/_kpi_workspace_nav.html" import kpi_workspace_nav %}
 
 {% block page_title %}KPI Achievement{% endblock %}
 
@@ -16,6 +17,7 @@
 
 {% block content %}
 <div class="space-y-6">
+    {{ kpi_workspace_nav('reports') }}
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
@@ -34,7 +36,9 @@
         base_url="/people/perf/reports/kpi-achievement",
         active_filters=active_filters | default([])
     ) %}
-    <div>
+    <div class="flex flex-wrap gap-4">
+                <div><label for="report-start-date" class="form-label text-xs">Period start</label><input id="report-start-date" type="date" name="start_date" value="{{ start_date }}" class="form-input" {{ filter_attrs }}></div>
+                <div><label for="report-end-date" class="form-label text-xs">Period end</label><input id="report-end-date" type="date" name="end_date" value="{{ end_date }}" class="form-input" {{ filter_attrs }}></div>
                 <div class="w-64">
                     <label class="form-label text-xs">Department</label>
                     <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>

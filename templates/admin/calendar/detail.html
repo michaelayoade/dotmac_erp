@@ -1,11 +1,11 @@
-{% extends "admin/base_admin.html" %}
+{% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Event Details{% endblock %}
 
-{% block admin_breadcrumbs %}
+{% block breadcrumbs %}
 <ol class="flex flex-wrap items-center gap-2">
-    <li><a href="/admin/calendar" class="hover:text-slate-700 dark:hover:text-slate-300">Organizational Calendar</a></li>
+    <li><a href="/people/calendar" class="hover:text-slate-700 dark:hover:text-slate-300">Organization Calendar</a></li>
     <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">{{ event.title }}</span></li>
 </ol>
 {% endblock %}
@@ -20,13 +20,13 @@
     {% endif %}
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <a href="/admin/calendar" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">{{ icon_svg("arrow-left", "h-4 w-4") }} Back to calendar</a>
+        <a href="/people/calendar" class="inline-flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white">{{ icon_svg("arrow-left", "h-4 w-4") }} Back to calendar</a>
         <div class="flex flex-wrap gap-2">
             {% if can_edit and event.business_status != 'CANCELLED' %}
-            <a href="/admin/calendar/events/{{ event.event_id }}/edit" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">{{ icon_svg("edit", "h-4 w-4") }} Edit</a>
+            <a href="/people/calendar/events/{{ event.event_id }}/edit" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">{{ icon_svg("edit", "h-4 w-4") }} Edit</a>
             {% endif %}
             {% if can_cancel and event.business_status != 'CANCELLED' %}
-            <form action="/admin/calendar/events/{{ event.event_id }}/delete" method="post" onsubmit="return confirm('Delete this event? Published participant copies will be cancelled.');">
+            <form action="/people/calendar/events/{{ event.event_id }}/delete" method="post" onsubmit="return confirm('Delete this event? Published participant copies will be cancelled.');">
                 {{ request.state.csrf_form | safe }}<input type="hidden" name="version" value="{{ event.version }}">
                 <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">{{ icon_svg("trash", "h-4 w-4") }} Delete</button>
             </form>
@@ -36,7 +36,7 @@
 
     <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div class="space-y-5">
-            <section class="admin-card overflow-hidden">
+            <section class="card overflow-hidden">
                 <div class="h-2" style="background-color: {{ event.color }}"></div>
                 <div class="p-6">
                     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -60,7 +60,7 @@
                 </div>
             </section>
 
-            <section class="admin-card p-6">
+            <section class="card p-6">
                 <div class="flex items-center justify-between"><h2 class="text-base font-semibold text-slate-900 dark:text-white">Participants</h2><span class="text-xs text-slate-500">{{ active_participants | length }} total</span></div>
                 <div class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
                     {% for participant in active_participants %}
@@ -73,14 +73,14 @@
         </div>
 
         <aside class="space-y-5">
-            <section class="admin-card p-5">
+            <section class="card p-5">
                 <h2 class="text-base font-semibold text-slate-900 dark:text-white">Delivery identity</h2>
                 <dl class="mt-4 space-y-3 text-sm">
                     <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">Version</dt><dd class="font-mono text-slate-700 dark:text-slate-300">{{ event.version }}</dd></div>
                     <div class="flex items-center justify-between gap-3"><dt class="text-slate-500">UID</dt><dd class="max-w-44 truncate font-mono text-xs text-slate-700 dark:text-slate-300" title="{{ event.ical_uid }}">{{ event.ical_uid }}</dd></div>
                 </dl>
             </section>
-            <section class="admin-card p-5">
+            <section class="card p-5">
                 <h2 class="text-base font-semibold text-slate-900 dark:text-white">Reminders</h2>
                 <ul class="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                     {% for reminder in event.reminders %}<li class="flex items-center gap-2">{{ icon_svg("clock", "h-4 w-4 text-accent-500") }} {{ reminder.offset_minutes }} minutes before</li>{% else %}<li class="text-slate-500">No reminders configured</li>{% endfor %}

@@ -59,6 +59,7 @@ DEFAULT_STATUSES = (
 OPEN_STATUSES = ("PENDING", "ACTIVE", "ON_TRACK", "AT_RISK")
 ORG_WIDE_ROLES = frozenset({"admin", "hr_manager", "hr_director"})
 PERIODS = {
+    "this_year": "This year",
     "this_month": "This month",
     "this_week": "This week",
     "this_quarter": "This quarter",
@@ -129,7 +130,7 @@ def _date(value: Any, field: str) -> date:
 class DashboardConfig:
     """Bounded configuration stored only in the authenticated person's metadata."""
 
-    period: str = "this_month"
+    period: str = "this_year"
     start_date: str = ""
     end_date: str = ""
     department_ids: tuple[str, ...] = ()
@@ -137,7 +138,7 @@ class DashboardConfig:
     widgets: tuple[str, ...] = DEFAULT_WIDGETS
     search: str = ""
     employee_search: str = ""
-    cohort: str = "due"
+    cohort: str = "active"
     attention: str = "all"
     show_charts: bool = True
 
@@ -158,7 +159,7 @@ class DashboardConfig:
         }
         if set(payload) - permitted:
             raise DashboardValidationError("Unsupported dashboard configuration field.")
-        period = payload.get("period", "this_month")
+        period = payload.get("period", "this_year")
         if not isinstance(period, str) or period not in PERIODS:
             raise DashboardValidationError("Choose a supported reporting period.")
         departments = _strings(
@@ -194,7 +195,9 @@ class DashboardConfig:
             raise DashboardValidationError(
                 "Employee search must be no longer than 100 characters."
             )
-        cohort = payload.get("cohort", "due")
+        # Saved views created before the date-scope filter existed represented
+        # the due cohort. Fresh dashboard configuration defaults to active.
+        cohort = payload.get("cohort", "due" if "widgets" in payload else "active")
         if not isinstance(cohort, str) or cohort not in {"due", "active", "overdue"}:
             raise DashboardValidationError("Choose a valid KPI date scope.")
         attention = payload.get("attention", "all")
@@ -256,6 +259,9 @@ class DashboardConfig:
                 else date(today.year, month + 3, 1)
             )
             end = next_quarter - timedelta(days=1)
+        elif self.period == "this_year":
+            start = date(today.year, 1, 1)
+            end = date(today.year, 12, 31)
         elif self.period == "last_month":
             end = today.replace(day=1) - timedelta(days=1)
             start = end.replace(day=1)

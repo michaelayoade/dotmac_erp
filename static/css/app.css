@@ -4767,8 +4767,8 @@ a.stat-hero-link:active { transform: scale(0.98); }
     min-height: 7rem;
 }
 
-.min-h-32 {
-    min-height: 8rem;
+.min-h-36 {
+    min-height: 9rem;
 }
 
 .min-h-56 {
@@ -5270,6 +5270,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
 .min-w-full {
     min-width: 100%;
+}
+
+.min-w-max {
+    min-width: -moz-max-content;
+    min-width: max-content;
 }
 
 .max-w-12 {
@@ -6439,6 +6444,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
 .border-l-rose-500 {
     --tw-border-opacity: 1;
     border-left-color: rgb(244 63 94 / var(--tw-border-opacity, 1));
+}
+
+.border-l-sky-500 {
+    --tw-border-opacity: 1;
+    border-left-color: rgb(14 165 233 / var(--tw-border-opacity, 1));
 }
 
 .border-l-violet-500 {
