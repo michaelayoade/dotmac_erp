@@ -803,7 +803,6 @@ CALENDAR_PERMISSIONS = [
         "calendar:participants:add_all",
         "Add every eligible employee to an event",
     ),
-    ("calendar:sync:retry", "Retry failed organization calendar synchronization"),
     ("calendar:audit:read", "Read organization calendar audit history"),
 ]
 

@@ -118,6 +118,7 @@ from app.tasks.inventory import (
 from app.tasks.imports import process_customer_import_partitions
 from app.tasks.license import revalidate_license
 from app.tasks.notifications import (
+    process_due_calendar_reminders,
     process_pending_nextcloud_notifications,
     process_pending_notification_emails,
 )
@@ -278,6 +279,7 @@ __all__ = [
     "fix_unbalanced_posted_journals",
     "run_data_health_check",
     # Notification tasks
+    "process_due_calendar_reminders",
     "process_pending_notification_emails",
     "process_pending_nextcloud_notifications",
     "execute_async_hook",

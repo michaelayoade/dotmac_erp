@@ -569,6 +569,35 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
         ),
     ),
     DomainSOT(
+        domain="calendar_events",
+        services=(
+            SOTService(
+                name="calendar.events",
+                module="app.services.organization_calendar",
+                owns=(
+                    "organizational and personal ERP calendar event state",
+                    "calendar participant membership and visibility decisions",
+                    "calendar notification and reminder intent",
+                ),
+                depends_on=("platform.notifications",),
+            ),
+            SOTService(
+                name="calendar.reminder_dispatch",
+                module="app.tasks.notifications",
+                owns=("due-reminder claims and notification creation",),
+                depends_on=("calendar.events", "platform.notifications"),
+            ),
+        ),
+        entrypoints=(
+            "app.web.organization_calendar",
+            "app.web.people.self_service_calendar",
+        ),
+        rule=(
+            "ERP owns calendar state and decides recipients; Nextcloud Talk "
+            "only transports links back to ERP and receives no calendar copy."
+        ),
+    ),
+    DomainSOT(
         domain="platform_services",
         services=(
             SOTService(
@@ -585,7 +614,11 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             SOTService(
                 name="platform.notifications",
                 module="app.services.notification",
-                owns=("in-app and email notification dispatch",),
+                owns=("in-app, email, push, and Nextcloud Talk notification intent",),
+                notes=(
+                    "Delivery workers are transports; domain owners decide when "
+                    "and whom to notify."
+                ),
             ),
         ),
         entrypoints=("app.api.files",),

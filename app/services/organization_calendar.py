@@ -1,4 +1,4 @@
-"""Organization calendar domain service and Integrator outbox contract."""
+"""ERP-owned calendar service with queued Talk notification consequences."""
 
 from __future__ import annotations
 
@@ -12,11 +12,6 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
-from app.models.finance.platform.service_hook_execution import (
-    ExecutionStatus,
-    ServiceHookExecution,
-)
 from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
@@ -29,12 +24,8 @@ from app.models.organization_calendar import (
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
-from app.services.finance.platform.outbox_publisher import OutboxPublisher
 from app.services.notification import NotificationService
 
-CALENDAR_UPSERTED = "organization.calendar.upserted"
-CALENDAR_CANCELLED = "organization.calendar.cancelled"
-CALENDAR_CONTRACT_VERSION = "organization.calendar.v1"
 DEFAULT_TIMEZONE = "Africa/Lagos"
 MAX_REMINDERS = 3
 MAX_PARTICIPANTS = 1000
@@ -85,14 +76,6 @@ class CalendarEventData:
     start_date: date | None
     end_date_exclusive: date | None
     color: str = "#4F46E5"
-
-
-@dataclass(frozen=True)
-class CalendarDeliveryIssue:
-    """A failed calendar delivery projected from its canonical execution log."""
-
-    event: OrganizationCalendarEvent
-    delivery: ServiceHookExecution
 
 
 class OrganizationCalendarService:
@@ -380,37 +363,6 @@ class OrganizationCalendarService:
             _owner_person_id=actor_person_id,
         )
 
-    def list_delivery_issues(self, *, limit: int = 200) -> list[CalendarDeliveryIssue]:
-        """Project failed calendar deliveries from the hook execution owner."""
-        deliveries = list(
-            self.db.scalars(
-                select(ServiceHookExecution)
-                .where(
-                    ServiceHookExecution.organization_id == self.organization_id,
-                    ServiceHookExecution.event_name.in_(
-                        [CALENDAR_UPSERTED, CALENDAR_CANCELLED]
-                    ),
-                    ServiceHookExecution.status.in_(
-                        [ExecutionStatus.FAILED, ExecutionStatus.DEAD]
-                    ),
-                )
-                .order_by(ServiceHookExecution.created_at.desc())
-                .limit(max(1, min(limit, 500)))
-            ).all()
-        )
-        issues: list[CalendarDeliveryIssue] = []
-        for delivery in deliveries:
-            payload = delivery.event_payload or {}
-            metadata = payload.get("_hook_meta")
-            event_id = metadata.get("entity_id") if isinstance(metadata, dict) else None
-            event_id = event_id or payload.get("event_id")
-            try:
-                event = self.get_event(uuid.UUID(str(event_id)))
-            except (CalendarNotFoundError, TypeError, ValueError):
-                continue
-            issues.append(CalendarDeliveryIssue(event=event, delivery=delivery))
-        return issues
-
     def create_event(
         self,
         data: CalendarEventData,
@@ -456,15 +408,18 @@ class OrganizationCalendarService:
         candidates = self._resolve_candidates(participant_person_ids, add_everyone)
         if publish and not candidates:
             raise CalendarError("A published event must have at least one participant.")
-        newly_added = self._replace_participants(event, candidates)
+        newly_added, _removed = self._replace_participants(event, candidates)
         self._replace_reminders(event, reminder_offsets)
         self._audit(event, actor_person_id, "PUBLISHED" if publish else "CREATED")
         if publish:
-            self._publish_command(event, CALENDAR_UPSERTED, actor_person_id)
-            if _event_scope == CalendarEventScope.ORGANIZATIONAL.value:
-                self._notify_organizational_participants(
-                    event, newly_added, actor_person_id
-                )
+            self._notify_calendar_participants(
+                event,
+                newly_added,
+                actor_person_id,
+                notification_type=NotificationType.ASSIGNED,
+                title_prefix="New calendar event",
+                message="You have been added to this event.",
+            )
         self.db.flush()
         return event
 
@@ -522,20 +477,37 @@ class OrganizationCalendarService:
                 event.published_at = datetime.now(UTC)
                 event.published_by_id = actor_person_id
 
-        newly_added = self._replace_participants(event, candidates)
+        newly_added, removed = self._replace_participants(event, candidates)
         self._replace_reminders(event, reminder_offsets)
         self._audit(event, actor_person_id, "UPDATED", old_values=old)
         if target_published:
-            self._publish_command(event, CALENDAR_UPSERTED, actor_person_id)
-            if _event_scope == CalendarEventScope.ORGANIZATIONAL.value:
-                recipients = (
-                    newly_added
-                    if was_published
-                    else {candidate.person_id for candidate in candidates}
+            active_recipients = {candidate.person_id for candidate in candidates}
+            if was_published:
+                self._notify_calendar_participants(
+                    event,
+                    active_recipients - newly_added,
+                    actor_person_id,
+                    notification_type=NotificationType.STATUS_CHANGE,
+                    title_prefix="Calendar event updated",
+                    message="Event details have changed.",
                 )
-                self._notify_organizational_participants(
-                    event, recipients, actor_person_id
+                self._notify_calendar_participants(
+                    event,
+                    removed,
+                    actor_person_id,
+                    notification_type=NotificationType.STATUS_CHANGE,
+                    title_prefix="Removed from calendar event",
+                    message="You are no longer a participant in this event.",
+                    action_url="/people/self/calendar",
                 )
+            self._notify_calendar_participants(
+                event,
+                newly_added if was_published else active_recipients,
+                actor_person_id,
+                notification_type=NotificationType.ASSIGNED,
+                title_prefix="New calendar event",
+                message="You have been added to this event.",
+            )
         self.db.flush()
         return event
 
@@ -558,6 +530,11 @@ class OrganizationCalendarService:
         if event.business_status == CalendarBusinessStatus.CANCELLED.value:
             return event
         was_published = event.business_status == CalendarBusinessStatus.PUBLISHED.value
+        active_recipients = {
+            participant.person_id
+            for participant in event.participants
+            if participant.membership_status == ParticipantMembershipStatus.ACTIVE.value
+        }
         old = self._event_snapshot(event)
         event.business_status = CalendarBusinessStatus.CANCELLED.value
         event.cancelled_at = datetime.now(UTC)
@@ -574,38 +551,15 @@ class OrganizationCalendarService:
                 )
         self._audit(event, actor_person_id, "CANCELLED", old_values=old)
         if was_published:
-            self._publish_command(event, CALENDAR_CANCELLED, actor_person_id)
-        self.db.flush()
-        return event
-
-    def request_retry(
-        self, event_id: uuid.UUID, *, actor_person_id: uuid.UUID
-    ) -> OrganizationCalendarEvent:
-        event = self.get_event(event_id, for_update=True)
-        if event.business_status == CalendarBusinessStatus.DRAFT.value:
-            raise CalendarError("Draft events do not require synchronization.")
-        active = self.db.scalar(
-            select(EventOutbox)
-            .where(
-                EventOutbox.aggregate_type == "OrganizationCalendarEvent",
-                EventOutbox.aggregate_id == str(event.event_id),
-                EventOutbox.event_name.in_([CALENDAR_UPSERTED, CALENDAR_CANCELLED]),
-                EventOutbox.status.in_(
-                    [EventStatus.PENDING, EventStatus.FAILED, EventStatus.DEAD]
-                ),
+            self._notify_calendar_participants(
+                event,
+                active_recipients,
+                actor_person_id,
+                notification_type=NotificationType.STATUS_CHANGE,
+                title_prefix="Calendar event cancelled",
+                message="This event has been cancelled.",
+                action_url="/people/self/calendar",
             )
-            .order_by(EventOutbox.occurred_at.desc())
-        )
-        if active is not None and active.status == EventStatus.DEAD:
-            OutboxPublisher.requeue_dead_event(self.db, active.event_id)
-        elif active is None:
-            action = (
-                CALENDAR_CANCELLED
-                if event.business_status == CalendarBusinessStatus.CANCELLED.value
-                else CALENDAR_UPSERTED
-            )
-            self._publish_command(event, action, actor_person_id, retry=True)
-        self._audit(event, actor_person_id, "RETRY_REQUESTED")
         self.db.flush()
         return event
 
@@ -675,7 +629,15 @@ class OrganizationCalendarService:
                 "PARTICIPANT_REMOVED_OFFBOARDING",
             )
             if published:
-                self._publish_command(event, CALENDAR_UPSERTED, actor_person_id)
+                self._notify_calendar_participants(
+                    event,
+                    {person_id},
+                    actor_person_id,
+                    notification_type=NotificationType.STATUS_CHANGE,
+                    title_prefix="Removed from calendar event",
+                    message="You are no longer a participant in this event.",
+                    action_url="/people/self/calendar",
+                )
             changed += 1
         self.db.flush()
         return changed
@@ -702,13 +664,14 @@ class OrganizationCalendarService:
         self,
         event: OrganizationCalendarEvent,
         candidates: list[ParticipantCandidate],
-    ) -> set[uuid.UUID]:
+    ) -> tuple[set[uuid.UUID], set[uuid.UUID]]:
         desired = {candidate.person_id: candidate for candidate in candidates}
         existing = {
             participant.person_id: participant for participant in event.participants
         }
         now = datetime.now(UTC)
         newly_added: set[uuid.UUID] = set()
+        removed: set[uuid.UUID] = set()
         for person_id, participant in existing.items():
             candidate = desired.get(person_id)
             if candidate is None:
@@ -716,6 +679,7 @@ class OrganizationCalendarService:
                     participant.membership_status
                     == ParticipantMembershipStatus.ACTIVE.value
                 ):
+                    removed.add(person_id)
                     participant.membership_status = (
                         ParticipantMembershipStatus.REMOVED.value
                     )
@@ -749,26 +713,35 @@ class OrganizationCalendarService:
                     membership_status=ParticipantMembershipStatus.ACTIVE.value,
                 )
             )
-        return newly_added
+        return newly_added, removed
 
-    def _notify_organizational_participants(
+    def _notify_calendar_participants(
         self,
         event: OrganizationCalendarEvent,
         recipient_ids: set[uuid.UUID],
-        actor_person_id: uuid.UUID,
+        actor_person_id: uuid.UUID | None,
+        *,
+        notification_type: NotificationType,
+        title_prefix: str,
+        message: str,
+        action_url: str | None = None,
     ) -> None:
-        """Create an ERP in-app alert for each newly involved participant."""
+        """Queue Talk delivery while retaining the notification in ERP."""
         NotificationService().create_many(
             self.db,
             organization_id=self.organization_id,
             recipient_ids=sorted(recipient_ids, key=str),
             entity_type=EntityType.SYSTEM,
             entity_id=event.event_id,
-            notification_type=NotificationType.ASSIGNED,
-            title=f"New calendar event: {event.title}",
-            message="You have been added to an event on the Organizational Calendar.",
-            channel=NotificationChannel.IN_APP,
-            action_url=f"/people/self/calendar/events/{event.event_id}",
+            notification_type=notification_type,
+            title=f"{title_prefix}: {event.title}",
+            message=message,
+            channel=NotificationChannel.NEXTCLOUD,
+            action_url=(
+                action_url
+                if action_url is not None
+                else f"/people/self/calendar/events/{event.event_id}"
+            ),
             actor_id=actor_person_id,
         )
 
@@ -789,106 +762,28 @@ class OrganizationCalendarService:
             OrganizationCalendarReminder(
                 organization_id=self.organization_id,
                 offset_minutes=offset,
+                scheduled_for=self._reminder_time(event, offset),
             )
             for offset in offsets
         )
 
-    def _publish_command(
-        self,
-        event: OrganizationCalendarEvent,
-        event_name: str,
-        actor_person_id: uuid.UUID | None,
-        *,
-        retry: bool = False,
-    ) -> None:
-        self.db.flush()
-        correlation_id = str(uuid.uuid4())
-        delivery_idempotency_key = (
-            f"organization-calendar:{event.event_id}:v{event.version}:{event_name}"
-        )
-        payload = self._contract_payload(
-            event,
-            event_name,
-            correlation_id=correlation_id,
-            idempotency_key=delivery_idempotency_key,
-        )
-        suffix = f":retry:{uuid.uuid4()}" if retry else ""
-        OutboxPublisher.publish_event(
-            self.db,
-            event_name=event_name,
-            event_version=1,
-            aggregate_type="OrganizationCalendarEvent",
-            aggregate_id=str(event.event_id),
-            payload=payload,
-            headers={
-                "organization_id": str(self.organization_id),
-                "user_id": str(actor_person_id) if actor_person_id else None,
-                "request_id": None,
-                "ip_address": None,
-                "source": "erp.organization_calendar",
-            },
-            producer_module="organization_calendar",
-            correlation_id=correlation_id,
-            idempotency_key=(
-                f"organization-calendar:{event.event_id}:v{event.version}{suffix}"
-            ),
-        )
-
-    def _contract_payload(
-        self,
-        event: OrganizationCalendarEvent,
-        event_name: str,
-        *,
-        correlation_id: str | None = None,
-        idempotency_key: str | None = None,
-    ) -> dict[str, object]:
-        participants = [
-            {
-                "person_id": str(item.person_id),
-                "employee_id": str(item.employee_id),
-                "nextcloud_user_id": item.nextcloud_user_id,
-                "email": item.participant_email,
-                "display_name": item.participant_name,
-                "membership_status": item.membership_status,
-            }
-            for item in event.participants
-        ]
-        return {
-            "contract_version": CALENDAR_CONTRACT_VERSION,
-            "correlation_id": correlation_id,
-            "idempotency_key": idempotency_key,
-            "event_type": event_name,
-            "action": "CANCEL_EVENT"
-            if event_name == CALENDAR_CANCELLED
-            else "UPSERT_EVENT",
-            "event_id": str(event.event_id),
-            "organization_id": str(self.organization_id),
-            "event_version": event.version,
-            "uid": event.ical_uid,
-            "business_status": event.business_status,
-            "event_scope": event.event_scope,
-            "title": event.title,
-            "description": event.description,
-            "event_details": event.event_details,
-            "location": event.location,
-            "meeting_url": event.meeting_url,
-            "timezone": event.timezone,
-            "all_day": event.all_day,
-            "start": event.start_at.isoformat() if event.start_at else None,
-            "end": event.end_at.isoformat() if event.end_at else None,
-            "start_date": event.start_date.isoformat() if event.start_date else None,
-            "end_date_exclusive": (
-                event.end_date_exclusive.isoformat()
-                if event.end_date_exclusive
-                else None
-            ),
-            "reminders": sorted(
-                [item.offset_minutes for item in event.reminders], reverse=True
-            ),
-            "participants": participants,
-            "recurrence": None,
-            "source_of_truth": "ERP",
-        }
+    @staticmethod
+    def _reminder_time(
+        event: OrganizationCalendarEvent, offset_minutes: int
+    ) -> datetime:
+        if event.all_day:
+            if event.start_date is None:
+                raise CalendarError("All-day event start date is missing.")
+            start = datetime.combine(
+                event.start_date,
+                time.min,
+                tzinfo=ZoneInfo(event.timezone),
+            ).astimezone(UTC)
+        else:
+            if event.start_at is None:
+                raise CalendarError("Timed event start is missing.")
+            start = event.start_at.astimezone(UTC)
+        return start - timedelta(minutes=offset_minutes)
 
     def _audit(
         self,
@@ -1023,11 +918,7 @@ def build_event_data(
 
 
 __all__ = [
-    "CALENDAR_CANCELLED",
-    "CALENDAR_CONTRACT_VERSION",
-    "CALENDAR_UPSERTED",
     "CalendarConflictError",
-    "CalendarDeliveryIssue",
     "CalendarError",
     "CalendarEventData",
     "CalendarNotFoundError",

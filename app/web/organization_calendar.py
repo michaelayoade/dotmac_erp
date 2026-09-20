@@ -139,10 +139,6 @@ def _calendar_context(
             "can_create": auth.has_permission("calendar:events:create"),
             "can_update_all": auth.has_permission("calendar:events:update_all"),
             "can_cancel_all": auth.has_permission("calendar:events:cancel_all"),
-            "can_view_sync_issues": (
-                auth.has_permission("calendar:audit:read")
-                or auth.has_permission("calendar:sync:retry")
-            ),
             "created": request.query_params.get("created") == "1",
             "updated": request.query_params.get("updated") == "1",
             "cancelled": request.query_params.get("cancelled") == "1",
@@ -348,50 +344,6 @@ def calendar_page(
         request,
         "admin/calendar/index.html",
         _calendar_context(request, auth, db, _parse_month(month)),
-    )
-
-
-@router.get("/sync-issues", response_class=HTMLResponse)
-def sync_issues_page(
-    request: Request,
-    auth: WebAuthContext = Depends(
-        require_any_web_permission(["calendar:audit:read", "calendar:sync:retry"])
-    ),
-    db: Session = Depends(get_db_for_org),
-):
-    service = OrganizationCalendarService(db, auth.organization_id)
-    issues = service.list_delivery_issues()
-    eligible, excluded = service.eligible_participants()
-    rows: list[dict[str, object]] = []
-    for issue in issues:
-        rows.append(
-            {
-                "event": issue.event,
-                "delivery": issue.delivery,
-                "error_messages": [issue.delivery.error_message]
-                if issue.delivery.error_message
-                else [],
-            }
-        )
-    context = base_context(
-        request,
-        auth,
-        "Calendar Synchronization Issues",
-        active_module="settings",
-        db=db,
-    )
-    context.update(
-        {
-            "active_page": "calendar",
-            "rows": rows,
-            "eligible_count": len(eligible),
-            "excluded_count": len(excluded),
-            "excluded_reasons": _excluded_reason_counts(excluded),
-            "can_retry": auth.has_permission("calendar:sync:retry"),
-        }
-    )
-    return templates.TemplateResponse(
-        request, "admin/calendar/sync_issues.html", context
     )
 
 
@@ -620,27 +572,6 @@ async def cancel_event(
             status_code=303,
         )
     return RedirectResponse(url="/admin/calendar?cancelled=1", status_code=303)
-
-
-@router.post("/events/{event_id}/retry")
-def retry_event(
-    event_id: uuid.UUID,
-    auth: WebAuthContext = Depends(require_web_permission("calendar:sync:retry")),
-    db: Session = Depends(get_db_for_org),
-):
-    try:
-        OrganizationCalendarService(db, auth.organization_id).request_retry(
-            event_id, actor_person_id=auth.person_id
-        )
-    except CalendarError as exc:
-        _rollback_and_reprime(db, auth.organization_id)
-        return RedirectResponse(
-            url=f"/admin/calendar/events/{event_id}?error={quote_plus(str(exc))}",
-            status_code=303,
-        )
-    return RedirectResponse(
-        url=f"/admin/calendar/events/{event_id}?retried=1", status_code=303
-    )
 
 
 __all__ = ["router"]
