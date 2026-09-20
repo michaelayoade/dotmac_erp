@@ -1,17 +1,17 @@
-{% extends "admin/base_admin.html" %}
+{% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}{{ 'Edit Event' if event else 'Create Event' }}{% endblock %}
 
-{% block admin_breadcrumbs %}
+{% block breadcrumbs %}
 <ol class="flex flex-wrap items-center gap-2">
-    <li><a href="/admin/calendar" class="hover:text-slate-700 dark:hover:text-slate-300">Organizational Calendar</a></li>
+    <li><a href="/people/calendar" class="hover:text-slate-700 dark:hover:text-slate-300">Organization Calendar</a></li>
     <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">{{ 'Edit' if event else 'Create' }}</span></li>
 </ol>
 {% endblock %}
 
 {% block content %}
-{% set form_action = '/admin/calendar/events/' ~ event.event_id ~ '/edit' if event else '/admin/calendar/events/new' %}
+{% set form_action = '/people/calendar/events/' ~ event.event_id ~ '/edit' if event else '/people/calendar/events/new' %}
 <form action="{{ form_action }}" method="post" class="mx-auto max-w-5xl space-y-5"
       x-data="{
         allDay: {{ 'true' if form_data.all_day else 'false' }},
@@ -42,7 +42,7 @@
 
     <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div class="space-y-5">
-            <section class="admin-card p-5 sm:p-6">
+            <section class="card p-5 sm:p-6">
                 <h2 class="text-base font-semibold text-slate-900 dark:text-white">Event details</h2>
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
                     <div class="sm:col-span-2">
@@ -79,7 +79,7 @@
                 </div>
             </section>
 
-            <section class="admin-card p-5 sm:p-6">
+            <section class="card p-5 sm:p-6">
                 <div class="flex items-center justify-between">
                     <h2 class="text-base font-semibold text-slate-900 dark:text-white">Date and time</h2>
                     <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
@@ -107,7 +107,7 @@
                 <p class="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">Recurring events are intentionally out of scope for release 1. Each event is currently a single occurrence.</p>
             </section>
 
-            <section class="admin-card p-5 sm:p-6">
+            <section class="card p-5 sm:p-6">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h2 class="text-base font-semibold text-slate-900 dark:text-white">Participants</h2>
@@ -136,7 +136,7 @@
                         <span class="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">Verified</span>
                     </label>
                     {% else %}
-                    <p class="px-4 py-8 text-center text-sm text-slate-500">No employees currently meet the Nextcloud identity and employment rules.</p>
+                    <p class="px-4 py-8 text-center text-sm text-slate-500">No employees currently meet the employment and contact rules.</p>
                     {% endfor %}
                 </div>
                 {% if excluded_employees %}
@@ -151,9 +151,9 @@
         </div>
 
         <aside class="space-y-5">
-            <section class="admin-card p-5">
+            <section class="card p-5">
                 <h2 class="text-base font-semibold text-slate-900 dark:text-white">Reminders</h2>
-                <p class="mt-1 text-xs text-slate-500">Choose up to three. Nextcloud performs delivery.</p>
+                <p class="mt-1 text-xs text-slate-500">Choose up to three. Reminders appear in ERP; connected delivery is optional.</p>
                 <div class="mt-4 space-y-3">
                     {% for value, label in [(15, '15 minutes before'), (60, '1 hour before'), (1440, '1 day before'), (10080, '1 week before')] %}
                     <label class="flex items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
@@ -170,7 +170,7 @@
     </div>
 
     <div class="sticky bottom-4 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:flex-row sm:items-center sm:justify-between">
-        <a href="{{ '/admin/calendar/events/' ~ event.event_id if event else '/admin/calendar' }}" class="rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</a>
+        <a href="{{ '/people/calendar/events/' ~ event.event_id if event else '/people/calendar' }}" class="rounded-xl border border-slate-200 px-4 py-2.5 text-center text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Cancel</a>
         <div class="flex flex-col gap-2 sm:flex-row">
             {% if not event or event.business_status == 'DRAFT' %}
             <button type="submit" class="rounded-xl border border-accent-300 px-4 py-2.5 text-sm font-semibold text-accent-700 hover:bg-accent-50 dark:border-accent-700 dark:text-accent-300">Save draft</button>

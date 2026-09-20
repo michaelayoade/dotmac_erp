@@ -1,9 +1,9 @@
-{% extends "admin/base_admin.html" %}
+{% extends "people/base_people.html" %}
 {% from "components/macros.html" import icon_svg %}
 
 {% block page_title %}Organizational Calendar{% endblock %}
 
-{% block admin_breadcrumbs %}
+{% block breadcrumbs %}
 <ol class="flex flex-wrap items-center gap-2">
     <li><a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a></li>
     <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-3.5 w-3.5") }} <span aria-current="page">Organizational Calendar</span></li>
@@ -25,7 +25,7 @@
         </div>
         <div class="flex flex-wrap items-center gap-2">
             {% if can_create %}
-            <a href="/admin/calendar/events/new"
+            <a href="/people/calendar/events/new"
                class="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-accent-500/20 transition hover:bg-accent-600">
                 {{ icon_svg("plus", "h-4 w-4") }} Create event
             </a>
@@ -34,7 +34,7 @@
     </div>
 
     <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
-        <section class="admin-card overflow-hidden" aria-label="Monthly calendar">
+        <section class="card overflow-hidden shadow-sm" aria-label="Monthly calendar">
             <div class="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
                 <div class="flex items-center gap-2">
                     <a href="?month={{ previous_month }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Previous month">
@@ -59,14 +59,14 @@
                     {% for week in weeks %}
                     <div class="grid grid-cols-7 border-b border-slate-200 last:border-b-0 dark:border-slate-700">
                         {% for day in week %}
-                        <div class="min-h-32 border-r border-slate-200 p-1.5 last:border-r-0 dark:border-slate-700 {{ 'bg-slate-50/70 dark:bg-slate-900/35' if day.month != month_start.month else 'bg-white dark:bg-slate-900' }}">
+                        <div class="min-h-36 border-r border-slate-200 p-2 last:border-r-0 dark:border-slate-700 {{ 'bg-slate-50/70 dark:bg-slate-900/35' if day.month != month_start.month else 'bg-white dark:bg-slate-900' }}">
                             <div class="mb-1 flex items-center justify-between">
                                 <span class="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold {{ 'bg-accent-500 text-white' if day == today else 'text-slate-700 dark:text-slate-300' if day.month == month_start.month else 'text-slate-400 dark:text-slate-600' }}">{{ day.day }}</span>
                             </div>
                             <div class="space-y-1">
                                 {% for row in events_by_day[day][:4] %}
-                                <a href="/admin/calendar/events/{{ row.event.event_id }}"
-                                   class="block truncate rounded-md border-l-4 px-2 py-1 text-xs font-medium text-slate-800 shadow-sm transition hover:brightness-95 dark:text-white"
+                                <a href="/people/calendar/events/{{ row.event.event_id }}"
+                                   class="block truncate rounded-lg border-l-4 px-2 py-1.5 text-xs font-medium text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:brightness-95 dark:text-white"
                                    style="border-left-color: {{ row.event.color }}; background-color: {{ row.event.color }}22"
                                    title="{{ row.event.title }} — {{ row.display_time }}">
                                     <span class="mr-1 text-[10px] font-semibold text-slate-500 dark:text-slate-300">{{ row.display_time }}</span>{{ row.event.title }}
@@ -84,7 +84,7 @@
             </div>
         </section>
 
-        <aside class="admin-card flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden" aria-label="Event list">
+        <aside class="card flex max-h-[calc(100vh-10rem)] flex-col overflow-hidden shadow-sm" aria-label="Event list">
             <div class="border-b border-slate-200 px-4 py-4 dark:border-slate-700">
                 <div class="flex items-center justify-between">
                     <div>
@@ -97,7 +97,7 @@
             <div class="flex-1 space-y-2 overflow-y-auto p-3">
                 {% for row in event_rows %}
                 <article class="rounded-xl border border-slate-200 p-3 transition hover:border-accent-300 dark:border-slate-700 dark:hover:border-accent-700">
-                    <a href="/admin/calendar/events/{{ row.event.event_id }}" class="block">
+                    <a href="/people/calendar/events/{{ row.event.event_id }}" class="block">
                         <div class="flex items-start gap-2">
                             <span class="mt-1 h-3 w-3 flex-none rounded-full" style="background-color: {{ row.event.color }}"></span>
                             <div class="min-w-0 flex-1">
@@ -111,12 +111,12 @@
                     </a>
                     <div class="mt-3 flex items-center justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
                         {% if auth.has_permission('calendar:events:update_all') or (auth.has_permission('calendar:events:update_own') and row.event.created_by_id == auth.person_id) %}
-                        <a href="/admin/calendar/events/{{ row.event.event_id }}/edit" class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                        <a href="/people/calendar/events/{{ row.event.event_id }}/edit" class="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
                             {{ icon_svg("edit", "h-3.5 w-3.5") }} Edit
                         </a>
                         {% endif %}
                         {% if auth.has_permission('calendar:events:cancel_all') or (auth.has_permission('calendar:events:cancel_own') and row.event.created_by_id == auth.person_id) %}
-                        <form action="/admin/calendar/events/{{ row.event.event_id }}/delete" method="post" onsubmit="return confirm('Delete this event? Published participant copies will be cancelled.');">
+                        <form action="/people/calendar/events/{{ row.event.event_id }}/delete" method="post" onsubmit="return confirm('Delete this event? Published participant copies will be cancelled.');">
                             {{ request.state.csrf_form | safe }}
                             <input type="hidden" name="version" value="{{ row.event.version }}">
                             <button type="submit" class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">

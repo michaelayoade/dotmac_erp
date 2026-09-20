@@ -68,9 +68,9 @@ turning Talk into a link to an unrelated site.
 
 ## Identity and security
 
-Eligible participants must have an active employee and person record, a valid
-work email, and an ERP-bound Nextcloud user ID. Known failed Nextcloud
-provisioning identities are excluded.
+Eligible participants must have an active employee and person record plus a
+valid work email. A Nextcloud identity is optional; when present it enables
+Talk delivery, but it never blocks ERP calendar participation or in-app alerts.
 
 The Talk sender uses a dedicated low-privilege Nextcloud account and an app
 password. The credential belongs in the approved secret store and must never be
@@ -93,7 +93,7 @@ committed, written to project files, or reused for employee provisioning.
 1. Configure the deployment's public ERP origin.
 2. Configure the Notifications domain with the Nextcloud server, dedicated
    Talk sender, and its secret-store-backed app password.
-3. Keep employee-to-Nextcloud identity mappings current.
+3. Keep employee-to-Nextcloud identity mappings current when Talk delivery is desired.
 4. Run the reminder and Talk delivery jobs every minute.
 
 ## Acceptance gate

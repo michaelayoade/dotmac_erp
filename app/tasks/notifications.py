@@ -144,9 +144,36 @@ def process_due_calendar_reminders(
                 notification_type=NotificationType.REMINDER,
                 title=f"Calendar reminder: {event.title}",
                 message="This event is approaching.",
-                channel=NotificationChannel.NEXTCLOUD,
+                channel=NotificationChannel.IN_APP,
                 action_url=f"/people/self/calendar/events/{event.event_id}",
             )
+            talk_recipient_ids = list(
+                db.scalars(
+                    select(OrganizationCalendarParticipant.person_id).where(
+                        OrganizationCalendarParticipant.organization_id
+                        == event.organization_id,
+                        OrganizationCalendarParticipant.event_id == event.event_id,
+                        OrganizationCalendarParticipant.membership_status
+                        == ParticipantMembershipStatus.ACTIVE.value,
+                        OrganizationCalendarParticipant.nextcloud_user_id.is_not(None),
+                    )
+                ).all()
+            )
+            if talk_recipient_ids:
+                notifications.extend(
+                    notification_service.create_many(
+                        db,
+                        organization_id=event.organization_id,
+                        recipient_ids=talk_recipient_ids,
+                        entity_type=EntityType.SYSTEM,
+                        entity_id=event.event_id,
+                        notification_type=NotificationType.REMINDER,
+                        title=f"Calendar reminder: {event.title}",
+                        message="This event is approaching.",
+                        channel=NotificationChannel.NEXTCLOUD,
+                        action_url=f"/people/self/calendar/events/{event.event_id}",
+                    )
+                )
             reminder.dispatched_at = now
             results["processed"] += 1
             results["notifications_queued"] += len(notifications)

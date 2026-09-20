@@ -148,6 +148,16 @@
                 <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Attendance</span>
             </a>
 
+            {% if auth is defined and (auth.has_permission('calendar:events:access') or auth.has_permission('calendar:events:read_all')) %}
+            <a href="/people/calendar"
+               :aria-current="activeModule === 'calendar' ? 'page' : false"
+               :class="activeModule === 'calendar' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
+               class="flex items-center gap-3 rounded-lg border px-3 py-2.5 font-medium transition-all">
+                {{ icon_svg("calendar", "h-5 w-5 flex-shrink-0") }}
+                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Organization Calendar</span>
+            </a>
+            {% endif %}
+
             <a href="/people/recruit"
                :aria-current="activeModule === 'recruit' ? 'page' : false"
                :class="activeModule === 'recruit' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"

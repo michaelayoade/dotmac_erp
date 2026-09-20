@@ -44,6 +44,7 @@ def test_due_reminder_queues_talk_notifications_and_is_marked_dispatched() -> No
     db.scalars.side_effect = [
         SimpleNamespace(all=lambda: [reminder]),
         SimpleNamespace(all=lambda: recipient_ids),
+        SimpleNamespace(all=lambda: recipient_ids),
     ]
     db.get.return_value = event
     queued = [SimpleNamespace(), SimpleNamespace()]
@@ -57,12 +58,17 @@ def test_due_reminder_queues_talk_notifications_and_is_marked_dispatched() -> No
 
         result = process_due_calendar_reminders.run()
 
-    assert result == {"processed": 1, "notifications_queued": 2}
+    assert result == {"processed": 1, "notifications_queued": 4}
     assert reminder.dispatched_at is not None
     db.commit.assert_called_once_with()
-    service_type.return_value.create_many.assert_called_once()
-    call = service_type.return_value.create_many.call_args
-    assert call.kwargs["organization_id"] == organization_id
-    assert call.kwargs["recipient_ids"] == recipient_ids
-    assert call.kwargs["channel"] == NotificationChannel.NEXTCLOUD
-    assert call.kwargs["action_url"] == f"/people/self/calendar/events/{event_id}"
+    assert service_type.return_value.create_many.call_count == 2
+    calls = service_type.return_value.create_many.call_args_list
+    assert all(call.kwargs["organization_id"] == organization_id for call in calls)
+    assert calls[0].kwargs["recipient_ids"] == recipient_ids
+    assert calls[0].kwargs["channel"] == NotificationChannel.IN_APP
+    assert calls[1].kwargs["recipient_ids"] == recipient_ids
+    assert calls[1].kwargs["channel"] == NotificationChannel.NEXTCLOUD
+    assert all(
+        call.kwargs["action_url"] == f"/people/self/calendar/events/{event_id}"
+        for call in calls
+    )

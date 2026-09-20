@@ -38,7 +38,7 @@ READ_PERMISSIONS = ["calendar:events:access", "calendar:events:read_all"]
 UPDATE_PERMISSIONS = ["calendar:events:update_own", "calendar:events:update_all"]
 CANCEL_PERMISSIONS = ["calendar:events:cancel_own", "calendar:events:cancel_all"]
 
-router = APIRouter(prefix="/admin/calendar", tags=["organization-calendar-web"])
+router = APIRouter(prefix="/people/calendar", tags=["organization-calendar-web"])
 UTC = timezone.utc
 
 
@@ -120,7 +120,7 @@ def _calendar_context(
             day += timedelta(days=1)
     eligible, excluded = service.eligible_participants()
     context = base_context(
-        request, auth, "Organizational Calendar", active_module="settings", db=db
+        request, auth, "Organizational Calendar", active_module="calendar", db=db
     )
     context.update(
         {
@@ -211,7 +211,7 @@ def _form_context(
         request,
         auth,
         "Edit Calendar Event" if event else "Create Calendar Event",
-        active_module="settings",
+        active_module="calendar",
         db=db,
     )
     context.update(
@@ -381,7 +381,7 @@ async def create_event(
             add_everyone=add_everyone,
         )
         return RedirectResponse(
-            url=f"/admin/calendar/events/{event.event_id}?created=1", status_code=303
+            url=f"/people/calendar/events/{event.event_id}?created=1", status_code=303
         )
     except CalendarError as exc:
         _rollback_and_reprime(db, auth.organization_id)
@@ -518,7 +518,7 @@ async def update_event(
             add_everyone=add_everyone,
         )
         return RedirectResponse(
-            url=f"/admin/calendar/events/{updated.event_id}?updated=1", status_code=303
+            url=f"/people/calendar/events/{updated.event_id}?updated=1", status_code=303
         )
     except (CalendarError, ValueError) as exc:
         _rollback_and_reprime(db, auth.organization_id)
@@ -568,10 +568,10 @@ async def cancel_event(
     except CalendarConflictError as exc:
         _rollback_and_reprime(db, auth.organization_id)
         return RedirectResponse(
-            url=f"/admin/calendar/events/{event_id}?error={quote_plus(str(exc))}",
+            url=f"/people/calendar/events/{event_id}?error={quote_plus(str(exc))}",
             status_code=303,
         )
-    return RedirectResponse(url="/admin/calendar?cancelled=1", status_code=303)
+    return RedirectResponse(url="/people/calendar?cancelled=1", status_code=303)
 
 
 __all__ = ["router"]
