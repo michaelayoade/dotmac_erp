@@ -184,6 +184,7 @@ def expense_claims_list(
     search: str | None = None,
     employee_id: str | None = None,
     approver_id: str | None = None,
+    category_id: str | None = None,
     page: int | None = Query(None, ge=1),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
@@ -204,6 +205,7 @@ def expense_claims_list(
         search=search,
         employee_id=employee_id,
         approver_id=approver_id,
+        category_id=category_id,
         offset=offset,
         limit=limit,
     )
@@ -218,6 +220,7 @@ def expense_claims_export(
     search: str | None = None,
     employee_id: str | None = None,
     approver_id: str | None = None,
+    category_id: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db_for_org),
 ):
@@ -232,6 +235,7 @@ def expense_claims_export(
         search=search,
         employee_id=employee_id,
         approver_id=approver_id,
+        category_id=category_id,
     )
 
 
