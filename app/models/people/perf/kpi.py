@@ -16,13 +16,14 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    JSON,
     Numeric,
     String,
     Text,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -83,6 +84,15 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=False,
+    )
+
+    # Optional link to the database-managed departmental KPI configuration.
+    # Existing legacy KPIs remain valid with a null link.
+    department_template_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("perf.department_performance_template.template_id"),
+        nullable=True,
+        index=True,
     )
 
     # KRA (optional, can be standalone KPI)
@@ -177,6 +187,11 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
         nullable=True,
         comment="Supporting evidence or documentation",
     )
+    config_snapshot: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+        comment="Immutable scoring configuration copied when the KPI was assigned",
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -191,6 +206,7 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
     # Relationships
     employee: Mapped["Employee"] = relationship("Employee")
     kra: Mapped[Optional["KRA"]] = relationship("KRA")
+    department_template = relationship("DepartmentPerformanceTemplate")
 
     @property
     def effective_lower_is_better(self) -> bool:

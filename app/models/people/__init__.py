@@ -139,6 +139,8 @@ from app.models.people.payroll import (
 # Performance Models
 from app.models.people.perf import (
     KPI,
+    KPIConfigurationAudit,
+    KPIMeasurementHistory,
     KRA,
     Appraisal,
     AppraisalCycle,
@@ -306,6 +308,8 @@ __all__ = [
     "KRA",
     "KPI",
     "KPIStatus",
+    "KPIMeasurementHistory",
+    "KPIConfigurationAudit",
     "Appraisal",
     "AppraisalStatus",
     "AppraisalKRAScore",

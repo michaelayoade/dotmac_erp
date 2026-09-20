@@ -20,6 +20,7 @@ from fastapi import APIRouter
 
 from app.web.people.attendance import router as attendance_router
 from app.web.people.dashboard import router as dashboard_router
+from app.web.people.departmental_kpi import router as departmental_kpi_router
 from app.web.people.hr import router as hr_router
 from app.web.people.import_export import router as import_router
 from app.web.people.kpi_dashboard import router as kpi_dashboard_router
@@ -71,6 +72,7 @@ router.include_router(training_router)
 # performance mode; appraisal/PMS policy guards remain on their own routers.
 router.include_router(weekly_meeting_reports_router)
 router.include_router(kpi_dashboard_router)
+router.include_router(departmental_kpi_router)
 router.include_router(perf_router)
 
 # Self-service routes

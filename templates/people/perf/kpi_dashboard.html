@@ -27,7 +27,11 @@
                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Choose departments, reporting dates and summary cards. Save your preferred combinations as personal views.</p>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Access: {{ 'all departments in your organization' if organization_wide else 'only the active departments you head' }}. Saved views are private to your account.</p>
             </div>
-            {% if can_manage_kpis %}<a class="btn btn-secondary" href="/people/perf/goals">Manage Goals &amp; KPIs</a>{% endif %}
+            <div class="flex flex-wrap gap-2">
+                {% if can_manage_kpi_configurations %}<a class="btn btn-primary" href="/people/perf/kpi-dashboard/configurations">Configure departmental KPIs</a>{% endif %}
+                {% if can_manage_kpi_configurations %}<a class="btn btn-secondary" href="/people/perf/kpi-dashboard/department">Configured department view</a>{% endif %}
+                {% if can_manage_kpis %}<a class="btn btn-secondary" href="/people/perf/goals">Manage Goals &amp; KPIs</a>{% endif %}
+            </div>
         </div>
         <form method="get" action="{{ dashboard_url }}" class="mt-5 flex flex-wrap items-end gap-3">
             <div>
@@ -174,7 +178,7 @@
         <div class="text-sm text-slate-600 dark:text-slate-300">
             <p><strong>{{ 'All overdue open KPIs as of' if config.cohort == 'overdue' else ('Active-period overlap:' if config.cohort == 'active' else 'Period-end cohort:') }}</strong>
                 {% if config.cohort == 'overdue' %}{{ business_date.strftime('%d %b %Y') }}{% else %}{{ period_start.strftime('%d %b %Y') }} – {{ period_end.strftime('%d %b %Y') }}{% endif %}.</p>
-            <p class="mt-1 text-xs">Source: existing Goals &amp; KPIs records, including any existing metric syncs. Department attribution uses the employee's current department. These are current records, not historical snapshots or a combined employee performance score.</p>
+            <p class="mt-1 text-xs">Source: existing Goals &amp; KPIs records and configured departmental KPI periods, including metric syncs. Configured records preserve their target, weight, direction, thresholds and calculation snapshot for historical reporting.</p>
             <p class="mt-1 text-xs">Read at {{ queried_at.strftime('%d %b %Y %H:%M %Z') }}. Deadline checks use {{ organization_timezone }} ({{ business_date.isoformat() }}). A recent page read does not mean every actual has been updated recently.</p>
         </div>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -215,7 +219,7 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700 text-slate-700 dark:text-slate-200">
                         {% for employee in employee_rows %}<tr>
                             <th scope="row" class="px-5 py-3 text-left font-medium">
-                                {% if can_manage_kpis %}<a href="/people/perf/goals?employee_id={{ employee.employee_id }}" class="text-violet-700 dark:text-violet-300">{{ employee.employee_name or employee.employee_code }}</a>{% else %}{{ employee.employee_name or employee.employee_code }}{% endif %}
+                                {% if can_manage_kpi_configurations %}<a href="/people/perf/kpi-dashboard/employees/{{ employee.employee_id }}?period_start={{ period_start }}&amp;period_end={{ period_end }}" class="text-violet-700 dark:text-violet-300">{{ employee.employee_name or employee.employee_code }}</a>{% elif can_manage_kpis %}<a href="/people/perf/goals?employee_id={{ employee.employee_id }}" class="text-violet-700 dark:text-violet-300">{{ employee.employee_name or employee.employee_code }}</a>{% else %}{{ employee.employee_name or employee.employee_code }}{% endif %}
                                 <div class="mt-1 text-xs font-mono">{{ employee.employee_code }}</div>
                                 {% if employee.unscorable %}<div class="mt-1 text-xs">Review measurement setup: {{ employee.unscorable }}</div>{% endif %}
                                 {% if employee.assigned == 0 %}<div class="mt-1 text-xs">No KPI records in date scope</div>{% elif employee.tracked == 0 %}<div class="mt-1 text-xs">No records match the current status/name filters</div>{% endif %}
