@@ -722,15 +722,7 @@ class SubExpenseDestinationVerifyPayload(BaseModel):
     mode: Literal["erp_profile", "expense_override"]
     bank_code: str | None = Field(None, min_length=2, max_length=20)
     account_number: str | None = Field(None, min_length=6, max_length=30)
-    beneficiary_name: str | None = Field(
-        None,
-        min_length=2,
-        max_length=150,
-        description=(
-            "Deprecated rolling-deployment input; ERP ignores this value and uses "
-            "the bank-resolved account name."
-        ),
-    )
+    beneficiary_name: str | None = Field(None, min_length=2, max_length=150)
 
     @model_validator(mode="after")
     def validate_destination_inputs(self) -> SubExpenseDestinationVerifyPayload:
