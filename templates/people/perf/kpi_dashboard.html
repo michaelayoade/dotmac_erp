@@ -23,8 +23,8 @@
     <section class="card p-6" aria-labelledby="kpi-heading">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-                <h2 id="kpi-heading" class="font-display text-xl font-semibold text-slate-900 dark:text-white">Department KPI overview</h2>
-                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Choose departments, reporting dates and summary cards. Save your preferred combinations as personal views.</p>
+                <h2 id="kpi-heading" class="font-display text-xl font-semibold text-slate-900 dark:text-white">KPI Dashboard</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Review KPI health, employee follow-up and measurement coverage from one place.</p>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Access: {{ 'all departments in your organization' if organization_wide else 'only the active departments you head' }}. Saved views are private to your account.</p>
             </div>
             <div class="flex flex-wrap gap-2">
@@ -51,35 +51,28 @@
     </section>
 
     <form method="get" action="{{ dashboard_url }}" class="card p-6 space-y-5" aria-label="Dashboard filters"
+          x-data='{ period: {{ config.period | tojson }} }'
           hx-get="{{ dashboard_url }}" hx-target="#kpi-workspace" hx-select="#kpi-workspace" hx-swap="outerHTML" hx-push-url="true">
         <input type="hidden" name="configured" value="1">
         {% if selected_view_id %}<input type="hidden" name="view_id" value="{{ selected_view_id }}">{% endif %}
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div>
+                <label for="kpi-department" class="form-label">Department</label>
+                <select name="department_id" id="kpi-department" class="form-select">
+                    <option value="" {% if not config.department_ids %}selected{% endif %}>All authorized departments</option>
+                    {% for department in departments %}
+                    <option value="{{ department.id }}" {% if config.department_ids|length == 1 and department.id == config.department_ids[0] %}selected{% endif %}>{{ department.name }}{% if not department.active %} (inactive){% endif %}</option>
+                    {% else %}<option disabled>No departments configured</option>{% endfor %}
+                </select>
+                {% if config.department_ids|length > 1 %}<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Multiple departments are saved in this view. Choose one to replace that selection.</p>{% endif %}
+            </div>
             <div>
                 <label for="kpi-period" class="form-label">Reporting period</label>
-                <select name="period" id="kpi-period" class="form-select">
+                <select name="period" id="kpi-period" class="form-select" x-model="period">
                     {% for key, label in period_options.items() %}
                     <option value="{{ key }}" {% if config.period == key %}selected{% endif %}>{{ label }}</option>
                     {% else %}<option disabled>No reporting periods available</option>{% endfor %}
                 </select>
-            </div>
-            <div>
-                <label for="kpi-start" class="form-label">Custom start date</label>
-                <input type="date" id="kpi-start" name="start_date" value="{{ config.start_date }}" class="form-input" aria-describedby="custom-dates-help">
-            </div>
-            <div>
-                <label for="kpi-end" class="form-label">Custom end date</label>
-                <input type="date" id="kpi-end" name="end_date" value="{{ config.end_date }}" class="form-input" aria-describedby="custom-dates-help">
-            </div>
-            <div>
-                <label for="kpi-search" class="form-label">KPI name</label>
-                <input type="search" id="kpi-search" name="search" maxlength="100" value="{{ config.search }}" class="form-input" placeholder="Search recorded KPIs">
-            </div>
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div>
-                <label for="employee-search" class="form-label">Employee name or code</label>
-                <input id="employee-search" name="employee_search" type="search" maxlength="100" value="{{ config.employee_search }}" class="form-input" placeholder="Find an employee">
             </div>
             <div>
                 <label for="kpi-cohort" class="form-label">KPI date scope</label>
@@ -90,35 +83,43 @@
                 </select>
             </div>
             <div>
-                <label for="employee-attention" class="form-label">Employee review</label>
-                <select id="employee-attention" name="attention" class="form-select">
-                    <option value="all" {% if config.attention == 'all' %}selected{% endif %}>All active employees</option>
-                    <option value="needs_attention" {% if config.attention == 'needs_attention' %}selected{% endif %}>Needs attention</option>
-                </select>
+                <label for="employee-search" class="form-label">Employee</label>
+                <input id="employee-search" name="employee_search" type="search" maxlength="100" value="{{ config.employee_search }}" class="form-input" placeholder="Name or employee code">
             </div>
             <div>
-                <label for="show-kpi-charts" class="form-label">Charts</label>
-                <select id="show-kpi-charts" name="show_charts" class="form-select">
-                    <option value="1" {% if config.show_charts %}selected{% endif %}>Show charts</option>
-                    <option value="0" {% if not config.show_charts %}selected{% endif %}>Tables only</option>
-                </select>
+                <label for="kpi-search" class="form-label">KPI name</label>
+                <input type="search" id="kpi-search" name="search" maxlength="100" value="{{ config.search }}" class="form-input" placeholder="Search recorded KPIs">
             </div>
         </div>
-        <p id="custom-dates-help" class="text-xs text-slate-500 dark:text-slate-400">Dates apply only when Custom dates is selected. Maximum range: 366 days. Due scope uses period-end dates; Active scope uses overlapping periods. All overdue ignores the reporting dates and includes open KPIs with a past deadline. Employee review filters only the employee table, not the KPI totals or charts.</p>
-        <fieldset>
-            <legend class="form-label">Departments</legend>
-            <p class="mb-2 text-xs text-slate-500 dark:text-slate-400">Select one or several. Leave all unchecked to include every department you are authorized to view.</p>
-            <div class="flex flex-wrap gap-x-5 gap-y-4">
-                {% for department in departments %}
-                <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                    <input type="checkbox" name="department_id" value="{{ department.id }}" {% if department.id in config.department_ids %}checked{% endif %}>
-                    {{ department.name }}{% if not department.active %} (inactive){% endif %}
-                </label>
-                {% else %}<p class="text-sm text-slate-500 dark:text-slate-400">No departments configured. Organization-wide results may still contain unassigned KPI owners.</p>{% endfor %}
+        <div x-show="period === 'custom'" x-cloak class="grid gap-4 sm:grid-cols-2" aria-live="polite">
+            <div>
+                <label for="kpi-start" class="form-label">Custom start date</label>
+                <input type="date" id="kpi-start" name="start_date" value="{{ config.start_date }}" class="form-input" aria-describedby="custom-dates-help">
             </div>
-        </fieldset>
+            <div>
+                <label for="kpi-end" class="form-label">Custom end date</label>
+                <input type="date" id="kpi-end" name="end_date" value="{{ config.end_date }}" class="form-input" aria-describedby="custom-dates-help">
+            </div>
+        </div>
+        <p id="custom-dates-help" class="text-xs text-slate-500 dark:text-slate-400">Custom dates support a maximum 366-day range. Due uses period-end dates; Active uses overlapping periods; Overdue ignores reporting dates and includes open KPIs past their deadline. Employee review filters only the employee table.</p>
         <details>
-            <summary class="cursor-pointer text-sm font-medium text-violet-700 dark:text-violet-300">Customize statuses and summary cards</summary>
+            <summary class="cursor-pointer text-sm font-medium text-violet-700 dark:text-violet-300">Advanced filters and display</summary>
+            <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                    <label for="employee-attention" class="form-label">Employee review</label>
+                    <select id="employee-attention" name="attention" class="form-select">
+                        <option value="all" {% if config.attention == 'all' %}selected{% endif %}>All active employees</option>
+                        <option value="needs_attention" {% if config.attention == 'needs_attention' %}selected{% endif %}>Needs attention</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="show-kpi-charts" class="form-label">Charts</label>
+                    <select id="show-kpi-charts" name="show_charts" class="form-select">
+                        <option value="1" {% if config.show_charts %}selected{% endif %}>Show charts</option>
+                        <option value="0" {% if not config.show_charts %}selected{% endif %}>Tables only</option>
+                    </select>
+                </div>
+            </div>
             <fieldset class="mt-4">
                 <legend class="form-label">Recorded KPI statuses</legend>
                 <div class="flex flex-wrap gap-x-5 gap-y-4">
