@@ -579,9 +579,10 @@ class TestSubExpenseBankDirectory:
         employee.bank_name = "OPay"
         employee.bank_branch_code = opay_bank.bank_sort_code
         paystack = MagicMock()
+        employee.bank_account_name = "Akande Sanmi"
         paystack.resolve_account.return_value = ResolveAccountResponse(
             account_number=employee.bank_account_number,
-            account_name=employee.bank_account_name,
+            account_name="AKANDE SANMI BAMIDELE",
             bank_id=1,
         )
         paystack_context = MagicMock()
@@ -619,10 +620,55 @@ class TestSubExpenseBankDirectory:
         assert profile.bank_code == "999992"
         assert profile.bank_name == opay_bank.bank_name
         assert verified.bank_code == "999992"
+        assert verified.verified_beneficiary_name == "AKANDE SANMI BAMIDELE"
         paystack.resolve_account.assert_called_once_with(
             account_number=employee.bank_account_number,
             bank_code="999992",
         )
+
+    def test_override_uses_the_bank_returned_name_without_user_name_input(
+        self,
+        service,
+        employee,
+        opay_bank,
+        monkeypatch,
+    ):
+        paystack = MagicMock()
+        paystack.resolve_account.return_value = ResolveAccountResponse(
+            account_number="0123456789",
+            account_name="ELUWOLE ADENIYI HEZEKIEL",
+            bank_id=1,
+        )
+        paystack_context = MagicMock()
+        paystack_context.__enter__.return_value = paystack
+        monkeypatch.setattr(
+            service,
+            "_require_transfer_config",
+            lambda _payment_service: MagicMock(),
+        )
+        monkeypatch.setattr(
+            sub_expenses,
+            "PaystackClient",
+            lambda _config: paystack_context,
+        )
+        monkeypatch.setattr(
+            sub_expenses,
+            "encrypt_credential",
+            lambda _value, _db: "enc:" + "x" * 32,
+        )
+
+        verified = service.verify_expense_destination(
+            employee.organization_id,
+            SubExpenseDestinationVerifyPayload(
+                requested_by_email=employee.person.email,
+                source_claim_id=uuid.uuid4(),
+                mode="expense_override",
+                bank_code=opay_bank.bank_sort_code,
+                account_number="0123456789",
+            ),
+        )
+
+        assert verified.verified_beneficiary_name == "ELUWOLE ADENIYI HEZEKIEL"
 
     def test_legacy_code_fails_closed_until_employee_reselects_the_bank(
         self,
