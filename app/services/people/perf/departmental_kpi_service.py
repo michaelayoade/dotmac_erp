@@ -305,7 +305,10 @@ class DepartmentalKPIService:
                 issues.append("Inactive")
             if config.effective_end and config.effective_end < today:
                 issues.append("Expired")
-            if config.metric_source_key and config.metric_source_key not in AUTOMATIC_DATA_SOURCES:
+            if (
+                config.metric_source_key
+                and config.metric_source_key not in AUTOMATIC_DATA_SOURCES
+            ):
                 issues.append("Unsupported source")
             if config.target_value is None or config.target_value <= 0:
                 issues.append("Missing target")
@@ -1781,8 +1784,7 @@ class DepartmentalKPIService:
         if department_ids:
             query = query.join(
                 DepartmentPerformanceTemplate,
-                KPI.department_template_id
-                == DepartmentPerformanceTemplate.template_id,
+                KPI.department_template_id == DepartmentPerformanceTemplate.template_id,
             ).where(DepartmentPerformanceTemplate.department_id.in_(department_ids))
         if employee_search.strip():
             query = query.join(Employee, KPI.employee_id == Employee.employee_id)
@@ -1812,8 +1814,8 @@ class DepartmentalKPIService:
             ).all()
         )
         latest: dict[UUID, KPIMeasurementHistory] = {}
-        for history in histories:
-            latest.setdefault(history.kpi_id, history)
+        for measurement in histories:
+            latest.setdefault(measurement.kpi_id, measurement)
 
         allowed_states = {
             "missing",
@@ -1828,7 +1830,7 @@ class DepartmentalKPIService:
 
         rows: list[dict[str, Any]] = []
         for record in records:
-            history = latest.get(record.kpi_id)
+            history: KPIMeasurementHistory | None = latest.get(record.kpi_id)
             if history and history.approval_status in {"REJECTED", "RETURNED"}:
                 queue_state = "returned"
             elif history and history.approval_status == "SUBMITTED":
