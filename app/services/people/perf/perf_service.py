@@ -712,7 +712,7 @@ class PerformanceService:
             kpi.department_template is not None
             and kpi.department_template.scorecard_perspective in SCORECARD_PERSPECTIVES
         ):
-            return kpi.department_template.scorecard_perspective
+            return cast(str, kpi.department_template.scorecard_perspective)
         for source in (kpi.notes, kpi.description):
             if not source:
                 continue
