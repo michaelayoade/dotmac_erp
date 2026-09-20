@@ -112,22 +112,6 @@ def _masked_account_number(account_number: str) -> str:
     return f"{'*' * max(2, len(account_number) - len(suffix))}{suffix}"
 
 
-def _normalized_name_tokens(value: str) -> set[str]:
-    return {
-        token
-        for token in "".join(
-            character.upper() if character.isalnum() else " " for character in value
-        ).split()
-        if len(token) > 1
-    }
-
-
-def _beneficiary_matches(entered: str, verified: str) -> bool:
-    entered_tokens = _normalized_name_tokens(entered)
-    verified_tokens = _normalized_name_tokens(verified)
-    return bool(entered_tokens) and entered_tokens == verified_tokens
-
-
 class SubExpenseReceiptError(Exception):
     """Transport-neutral refusal of a Sub receipt delivery."""
 
@@ -255,9 +239,6 @@ class _ExpenseSyncMixin(_SubSyncBase):
         employee = self._require_employee_by_email(org_id, requested_by_email)
         bank_code = (employee.bank_branch_code or "").strip()
         account_number = (employee.bank_account_number or "").strip()
-        beneficiary_name = (
-            employee.bank_account_name or employee.full_name or ""
-        ).strip()
         bank = (
             OrgBankDirectoryService(self.db).get_active_bank_by_sort_code(
                 org_id,
@@ -266,14 +247,17 @@ class _ExpenseSyncMixin(_SubSyncBase):
             if bank_code
             else None
         )
-        if bank is None or not account_number or not beneficiary_name:
+        if bank is None or not account_number:
             return SubExpenseProfileDestinationResponse(available=False)
         return SubExpenseProfileDestinationResponse(
             available=True,
             bank_code=bank.bank_sort_code,
             bank_name=bank.bank_name,
             masked_account_number=_masked_account_number(account_number),
-            beneficiary_name=beneficiary_name,
+            beneficiary_name=(
+                employee.bank_account_name or employee.full_name or ""
+            ).strip()
+            or None,
         )
 
     def verify_expense_destination(
@@ -286,10 +270,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
         if data.mode == "erp_profile":
             bank_code = (employee.bank_branch_code or "").strip()
             account_number = (employee.bank_account_number or "").strip()
-            beneficiary_name = (
-                employee.bank_account_name or employee.full_name or ""
-            ).strip()
-            if not bank_code or not account_number or not beneficiary_name:
+            if not bank_code or not account_number:
                 raise HTTPException(
                     status_code=422,
                     detail="The ERP employee bank profile is incomplete",
@@ -297,7 +278,6 @@ class _ExpenseSyncMixin(_SubSyncBase):
         else:
             bank_code = str(data.bank_code or "").strip()
             account_number = str(data.account_number or "").strip()
-            beneficiary_name = str(data.beneficiary_name or "").strip()
 
         if not account_number.isdigit() or not 6 <= len(account_number) <= 30:
             raise HTTPException(status_code=422, detail="Account number is invalid")
@@ -327,12 +307,12 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 status_code=422,
                 detail="The bank account could not be verified",
             ) from exc
-        if not _beneficiary_matches(beneficiary_name, resolved.account_name):
+        resolved_account_name = resolved.account_name.strip()
+        if not resolved_account_name:
             raise HTTPException(
                 status_code=422,
-                detail="Beneficiary name does not match the verified account name",
+                detail="The bank account could not be verified",
             )
-
         now = datetime.now(UTC)
         expires_at = now + _DESTINATION_TOKEN_TTL
         token_payload = {
@@ -344,7 +324,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
             "bank_code": bank.bank_sort_code,
             "bank_name": bank.bank_name,
             "account_number": account_number,
-            "verified_beneficiary_name": resolved.account_name,
+            "verified_beneficiary_name": resolved_account_name,
             "verified_at": now.isoformat(),
             "expires_at": expires_at.isoformat(),
         }
@@ -358,7 +338,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
             bank_code=bank.bank_sort_code,
             bank_name=bank.bank_name,
             masked_account_number=_masked_account_number(account_number),
-            verified_beneficiary_name=resolved.account_name,
+            verified_beneficiary_name=resolved_account_name,
             verified_at=now,
             expires_at=expires_at,
         )

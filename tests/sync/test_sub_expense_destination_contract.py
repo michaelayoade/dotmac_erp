@@ -13,14 +13,23 @@ from app.schemas.sync.sub_operational import (
 from app.services.sync.sub import expenses
 
 
-def test_override_requires_bank_account_and_beneficiary() -> None:
+def test_override_requires_bank_and_account_but_not_an_entered_name() -> None:
+    result = SubExpenseDestinationVerifyPayload(
+        requested_by_email="tech@example.com",
+        source_claim_id=uuid4(),
+        mode="expense_override",
+        bank_code="058",
+        account_number="0123456789",
+    )
+
+    assert result.beneficiary_name is None
+
     with pytest.raises(ValidationError):
         SubExpenseDestinationVerifyPayload(
             requested_by_email="tech@example.com",
             source_claim_id=uuid4(),
             mode="expense_override",
             bank_code="058",
-            account_number="0123456789",
         )
 
 

@@ -75,12 +75,16 @@ active reimbursement bank directory from `settings.org_bank_directory`, and
 masked employee profile.
 `POST /api/v1/sync/sub/expense-payment-destinations/verify` resolves the
 account with Paystack without creating a recipient, intent, or transfer.
+The caller supplies only the selected bank and account number for an override.
+The Paystack-resolved account name is the verified beneficiary displayed for
+both profile and override destinations; ERP does not compare it with the
+employee's HR/display name or a caller-entered duplicate name.
 It returns an encrypted token bound to organization, employee, claim UUID, and
 a 30-minute expiry. No full stored profile account is returned to Sub.
 
 Validation failures use HTTP 422 with FastAPI's `detail` field. The detail
 identifies an unmatched ERP employee, incomplete profile, invalid account,
-inactive bank, failed account resolution, beneficiary mismatch, ineligible
+inactive bank, failed account resolution, ineligible
 approver, invalid or expired token, or changed idempotent submission. Sub must
 store the detailed response in restricted delivery evidence, show a safe
 field-level message to the technician, and never log the account number or
