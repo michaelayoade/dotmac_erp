@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
-from sqlalchemy import extract, func, or_, select
+from sqlalchemy import and_, extract, func, or_, select
 
 from app.models.expense import (
     CashAdvance,
@@ -282,6 +282,7 @@ class ExpenseReportingMixin(ExpenseServiceBase):
 
         results = self.db.execute(
             select(
+                ExpenseCategory.category_id,
                 ExpenseCategory.category_code,
                 ExpenseCategory.category_name,
                 func.count(ExpenseClaimItem.item_id).label("item_count"),
@@ -290,11 +291,20 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             )
             .join(
                 ExpenseClaimItem,
-                ExpenseClaimItem.category_id == ExpenseCategory.category_id,
+                and_(
+                    ExpenseClaimItem.category_id == ExpenseCategory.category_id,
+                    ExpenseClaimItem.organization_id == org_id,
+                ),
             )
-            .join(ExpenseClaim, ExpenseClaim.claim_id == ExpenseClaimItem.claim_id)
+            .join(
+                ExpenseClaim,
+                and_(
+                    ExpenseClaim.claim_id == ExpenseClaimItem.claim_id,
+                    ExpenseClaim.organization_id == org_id,
+                ),
+            )
             .where(
-                ExpenseClaim.organization_id == org_id,
+                ExpenseCategory.organization_id == org_id,
                 ExpenseClaim.claim_date >= start_date,
                 ExpenseClaim.claim_date <= end_date,
                 ExpenseClaim.status.in_(REPORTABLE_EXPENSE_CLAIM_STATUSES),
@@ -315,6 +325,7 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             approved = row.approved_amount or Decimal("0")
             categories.append(
                 {
+                    "category_id": row.category_id,
                     "category_code": row.category_code,
                     "category_name": row.category_name,
                     "item_count": row.item_count,
@@ -325,18 +336,47 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             total_claimed += claimed
             total_approved += approved
 
-        for category in categories:
-            category["percentage"] = (
-                float(category["claimed_amount"] / total_claimed * 100)
-                if total_claimed > 0
-                else 0.0
+        if total_claimed > 0:
+            for category in categories:
+                category["percentage"] = (
+                    category["claimed_amount"] / total_claimed * Decimal("100")
+                ).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+            displayed_total = sum(
+                (category["percentage"] for category in categories),
+                Decimal("0"),
             )
+            if categories:
+                categories[0]["percentage"] += Decimal("100.0") - displayed_total
+        else:
+            for category in categories:
+                category["percentage"] = Decimal("0.0")
+
+        overall_claimed, overall_approved = self.db.execute(
+            select(
+                func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0),
+                func.coalesce(func.sum(ExpenseClaim.total_approved_amount), 0),
+            ).where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.claim_date >= start_date,
+                ExpenseClaim.claim_date <= end_date,
+                ExpenseClaim.status.in_(REPORTABLE_EXPENSE_CLAIM_STATUSES),
+            )
+        ).one()
+        claimed_difference = total_claimed - overall_claimed
+        approved_difference = total_approved - overall_approved
         return {
             "start_date": start_date,
             "end_date": end_date,
             "categories": categories,
             "total_claimed": total_claimed,
             "total_approved": total_approved,
+            "reconciliation": {
+                "is_reconciled": claimed_difference == 0 and approved_difference == 0,
+                "overall_claimed": overall_claimed,
+                "overall_approved": overall_approved,
+                "claimed_difference": claimed_difference,
+                "approved_difference": approved_difference,
+            },
         }
 
     def get_expense_by_employee_report(

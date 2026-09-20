@@ -30,6 +30,16 @@
     ) %}{% endcall %}
 
     <div id="results-container" class="space-y-8">
+    {% if not report.reconciliation.is_reconciled %}
+    <div role="alert" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+        <p class="font-semibold">Category totals need reconciliation</p>
+        <p class="mt-1">
+            Category lines total {{ "{:,.2f}".format(report.total_claimed) }} claimed and {{ "{:,.2f}".format(report.total_approved) }} reimbursed,
+            while the matching claims total {{ "{:,.2f}".format(report.reconciliation.overall_claimed) }} claimed and {{ "{:,.2f}".format(report.reconciliation.overall_approved) }} reimbursed.
+            Review the affected claim items before relying on this breakdown.
+        </p>
+    </div>
+    {% endif %}
     {% set report_hero_stats = [
         {"label": "Categories", "value": report.categories | length, "icon": "tag", "icon_bg": "bg-amber-100 dark:bg-amber-900/30", "icon_class": "h-6 w-6 text-amber-600 dark:text-amber-400"},
         {"label": "Total Claimed", "value": "{:,.2f}".format(report.total_claimed), "icon": "currency", "icon_bg": "bg-blue-100 dark:bg-blue-900/30", "icon_class": "h-6 w-6 text-blue-600 dark:text-blue-400", "value_class": "text-slate-900 dark:text-white font-mono"},
@@ -57,9 +67,12 @@
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for cat in report.categories %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer" onclick="window.location='/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}&search={{ cat.category_name | urlencode }}'">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="px-5 py-3">
-                            <div class="font-medium text-slate-900 dark:text-white">{{ cat.category_name }}</div>
+                            <a href="/expense/claims/list?start_date={{ start_date }}&end_date={{ end_date }}&category_id={{ cat.category_id }}"
+                               class="font-medium text-slate-900 hover:text-amber-700 hover:underline dark:text-white dark:hover:text-amber-300">
+                                {{ cat.category_name }}
+                            </a>
                             <div class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ cat.category_code }}</div>
                         </td>
                         <td class="px-5 py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -96,7 +109,7 @@
                         </td>
                         <td class="px-5 py-3 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(report.total_claimed) }}</td>
                         <td class="px-5 py-3 text-right font-mono text-green-600 dark:text-green-400">{{ "{:,.2f}".format(report.total_approved) }}</td>
-                        <td class="px-5 py-3 text-right text-slate-500 dark:text-slate-400">100%</td>
+                        <td class="px-5 py-3 text-right text-slate-500 dark:text-slate-400">100.0%</td>
                         <td class="px-5 py-3"></td>
                     </tr>
                 </tfoot>

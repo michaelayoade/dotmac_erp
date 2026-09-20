@@ -133,7 +133,6 @@ def test_expense_reports_exclude_rejected_claims_from_spend_totals(db_session, e
         Decimal("200.00"),
         ExpenseClaimStatus.REJECTED,
     )
-
     db_session.add_all(
         [
             approvable_person,
@@ -195,6 +194,156 @@ def test_expense_reports_exclude_rejected_claims_from_spend_totals(db_session, e
     assert trends["months"][0]["claimed_amount"] == Decimal("100.00")
 
 
+def test_category_breakdown_reconciles_multiple_categories_and_rounding(
+    db_session, engine
+):
+    _ensure_hr_tables(engine)
+    org_id = uuid.uuid4()
+    person = _make_person(org_id, "category-reconciliation@example.com")
+    employee = _make_employee(org_id, person, "EMP-CAT")
+    travel = ExpenseCategory(
+        category_id=uuid.uuid4(),
+        organization_id=org_id,
+        category_code="TRAVEL",
+        category_name="Travel",
+        is_active=True,
+    )
+    meals = ExpenseCategory(
+        category_id=uuid.uuid4(),
+        organization_id=org_id,
+        category_code="MEALS",
+        category_name="Meals",
+        is_active=True,
+    )
+    claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-CAT-001",
+        Decimal("150.00"),
+        ExpenseClaimStatus.APPROVED,
+        approved_amount=Decimal("120.00"),
+    )
+    db_session.add_all(
+        [
+            person,
+            employee,
+            travel,
+            meals,
+            claim,
+            _make_item(
+                org_id,
+                claim.claim_id,
+                travel.category_id,
+                Decimal("100.00"),
+                approved_amount=Decimal("80.00"),
+            ),
+            _make_item(
+                org_id,
+                claim.claim_id,
+                meals.category_id,
+                Decimal("50.00"),
+                approved_amount=Decimal("40.00"),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    svc = ExpenseService(db_session)
+    report = svc.get_expense_by_category_report(org_id)
+
+    assert report["total_claimed"] == Decimal("150.00")
+    assert report["total_approved"] == Decimal("120.00")
+    assert report["reconciliation"]["is_reconciled"] is True
+    assert {row["category_id"] for row in report["categories"]} == {
+        travel.category_id,
+        meals.category_id,
+    }
+    assert sum(
+        (row["percentage"] for row in report["categories"]),
+        Decimal("0"),
+    ) == Decimal("100.0")
+
+    claim.total_claimed_amount = Decimal("160.00")
+    claim.total_approved_amount = Decimal("125.00")
+    db_session.commit()
+
+    mismatched = svc.get_expense_by_category_report(org_id)
+    assert mismatched["reconciliation"] == {
+        "is_reconciled": False,
+        "overall_claimed": Decimal("160.00"),
+        "overall_approved": Decimal("125.00"),
+        "claimed_difference": Decimal("-10.00"),
+        "approved_difference": Decimal("-5.00"),
+    }
+
+
+def test_claim_category_filter_returns_claims_containing_that_category(
+    db_session, engine
+):
+    _ensure_hr_tables(engine)
+    org_id = uuid.uuid4()
+    person = _make_person(org_id, "category-filter@example.com")
+    employee = _make_employee(org_id, person, "EMP-FILTER")
+    travel = ExpenseCategory(
+        category_id=uuid.uuid4(),
+        organization_id=org_id,
+        category_code="TRAVEL-FILTER",
+        category_name="Travel Filter",
+        is_active=True,
+    )
+    meals = ExpenseCategory(
+        category_id=uuid.uuid4(),
+        organization_id=org_id,
+        category_code="MEALS-FILTER",
+        category_name="Meals Filter",
+        is_active=True,
+    )
+    travel_claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-FILTER-TRAVEL",
+        Decimal("40.00"),
+        ExpenseClaimStatus.SUBMITTED,
+    )
+    meals_claim = _make_claim(
+        org_id,
+        employee.employee_id,
+        "CLM-FILTER-MEALS",
+        Decimal("30.00"),
+        ExpenseClaimStatus.SUBMITTED,
+    )
+    db_session.add_all(
+        [
+            person,
+            employee,
+            travel,
+            meals,
+            travel_claim,
+            meals_claim,
+            _make_item(
+                org_id,
+                travel_claim.claim_id,
+                travel.category_id,
+                Decimal("40.00"),
+            ),
+            _make_item(
+                org_id,
+                meals_claim.claim_id,
+                meals.category_id,
+                Decimal("30.00"),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    result = ExpenseService(db_session).list_claims(
+        org_id,
+        category_id=travel.category_id,
+    )
+
+    assert [claim.claim_id for claim in result.items] == [travel_claim.claim_id]
+
+
 def test_expense_dashboard_spend_helpers_exclude_rejected_claims(db_session, engine):
     _ensure_hr_tables(engine)
     org_id = uuid.uuid4()
@@ -226,6 +375,14 @@ def test_expense_dashboard_spend_helpers_exclude_rejected_claims(db_session, eng
         Decimal("300.00"),
         ExpenseClaimStatus.REJECTED,
     )
+    approved_item = _make_item(
+        org_id,
+        approved_claim.claim_id,
+        category.category_id,
+        Decimal("75.00"),
+        approved_amount=Decimal("75.00"),
+    )
+    approved_item.expense_date = date(2020, 1, 1)
 
     db_session.add_all(
         [
@@ -236,13 +393,7 @@ def test_expense_dashboard_spend_helpers_exclude_rejected_claims(db_session, eng
             category,
             approved_claim,
             rejected_claim,
-            _make_item(
-                org_id,
-                approved_claim.claim_id,
-                category.category_id,
-                Decimal("75.00"),
-                approved_amount=Decimal("75.00"),
-            ),
+            approved_item,
             _make_item(
                 org_id,
                 rejected_claim.claim_id,
@@ -258,7 +409,7 @@ def test_expense_dashboard_spend_helpers_exclude_rejected_claims(db_session, eng
     assert top_spenders[0]["amount"] == 75.0
 
     category_distribution = expense_dashboard_service._get_category_distribution(
-        db_session, org_id, None
+        db_session, org_id, date.today()
     )
     assert len(category_distribution) == 1
     assert category_distribution[0]["amount"] == 75.0

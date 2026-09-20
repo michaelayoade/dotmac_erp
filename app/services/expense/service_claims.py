@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.models.expense import (
@@ -71,6 +71,92 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         return description
 
     @staticmethod
+    def _validate_approved_amount(
+        item: ExpenseClaimItem,
+        value: object,
+    ) -> Decimal:
+        try:
+            amount = Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ValidationError("Approved amount must be a valid number.") from exc
+        if not amount.is_finite() or amount < 0:
+            raise ValidationError("Approved amount cannot be negative.")
+        if amount > item.claimed_amount:
+            raise ValidationError("Approved amount cannot exceed the claimed amount.")
+        return amount
+
+    def _validate_approval_corrections(
+        self,
+        org_id: UUID,
+        claim: ExpenseClaim,
+        corrections: list[dict] | None,
+    ) -> dict[str, dict[str, Any]]:
+        if not corrections:
+            return {}
+
+        items_by_id = {str(item.item_id): item for item in claim.items}
+        validated: dict[str, dict[str, Any]] = {}
+        for correction in corrections:
+            item_key = str(correction.get("item_id") or "")
+            item = items_by_id.get(item_key)
+            if item is None:
+                raise ValidationError(
+                    "Corrected expense item does not belong to claim."
+                )
+            if item_key in validated:
+                raise ValidationError(
+                    "Expense item correction was submitted more than once."
+                )
+
+            normalized = dict(correction)
+            normalized["approved_amount"] = self._validate_approved_amount(
+                item,
+                correction.get("approved_amount"),
+            )
+            raw_category_id = correction.get("category_id")
+            if raw_category_id:
+                try:
+                    category_id = (
+                        raw_category_id
+                        if isinstance(raw_category_id, UUID)
+                        else UUID(str(raw_category_id))
+                    )
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(
+                        "Corrected expense category is invalid."
+                    ) from exc
+                category = self.get_category(org_id, category_id)
+                if not category.is_active:
+                    raise ValidationError("Corrected expense category is inactive.")
+                normalized["category_id"] = category_id
+            validated[item_key] = normalized
+        return validated
+
+    def _validate_approval_amounts(
+        self,
+        claim: ExpenseClaim,
+        approved_amounts: list[dict] | None,
+    ) -> dict[str, Decimal]:
+        if not approved_amounts:
+            return {}
+        items_by_id = {str(item.item_id): item for item in claim.items}
+        validated: dict[str, Decimal] = {}
+        for entry in approved_amounts:
+            item_key = str(entry.get("item_id") or "")
+            item = items_by_id.get(item_key)
+            if item is None:
+                raise ValidationError("Approved expense item does not belong to claim.")
+            if item_key in validated:
+                raise ValidationError(
+                    "Approved expense item was submitted more than once."
+                )
+            validated[item_key] = self._validate_approved_amount(
+                item,
+                entry.get("approved_amount"),
+            )
+        return validated
+
+    @staticmethod
     def _stamp_created(claim: ExpenseClaim, actor_id: UUID | None) -> None:
         if actor_id is None:
             return
@@ -101,6 +187,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         from_date: date | None = None,
         to_date: date | None = None,
         search: str | None = None,
+        category_id: UUID | None = None,
         pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseClaim]:
         self._ensure_org_context(org_id)
@@ -123,6 +210,16 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 or_(
                     ExpenseClaim.claim_number.ilike(search_term),
                     ExpenseClaim.purpose.ilike(search_term),
+                )
+            )
+        if category_id:
+            query = query.where(
+                exists(
+                    select(1).where(
+                        ExpenseClaimItem.organization_id == org_id,
+                        ExpenseClaimItem.claim_id == ExpenseClaim.claim_id,
+                        ExpenseClaimItem.category_id == category_id,
+                    )
                 )
             )
 
@@ -821,6 +918,16 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             ):
                 raise ExpenseServiceError("Cannot approve your own expense claim")
 
+            corrections_map = self._validate_approval_corrections(
+                org_id,
+                claim,
+                corrections,
+            )
+            approved_amounts_map = self._validate_approval_amounts(
+                claim,
+                approved_amounts,
+            )
+
             if (
                 approver_id is not None
                 and isinstance(claim, ExpenseClaim)
@@ -852,18 +959,14 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             if notes:
                 claim.approval_notes = notes
 
-            corrections_map: dict[str, dict[str, Any]] = {}
             correction_audit: list[dict[str, str]] = []
-            if corrections:
-                for correction_entry in corrections:
-                    corrections_map[str(correction_entry["item_id"])] = correction_entry
 
             total_approved = Decimal("0")
             for item in claim.items:
                 item_key = str(item.item_id)
                 correction_data = corrections_map.get(item_key)
                 if correction_data:
-                    amount = Decimal(str(correction_data["approved_amount"]))
+                    amount = correction_data["approved_amount"]
                     changed = False
                     audit_entry: dict[str, str] = {"item_id": item_key}
                     if amount != item.claimed_amount:
@@ -874,11 +977,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     new_cat_id = correction_data.get("category_id")
                     if new_cat_id and str(new_cat_id) != str(item.category_id):
                         item.original_category_id = item.category_id
-                        item.category_id = (
-                            new_cat_id
-                            if isinstance(new_cat_id, UUID)
-                            else UUID(str(new_cat_id))
-                        )
+                        item.category_id = new_cat_id
                         audit_entry["category_changed"] = "true"
                         changed = True
                     new_desc = correction_data.get("description")
@@ -895,18 +994,12 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                         correction_audit.append(audit_entry)
                     total_approved += amount
                 elif approved_amounts:
-                    matched = next(
-                        (
-                            value
-                            for value in approved_amounts
-                            if str(value["item_id"]) == item_key
-                        ),
-                        None,
+                    approved_amount = approved_amounts_map.get(
+                        item_key,
+                        item.claimed_amount,
                     )
-                    item.approved_amount = (
-                        matched["approved_amount"] if matched else item.claimed_amount
-                    )
-                    total_approved += item.approved_amount
+                    item.approved_amount = approved_amount
+                    total_approved += approved_amount
                 else:
                     item.approved_amount = item.claimed_amount
                     total_approved += item.claimed_amount

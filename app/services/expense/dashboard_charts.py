@@ -208,9 +208,13 @@ class ExpenseDashboardChartsMixin:
     def _get_category_distribution(
         self, db: Session, org_id: UUID, start_date: date | None
     ) -> list[dict[str, Any]]:
-        base_filter = [ExpenseClaimItem.organization_id == org_id]
+        base_filter = [
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaimItem.organization_id == org_id,
+            ExpenseCategory.organization_id == org_id,
+        ]
         if start_date:
-            base_filter.append(ExpenseClaimItem.expense_date >= start_date)
+            base_filter.append(ExpenseClaim.claim_date >= start_date)
         results = db.execute(
             select(
                 ExpenseCategory.category_name,

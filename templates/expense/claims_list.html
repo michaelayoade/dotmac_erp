@@ -1,6 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
-{% from "components/macros.html" import empty_state, compact_filters, filter_select_field, filter_date_field, pagination, icon_svg, status_badge %}
+{% from "components/macros.html" import empty_state, compact_filters, filter_select_field, filter_entity_select_field, filter_date_field, pagination, icon_svg, status_badge %}
 {% block page_title %}Expense Claims{% endblock %}
 
 {% block breadcrumbs %}
@@ -45,6 +45,7 @@
     ) %}
         <input type="hidden" name="view" value="{{ filter_view }}">
         {{ filter_select_field("status", "Status", filter_status, statuses, filter_attrs, "All Status", true) }}
+        {{ filter_entity_select_field("category_id", "Category", filter_category_id, claim_categories, "category_id", "category_name", filter_attrs, "All Categories") }}
         <div>
             <label class="form-label text-xs" for="filter-employee-search">Employee</label>
             <input type="text"
