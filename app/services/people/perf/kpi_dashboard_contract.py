@@ -138,7 +138,7 @@ class DashboardConfig:
     widgets: tuple[str, ...] = DEFAULT_WIDGETS
     search: str = ""
     employee_search: str = ""
-    cohort: str = "active"
+    cohort: str = "due"
     attention: str = "all"
     show_charts: bool = True
 
@@ -195,7 +195,7 @@ class DashboardConfig:
             raise DashboardValidationError(
                 "Employee search must be no longer than 100 characters."
             )
-        cohort = payload.get("cohort", "active")
+        cohort = payload.get("cohort", "due")
         if not isinstance(cohort, str) or cohort not in {"due", "active", "overdue"}:
             raise DashboardValidationError("Choose a valid KPI date scope.")
         attention = payload.get("attention", "all")

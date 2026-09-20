@@ -69,6 +69,12 @@ def _is_pip_gate_error(exc: Exception) -> bool:
     return any(message.startswith(prefix) for prefix in _PIP_GATE_ERROR_PREFIXES)
 
 
+def _has_permission(auth: WebAuthContext, permission: str) -> bool:
+    """Return a permission result, denying access for incomplete auth objects."""
+    checker = getattr(auth, "has_permission", None)
+    return bool(checker(permission)) if callable(checker) else False
+
+
 def _linked_pip_for_appraisal(
     db: Session,
     org_id: Any,
@@ -1946,8 +1952,8 @@ class PerfWebService:
                 "deletable_kpi_ids": deletable_kpi_ids,
                 "success": success,
                 "error": error,
-                "can_view_definitions": auth.has_permission("performance:kpi:manage"),
-                "can_measure_kpis": auth.has_permission("performance:kpi:measure"),
+                "can_view_definitions": _has_permission(auth, "performance:kpi:manage"),
+                "can_measure_kpis": _has_permission(auth, "performance:kpi:measure"),
             }
         )
         return templates.TemplateResponse(request, "people/perf/kpis.html", context)
