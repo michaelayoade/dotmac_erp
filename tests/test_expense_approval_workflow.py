@@ -306,7 +306,10 @@ def test_approve_claim_rejects_invalid_item_approved_amount(
 ):
     _ensure_hr_tables(engine)
     org_id = uuid.uuid4()
-    person = _make_person(org_id, "invalid-approval@example.com")
+    person = _make_person(
+        org_id,
+        f"invalid-approval-{uuid.uuid4().hex}@example.com",
+    )
     employee = _make_employee(org_id, person, "EMP-INVALID-AMOUNT")
     category = _make_category(org_id)
     claim = _make_claim(
