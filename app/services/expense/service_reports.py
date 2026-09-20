@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import extract, func, or_, select
+from sqlalchemy import and_, extract, func, or_, select
 
 from app.models.expense import (
     CashAdvance,
@@ -295,6 +295,8 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             .join(ExpenseClaim, ExpenseClaim.claim_id == ExpenseClaimItem.claim_id)
             .where(
                 ExpenseClaim.organization_id == org_id,
+                ExpenseClaimItem.organization_id == org_id,
+                ExpenseCategory.organization_id == org_id,
                 ExpenseClaim.claim_date >= start_date,
                 ExpenseClaim.claim_date <= end_date,
                 ExpenseClaim.status.in_(REPORTABLE_EXPENSE_CLAIM_STATUSES),
@@ -366,9 +368,17 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             )
             .join(ExpenseClaim, ExpenseClaim.employee_id == Employee.employee_id)
             .join(Person, Person.id == Employee.person_id)
-            .outerjoin(Department, Employee.department_id == Department.department_id)
+            .outerjoin(
+                Department,
+                and_(
+                    Employee.department_id == Department.department_id,
+                    Department.organization_id == org_id,
+                ),
+            )
             .where(
                 ExpenseClaim.organization_id == org_id,
+                Employee.organization_id == org_id,
+                Person.organization_id == org_id,
                 ExpenseClaim.claim_date >= start_date,
                 ExpenseClaim.claim_date <= end_date,
                 ExpenseClaim.status.in_(REPORTABLE_EXPENSE_CLAIM_STATUSES),
@@ -411,12 +421,21 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             "total_approved": total_approved,
         }
 
-    def get_expense_trends_report(self, org_id: UUID, *, months: int = 12) -> dict:
+    def get_expense_trends_report(
+        self,
+        org_id: UUID,
+        *,
+        months: int = 12,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict:
         from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 
         today = date.today()
-        end_date = today.replace(day=1)
-        start_date = end_date - relativedelta(months=months - 1)
+        effective_end = end_date or today
+        effective_start = start_date or (
+            effective_end.replace(day=1) - relativedelta(months=max(months, 1) - 1)
+        )
         year_bucket = extract("year", ExpenseClaim.claim_date)
         month_bucket = extract("month", ExpenseClaim.claim_date)
         results = self.db.execute(
@@ -429,8 +448,8 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             )
             .where(
                 ExpenseClaim.organization_id == org_id,
-                ExpenseClaim.claim_date >= start_date,
-                ExpenseClaim.claim_date <= today,
+                ExpenseClaim.claim_date >= effective_start,
+                ExpenseClaim.claim_date <= effective_end,
                 ExpenseClaim.status.in_(REPORTABLE_EXPENSE_CLAIM_STATUSES),
             )
             .group_by(year_bucket, month_bucket)
@@ -450,21 +469,27 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             }
 
         months_list = []
-        current = start_date
-        while current <= today:
+        current = effective_start.replace(day=1)
+        final_month = effective_end.replace(day=1)
+        while current <= final_month:
             month_key = current.strftime("%Y-%m")
-            months_list.append(
-                monthly_data.get(
-                    month_key,
-                    {
-                        "month": month_key,
-                        "month_label": current.strftime("%b %Y"),
-                        "claim_count": 0,
-                        "claimed_amount": Decimal("0"),
-                        "approved_amount": Decimal("0"),
-                    },
-                )
+            month_data = monthly_data.get(
+                month_key,
+                {
+                    "month": month_key,
+                    "month_label": current.strftime("%b %Y"),
+                    "claim_count": 0,
+                    "claimed_amount": Decimal("0"),
+                    "approved_amount": Decimal("0"),
+                },
             )
+            next_month = current + relativedelta(months=1)
+            month_data["start_date"] = max(effective_start, current)
+            month_data["end_date"] = min(
+                effective_end,
+                next_month - timedelta(days=1),
+            )
+            months_list.append(month_data)
             current = current + relativedelta(months=1)
 
         total_claimed = sum(month["claimed_amount"] for month in months_list)
@@ -472,6 +497,8 @@ class ExpenseReportingMixin(ExpenseServiceBase):
         num_months = len(months_list)
         average_monthly = total_claimed / num_months if num_months > 0 else Decimal("0")
         return {
+            "start_date": effective_start,
+            "end_date": effective_end,
             "months": months_list,
             "total_months": num_months,
             "total_claimed": total_claimed,
