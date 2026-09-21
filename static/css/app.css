@@ -682,12 +682,15 @@ code {
         height: auto;
         min-height: 4rem;
     }
+
     .topbar-left {
         width: 100%;
     }
+
     .topbar-breadcrumbs-responsive {
         display: none !important;
     }
+
     .topbar-actions {
         width: 100%;
         flex-wrap: nowrap;
@@ -696,18 +699,22 @@ code {
         padding-top: var(--spacing-sm);
         border-top: 1px solid var(--card-border);
     }
+
     .topbar-page-actions {
         margin-right: auto;
     }
+
     .topbar-page-actions > * {
         display: flex;
         min-width: 0;
         align-items: center;
         gap: var(--spacing-sm);
     }
+
     .topbar-global-actions {
         gap: var(--spacing-xs);
     }
+
     .topbar-actions .btn {
         font-size: 0;
         line-height: 0;
@@ -13582,6 +13589,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
         justify-content: space-between;
     }
 
+    .sm\:gap-2 {
+        gap: 0.5rem;
+    }
+
     .sm\:gap-3 {
         gap: 0.75rem;
     }
@@ -13634,6 +13645,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
         padding-bottom: 0px;
     }
 
+    .sm\:pb-6 {
+        padding-bottom: 1.5rem;
+    }
+
     .sm\:pl-0 {
         padding-left: 0px;
     }
@@ -13644,6 +13659,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
     .sm\:pr-0 {
         padding-right: 0px;
+    }
+
+    .sm\:pt-6 {
+        padding-top: 1.5rem;
     }
 
     .sm\:align-middle {
