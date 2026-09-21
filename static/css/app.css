@@ -674,6 +674,40 @@ code {
 /* Topbar action buttons — icon-only on mobile */
 
 @media (max-width: 639px) {
+    .app-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: center;
+        gap: var(--spacing-sm);
+        height: auto;
+        min-height: 4rem;
+    }
+    .topbar-left {
+        width: 100%;
+    }
+    .topbar-breadcrumbs-responsive {
+        display: none !important;
+    }
+    .topbar-actions {
+        width: 100%;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        gap: var(--spacing-sm);
+        padding-top: var(--spacing-sm);
+        border-top: 1px solid var(--card-border);
+    }
+    .topbar-page-actions {
+        margin-right: auto;
+    }
+    .topbar-page-actions > * {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+    .topbar-global-actions {
+        gap: var(--spacing-xs);
+    }
     .topbar-actions .btn {
         font-size: 0;
         line-height: 0;
