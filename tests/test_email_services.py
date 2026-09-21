@@ -216,6 +216,43 @@ class TestValidateSmtpConfig:
 class TestSendEmail:
     """Tests for send_email function."""
 
+    def test_module_fallback_keeps_explicit_organization_scope(self):
+        organization_id = uuid4()
+        db = MagicMock()
+        config = {
+            "host": "localhost",
+            "port": 587,
+            "username": None,
+            "password": None,
+            "use_tls": False,
+            "use_ssl": False,
+            "from_email": "noreply@example.com",
+            "from_name": "Dotmac ERP",
+            "reply_to": None,
+        }
+        smtp = MagicMock()
+
+        with (
+            patch(
+                "app.services.email._get_module_smtp_config",
+                return_value=None,
+            ),
+            patch(
+                "app.services.email._get_smtp_config",
+                return_value=config,
+            ) as fallback,
+            patch("app.services.email.smtplib.SMTP", return_value=smtp),
+        ):
+            assert send_email(
+                db,
+                "test@example.com",
+                "Test Subject",
+                "<p>Test Body</p>",
+                organization_id=organization_id,
+            )
+
+        fallback.assert_called_once_with(db, organization_id=organization_id)
+
     def test_send_email_success(self, monkeypatch):
         """Test successful email sending."""
         monkeypatch.setenv("SMTP_HOST", "localhost")
