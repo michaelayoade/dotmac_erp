@@ -111,8 +111,7 @@ def process_due_calendar_reminders(
                         == OrganizationCalendarReminder.event_id,
                     )
                     .where(
-                        OrganizationCalendarReminder.organization_id
-                        == organization_id,
+                        OrganizationCalendarReminder.organization_id == organization_id,
                         OrganizationCalendarEvent.organization_id == organization_id,
                         OrganizationCalendarReminder.dispatched_at.is_(None),
                         OrganizationCalendarReminder.scheduled_for <= now,
@@ -169,7 +168,9 @@ def process_due_calendar_reminders(
                             OrganizationCalendarParticipant.event_id == event.event_id,
                             OrganizationCalendarParticipant.membership_status
                             == ParticipantMembershipStatus.ACTIVE.value,
-                            OrganizationCalendarParticipant.nextcloud_user_id.is_not(None),
+                            OrganizationCalendarParticipant.nextcloud_user_id.is_not(
+                                None
+                            ),
                         )
                     ).all()
                 )
