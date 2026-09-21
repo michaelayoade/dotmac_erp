@@ -339,12 +339,37 @@ def test_group_recipient_resolution_deduplicates_current_candidates() -> None:
     first = uuid4()
     second = uuid4()
     candidates = [
-        ParticipantCandidate(first, uuid4(), "First", "first@example.com", None, "Operations", department_id, designation_id, "Manager"),
-        ParticipantCandidate(second, uuid4(), "Second", "second@example.com", None, "Operations", department_id, None, None),
+        ParticipantCandidate(
+            first,
+            uuid4(),
+            "First",
+            "first@example.com",
+            None,
+            "Operations",
+            department_id,
+            designation_id,
+            "Manager",
+        ),
+        ParticipantCandidate(
+            second,
+            uuid4(),
+            "Second",
+            "second@example.com",
+            None,
+            "Operations",
+            department_id,
+            None,
+            None,
+        ),
     ]
     service = _PersonalCalendarService(organization_id, candidates)
 
-    resolved, targets = service._resolve_candidates([first], False, [department_id], [designation_id])
+    resolved, targets = service._resolve_candidates(
+        [first], False, [department_id], [designation_id]
+    )
 
     assert {item.person_id for item in resolved} == {first, second}
-    assert targets == {"departments": [str(department_id)], "designations": [str(designation_id)]}
+    assert targets == {
+        "departments": [str(department_id)],
+        "designations": [str(designation_id)],
+    }

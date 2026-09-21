@@ -131,7 +131,9 @@ def _calendar_context(
             "next_month": _shift_month(month_start, 1).strftime("%Y-%m"),
             "current_month": date.today().strftime("%Y-%m"),
             "today": date.today(),
-            "month_options": [(index, date(2000, index, 1).strftime("%B")) for index in range(1, 13)],
+            "month_options": [
+                (index, date(2000, index, 1).strftime("%B")) for index in range(1, 13)
+            ],
             "year_options": range(date.today().year - 10, date.today().year + 11),
             "weeks": weeks,
             "events_by_day": by_day,
@@ -203,8 +205,16 @@ def _form_context(
         "end_time": end_local.strftime("%H:%M") if end_local else "10:00",
         "color": event.color if event else "#4F46E5",
         "selected_participants": selected,
-        "selected_departments": set((event.recipient_targets or {}).get("departments", [])) if event else set(),
-        "selected_designations": set((event.recipient_targets or {}).get("designations", [])) if event else set(),
+        "selected_departments": set(
+            (event.recipient_targets or {}).get("departments", [])
+        )
+        if event
+        else set(),
+        "selected_designations": set(
+            (event.recipient_targets or {}).get("designations", [])
+        )
+        if event
+        else set(),
         "reminder_offsets": (
             {str(item.offset_minutes) for item in event.reminders} if event else {"60"}
         ),
@@ -262,9 +272,9 @@ def _require_participant_management(
     designation_ids: list[uuid.UUID],
     add_everyone: bool,
 ) -> None:
-    if (participant_ids or department_ids or designation_ids or add_everyone) and not auth.has_permission(
-        "calendar:participants:manage"
-    ):
+    if (
+        participant_ids or department_ids or designation_ids or add_everyone
+    ) and not auth.has_permission("calendar:participants:manage"):
         raise HTTPException(
             status_code=403, detail="Participant management permission required"
         )
@@ -272,7 +282,14 @@ def _require_participant_management(
 
 async def _read_form(
     request: Request,
-) -> tuple[dict[str, object], list[uuid.UUID], list[uuid.UUID], list[uuid.UUID], list[int], bool]:
+) -> tuple[
+    dict[str, object],
+    list[uuid.UUID],
+    list[uuid.UUID],
+    list[uuid.UUID],
+    list[int],
+    bool,
+]:
     raw = getattr(request.state, "csrf_form", None)
     if raw is None or isinstance(raw, str):
         raw = await request.form()
@@ -282,8 +299,16 @@ async def _read_form(
             participant_ids.append(uuid.UUID(str(value)))
         except ValueError as exc:
             raise CalendarError("The participant selection is invalid.") from exc
-    department_ids = [uuid.UUID(str(value)) for value in raw.getlist("department_ids") if str(value).strip()]
-    designation_ids = [uuid.UUID(str(value)) for value in raw.getlist("designation_ids") if str(value).strip()]
+    department_ids = [
+        uuid.UUID(str(value))
+        for value in raw.getlist("department_ids")
+        if str(value).strip()
+    ]
+    designation_ids = [
+        uuid.UUID(str(value))
+        for value in raw.getlist("designation_ids")
+        if str(value).strip()
+    ]
     reminder_offsets: list[int] = []
     for value in raw.getlist("reminder_offsets"):
         if str(value).strip():
@@ -311,7 +336,14 @@ async def _read_form(
         "reminder_offsets": {str(value) for value in reminder_offsets},
     }
     add_everyone = raw.get("add_everyone") == "1"
-    return submitted, participant_ids, department_ids, designation_ids, reminder_offsets, add_everyone
+    return (
+        submitted,
+        participant_ids,
+        department_ids,
+        designation_ids,
+        reminder_offsets,
+        add_everyone,
+    )
 
 
 def _data_from_submitted(submitted: dict[str, object]):
@@ -359,10 +391,27 @@ def calendar_day(
         raise HTTPException(status_code=422, detail="Invalid calendar date") from exc
     tz = ZoneInfo(DEFAULT_TIMEZONE)
     start = datetime.combine(selected, time.min, tzinfo=tz).astimezone(UTC)
-    end = datetime.combine(selected + timedelta(days=1), time.min, tzinfo=tz).astimezone(UTC)
-    events = OrganizationCalendarService(db, auth.organization_id).list_events(start, end)
-    context = base_context(request, auth, selected.strftime("%A, %d %B %Y"), active_module="calendar", db=db)
-    context.update({"active_page": "calendar", "day": selected, "events": events, "can_create": auth.has_permission("calendar:events:create")})
+    end = datetime.combine(
+        selected + timedelta(days=1), time.min, tzinfo=tz
+    ).astimezone(UTC)
+    events = OrganizationCalendarService(db, auth.organization_id).list_events(
+        start, end
+    )
+    context = base_context(
+        request,
+        auth,
+        selected.strftime("%A, %d %B %Y"),
+        active_module="calendar",
+        db=db,
+    )
+    context.update(
+        {
+            "active_page": "calendar",
+            "day": selected,
+            "events": events,
+            "can_create": auth.has_permission("calendar:events:create"),
+        }
+    )
     return templates.TemplateResponse(request, "admin/calendar/day.html", context)
 
 
@@ -387,7 +436,16 @@ def new_event_page(
     db: Session = Depends(get_db_for_org),
 ):
     return templates.TemplateResponse(
-        request, "admin/calendar/form.html", _form_context(request, auth, db, submitted={"start_date": request.query_params.get("start_date")} if request.query_params.get("start_date") else None)
+        request,
+        "admin/calendar/form.html",
+        _form_context(
+            request,
+            auth,
+            db,
+            submitted={"start_date": request.query_params.get("start_date")}
+            if request.query_params.get("start_date")
+            else None,
+        ),
     )
 
 
@@ -399,8 +457,17 @@ async def create_event(
 ):
     submitted: dict[str, object] = {}
     try:
-        submitted, participant_ids, department_ids, designation_ids, reminders, add_everyone = await _read_form(request)
-        _require_participant_management(auth, participant_ids, department_ids, designation_ids, add_everyone)
+        (
+            submitted,
+            participant_ids,
+            department_ids,
+            designation_ids,
+            reminders,
+            add_everyone,
+        ) = await _read_form(request)
+        _require_participant_management(
+            auth, participant_ids, department_ids, designation_ids, add_everyone
+        )
         if add_everyone and not auth.has_permission("calendar:participants:add_all"):
             raise HTTPException(
                 status_code=403, detail="Add Everyone permission required"
@@ -532,8 +599,17 @@ async def update_event(
         raise HTTPException(status_code=403, detail="You can only edit your own events")
     submitted: dict[str, object] = {}
     try:
-        submitted, participant_ids, department_ids, designation_ids, reminders, add_everyone = await _read_form(request)
-        _require_participant_management(auth, participant_ids, department_ids, designation_ids, add_everyone)
+        (
+            submitted,
+            participant_ids,
+            department_ids,
+            designation_ids,
+            reminders,
+            add_everyone,
+        ) = await _read_form(request)
+        _require_participant_management(
+            auth, participant_ids, department_ids, designation_ids, add_everyone
+        )
         expected_version = int(str(submitted["version"]))
         if add_everyone and not auth.has_permission("calendar:participants:add_all"):
             raise HTTPException(
