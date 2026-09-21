@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from enum import Enum
@@ -47,6 +48,14 @@ class ExpenseClaimApprovalSource(str, Enum):
 
     ERP_WORKFLOW = "erp_workflow"
     TRUSTED_SUB_MANAGER = "trusted_sub_manager"
+
+
+@dataclass(frozen=True, slots=True)
+class ExpenseClaimApprovedAmount:
+    """One typed per-line amount accepted by the claim approval owner."""
+
+    item_id: UUID
+    approved_amount: Decimal
 
 
 try:
@@ -135,14 +144,14 @@ class ExpenseClaimMixin(ExpenseServiceBase):
     def _validate_approval_amounts(
         self,
         claim: ExpenseClaim,
-        approved_amounts: list[dict] | None,
+        approved_amounts: tuple[ExpenseClaimApprovedAmount, ...] | None,
     ) -> dict[str, Decimal]:
         if not approved_amounts:
             return {}
         items_by_id = {str(item.item_id): item for item in claim.items}
         validated: dict[str, Decimal] = {}
         for entry in approved_amounts:
-            item_key = str(entry.get("item_id") or "")
+            item_key = str(entry.item_id)
             item = items_by_id.get(item_key)
             if item is None:
                 raise ValidationError("Approved expense item does not belong to claim.")
@@ -152,7 +161,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 )
             validated[item_key] = self._validate_approved_amount(
                 item,
-                entry.get("approved_amount"),
+                entry.approved_amount,
             )
         return validated
 
@@ -357,6 +366,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 item = ExpenseClaimItem(
                     organization_id=org_id,
                     claim_id=claim.claim_id,
+                    source_line_id=item_data.get("source_line_id"),
                     expense_date=item_data["expense_date"],
                     category_id=item_data["category_id"],
                     description=description,
@@ -422,6 +432,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         item = ExpenseClaimItem(
             organization_id=org_id,
             claim_id=claim_id,
+            source_line_id=item_data.get("source_line_id"),
             expense_date=item_data["expense_date"],
             category_id=item_data["category_id"],
             description=description,
@@ -856,7 +867,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         claim_id: UUID,
         *,
         approver_id: UUID | None = None,
-        approved_amounts: list[dict] | None = None,
+        approved_amounts: tuple[ExpenseClaimApprovedAmount, ...] | None = None,
         corrections: list[dict] | None = None,
         notes: str | None = None,
         auto_post_gl: bool = False,
@@ -940,7 +951,17 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     approver_id,
                     "APPROVED",
                     notes=notes,
-                    approved_amounts=approved_amounts,
+                    approved_amounts=(
+                        [
+                            {
+                                "item_id": entry.item_id,
+                                "approved_amount": entry.approved_amount,
+                            }
+                            for entry in approved_amounts
+                        ]
+                        if approved_amounts
+                        else None
+                    ),
                 )
                 if not chain.is_complete:
                     claim.status = ExpenseClaimStatus.PENDING_APPROVAL

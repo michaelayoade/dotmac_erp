@@ -8734,10 +8734,11 @@
   },
   "POST /api/v1/sync/sub/expense-claims/{source_claim_id}/approve": {
    "params": [
+    "header:Idempotency-Key!",
     "header:x-api-key!",
     "path:source_claim_id!"
    ],
-   "request": "8ab5c0e114c0",
+   "request": "0f3e35ebe8ee",
    "responses": {
     "200": "f52e00276bfd",
     "422": "a11c9d9b2af8"
@@ -9931,7 +9932,8 @@
   "SubExpenseBanksResponse": "59c29d8e94cb",
   "SubExpenseCategoriesResponse": "d2fa1a1bebde",
   "SubExpenseCategoryItem": "d005e565d191",
-  "SubExpenseClaimDecisionPayload": "23ab9b7004e7",
+  "SubExpenseClaimApprovalLine": "c2f9d4f864fc",
+  "SubExpenseClaimApprovalPayload": "83cdbf596725",
   "SubExpenseClaimDraftItemResponse": "47ab89e08a8c",
   "SubExpenseClaimDraftResponse": "1b409903701b",
   "SubExpenseClaimItemPayload": "4006fb7a5126",

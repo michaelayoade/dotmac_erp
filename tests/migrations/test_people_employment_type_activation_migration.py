@@ -164,7 +164,7 @@ def test_the_erp_lineage_stays_single_headed_after_this_activation() -> None:
     assert len(parents) > 100, len(parents)
     referenced = {parent for values in parents.values() for parent in values}
     heads = sorted(revision for revision in parents if revision not in referenced)
-    assert heads == ["20260920_people_calendar_optional_nextcloud"], heads
+    assert heads == ["20260921_sub_expense_approval_v4"], heads
 
 
 def test_rbac_contract_is_a_frozen_exact_copy_of_the_authored_seed() -> None:

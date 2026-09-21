@@ -330,3 +330,46 @@ def test_admin_calendar_is_named_organizational_and_remains_permission_gated() -
     assert 'require_web_permission("calendar:events:create")' in route
     assert "Finance Manager" not in route
     assert "Admin" not in route
+
+
+def test_group_recipient_resolution_deduplicates_current_candidates() -> None:
+    organization_id = uuid4()
+    department_id = uuid4()
+    designation_id = uuid4()
+    first = uuid4()
+    second = uuid4()
+    candidates = [
+        ParticipantCandidate(
+            first,
+            uuid4(),
+            "First",
+            "first@example.com",
+            None,
+            "Operations",
+            department_id,
+            designation_id,
+            "Manager",
+        ),
+        ParticipantCandidate(
+            second,
+            uuid4(),
+            "Second",
+            "second@example.com",
+            None,
+            "Operations",
+            department_id,
+            None,
+            None,
+        ),
+    ]
+    service = _PersonalCalendarService(organization_id, candidates)
+
+    resolved, targets = service._resolve_candidates(
+        [first], False, [department_id], [designation_id]
+    )
+
+    assert {item.person_id for item in resolved} == {first, second}
+    assert targets == {
+        "departments": [str(department_id)],
+        "designations": [str(designation_id)],
+    }

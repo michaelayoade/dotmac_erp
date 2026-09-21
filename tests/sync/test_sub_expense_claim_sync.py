@@ -37,11 +37,12 @@ from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.models.settings.org_bank_directory import OrgBankDirectory
 from app.schemas.sync.sub_operational import (
-    SubExpenseDestinationVerifyPayload,
+    SubExpenseClaimApprovalLine,
+    SubExpenseClaimApprovalPayload,
     SubExpenseClaimItemPayload,
-    SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
     SubExpenseClaimRejectionPayload,
+    SubExpenseDestinationVerifyPayload,
     SubExpenseReceiptPayload,
 )
 from app.services.finance.common.numbering import SyncNumberingService
@@ -884,13 +885,17 @@ class TestFieldManagerDecision:
         assert [
             claim.claim_id for claim in normal_expense_service.list_claims(org_id).items
         ] == [draft.claim_id]
+        decision_id = uuid.uuid4()
         approved = service.approve_expense_claim(
             org_id,
             payload.source_claim_id,
-            SubExpenseClaimDecisionPayload(
-                decision_id=uuid.uuid4(),
+            SubExpenseClaimApprovalPayload(
+                decision_id=decision_id,
                 decided_by_email=manager.person.email,
                 decided_at=datetime.now(UTC),
+            ),
+            idempotency_key=(
+                f"exp-{payload.source_claim_id}-approved-{decision_id}-v3"
             ),
         )
         assert approved.status == "approved"
@@ -955,14 +960,18 @@ class TestFieldManagerDecision:
         payload = _payload(employee)
         created = service.create_expense_claim(org_id, payload, employee.person_id)
 
+        decision_id = uuid.uuid4()
         result = service.approve_expense_claim(
             org_id,
             payload.source_claim_id,
-            SubExpenseClaimDecisionPayload(
-                decision_id=uuid.uuid4(),
+            SubExpenseClaimApprovalPayload(
+                decision_id=decision_id,
                 decided_by_email=manager.person.email,
                 decided_at=datetime.now(UTC),
                 notes="Approved in Field",
+            ),
+            idempotency_key=(
+                f"exp-{payload.source_claim_id}-approved-{decision_id}-v3"
             ),
         )
 
@@ -971,6 +980,223 @@ class TestFieldManagerDecision:
         assert claim.status == ExpenseClaimStatus.APPROVED
         assert claim.approver_id == manager.employee_id
         assert claim.total_approved_amount == Decimal("6500.00")
+
+    def test_v4_approval_applies_adjusted_amounts_and_replays_idempotently(
+        self,
+        service,
+        db_session,
+        org_id,
+        employee,
+        manager,
+        fuel_category,
+        numbering_patch,
+    ):
+        first_source_line_id = uuid.uuid4()
+        second_source_line_id = uuid.uuid4()
+        payload = _payload(
+            employee,
+            items=[
+                SubExpenseClaimItemPayload(
+                    source_line_id=first_source_line_id,
+                    category_code="FUEL",
+                    description="Fuel for site visit",
+                    claimed_amount=Decimal("5000.00"),
+                ),
+                SubExpenseClaimItemPayload(
+                    source_line_id=second_source_line_id,
+                    category_code="FUEL",
+                    description="Transport to customer premises",
+                    claimed_amount=Decimal("1500.00"),
+                ),
+            ],
+        )
+        created = service.create_expense_claim(org_id, payload, employee.person_id)
+        decision_id = uuid.uuid4()
+        decided_at = datetime.now(UTC)
+        approval = SubExpenseClaimApprovalPayload(
+            decision_id=decision_id,
+            decided_by_email=manager.person.email,
+            decided_at=decided_at,
+            items=(
+                SubExpenseClaimApprovalLine(
+                    source_line_id=second_source_line_id,
+                    approved_amount=Decimal("1200.00"),
+                ),
+                SubExpenseClaimApprovalLine(
+                    source_line_id=first_source_line_id,
+                    approved_amount=Decimal("4500.00"),
+                ),
+            ),
+            adjustment_reason="Approved rates are lower than the submitted amounts",
+        )
+        idempotency_key = f"exp-{payload.source_claim_id}-approved-{decision_id}-v4"
+
+        with pytest.raises(HTTPException) as missing_reason:
+            service.approve_expense_claim(
+                org_id,
+                payload.source_claim_id,
+                approval.model_copy(update={"adjustment_reason": None}),
+                idempotency_key=idempotency_key,
+            )
+        unapproved_claim = db_session.get(ExpenseClaim, created.claim_id)
+        assert missing_reason.value.status_code == 422
+        assert unapproved_claim.status == ExpenseClaimStatus.SUBMITTED
+        assert all(item.approved_amount is None for item in unapproved_claim.items)
+
+        first = service.approve_expense_claim(
+            org_id,
+            payload.source_claim_id,
+            approval,
+            idempotency_key=idempotency_key,
+        )
+        replay = service.approve_expense_claim(
+            org_id,
+            payload.source_claim_id,
+            approval,
+            idempotency_key=idempotency_key,
+        )
+
+        claim = db_session.get(ExpenseClaim, created.claim_id)
+        amounts = {item.source_line_id: item.approved_amount for item in claim.items}
+        assert first.status == "approved"
+        assert replay.status == "approved"
+        assert amounts == {
+            first_source_line_id: Decimal("4500.00"),
+            second_source_line_id: Decimal("1200.00"),
+        }
+        assert claim.total_claimed_amount == Decimal("6500.00")
+        assert claim.total_approved_amount == Decimal("5700.00")
+        assert claim.net_payable_amount == Decimal("5700.00")
+        assert "Approved rates are lower" in (claim.approval_notes or "")
+
+        changed_replay = approval.model_copy(
+            update={
+                "items": (
+                    SubExpenseClaimApprovalLine(
+                        source_line_id=first_source_line_id,
+                        approved_amount=Decimal("4400.00"),
+                    ),
+                    SubExpenseClaimApprovalLine(
+                        source_line_id=second_source_line_id,
+                        approved_amount=Decimal("1200.00"),
+                    ),
+                )
+            }
+        )
+        with pytest.raises(HTTPException) as exc:
+            service.approve_expense_claim(
+                org_id,
+                payload.source_claim_id,
+                changed_replay,
+                idempotency_key=idempotency_key,
+            )
+        assert exc.value.status_code == 409
+
+    def test_v4_unchanged_amounts_approve_without_adjustment_reason(
+        self,
+        service,
+        db_session,
+        org_id,
+        employee,
+        manager,
+        fuel_category,
+        numbering_patch,
+    ):
+        source_line_id = uuid.uuid4()
+        payload = _payload(
+            employee,
+            items=[
+                SubExpenseClaimItemPayload(
+                    source_line_id=source_line_id,
+                    category_code="FUEL",
+                    description="Fuel",
+                    claimed_amount=Decimal("5000.00"),
+                )
+            ],
+        )
+        created = service.create_expense_claim(org_id, payload, employee.person_id)
+        decision_id = uuid.uuid4()
+
+        result = service.approve_expense_claim(
+            org_id,
+            payload.source_claim_id,
+            SubExpenseClaimApprovalPayload(
+                decision_id=decision_id,
+                decided_by_email=manager.person.email,
+                decided_at=datetime.now(UTC),
+                items=(
+                    SubExpenseClaimApprovalLine(
+                        source_line_id=source_line_id,
+                        approved_amount=Decimal("5000.00"),
+                    ),
+                ),
+            ),
+            idempotency_key=(
+                f"exp-{payload.source_claim_id}-approved-{decision_id}-v4"
+            ),
+        )
+
+        claim = db_session.get(ExpenseClaim, created.claim_id)
+        assert result.status == "approved"
+        assert claim.total_approved_amount == Decimal("5000.00")
+        assert claim.items[0].approved_amount == Decimal("5000.00")
+
+    def test_v4_incomplete_line_set_fails_before_approval(
+        self,
+        service,
+        db_session,
+        org_id,
+        employee,
+        manager,
+        fuel_category,
+        numbering_patch,
+    ):
+        first_source_line_id = uuid.uuid4()
+        payload = _payload(
+            employee,
+            items=[
+                SubExpenseClaimItemPayload(
+                    source_line_id=first_source_line_id,
+                    category_code="FUEL",
+                    description="Fuel",
+                    claimed_amount=Decimal("5000.00"),
+                ),
+                SubExpenseClaimItemPayload(
+                    source_line_id=uuid.uuid4(),
+                    category_code="FUEL",
+                    description="Transport",
+                    claimed_amount=Decimal("1500.00"),
+                ),
+            ],
+        )
+        created = service.create_expense_claim(org_id, payload, employee.person_id)
+        decision_id = uuid.uuid4()
+
+        with pytest.raises(HTTPException) as exc:
+            service.approve_expense_claim(
+                org_id,
+                payload.source_claim_id,
+                SubExpenseClaimApprovalPayload(
+                    decision_id=decision_id,
+                    decided_by_email=manager.person.email,
+                    decided_at=datetime.now(UTC),
+                    items=(
+                        SubExpenseClaimApprovalLine(
+                            source_line_id=first_source_line_id,
+                            approved_amount=Decimal("4500.00"),
+                        ),
+                    ),
+                    adjustment_reason="Approved fuel rate",
+                ),
+                idempotency_key=(
+                    f"exp-{payload.source_claim_id}-approved-{decision_id}-v4"
+                ),
+            )
+
+        claim = db_session.get(ExpenseClaim, created.claim_id)
+        assert exc.value.status_code == 422
+        assert claim.status == ExpenseClaimStatus.SUBMITTED
+        assert all(item.approved_amount is None for item in claim.items)
 
     def test_trusted_sub_rejection_is_projected_to_erp(
         self,

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.models.finance.tax.tax_code import TaxCode
 from app.services.dotmac_sub.client import TaxRateRecord
 from app.services.dotmac_sub.sync._base import (
     BaseSyncMixin,
@@ -34,6 +35,10 @@ def _harness(candidates: list[object]) -> BaseSyncMixin:
     return harness
 
 
+def _candidate(code: str) -> SimpleNamespace:
+    return SimpleNamespace(tax_code_id=uuid.uuid4(), tax_code=code)
+
+
 def _resolve(harness: BaseSyncMixin):
     return harness._resolve_source_sales_tax_code(
         source_tax_rate_id="source-vat",
@@ -43,7 +48,7 @@ def _resolve(harness: BaseSyncMixin):
 
 
 def test_unambiguous_semantic_mapping_does_not_require_shared_display_code() -> None:
-    erp_code = SimpleNamespace(tax_code="NG-VAT-7.5")
+    erp_code = _candidate("NG-VAT-7.5")
     harness = _harness([erp_code])
 
     assert _resolve(harness) is erp_code
@@ -52,16 +57,14 @@ def test_unambiguous_semantic_mapping_does_not_require_shared_display_code() -> 
 
 
 def test_source_code_breaks_tie_between_semantically_equivalent_codes() -> None:
-    preferred = SimpleNamespace(tax_code="VAT75")
-    harness = _harness([SimpleNamespace(tax_code="NG-VAT-7.5"), preferred])
+    preferred = _candidate("VAT75")
+    harness = _harness([_candidate("NG-VAT-7.5"), preferred])
 
     assert _resolve(harness) is preferred
 
 
 def test_ambiguous_semantic_mapping_fails_closed_with_candidate_codes() -> None:
-    harness = _harness(
-        [SimpleNamespace(tax_code="VAT-A"), SimpleNamespace(tax_code="VAT-B")]
-    )
+    harness = _harness([_candidate("VAT-A"), _candidate("VAT-B")])
 
     with pytest.raises(TaxMappingConfigurationError, match="VAT-A, VAT-B") as caught:
         _resolve(harness)
@@ -74,3 +77,20 @@ def test_missing_semantic_mapping_names_the_effective_date() -> None:
 
     with pytest.raises(TaxMappingConfigurationError, match="2026-09-06"):
         _resolve(harness)
+
+
+def test_cached_tax_mapping_rehydrates_from_the_active_session() -> None:
+    original = _candidate("VAT75")
+    refreshed = _candidate("VAT75")
+    refreshed.tax_code_id = original.tax_code_id
+    harness = _harness([original])
+
+    assert _resolve(harness) is original
+
+    # A batch commit/expunge detaches ORM instances. The cache therefore keeps
+    # only the stable UUID and resolves the row again through the current session.
+    harness.db.scalars.return_value.all.return_value = []
+    harness.db.get.return_value = refreshed
+
+    assert _resolve(harness) is refreshed
+    harness.db.get.assert_called_once_with(TaxCode, original.tax_code_id)

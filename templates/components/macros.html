@@ -1869,7 +1869,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
          window.addEventListener('resize', () => recalcHeaderFit());
        "
        x-ref="topbarHeader">
-    <div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-4" x-ref="topbarLeft">
+    <div class="topbar-left flex min-w-0 flex-1 items-center gap-3 sm:gap-4" x-ref="topbarLeft">
       <button @click="toggleSidebar()"
               x-show="!isDesktop || sidebarCollapsed"
               x-cloak
@@ -1926,7 +1926,10 @@ if (typeof window.searchAutosuggest === 'undefined') {
         </kbd>
       </button>
       {% endif %}
-      {{ header_actions_html | safe }}
+      <div class="topbar-page-actions flex min-w-0 items-center gap-2 sm:gap-3">
+        {{ header_actions_html | safe }}
+      </div>
+      <div class="topbar-global-actions flex flex-shrink-0 items-center gap-1 sm:gap-2">
       <button @click="darkMode = !darkMode"
               class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
               :data-ui-tooltip="darkMode ? 'Switch to light mode' : 'Switch to dark mode'"
@@ -2124,6 +2127,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
       {% with accessible_modules=launcher_modules, user=launcher_user %}
         {% include "partials/_module_launcher.html" %}
       {% endwith %}
+      </div>
     </div>
   </div>
 </header>

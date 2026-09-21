@@ -47,6 +47,14 @@ per-organization PostgreSQL advisory single-flight lock and bounded execution
 time, so connector latency or authentication failure cannot consume the shared
 worker pool. Celery remains the transport and does not decide sync state.
 
+For Sub-originated employee expenses, Sub owns the manager's approval decision
+and the approved amount for every stable source line. ERP's
+`sync.sub_expense_decisions` owner verifies the organization, selected manager,
+complete line set, amount bounds, adjustment reason, and decision idempotency
+before delegating the single local claim transition and total calculation to
+`ExpenseService`. The integration route is only an adapter. Historical v3
+approvals remain readable input; new amount-bearing decisions use v4.
+
 For the versioned Self-Care invoice accounting feed, Self-Care owns invoice
 facts and ERP owns accounting mappings and postings. ERP persists each consumed
 source revision in `ar.dotmac_sub_invoice_sync_outcome` and normalized blockers

@@ -124,10 +124,25 @@
                     <label for="participant_search" class="sr-only">Search employees</label>
                     <input id="participant_search" type="search" x-model="search" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" placeholder="Search by name, email, or department">
                 </div>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                    <fieldset>
+                        <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500">Departments</legend>
+                        <div class="mt-2 max-h-36 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                            {% for group in recipient_groups.departments %}<label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="department_ids" value="{{ group.id }}" {{ 'checked' if group.id|string in form_data.selected_departments else '' }} @change="countSelected()" class="h-4 w-4 rounded border-slate-300 text-accent-600 focus:ring-accent-500"><span>{{ group.name }}</span></label>{% else %}<p class="text-xs text-slate-500">No active departments.</p>{% endfor %}
+                        </div>
+                    </fieldset>
+                    <fieldset>
+                        <legend class="text-xs font-semibold uppercase tracking-wide text-slate-500">Designations</legend>
+                        <div class="mt-2 max-h-36 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                            {% for group in recipient_groups.designations %}<label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"><input type="checkbox" name="designation_ids" value="{{ group.id }}" {{ 'checked' if group.id|string in form_data.selected_designations else '' }} @change="countSelected()" class="h-4 w-4 rounded border-slate-300 text-accent-600 focus:ring-accent-500"><span>{{ group.name }}</span></label>{% else %}<p class="text-xs text-slate-500">No active designations.</p>{% endfor %}
+                        </div>
+                    </fieldset>
+                </div>
+                <p class="mt-3 text-xs text-slate-500">Group selections stay linked to the current organization structure. Active members are resolved when the calendar is viewed.</p>
                 <div class="mt-3 max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200 dark:divide-slate-700 dark:border-slate-700">
                     {% for employee in employees %}
                     <label class="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800"
-                           x-show="search === '' || '{{ (employee.name ~ ' ' ~ employee.email ~ ' ' ~ (employee.department_name or '')) | lower }}'.includes(search.toLowerCase())">
+                           x-show="search === '' || '{{ (employee.name ~ ' ' ~ employee.email ~ ' ' ~ (employee.department_name or '') ~ ' ' ~ (employee.designation_name or '')) | lower }}'.includes(search.toLowerCase())">
                         <input type="checkbox" name="participant_ids" value="{{ employee.person_id }}" {{ 'checked' if employee.person_id | string in form_data.selected_participants else '' }} @change="everyone = false; countSelected()" class="h-4 w-4 rounded border-slate-300 text-accent-600 focus:ring-accent-500">
                         <span class="min-w-0 flex-1">
                             <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-200">{{ employee.name }}</span>
@@ -163,8 +178,8 @@
                 </div>
             </section>
             <section class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                <p class="font-semibold">Privacy boundary</p>
-                <p class="mt-1 leading-5">ERP can only create and manage this organizational event. Employees' personal Nextcloud events are never read, imported, changed, or shown here.</p>
+                <p class="font-semibold">ERP calendar</p>
+                <p class="mt-1 leading-5">Participants receive this event in their ERP calendar based on the selections above.</p>
             </section>
         </aside>
     </div>
