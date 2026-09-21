@@ -29,9 +29,7 @@ def test_scorecards_accepts_empty_optional_employee_filter() -> None:
         "dashboard_response",
         return_value=HTMLResponse("ok"),
     ) as dashboard:
-        response = client.get(
-            "/people/perf/kpi-dashboard/scorecards?employee_id="
-        )
+        response = client.get("/people/perf/kpi-dashboard/scorecards?employee_id=")
 
     assert response.status_code == 200
     assert dashboard.call_args.kwargs["employee_id"] == ""
