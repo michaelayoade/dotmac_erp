@@ -206,8 +206,11 @@ class BaseSyncMixin:
         self._default_bank_account_cache: dict[str, UUID] = {}
 
         self._source_tax_rates: dict[str, TaxRateRecord] | None = None
-        self._source_tax_code_cache: dict[tuple[str, str, date], TaxCode] = {}
-        self._source_wht_code_cache: dict[tuple[Decimal, date], TaxCode] = {}
+        # Cache stable identities, not ORM instances. Sync batches deliberately
+        # commit and expunge the session every 500 rows; keeping TaxCode objects
+        # here would retain detached/expired instances across that boundary.
+        self._source_tax_code_cache: dict[tuple[str, str, date], UUID] = {}
+        self._source_wht_code_cache: dict[tuple[Decimal, date], UUID] = {}
 
     def _reprime_tenant_context(self) -> None:
         prime_tenant_context(self.db, self.organization_id)
@@ -288,9 +291,12 @@ class BaseSyncMixin:
         if application not in {"exclusive", "inclusive"}:
             raise ValueError(f"Unsupported taxable application: {tax_application}")
         key = (source_tax_rate_id, application, effective_date)
-        cached = self._source_tax_code_cache.get(key)
-        if cached is not None:
-            return cached
+        cached_id = self._source_tax_code_cache.get(key)
+        if cached_id is not None:
+            cached = self.db.get(TaxCode, cached_id)
+            if cached is not None:
+                return cached
+            self._source_tax_code_cache.pop(key, None)
 
         source_rate = self._get_source_tax_rate(source_tax_rate_id)
         ratio = self._source_rate_ratio(source_rate.rate)
@@ -336,7 +342,7 @@ class BaseSyncMixin:
                 f"{effective_date}; semantic candidates: {detail}",
                 dedupe_key=(source_tax_rate_id, application),
             )
-        self._source_tax_code_cache[key] = candidates[0]
+        self._source_tax_code_cache[key] = candidates[0].tax_code_id
         return candidates[0]
 
     def _resolve_source_wht_code(
@@ -344,9 +350,12 @@ class BaseSyncMixin:
     ) -> TaxCode:
         """Resolve customer-deducted WHT to one ERP WHT-receivable tax code."""
         key = (rate_percent.normalize(), effective_date)
-        cached = self._source_wht_code_cache.get(key)
-        if cached is not None:
-            return cached
+        cached_id = self._source_wht_code_cache.get(key)
+        if cached_id is not None:
+            cached = self.db.get(TaxCode, cached_id)
+            if cached is not None:
+                return cached
+            self._source_wht_code_cache.pop(key, None)
         ratio = self._source_rate_ratio(rate_percent)
         candidates = list(
             self.db.scalars(
@@ -369,7 +378,7 @@ class BaseSyncMixin:
                 "ERP must have exactly one effective WHT code with a receivable "
                 f"account for Sub rate {rate_percent}%; found {len(candidates)}"
             )
-        self._source_wht_code_cache[key] = candidates[0]
+        self._source_wht_code_cache[key] = candidates[0].tax_code_id
         return candidates[0]
 
     def _generate_invoice_number(self, reference_date: date | None = None) -> str:
