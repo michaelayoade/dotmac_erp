@@ -33,3 +33,11 @@ def test_people_web_job_applicant_report_route_is_registered():
 
     assert len(routes) == 1
     assert routes[0].response_class is HTMLResponse
+
+
+def test_organization_calendar_route_is_registered_without_duplicate_prefix():
+    routes = _matching_routes("/people/calendar")
+
+    assert len(routes) == 1
+    assert routes[0].response_class is HTMLResponse
+    assert not _matching_routes("/people/people/calendar")

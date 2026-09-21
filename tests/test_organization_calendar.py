@@ -326,7 +326,7 @@ def test_admin_calendar_is_named_organizational_and_remains_permission_gated() -
         encoding="utf-8"
     )
     assert "Organizational Calendar" in index
-    assert 'prefix="/people/calendar"' in route
+    assert 'prefix="/calendar"' in route
     assert 'require_web_permission("calendar:events:create")' in route
     assert "Finance Manager" not in route
     assert "Admin" not in route

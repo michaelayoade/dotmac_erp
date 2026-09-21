@@ -38,7 +38,7 @@ READ_PERMISSIONS = ["calendar:events:access", "calendar:events:read_all"]
 UPDATE_PERMISSIONS = ["calendar:events:update_own", "calendar:events:update_all"]
 CANCEL_PERMISSIONS = ["calendar:events:cancel_own", "calendar:events:cancel_all"]
 
-router = APIRouter(prefix="/people/calendar", tags=["organization-calendar-web"])
+router = APIRouter(prefix="/calendar", tags=["organization-calendar-web"])
 UTC = timezone.utc
 
 
