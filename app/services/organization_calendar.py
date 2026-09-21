@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import Text, and_, cast, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.notification import EntityType, NotificationChannel, NotificationType
@@ -22,6 +22,8 @@ from app.models.organization_calendar import (
     OrganizationCalendarReminder,
     ParticipantMembershipStatus,
 )
+from app.models.people.hr.department import Department
+from app.models.people.hr.designation import Designation
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.services.notification import NotificationService
@@ -53,6 +55,9 @@ class ParticipantCandidate:
     email: str
     nextcloud_user_id: str | None
     department_name: str | None
+    department_id: uuid.UUID | None = None
+    designation_id: uuid.UUID | None = None
+    designation_name: str | None = None
 
     @property
     def has_nextcloud_identity(self) -> bool:
@@ -92,19 +97,25 @@ class OrganizationCalendarService:
     def eligible_participants(
         self,
     ) -> tuple[list[ParticipantCandidate], list[ExcludedEmployee]]:
-        from app.models.people.hr.department import Department
-
         rows = self.db.execute(
-            select(Employee, Person, Department.department_name)
+            select(
+                Employee,
+                Person,
+                Department.department_id,
+                Department.department_name,
+                Designation.designation_id,
+                Designation.designation_name,
+            )
             .join(Person, Person.id == Employee.person_id)
             .outerjoin(Department, Department.department_id == Employee.department_id)
+            .outerjoin(Designation, Designation.designation_id == Employee.designation_id)
             .where(Employee.organization_id == self.organization_id)
             .order_by(Person.first_name, Person.last_name, Employee.employee_code)
         ).all()
         eligible: list[ParticipantCandidate] = []
         excluded: list[ExcludedEmployee] = []
         today = date.today()
-        for employee, person, department_name in rows:
+        for employee, person, department_id, department_name, designation_id, designation_name in rows:
             reason = self._eligibility_failure(employee, person, today=today)
             if reason:
                 excluded.append(
@@ -118,10 +129,31 @@ class OrganizationCalendarService:
                     name=person.name or employee.employee_code,
                     email=person.email.strip().lower(),
                     nextcloud_user_id=(person.nextcloud_user_id or "").strip() or None,
+                    department_id=department_id,
                     department_name=department_name,
+                    designation_id=designation_id,
+                    designation_name=designation_name,
                 )
             )
         return eligible, excluded
+
+    def recipient_groups(self) -> dict[str, list[dict[str, object]]]:
+        departments = self.db.scalars(
+            select(Department).where(
+                Department.organization_id == self.organization_id,
+                Department.is_active.is_(True),
+            ).order_by(Department.department_name)
+        ).all()
+        designations = self.db.scalars(
+            select(Designation).where(
+                Designation.organization_id == self.organization_id,
+                Designation.is_active.is_(True),
+            ).order_by(Designation.designation_name)
+        ).all()
+        return {
+            "departments": [{"id": item.department_id, "name": item.department_name} for item in departments],
+            "designations": [{"id": item.designation_id, "name": item.designation_name} for item in designations],
+        }
 
     @staticmethod
     def _eligibility_failure(
@@ -164,12 +196,23 @@ class OrganizationCalendarService:
             raise CalendarNotFoundError("Calendar event was not found.")
         return event
 
+    def _dynamic_target_exists(self, person_id: uuid.UUID):
+        return exists().where(
+            Employee.organization_id == self.organization_id,
+            Employee.person_id == person_id,
+            Employee.status == EmployeeStatus.ACTIVE,
+            or_(
+                func.position(cast(Employee.department_id, Text), cast(OrganizationCalendarEvent.recipient_targets, Text)) > 0,
+                func.position(cast(Employee.designation_id, Text), cast(OrganizationCalendarEvent.recipient_targets, Text)) > 0,
+            ),
+        )
+
     def list_events(
         self, range_start: datetime, range_end: datetime
     ) -> list[OrganizationCalendarEvent]:
         start_date = range_start.date()
         end_date = range_end.date()
-        return list(
+        events = list(
             self.db.scalars(
                 select(OrganizationCalendarEvent)
                 .options(
@@ -232,7 +275,7 @@ class OrganizationCalendarService:
                     OrganizationCalendarEvent.business_status
                     == CalendarBusinessStatus.PUBLISHED.value,
                     or_(
-                        active_participation,
+                        or_(active_participation, self._dynamic_target_exists(person_id)),
                         and_(
                             OrganizationCalendarEvent.event_scope
                             == CalendarEventScope.PERSONAL.value,
@@ -261,6 +304,28 @@ class OrganizationCalendarService:
             .unique()
             .all()
         )
+        return [event for event in events if self._event_matches_current_target(event, person_id)]
+
+    def _event_matches_current_target(self, event: OrganizationCalendarEvent, person_id: uuid.UUID) -> bool:
+        if any(
+            item.person_id == person_id
+            and item.membership_status == ParticipantMembershipStatus.ACTIVE.value
+            for item in event.participants
+        ):
+            return True
+        targets = event.recipient_targets or {}
+        if not targets.get("departments") and not targets.get("designations"):
+            return False
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.organization_id == self.organization_id,
+                Employee.person_id == person_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+            )
+        )
+        if employee is None:
+            return False
+        return str(employee.department_id) in set(targets.get("departments", [])) or str(employee.designation_id) in set(targets.get("designations", []))
 
     def get_visible_event_for_person(
         self, event_id: uuid.UUID, person_id: uuid.UUID
@@ -286,7 +351,7 @@ class OrganizationCalendarService:
                 OrganizationCalendarEvent.business_status
                 != CalendarBusinessStatus.CANCELLED.value,
                 or_(
-                    active_participation,
+                    or_(active_participation, self._dynamic_target_exists(person_id)),
                     and_(
                         OrganizationCalendarEvent.event_scope
                         == CalendarEventScope.PERSONAL.value,
@@ -295,7 +360,7 @@ class OrganizationCalendarService:
                 ),
             )
         )
-        if event is None:
+        if event is None or not self._event_matches_current_target(event, person_id):
             raise CalendarNotFoundError("Calendar event was not found.")
         return event
 
@@ -306,6 +371,8 @@ class OrganizationCalendarService:
         actor_person_id: uuid.UUID,
         participant_person_ids: list[uuid.UUID],
         reminder_offsets: list[int],
+        department_ids: list[uuid.UUID] | None = None,
+        designation_ids: list[uuid.UUID] | None = None,
     ) -> OrganizationCalendarEvent:
         """Create a published personal event owned by the self-service user."""
         participants = list(dict.fromkeys([actor_person_id, *participant_person_ids]))
@@ -314,6 +381,8 @@ class OrganizationCalendarService:
             actor_person_id=actor_person_id,
             participant_person_ids=participants,
             reminder_offsets=reminder_offsets,
+            department_ids=department_ids,
+            designation_ids=designation_ids,
             publish=True,
             _event_scope=CalendarEventScope.PERSONAL.value,
         )
@@ -327,6 +396,8 @@ class OrganizationCalendarService:
         actor_person_id: uuid.UUID,
         participant_person_ids: list[uuid.UUID],
         reminder_offsets: list[int],
+        department_ids: list[uuid.UUID] | None = None,
+        designation_ids: list[uuid.UUID] | None = None,
     ) -> OrganizationCalendarEvent:
         """Update only a personal event owned by the self-service user."""
         participants = list(dict.fromkeys([actor_person_id, *participant_person_ids]))
@@ -337,6 +408,8 @@ class OrganizationCalendarService:
             actor_person_id=actor_person_id,
             participant_person_ids=participants,
             reminder_offsets=reminder_offsets,
+            department_ids=department_ids,
+            designation_ids=designation_ids,
             publish=True,
             _event_scope=CalendarEventScope.PERSONAL.value,
             _owner_person_id=actor_person_id,
@@ -365,6 +438,8 @@ class OrganizationCalendarService:
         actor_person_id: uuid.UUID,
         participant_person_ids: list[uuid.UUID],
         reminder_offsets: list[int],
+        department_ids: list[uuid.UUID] | None = None,
+        designation_ids: list[uuid.UUID] | None = None,
         publish: bool,
         add_everyone: bool = False,
         _event_scope: str = CalendarEventScope.ORGANIZATIONAL.value,
@@ -400,7 +475,13 @@ class OrganizationCalendarService:
         )
         self.db.add(event)
         self.db.flush()
-        candidates = self._resolve_candidates(participant_person_ids, add_everyone)
+        candidates, targets = self._resolve_candidates(
+            participant_person_ids,
+            add_everyone,
+            department_ids or [],
+            designation_ids or [],
+        )
+        event.recipient_targets = targets
         if publish and not candidates:
             raise CalendarError("A published event must have at least one participant.")
         newly_added, _removed = self._replace_participants(event, candidates)
@@ -427,6 +508,8 @@ class OrganizationCalendarService:
         actor_person_id: uuid.UUID,
         participant_person_ids: list[uuid.UUID],
         reminder_offsets: list[int],
+        department_ids: list[uuid.UUID] | None = None,
+        designation_ids: list[uuid.UUID] | None = None,
         publish: bool,
         add_everyone: bool = False,
         _event_scope: str = CalendarEventScope.ORGANIZATIONAL.value,
@@ -445,7 +528,12 @@ class OrganizationCalendarService:
 
         old = self._event_snapshot(event)
         was_published = event.business_status == CalendarBusinessStatus.PUBLISHED.value
-        candidates = self._resolve_candidates(participant_person_ids, add_everyone)
+        candidates, targets = self._resolve_candidates(
+            participant_person_ids,
+            add_everyone,
+            department_ids or [],
+            designation_ids or [],
+        )
         target_published = publish or (
             event.business_status == CalendarBusinessStatus.PUBLISHED.value
         )
@@ -464,6 +552,7 @@ class OrganizationCalendarService:
         event.start_date = data.start_date
         event.end_date_exclusive = data.end_date_exclusive
         event.color = data.color.upper()
+        event.recipient_targets = targets
         event.updated_by_id = actor_person_id
         event.version += 1
         if target_published:
@@ -638,22 +727,34 @@ class OrganizationCalendarService:
         return changed
 
     def _resolve_candidates(
-        self, person_ids: list[uuid.UUID], add_everyone: bool
-    ) -> list[ParticipantCandidate]:
+        self,
+        person_ids: list[uuid.UUID],
+        add_everyone: bool,
+        department_ids: list[uuid.UUID],
+        designation_ids: list[uuid.UUID],
+    ) -> tuple[list[ParticipantCandidate], dict[str, list[str]]]:
         eligible, _excluded = self.eligible_participants()
         by_id = {candidate.person_id: candidate for candidate in eligible}
-        requested = list(by_id) if add_everyone else list(dict.fromkeys(person_ids))
+        departments = set(department_ids)
+        designations = set(designation_ids)
+        requested = set(person_ids)
+        if add_everyone:
+            requested.update(by_id)
+        requested.update(
+            candidate.person_id
+            for candidate in eligible
+            if candidate.department_id in departments or candidate.designation_id in designations
+        )
         invalid = [person_id for person_id in requested if person_id not in by_id]
         if invalid:
-            raise CalendarError(
-                "One or more selected employees are not eligible for the ERP calendar. "
-                "Refresh the participant list and try again."
-            )
+            raise CalendarError("One or more selected employees are not eligible for the ERP calendar. Refresh the participant list and try again.")
         if len(requested) > MAX_PARTICIPANTS:
-            raise CalendarError(
-                f"An event cannot exceed {MAX_PARTICIPANTS} participants."
-            )
-        return [by_id[person_id] for person_id in requested]
+            raise CalendarError(f"An event cannot exceed {MAX_PARTICIPANTS} participants.")
+        targets = {
+            "departments": [str(value) for value in sorted(departments, key=str)],
+            "designations": [str(value) for value in sorted(designations, key=str)],
+        }
+        return [by_id[person_id] for person_id in requested], targets
 
     def _replace_participants(
         self,

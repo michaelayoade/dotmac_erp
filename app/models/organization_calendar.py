@@ -115,6 +115,11 @@ class OrganizationCalendarEvent(Base):
     event_details: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(String(255))
     meeting_url: Mapped[str | None] = mapped_column(String(1000))
+    recipient_targets: Mapped[dict[str, Any]] = mapped_column(
+        JSON().with_variant(JSONB, 'postgresql'),
+        nullable=False,
+        default=dict,
+    )
     color: Mapped[str] = mapped_column(
         String(7), nullable=False, default="#4F46E5", server_default="#4F46E5"
     )
