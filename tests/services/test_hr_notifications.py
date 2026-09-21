@@ -32,9 +32,12 @@ def employee(*, work_email=None, personal_email=None, status=None):
 def test_get_employee_email_prefers_and_normalizes_work_email(
     work_email, personal_email, expected
 ):
-    assert _get_employee_email(
-        employee(work_email=work_email, personal_email=personal_email)
-    ) == expected
+    assert (
+        _get_employee_email(
+            employee(work_email=work_email, personal_email=personal_email)
+        )
+        == expected
+    )
 
 
 def test_get_employee_email_uses_personal_email_when_no_person_is_linked():
@@ -69,10 +72,13 @@ def test_work_anniversary_notification_sends_to_work_email(monkeypatch):
         personal_email="manager-personal@example.test",
     )
 
-    assert service.send_work_anniversary_notification(
-        employee=employee(),
-        manager=manager,
-        years_of_service=5,
-        is_milestone=True,
-    ) is True
+    assert (
+        service.send_work_anniversary_notification(
+            employee=employee(),
+            manager=manager,
+            years_of_service=5,
+            is_milestone=True,
+        )
+        is True
+    )
     assert sent["to_email"] == "manager@example.test"
