@@ -220,6 +220,20 @@ def test_topbar_hides_back_button_when_fallback_is_blank():
     assert 'aria-label="Go back"' not in html
 
 
+def test_topbar_separates_page_and_global_actions_for_mobile_layout():
+    html = _render(
+        """
+{% from "components/macros.html" import topbar %}
+{{ topbar("Employees", "<nav>Dashboard</nav>", "<a class='btn'>Create employee</a>") }}
+"""
+    )
+
+    assert 'class="topbar-left ' in html
+    assert 'class="topbar-page-actions ' in html
+    assert "Create employee" in html
+    assert 'class="topbar-global-actions ' in html
+
+
 def test_topbar_polls_for_new_mentions_and_shows_deduplicated_toasts():
     html = _render(
         """
