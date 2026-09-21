@@ -100,7 +100,9 @@ def test_due_reminder_batch_budget_is_global_across_organizations() -> None:
             "app.tasks.notifications.active_organization_ids",
             return_value=[first_org, second_org],
         ),
-        patch("app.tasks.notifications.session_for_org", side_effect=_session) as sessions,
+        patch(
+            "app.tasks.notifications.session_for_org", side_effect=_session
+        ) as sessions,
     ):
         result = process_due_calendar_reminders.run(batch_size=1)
 
