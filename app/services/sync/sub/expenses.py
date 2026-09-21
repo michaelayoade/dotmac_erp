@@ -50,10 +50,10 @@ from app.schemas.sync.sub_operational import (
     SubExpenseApproversResponse,
     SubExpenseBankItem,
     SubExpenseBanksResponse,
+    SubExpenseClaimApprovalPayload,
     SubExpenseClaimDraftItemResponse,
     SubExpenseClaimDraftResponse,
     SubExpenseClaimPayload,
-    SubExpenseClaimDecisionPayload,
     SubExpenseClaimRejectionPayload,
     SubExpenseClaimResponse,
     SubExpenseClaimStatusResponse,
@@ -606,6 +606,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
             )
             resolved_items.append(
                 {
+                    "source_line_id": item.source_line_id,
                     "sequence": seq,
                     "category_id": categories[item.category_code].category_id,
                     "expense_date": expense_date_val,
@@ -657,6 +658,14 @@ class _ExpenseSyncMixin(_SubSyncBase):
                     )
                 persisted_fingerprint_items.append(
                     {
+                        # Rows created before the v4 expand migration have no
+                        # recoverable source-line identity. Preserve their v3
+                        # replay behavior without promoting them to v4.
+                        "source_line_id": (
+                            line.source_line_id
+                            if line.source_line_id is not None
+                            else source_item.source_line_id
+                        ),
                         "sequence": line.sequence,
                         "category_id": line.category_id,
                         "expense_date": line.expense_date,
@@ -981,13 +990,32 @@ class _ExpenseSyncMixin(_SubSyncBase):
         self,
         org_id: UUID,
         source_claim_id: str,
-        data: SubExpenseClaimDecisionPayload,
+        data: SubExpenseClaimApprovalPayload,
+        *,
+        idempotency_key: str,
     ) -> SubExpenseClaimTransitionResponse:
         """Apply a manager approval already authorized and recorded by Sub."""
         from app.services.expense import ExpenseService, ExpenseServiceError
-        from app.services.expense.service_claims import ExpenseClaimApprovalSource
+        from app.services.expense.service_claims import (
+            ExpenseClaimApprovalSource,
+            ExpenseClaimApprovedAmount,
+        )
 
-        claim = self._require_sub_expense_claim(org_id, source_claim_id)
+        contract_version = "v4" if data.items else "v3"
+        expected_key = (
+            f"exp-{source_claim_id}-approved-{data.decision_id}-{contract_version}"
+        )
+        if idempotency_key != expected_key:
+            raise HTTPException(
+                status_code=409,
+                detail="Expense approval idempotency key is invalid",
+            )
+        claim = self._find_claim_by_source_claim_id(org_id, source_claim_id, lock=True)
+        if claim is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Expense claim not found: {source_claim_id}",
+            )
         approver = self._require_employee_by_email(org_id, data.decided_by_email)
         if (
             claim.requested_approver_id is not None
@@ -999,7 +1027,76 @@ class _ExpenseSyncMixin(_SubSyncBase):
             )
         evidence = self._decision_evidence(data.decision_id, data.decided_at)
         supplied_notes = (data.notes or "").strip()
-        notes = f"{supplied_notes}\n{evidence}" if supplied_notes else evidence
+        adjustment_reason = (data.adjustment_reason or "").strip()
+        note_parts = [part for part in (supplied_notes, evidence) if part]
+
+        approved_amounts: tuple[ExpenseClaimApprovedAmount, ...] | None = None
+        if data.items:
+            claim_items_by_source_id = {
+                item.source_line_id: item
+                for item in claim.items
+                if item.source_line_id is not None
+            }
+            supplied_source_ids = [item.source_line_id for item in data.items]
+            if len(set(supplied_source_ids)) != len(supplied_source_ids):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Each expense approval line must be supplied exactly once",
+                )
+            if len(claim_items_by_source_id) != len(claim.items) or set(
+                supplied_source_ids
+            ) != set(claim_items_by_source_id):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Expense approval lines do not match the submitted claim",
+                )
+            approved_amounts = tuple(
+                ExpenseClaimApprovedAmount(
+                    item_id=claim_items_by_source_id[line.source_line_id].item_id,
+                    approved_amount=line.approved_amount,
+                )
+                for line in data.items
+            )
+            amounts_adjusted = any(
+                line.approved_amount
+                != claim_items_by_source_id[line.source_line_id].claimed_amount
+                for line in data.items
+            )
+            if amounts_adjusted and len(adjustment_reason) < 2:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "An adjustment reason is required when an approved amount "
+                        "differs from the claimed amount"
+                    ),
+                )
+            if adjustment_reason:
+                note_parts.append(
+                    f"Sub approval adjustment reason: {adjustment_reason}"
+                )
+
+        notes = "\n".join(note_parts)
+        if data.items and claim.status in {
+            ExpenseClaimStatus.APPROVED,
+            ExpenseClaimStatus.PAID,
+        }:
+            persisted_amounts = {
+                item.source_line_id: item.approved_amount for item in claim.items
+            }
+            requested_amounts = {
+                item.source_line_id: item.approved_amount for item in data.items
+            }
+            if claim.approval_notes != notes or persisted_amounts != requested_amounts:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Expense claim was already approved by a different decision",
+                )
+            return SubExpenseClaimTransitionResponse(
+                claim_id=claim.claim_id,
+                claim_number=claim.claim_number,
+                status="approved",
+                source_claim_id=source_claim_id,
+            )
         service = ExpenseService(self.db)
         if claim.status == ExpenseClaimStatus.DRAFT:
             raise HTTPException(
@@ -1011,6 +1108,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 org_id,
                 claim.claim_id,
                 approver_id=approver.employee_id,
+                approved_amounts=approved_amounts,
                 notes=notes,
                 actor_id=approver.person_id,
                 approval_source=ExpenseClaimApprovalSource.TRUSTED_SUB_MANAGER,
@@ -1018,7 +1116,10 @@ class _ExpenseSyncMixin(_SubSyncBase):
         except ExpenseServiceError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return SubExpenseClaimTransitionResponse(
-            **self._claim_response(claim, source_claim_id).model_dump()
+            claim_id=claim.claim_id,
+            claim_number=claim.claim_number,
+            status="approved",
+            source_claim_id=source_claim_id,
         )
 
     def reject_expense_claim(
@@ -1311,6 +1412,11 @@ class _ExpenseSyncMixin(_SubSyncBase):
             amount = Decimal(str(item["claimed_amount"])).quantize(Decimal("0.01"))
             items_payload.append(
                 {
+                    "source_line_id": (
+                        str(item["source_line_id"])
+                        if item.get("source_line_id") is not None
+                        else None
+                    ),
                     "sequence": item["sequence"],
                     "category_id": str(item["category_id"]),
                     "expense_date": item["expense_date"].isoformat(),

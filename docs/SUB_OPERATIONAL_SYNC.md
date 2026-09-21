@@ -112,6 +112,15 @@ claim status polling require the exact `sub:expense:write` service scope.
 The selected employee is rechecked against current ERP approver eligibility,
 and only that employee may approve or reject the Sub-originated claim.
 
+New approvals use `work-order-expense.v4`. The approval body carries every
+stable `source_line_id` exactly once with its `approved_amount`; ERP matches the
+complete set to the submitted claim, validates that no amount exceeds its
+claimed amount, applies all line amounts, recalculates the approved and payable
+totals, and approves in the same transaction. If any amount changes, a short
+`adjustment_reason` is required and retained in the approval evidence. If every
+amount is unchanged, no adjustment reason is required: the manager can use the
+normal Approve action without opening the adjustment form.
+
 The worker creates or retrieves a receipt-capable hidden `DRAFT` through
 `POST /api/v1/sync/sub/expense-claims/drafts`. Every line carries a stable
 `source_line_id`, and the response maps it to the ERP item identity without
@@ -139,9 +148,12 @@ receipt upload, submit, decision endpoints, and claim status polling require the
 Destination verification, draft creation, submission, manager decisions, and
 status polling all use the same source UUID. A token bound to another
 `source_claim_id` fails closed. Submit is idempotent under
-`exp-{expense_id}-submitted-v3`; decisions use
-`exp-{expense_id}-approved-{decision_id}-v3` or
-`exp-{expense_id}-rejected-{decision_id}-v3`.
+`exp-{expense_id}-submitted-v3`; new approvals use
+`exp-{expense_id}-approved-{decision_id}-v4`, while rejections use
+`exp-{expense_id}-rejected-{decision_id}-v3`. ERP continues to accept already
+queued historical v3 approvals, which approve the originally claimed amounts.
+An exact v4 replay returns the existing approved result; a replay with changed
+lines, amounts, notes, or adjustment reason fails with a conflict.
 
 An approved claim may be paid from the Field app. Sub only stages and delivers
 the command; ERP owns creation of the payment intent, Paystack transfer,
@@ -183,6 +195,10 @@ expense, and replays the request to prove idempotency.
   `erp.expense.form_context.v1` capability. Logs, errors, and operator evidence
   must redact account numbers, destination tokens, bank credentials, and
   private employee data.
+- Deploy revision `20260921_sub_expense_approval_v4` before enabling Sub's
+  `work-order-expense.v4` approval events. The nullable source-line column keeps
+  historical claims readable; only newly created stable-line claims are eligible
+  for amount-bearing v4 decisions.
 - Do not replay historical failed expense events automatically. A Self-Care
   recovery owner must revalidate and explicitly create linked replacement
   evidence before this contract is invoked.

@@ -505,10 +505,19 @@ def approve_claim(
     if replay:
         return build_cached_response(replay)
 
-    # Convert approved_amounts if provided
-    approved_amounts = None
-    if payload.approved_amounts:
-        approved_amounts = [a.model_dump() for a in payload.approved_amounts]
+    from app.services.expense.service_claims import ExpenseClaimApprovedAmount
+
+    approved_amounts = (
+        tuple(
+            ExpenseClaimApprovedAmount(
+                item_id=amount.item_id,
+                approved_amount=amount.approved_amount,
+            )
+            for amount in payload.approved_amounts
+        )
+        if payload.approved_amounts
+        else None
+    )
 
     try:
         claim = svc.approve_claim(

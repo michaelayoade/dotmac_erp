@@ -520,6 +520,12 @@ class ExpenseClaimItem(Base):
 
     __tablename__ = "expense_claim_item"
     __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "claim_id",
+            "source_line_id",
+            name="uq_expense_claim_item_org_claim_source_line",
+        ),
         Index("idx_expense_claim_item_claim", "claim_id"),
         Index("idx_expense_claim_item_category", "category_id"),
         {"schema": "expense"},
@@ -543,6 +549,11 @@ class ExpenseClaimItem(Base):
         UUID(as_uuid=True),
         ForeignKey("expense.expense_claim.claim_id"),
         nullable=False,
+    )
+    source_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="Stable source-system line identity for deterministic decisions",
     )
 
     # Item details
