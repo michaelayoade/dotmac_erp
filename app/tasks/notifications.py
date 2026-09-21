@@ -89,95 +89,109 @@ class CalendarReminderDispatchResults(TypedDict):
 def process_due_calendar_reminders(
     batch_size: int = 100,
 ) -> CalendarReminderDispatchResults:
-    """Atomically turn due ERP calendar reminders into Talk notifications."""
+    """Turn due ERP calendar reminders into notifications under tenant scope."""
     results: CalendarReminderDispatchResults = {
         "processed": 0,
         "notifications_queued": 0,
     }
     now = datetime.now(UTC)
-    with _task_db_session() as db:
-        reminders = list(
-            db.scalars(
-                select(OrganizationCalendarReminder)
-                .join(
-                    OrganizationCalendarEvent,
-                    OrganizationCalendarEvent.event_id
-                    == OrganizationCalendarReminder.event_id,
+    remaining = max(1, min(batch_size, 500))
+    notification_service = NotificationService()
+
+    for organization_id in active_organization_ids():
+        if remaining <= 0:
+            break
+        with session_for_org(organization_id) as db:
+            reminders = list(
+                db.scalars(
+                    select(OrganizationCalendarReminder)
+                    .join(
+                        OrganizationCalendarEvent,
+                        OrganizationCalendarEvent.event_id
+                        == OrganizationCalendarReminder.event_id,
+                    )
+                    .where(
+                        OrganizationCalendarReminder.organization_id
+                        == organization_id,
+                        OrganizationCalendarEvent.organization_id == organization_id,
+                        OrganizationCalendarReminder.dispatched_at.is_(None),
+                        OrganizationCalendarReminder.scheduled_for <= now,
+                        OrganizationCalendarEvent.business_status
+                        == CalendarBusinessStatus.PUBLISHED.value,
+                    )
+                    .order_by(OrganizationCalendarReminder.scheduled_for.asc())
+                    .limit(remaining)
+                    .with_for_update(
+                        of=OrganizationCalendarReminder,
+                        skip_locked=True,
+                    )
+                ).all()
+            )
+            remaining -= len(reminders)
+            for reminder in reminders:
+                event = db.scalar(
+                    select(OrganizationCalendarEvent).where(
+                        OrganizationCalendarEvent.organization_id == organization_id,
+                        OrganizationCalendarEvent.event_id == reminder.event_id,
+                    )
                 )
-                .where(
-                    OrganizationCalendarReminder.dispatched_at.is_(None),
-                    OrganizationCalendarReminder.scheduled_for <= now,
-                    OrganizationCalendarEvent.business_status
-                    == CalendarBusinessStatus.PUBLISHED.value,
+                if event is None:
+                    reminder.dispatched_at = now
+                    continue
+                recipient_ids = list(
+                    db.scalars(
+                        select(OrganizationCalendarParticipant.person_id).where(
+                            OrganizationCalendarParticipant.organization_id
+                            == organization_id,
+                            OrganizationCalendarParticipant.event_id == event.event_id,
+                            OrganizationCalendarParticipant.membership_status
+                            == ParticipantMembershipStatus.ACTIVE.value,
+                        )
+                    ).all()
                 )
-                .order_by(OrganizationCalendarReminder.scheduled_for.asc())
-                .limit(max(1, min(batch_size, 500)))
-                .with_for_update(
-                    of=OrganizationCalendarReminder,
-                    skip_locked=True,
+                notifications = notification_service.create_many(
+                    db,
+                    organization_id=organization_id,
+                    recipient_ids=recipient_ids,
+                    entity_type=EntityType.SYSTEM,
+                    entity_id=event.event_id,
+                    notification_type=NotificationType.REMINDER,
+                    title=f"Calendar reminder: {event.title}",
+                    message="This event is approaching.",
+                    channel=NotificationChannel.IN_APP,
+                    action_url=f"/people/self/calendar/events/{event.event_id}",
                 )
-            ).all()
-        )
-        notification_service = NotificationService()
-        for reminder in reminders:
-            event = db.get(OrganizationCalendarEvent, reminder.event_id)
-            if event is None:
+                talk_recipient_ids = list(
+                    db.scalars(
+                        select(OrganizationCalendarParticipant.person_id).where(
+                            OrganizationCalendarParticipant.organization_id
+                            == organization_id,
+                            OrganizationCalendarParticipant.event_id == event.event_id,
+                            OrganizationCalendarParticipant.membership_status
+                            == ParticipantMembershipStatus.ACTIVE.value,
+                            OrganizationCalendarParticipant.nextcloud_user_id.is_not(None),
+                        )
+                    ).all()
+                )
+                if talk_recipient_ids:
+                    notifications.extend(
+                        notification_service.create_many(
+                            db,
+                            organization_id=organization_id,
+                            recipient_ids=talk_recipient_ids,
+                            entity_type=EntityType.SYSTEM,
+                            entity_id=event.event_id,
+                            notification_type=NotificationType.REMINDER,
+                            title=f"Calendar reminder: {event.title}",
+                            message="This event is approaching.",
+                            channel=NotificationChannel.NEXTCLOUD,
+                            action_url=f"/people/self/calendar/events/{event.event_id}",
+                        )
+                    )
                 reminder.dispatched_at = now
-                continue
-            recipient_ids = list(
-                db.scalars(
-                    select(OrganizationCalendarParticipant.person_id).where(
-                        OrganizationCalendarParticipant.organization_id
-                        == event.organization_id,
-                        OrganizationCalendarParticipant.event_id == event.event_id,
-                        OrganizationCalendarParticipant.membership_status
-                        == ParticipantMembershipStatus.ACTIVE.value,
-                    )
-                ).all()
-            )
-            notifications = notification_service.create_many(
-                db,
-                organization_id=event.organization_id,
-                recipient_ids=recipient_ids,
-                entity_type=EntityType.SYSTEM,
-                entity_id=event.event_id,
-                notification_type=NotificationType.REMINDER,
-                title=f"Calendar reminder: {event.title}",
-                message="This event is approaching.",
-                channel=NotificationChannel.IN_APP,
-                action_url=f"/people/self/calendar/events/{event.event_id}",
-            )
-            talk_recipient_ids = list(
-                db.scalars(
-                    select(OrganizationCalendarParticipant.person_id).where(
-                        OrganizationCalendarParticipant.organization_id
-                        == event.organization_id,
-                        OrganizationCalendarParticipant.event_id == event.event_id,
-                        OrganizationCalendarParticipant.membership_status
-                        == ParticipantMembershipStatus.ACTIVE.value,
-                        OrganizationCalendarParticipant.nextcloud_user_id.is_not(None),
-                    )
-                ).all()
-            )
-            if talk_recipient_ids:
-                notifications.extend(
-                    notification_service.create_many(
-                        db,
-                        organization_id=event.organization_id,
-                        recipient_ids=talk_recipient_ids,
-                        entity_type=EntityType.SYSTEM,
-                        entity_id=event.event_id,
-                        notification_type=NotificationType.REMINDER,
-                        title=f"Calendar reminder: {event.title}",
-                        message="This event is approaching.",
-                        channel=NotificationChannel.NEXTCLOUD,
-                        action_url=f"/people/self/calendar/events/{event.event_id}",
-                    )
-                )
-            reminder.dispatched_at = now
-            results["processed"] += 1
-            results["notifications_queued"] += len(notifications)
-        db.commit()
+                results["processed"] += 1
+                results["notifications_queued"] += len(notifications)
+            db.commit()
     return results
 
 
