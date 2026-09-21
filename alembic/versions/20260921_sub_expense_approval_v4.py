@@ -1,7 +1,7 @@
 """Persist stable Sub expense-line identities for approval v4.
 
 Revision ID: 20260921_sub_expense_approval_v4
-Revises: 20260920_people_calendar_optional_nextcloud
+Revises: 20260921_calendar_recipient_targets
 Create Date: 2026-09-21
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "20260921_sub_expense_approval_v4"
-down_revision = "20260920_people_calendar_optional_nextcloud"
+down_revision = "20260921_calendar_recipient_targets"
 branch_labels = None
 depends_on = None
 
