@@ -64,9 +64,7 @@ def test_source_code_breaks_tie_between_semantically_equivalent_codes() -> None:
 
 
 def test_ambiguous_semantic_mapping_fails_closed_with_candidate_codes() -> None:
-    harness = _harness(
-        [_candidate("VAT-A"), _candidate("VAT-B")]
-    )
+    harness = _harness([_candidate("VAT-A"), _candidate("VAT-B")])
 
     with pytest.raises(TaxMappingConfigurationError, match="VAT-A, VAT-B") as caught:
         _resolve(harness)
