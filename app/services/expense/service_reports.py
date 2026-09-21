@@ -625,10 +625,11 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             ExpenseClaim.updated_at,
             ExpenseClaim.created_at,
         ).label("activity_at")
+        claimant_name = Person.name_expr().label("claimant_name")
         employee_rows = self.db.execute(
             select(
                 ExpenseClaim.employee_id,
-                Person.name_expr().label("claimant_name"),
+                claimant_name,
             )
             .select_from(ExpenseClaimApprovalStep)
             .join(
@@ -644,7 +645,7 @@ class ExpenseReportingMixin(ExpenseServiceBase):
                 or_(*decision_conditions),
             )
             .distinct()
-            .order_by(Person.name_expr())
+            .order_by(claimant_name)
         ).all()
         employee_options = [
             {
