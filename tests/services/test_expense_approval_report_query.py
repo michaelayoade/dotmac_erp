@@ -44,3 +44,11 @@ def test_my_approvals_report_anchors_queries_on_approval_steps() -> None:
         ) in sql
         assert "expense_claim_approval_step.organization_id" in sql
         assert "expense_claim.organization_id" in sql
+
+    employee_options_sql = str(
+        db.statements[0].compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    assert "ORDER BY claimant_name" in employee_options_sql
