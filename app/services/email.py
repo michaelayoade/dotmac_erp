@@ -449,7 +449,7 @@ def send_email(
         smtplib.SMTPException: If raise_on_error=True and sending fails
     """
     config = _get_module_smtp_config(db, organization_id, module) or _get_smtp_config(
-        db
+        db, organization_id=organization_id
     )
 
     # Use mixed multipart to support both alternative content and attachments
