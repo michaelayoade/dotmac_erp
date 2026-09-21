@@ -619,6 +619,24 @@ class SubExpenseClaimDecisionPayload(BaseModel):
     notes: str | None = Field(None, max_length=2000)
 
 
+class SubExpenseClaimApprovalLine(BaseModel):
+    """One authoritative approved amount for a stable Sub expense line."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_line_id: UUID
+    approved_amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+
+
+class SubExpenseClaimApprovalPayload(SubExpenseClaimDecisionPayload):
+    """A Sub approval; empty items retain historical v3 approval behavior."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    items: tuple[SubExpenseClaimApprovalLine, ...] = Field(default=(), max_length=50)
+    adjustment_reason: str | None = Field(None, max_length=500)
+
+
 class SubExpenseClaimRejectionPayload(SubExpenseClaimDecisionPayload):
     """A rejected Sub expense and its required reason."""
 

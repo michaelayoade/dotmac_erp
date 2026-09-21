@@ -485,6 +485,21 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                 ),
             ),
             SOTService(
+                name="sync.sub_expense_decisions",
+                module="app.services.sync.sub.expenses",
+                owns=(
+                    "typed Sub expense-decision intake",
+                    "organization-scoped source-line correlation",
+                    "atomic projection of approved line amounts into ERP claims",
+                ),
+                notes=(
+                    "Sub owns the manager's decision and approved amounts; ERP "
+                    "revalidates identity and financial bounds, then ExpenseService "
+                    "owns the local claim transition and totals. Historical v3 "
+                    "approvals remain accepted without creating a second writer."
+                ),
+            ),
+            SOTService(
                 name="inventory.material_support",
                 module="app.services.inventory.material_support",
                 owns=(

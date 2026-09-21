@@ -31,8 +31,8 @@ from app.schemas.sync.sub_operational import (
     SubExpenseCategoriesResponse,
     SubExpenseApproversResponse,
     SubExpenseBanksResponse,
+    SubExpenseClaimApprovalPayload,
     SubExpenseClaimDraftResponse,
-    SubExpenseClaimDecisionPayload,
     SubExpenseClaimPayload,
     SubExpenseClaimRejectionPayload,
     SubExpenseClaimResponse,
@@ -611,7 +611,8 @@ def submit_sub_expense_claim(
 )
 def approve_sub_expense_claim(
     source_claim_id: str,
-    payload: SubExpenseClaimDecisionPayload,
+    payload: SubExpenseClaimApprovalPayload,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
     auth: dict = Depends(require_service_auth),
     db: Session = Depends(get_db_with_service_org),
 ) -> SubExpenseClaimTransitionResponse:
@@ -619,6 +620,7 @@ def approve_sub_expense_claim(
         org_id=UUID(str(auth["organization_id"])),
         source_claim_id=source_claim_id,
         data=payload,
+        idempotency_key=idempotency_key,
     )
 
 
