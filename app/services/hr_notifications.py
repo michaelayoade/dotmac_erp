@@ -64,22 +64,19 @@ def _get_employee_email(employee: Employee | None) -> str | None:
     if not employee or not employee_can_receive_email(employee):
         return None
 
-    # Try company email first
-    company_email = getattr(employee, "company_email", None)
-    if isinstance(company_email, str) and company_email:
-        return company_email
+    # The linked Person email is the canonical work address.
+    work_email = getattr(employee, "work_email", None)
+    if isinstance(work_email, str) and work_email.strip():
+        return work_email.strip()
 
-    # Try personal email
-    personal_email = getattr(employee, "personal_email", None)
-    if isinstance(personal_email, str) and personal_email:
-        return personal_email
-
-    # Try person's email
     person = getattr(employee, "person", None)
-    if person:
-        person_email = getattr(person, "email", None)
-        if isinstance(person_email, str) and person_email:
-            return person_email
+    person_email = getattr(person, "email", None) if person else None
+    if isinstance(person_email, str) and person_email.strip():
+        return person_email.strip()
+
+    personal_email = getattr(employee, "personal_email", None)
+    if isinstance(personal_email, str) and personal_email.strip():
+        return personal_email.strip()
 
     return None
 
