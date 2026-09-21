@@ -167,9 +167,9 @@ if args and args[0] == "ps":
     if os.environ.get("DEPLOY_TEST_RUNNING_ONE_OFF") == "1" and service == "app":
         print("dotmac-run-app-one-off")
 
-# The deploy makes three `compose run` calls: the executor preflight, the
-# migration, and the runtime admission check. Fail only the operation named by
-# each test flag.
+# The deploy makes four `compose run` calls: one executor preflight before
+# backup, another on the candidate image, the migration, and runtime admission.
+# Fail only the operation named by each test flag.
 if os.environ.get("DEPLOY_TEST_FAIL_MIGRATION") == "1":
     if args[:2] == ["compose", "run"] and "alembic" in args and "upgrade" in args:
         raise SystemExit(1)
@@ -281,7 +281,7 @@ def test_the_deploy_path_refuses_a_tag_in_the_rendered_project(
     `tests/architecture/test_deploy_image_gate.py` proves the gate itself
     refuses a tag. This proves the DEPLOY PATH is actually wired to it — a
     correct gate nothing calls guards nothing — and that the refusal lands
-    before any container is touched.
+    before any migration or runtime container mutation.
 
     The planted reference is `sha-abcdef0`, the exact shape the retired
     `ERP_IMAGE_TAG` path produced. A gate that only caught `:latest` would have
@@ -315,7 +315,9 @@ def test_the_deploy_path_refuses_a_tag_in_the_rendered_project(
         else []
     )
     assert not any("|compose up " in line for line in invocations), invocations
-    assert not any("|compose run " in line for line in invocations), invocations
+    preflights = [line for line in invocations if "|compose run " in line]
+    assert len(preflights) == 1, invocations
+    assert "bootstrap_database_roles.py --verify-only" in preflights[0]
 
 
 def test_the_deploy_path_pins_the_digest_from_the_rendered_project(
@@ -553,7 +555,9 @@ def test_a_failed_executor_preflight_stops_before_migrating(
 
     assert result.returncode == 1
     assert "DEPLOY STOPPED" in result.stderr
-    assert "bootstrap_database_roles.py" in result.stderr
+    assert "before backup or pull" in result.stderr
+    assert "Backing up database" not in result.stdout
+    assert "Pulling latest code" not in result.stdout
     invocations = invocation_log.read_text(encoding="utf-8").splitlines()
     assert not any("alembic" in line and "upgrade" in line for line in invocations)
     assert "Rolling back code" not in result.stdout
