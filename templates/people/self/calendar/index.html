@@ -58,7 +58,7 @@
                     <a href="?month={{ current_month }}" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">Today</a>
                     <a href="?month={{ next_month }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Next month">{{ icon_svg("chevron-right", "h-4 w-4") }}</a>
                 </div>
-                <h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ month_label }}</h2>
+                <div class="flex items-center gap-2"><label class="sr-only" for="calendar_month">Month</label><select id="calendar_month" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" onchange="window.location='?month='+document.getElementById('calendar_year').value+'-'+this.value">{% for value, label in month_options %}<option value="{{ '%02d'|format(value) }}" {{ 'selected' if value == month_start.month else '' }}>{{ label }}</option>{% endfor %}</select><label class="sr-only" for="calendar_year">Year</label><select id="calendar_year" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white" onchange="window.location='?month='+this.value+'-'+document.getElementById('calendar_month').value">{% for year in year_options %}<option value="{{ year }}" {{ 'selected' if year == month_start.year else '' }}>{{ year }}</option>{% endfor %}</select></div><h2 class="text-xl font-semibold text-slate-900 dark:text-white">{{ month_label }}</h2>
                 <span class="rounded-lg bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:bg-violet-900/20 dark:text-violet-300">Month</span>
             </div>
 
@@ -74,7 +74,7 @@
                         {% for day in week %}
                         <div class="min-h-36 border-r border-slate-200 p-2 last:border-r-0 dark:border-slate-700 {{ 'bg-slate-50/70 dark:bg-slate-900/35' if day.month != month_start.month else 'bg-white dark:bg-slate-900' }}">
                             <div class="mb-1 flex items-center justify-between">
-                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold {{ 'bg-violet-600 text-white' if day == today else 'text-slate-700 dark:text-slate-300' if day.month == month_start.month else 'text-slate-400 dark:text-slate-600' }}">{{ day.day }}</span>
+                                <a href="{% if events_by_day[day] %}/people/self/calendar/day?date={{ day.isoformat() }}{% else %}/people/self/calendar/events/new?start_date={{ day.isoformat() }}{% endif %}" class="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold hover:ring-2 hover:ring-violet-300 {{ 'bg-violet-600 text-white' if day == today else 'text-slate-700 dark:text-slate-300' if day.month == month_start.month else 'text-slate-400 dark:text-slate-600' }}" aria-label="{{ 'View events for' if events_by_day[day] else 'Create event on' }} {{ day }}">{{ day.day }}</a>{% if events_by_day[day] %}<span class="text-[10px] font-semibold text-slate-500">{{ events_by_day[day]|length }}</span>{% endif %}
                             </div>
                             <div class="space-y-1">
                                 {% for row in events_by_day[day][:4] %}
