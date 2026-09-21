@@ -116,7 +116,7 @@ class OrganizationCalendarEvent(Base):
     location: Mapped[str | None] = mapped_column(String(255))
     meeting_url: Mapped[str | None] = mapped_column(String(1000))
     recipient_targets: Mapped[dict[str, Any]] = mapped_column(
-        JSON().with_variant(JSONB, 'postgresql'),
+        JSON().with_variant(JSONB, "postgresql"),
         nullable=False,
         default=dict,
     )

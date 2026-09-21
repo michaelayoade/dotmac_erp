@@ -108,14 +108,23 @@ class OrganizationCalendarService:
             )
             .join(Person, Person.id == Employee.person_id)
             .outerjoin(Department, Department.department_id == Employee.department_id)
-            .outerjoin(Designation, Designation.designation_id == Employee.designation_id)
+            .outerjoin(
+                Designation, Designation.designation_id == Employee.designation_id
+            )
             .where(Employee.organization_id == self.organization_id)
             .order_by(Person.first_name, Person.last_name, Employee.employee_code)
         ).all()
         eligible: list[ParticipantCandidate] = []
         excluded: list[ExcludedEmployee] = []
         today = date.today()
-        for employee, person, department_id, department_name, designation_id, designation_name in rows:
+        for (
+            employee,
+            person,
+            department_id,
+            department_name,
+            designation_id,
+            designation_name,
+        ) in rows:
             reason = self._eligibility_failure(employee, person, today=today)
             if reason:
                 excluded.append(
@@ -139,20 +148,30 @@ class OrganizationCalendarService:
 
     def recipient_groups(self) -> dict[str, list[dict[str, object]]]:
         departments = self.db.scalars(
-            select(Department).where(
+            select(Department)
+            .where(
                 Department.organization_id == self.organization_id,
                 Department.is_active.is_(True),
-            ).order_by(Department.department_name)
+            )
+            .order_by(Department.department_name)
         ).all()
         designations = self.db.scalars(
-            select(Designation).where(
+            select(Designation)
+            .where(
                 Designation.organization_id == self.organization_id,
                 Designation.is_active.is_(True),
-            ).order_by(Designation.designation_name)
+            )
+            .order_by(Designation.designation_name)
         ).all()
         return {
-            "departments": [{"id": item.department_id, "name": item.department_name} for item in departments],
-            "designations": [{"id": item.designation_id, "name": item.designation_name} for item in designations],
+            "departments": [
+                {"id": item.department_id, "name": item.department_name}
+                for item in departments
+            ],
+            "designations": [
+                {"id": item.designation_id, "name": item.designation_name}
+                for item in designations
+            ],
         }
 
     @staticmethod
@@ -202,8 +221,16 @@ class OrganizationCalendarService:
             Employee.person_id == person_id,
             Employee.status == EmployeeStatus.ACTIVE,
             or_(
-                func.position(cast(Employee.department_id, Text), cast(OrganizationCalendarEvent.recipient_targets, Text)) > 0,
-                func.position(cast(Employee.designation_id, Text), cast(OrganizationCalendarEvent.recipient_targets, Text)) > 0,
+                func.position(
+                    cast(Employee.department_id, Text),
+                    cast(OrganizationCalendarEvent.recipient_targets, Text),
+                )
+                > 0,
+                func.position(
+                    cast(Employee.designation_id, Text),
+                    cast(OrganizationCalendarEvent.recipient_targets, Text),
+                )
+                > 0,
             ),
         )
 
@@ -212,7 +239,7 @@ class OrganizationCalendarService:
     ) -> list[OrganizationCalendarEvent]:
         start_date = range_start.date()
         end_date = range_end.date()
-        events = list(
+        return list(
             self.db.scalars(
                 select(OrganizationCalendarEvent)
                 .options(
@@ -263,7 +290,7 @@ class OrganizationCalendarService:
             OrganizationCalendarParticipant.membership_status
             == ParticipantMembershipStatus.ACTIVE.value,
         )
-        return list(
+        events = list(
             self.db.scalars(
                 select(OrganizationCalendarEvent)
                 .options(
@@ -275,7 +302,9 @@ class OrganizationCalendarService:
                     OrganizationCalendarEvent.business_status
                     == CalendarBusinessStatus.PUBLISHED.value,
                     or_(
-                        or_(active_participation, self._dynamic_target_exists(person_id)),
+                        or_(
+                            active_participation, self._dynamic_target_exists(person_id)
+                        ),
                         and_(
                             OrganizationCalendarEvent.event_scope
                             == CalendarEventScope.PERSONAL.value,
@@ -304,9 +333,15 @@ class OrganizationCalendarService:
             .unique()
             .all()
         )
-        return [event for event in events if self._event_matches_current_target(event, person_id)]
+        return [
+            event
+            for event in events
+            if self._event_matches_current_target(event, person_id)
+        ]
 
-    def _event_matches_current_target(self, event: OrganizationCalendarEvent, person_id: uuid.UUID) -> bool:
+    def _event_matches_current_target(
+        self, event: OrganizationCalendarEvent, person_id: uuid.UUID
+    ) -> bool:
         if any(
             item.person_id == person_id
             and item.membership_status == ParticipantMembershipStatus.ACTIVE.value
@@ -325,7 +360,9 @@ class OrganizationCalendarService:
         )
         if employee is None:
             return False
-        return str(employee.department_id) in set(targets.get("departments", [])) or str(employee.designation_id) in set(targets.get("designations", []))
+        return str(employee.department_id) in set(
+            targets.get("departments", [])
+        ) or str(employee.designation_id) in set(targets.get("designations", []))
 
     def get_visible_event_for_person(
         self, event_id: uuid.UUID, person_id: uuid.UUID
@@ -743,13 +780,18 @@ class OrganizationCalendarService:
         requested.update(
             candidate.person_id
             for candidate in eligible
-            if candidate.department_id in departments or candidate.designation_id in designations
+            if candidate.department_id in departments
+            or candidate.designation_id in designations
         )
         invalid = [person_id for person_id in requested if person_id not in by_id]
         if invalid:
-            raise CalendarError("One or more selected employees are not eligible for the ERP calendar. Refresh the participant list and try again.")
+            raise CalendarError(
+                "One or more selected employees are not eligible for the ERP calendar. Refresh the participant list and try again."
+            )
         if len(requested) > MAX_PARTICIPANTS:
-            raise CalendarError(f"An event cannot exceed {MAX_PARTICIPANTS} participants.")
+            raise CalendarError(
+                f"An event cannot exceed {MAX_PARTICIPANTS} participants."
+            )
         targets = {
             "departments": [str(value) for value in sorted(departments, key=str)],
             "designations": [str(value) for value in sorted(designations, key=str)],

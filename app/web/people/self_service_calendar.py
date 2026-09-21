@@ -143,7 +143,9 @@ def _calendar_context(
             "next_month": _shift_month(month_start, 1).strftime("%Y-%m"),
             "current_month": date.today().strftime("%Y-%m"),
             "today": date.today(),
-            "month_options": [(index, date(2000, index, 1).strftime("%B")) for index in range(1, 13)],
+            "month_options": [
+                (index, date(2000, index, 1).strftime("%B")) for index in range(1, 13)
+            ],
             "year_options": range(date.today().year - 10, date.today().year + 11),
             "weeks": weeks,
             "events_by_day": by_day,
@@ -215,8 +217,16 @@ def _form_context(
         "end_time": end_local.strftime("%H:%M") if end_local else "10:00",
         "color": event.color if event else "#7C3AED",
         "selected_participants": selected,
-        "selected_departments": set((event.recipient_targets or {}).get("departments", [])) if event else set(),
-        "selected_designations": set((event.recipient_targets or {}).get("designations", [])) if event else set(),
+        "selected_departments": set(
+            (event.recipient_targets or {}).get("departments", [])
+        )
+        if event
+        else set(),
+        "selected_designations": set(
+            (event.recipient_targets or {}).get("designations", [])
+        )
+        if event
+        else set(),
         "reminder_offsets": (
             {str(item.offset_minutes) for item in event.reminders} if event else {"60"}
         ),
@@ -235,7 +245,9 @@ def _form_context(
             "event": event,
             "form_data": initial,
             "employees": eligible,
-            "recipient_groups": OrganizationCalendarService(db, auth.organization_id).recipient_groups(),
+            "recipient_groups": OrganizationCalendarService(
+                db, auth.organization_id
+            ).recipient_groups(),
             "excluded_count": len(excluded),
             "can_invite": auth.has_permission("calendar:personal:invite"),
             "error": error,
@@ -253,7 +265,9 @@ async def _request_form(request: Request) -> FormData:
 
 async def _read_form(
     request: Request,
-) -> tuple[dict[str, object], list[uuid.UUID], list[uuid.UUID], list[uuid.UUID], list[int]]:
+) -> tuple[
+    dict[str, object], list[uuid.UUID], list[uuid.UUID], list[uuid.UUID], list[int]
+]:
     raw = await _request_form(request)
     participants: list[uuid.UUID] = []
     for value in raw.getlist("participant_ids"):
@@ -261,8 +275,16 @@ async def _read_form(
             participants.append(uuid.UUID(str(value)))
         except ValueError as exc:
             raise CalendarError("The participant selection is invalid.") from exc
-    department_ids = [uuid.UUID(str(value)) for value in raw.getlist("department_ids") if str(value).strip()]
-    designation_ids = [uuid.UUID(str(value)) for value in raw.getlist("designation_ids") if str(value).strip()]
+    department_ids = [
+        uuid.UUID(str(value))
+        for value in raw.getlist("department_ids")
+        if str(value).strip()
+    ]
+    designation_ids = [
+        uuid.UUID(str(value))
+        for value in raw.getlist("designation_ids")
+        if str(value).strip()
+    ]
     reminders: list[int] = []
     for value in raw.getlist("reminder_offsets"):
         try:
@@ -335,10 +357,22 @@ def calendar_day(
         raise HTTPException(status_code=422, detail="Invalid calendar date") from exc
     tz = ZoneInfo(DEFAULT_TIMEZONE)
     start = datetime.combine(selected, time.min, tzinfo=tz).astimezone(UTC)
-    end = datetime.combine(selected + timedelta(days=1), time.min, tzinfo=tz).astimezone(UTC)
-    events = OrganizationCalendarService(db, auth.organization_id).list_visible_events_for_person(auth.person_id, start, end)
-    context = base_context(request, auth, selected.strftime("%A, %d %B %Y"), "self", db=db)
-    context.update({"day": selected, "events": events, "can_create": auth.has_permission("calendar:personal:create")})
+    end = datetime.combine(
+        selected + timedelta(days=1), time.min, tzinfo=tz
+    ).astimezone(UTC)
+    events = OrganizationCalendarService(
+        db, auth.organization_id
+    ).list_visible_events_for_person(auth.person_id, start, end)
+    context = base_context(
+        request, auth, selected.strftime("%A, %d %B %Y"), "self", db=db
+    )
+    context.update(
+        {
+            "day": selected,
+            "events": events,
+            "can_create": auth.has_permission("calendar:personal:create"),
+        }
+    )
     return templates.TemplateResponse(request, "people/self/calendar/day.html", context)
 
 
@@ -363,7 +397,16 @@ def new_personal_event(
     db: Session = Depends(get_db_for_org),
 ):
     return templates.TemplateResponse(
-        request, "people/self/calendar/form.html", _form_context(request, auth, db, submitted={"start_date": request.query_params.get("start_date")} if request.query_params.get("start_date") else None)
+        request,
+        "people/self/calendar/form.html",
+        _form_context(
+            request,
+            auth,
+            db,
+            submitted={"start_date": request.query_params.get("start_date")}
+            if request.query_params.get("start_date")
+            else None,
+        ),
     )
 
 
@@ -375,8 +418,16 @@ async def create_personal_event(
 ):
     submitted: dict[str, object] = {}
     try:
-        submitted, participants, department_ids, designation_ids, reminders = await _read_form(request)
-        if (participants or department_ids or designation_ids) and not auth.has_permission("calendar:personal:invite"):
+        (
+            submitted,
+            participants,
+            department_ids,
+            designation_ids,
+            reminders,
+        ) = await _read_form(request)
+        if (
+            participants or department_ids or designation_ids
+        ) and not auth.has_permission("calendar:personal:invite"):
             raise HTTPException(
                 status_code=403, detail="Participant invite permission required"
             )
@@ -496,8 +547,16 @@ async def update_personal_event(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     submitted: dict[str, object] = {}
     try:
-        submitted, participants, department_ids, designation_ids, reminders = await _read_form(request)
-        if (participants or department_ids or designation_ids) and not auth.has_permission("calendar:personal:invite"):
+        (
+            submitted,
+            participants,
+            department_ids,
+            designation_ids,
+            reminders,
+        ) = await _read_form(request)
+        if (
+            participants or department_ids or designation_ids
+        ) and not auth.has_permission("calendar:personal:invite"):
             raise HTTPException(
                 status_code=403, detail="Participant invite permission required"
             )
