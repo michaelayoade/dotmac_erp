@@ -119,6 +119,39 @@ def test_process_pending_notification_emails_sends_active_notification() -> None
         assert "Review leave" in mock_send_email.call_args.kwargs["body_html"]
 
 
+def test_query_email_contains_absolute_reply_link_in_html_and_text(monkeypatch) -> None:
+    from app.tasks import notifications as notification_tasks
+
+    monkeypatch.setattr(
+        notification_tasks.settings, "app_url", "https://erp.example.test"
+    )
+    case_id = uuid4()
+    notification = _build_notification(
+        entity_type=EntityType.DISCIPLINE,
+        action_url=f"/people/self/discipline/{case_id}",
+    )
+    notification.title = "Disciplinary Query Issued - DC-2026-0001"
+
+    with (
+        patch("app.tasks.notifications.active_organization_ids", return_value=[ORG_ID]),
+        patch("app.tasks.notifications.session_for_org") as mock_session_local,
+        patch("app.tasks.notifications.person_can_receive_email", return_value=True),
+        patch(
+            "app.tasks.notifications.send_email", return_value=True
+        ) as mock_send_email,
+    ):
+        db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = db
+        db.execute.return_value.scalars.return_value.all.return_value = [notification]
+        result = notification_tasks.process_pending_notification_emails(batch_size=1)
+
+    assert result["sent"] == 1
+    expected_url = f"https://erp.example.test/people/self/discipline/{case_id}"
+    sent = mock_send_email.call_args.kwargs
+    assert f'href="{expected_url}"' in sent["body_html"]
+    assert f"View query and respond: {expected_url}" in sent["body_text"]
+
+
 def test_process_pending_notification_emails_routes_ticket_to_support() -> None:
     with (
         patch("app.tasks.notifications.active_organization_ids", return_value=[ORG_ID]),
