@@ -221,16 +221,14 @@ class OrganizationCalendarService:
             Employee.person_id == person_id,
             Employee.status == EmployeeStatus.ACTIVE,
             or_(
-                func.position(
+                func.jsonb_exists(
+                    OrganizationCalendarEvent.recipient_targets["departments"],
                     cast(Employee.department_id, Text),
-                    cast(OrganizationCalendarEvent.recipient_targets, Text),
-                )
-                > 0,
-                func.position(
+                ),
+                func.jsonb_exists(
+                    OrganizationCalendarEvent.recipient_targets["designations"],
                     cast(Employee.designation_id, Text),
-                    cast(OrganizationCalendarEvent.recipient_targets, Text),
-                )
-                > 0,
+                ),
             ),
         )
 
