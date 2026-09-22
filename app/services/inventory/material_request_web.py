@@ -1335,6 +1335,8 @@ class MaterialRequestWebService:
         item. Status → TRANSFERRED.
 
         For PURCHASE requests: no stock movement; status → ORDERED.
+
+        Stock approval is all-or-nothing: the caller must roll back on error.
         """
         import logging
         from datetime import datetime
@@ -1441,9 +1443,10 @@ class MaterialRequestWebService:
                         source_document_id=request.request_id,
                         source_document_line_id=line.item_id,
                         reference=request.request_number,
+                        serial_numbers=line.serial_numbers,
                     )
                     InventoryTransactionService.create_issue(
-                        db, organization_id, txn_input, user_id
+                        db, organization_id, txn_input, user_id, auto_commit=False
                     )
                 elif request.request_type == MaterialRequestType.TRANSFER:
                     if not request.transfer_to_warehouse_id:
@@ -1471,6 +1474,7 @@ class MaterialRequestWebService:
                         source_document_line_id=line.item_id,
                         reference=request.request_number,
                         reason_code="MATERIAL_REQUEST_TRANSFER",
+                        serial_numbers=line.serial_numbers,
                     )
                     InventoryTransactionService.create_transfer(
                         db,
@@ -1496,9 +1500,10 @@ class MaterialRequestWebService:
                         source_document_id=request.request_id,
                         source_document_line_id=line.item_id,
                         reference=request.request_number,
+                        serial_numbers=line.serial_numbers,
                     )
                     InventoryTransactionService.create_issue(
-                        db, organization_id, txn_input, user_id
+                        db, organization_id, txn_input, user_id, auto_commit=False
                     )
 
                 # Mark line as fulfilled
@@ -1515,6 +1520,8 @@ class MaterialRequestWebService:
 
         if errors and len(errors) == len(request.items):
             raise ValueError("All items failed to process: " + "; ".join(errors))
+        if errors:
+            raise ValueError("Material request approval failed: " + "; ".join(errors))
 
         # Set final status based on type
         old_status = request.status
@@ -1527,14 +1534,6 @@ class MaterialRequestWebService:
         MaterialRequestWebService._emit_sub_outcome(
             db, organization_id, request, old_status, request.status, user_id
         )
-
-        if errors:
-            logger.warning(
-                "Material request %s approved with %d errors: %s",
-                request.request_number,
-                len(errors),
-                "; ".join(errors),
-            )
 
         return request
 
