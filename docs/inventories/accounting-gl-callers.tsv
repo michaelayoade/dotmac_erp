@@ -131,6 +131,7 @@ app/services/fixed_assets/fa_posting_adapter.py	FAPostingAdapter.post_depreciati
 app/services/fixed_assets/fa_posting_adapter.py	FAPostingAdapter.post_revaluation	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/fixed_assets/fa_posting_adapter.py	FAPostingResult	gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/fixed_assets/reconciliation.py	FixedAssetGLReconciliationPackageService.create_draft_correction_journal	gl.period_guard	repoint_to_module	caller_repointed
+app/services/inventory/material_request_issue.py	MaterialRequestIssueService.issue_available	gl.period_guard	repoint_to_module	caller_repointed
 app/services/inventory/material_request_web.py	MaterialRequestWebService.approve_request	gl.period_guard	repoint_to_module	caller_repointed
 app/services/inventory/posting/adjustment.py	post_adjustment	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/inventory/posting/issue.py	post_issue	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed

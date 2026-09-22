@@ -701,6 +701,7 @@ class MaterialRequestWebService:
 
         detail_items = []
         stock_blocking_items: list[str] = []
+        remaining_display_stock = availability_by_item_warehouse.copy()
         for item in request_items:
             inv_item = items_map.get(item.inventory_item_id)
             effective_warehouse_id = item.warehouse_id or request.default_warehouse_id
@@ -713,23 +714,30 @@ class MaterialRequestWebService:
             ordered_qty = item.ordered_qty or Decimal("0")
             available_qty = Decimal("0")
             if effective_warehouse_id:
-                available_qty = availability_by_item_warehouse.get(
+                available_qty = remaining_display_stock.get(
                     (item.inventory_item_id, effective_warehouse_id),
                     Decimal("0"),
                 )
+            pending_qty = max(requested_qty - ordered_qty, Decimal("0"))
+            suggested_issue_qty = min(pending_qty, max(available_qty, Decimal("0")))
+            if effective_warehouse_id:
+                remaining_display_stock[
+                    (item.inventory_item_id, effective_warehouse_id)
+                ] = available_qty - suggested_issue_qty
             shortage_qty = (
-                max(requested_qty - available_qty, Decimal("0"))
+                max(pending_qty - available_qty, Decimal("0"))
                 if stock_required
                 else Decimal("0")
             )
             has_sufficient_stock = not stock_required or bool(
-                effective_warehouse_id and available_qty >= requested_qty
+                pending_qty == 0
+                or (effective_warehouse_id and available_qty >= pending_qty)
             )
             if not has_sufficient_stock:
                 code = inv_item.item_code if inv_item else f"Item #{item.sequence}"
                 stock_blocking_items.append(
                     f"{code}: {_format_currency(available_qty)} available, "
-                    f"{_format_currency(requested_qty)} requested"
+                    f"{_format_currency(pending_qty)} outstanding"
                 )
 
             detail_items.append(
@@ -742,7 +750,11 @@ class MaterialRequestWebService:
                     "requested_qty": _format_currency(requested_qty),
                     "ordered_qty": _format_currency(ordered_qty),
                     "ordered_qty_value": float(ordered_qty),
-                    "pending_qty": _format_currency(requested_qty - ordered_qty),
+                    "ordered_qty_raw": str(ordered_qty),
+                    "pending_qty": _format_currency(pending_qty),
+                    "has_pending_qty": pending_qty > 0,
+                    "suggested_issue_qty": str(suggested_issue_qty),
+                    "out_of_stock": getattr(item, "out_of_stock", False),
                     "available_qty": _format_currency(available_qty),
                     "available_qty_value": float(available_qty),
                     "shortage_qty": _format_currency(shortage_qty),
@@ -755,16 +767,22 @@ class MaterialRequestWebService:
             )
 
         stock_is_sufficient = not stock_blocking_items
+        inline_issue = (
+            request.request_type == MaterialRequestType.ISSUE
+            and getattr(request, "source_system", None) != "sub"
+        )
         approval_blocked_reason = None
         if (
-            request.status == MaterialRequestStatus.PENDING_STOCK
+            not inline_issue
+            and request.status == MaterialRequestStatus.PENDING_STOCK
             and not stock_is_sufficient
         ):
             approval_blocked_reason = "Waiting for stock: " + "; ".join(
                 stock_blocking_items
             )
         elif (
-            request.status == MaterialRequestStatus.SUBMITTED
+            not inline_issue
+            and request.status == MaterialRequestStatus.SUBMITTED
             and stock_required
             and not stock_is_sufficient
         ):
@@ -803,12 +821,21 @@ class MaterialRequestWebService:
                 "erpnext_id": request.erpnext_id,
                 "can_edit": request.status == MaterialRequestStatus.DRAFT,
                 "can_submit": request.status == MaterialRequestStatus.DRAFT,
-                "can_approve": request.status
+                "can_approve": not inline_issue
+                and request.status
                 in {
                     MaterialRequestStatus.SUBMITTED,
                     MaterialRequestStatus.PENDING_STOCK,
                 }
                 and (not stock_required or stock_is_sufficient),
+                "can_issue_lines": inline_issue
+                and request.status
+                in {
+                    MaterialRequestStatus.SUBMITTED,
+                    MaterialRequestStatus.PENDING_STOCK,
+                    MaterialRequestStatus.PARTIALLY_ISSUED,
+                }
+                and total_qty > total_ordered,
                 "approval_blocked_reason": approval_blocked_reason,
                 "stock_required": stock_required,
                 "stock_is_sufficient": stock_is_sufficient,
@@ -884,6 +911,7 @@ class MaterialRequestWebService:
                 MaterialRequestStatus.DRAFT,
                 MaterialRequestStatus.SUBMITTED,
                 MaterialRequestStatus.PENDING_STOCK,
+                MaterialRequestStatus.PARTIALLY_ISSUED,
                 MaterialRequestStatus.PARTIALLY_ORDERED,
             ]
         )
@@ -1335,6 +1363,8 @@ class MaterialRequestWebService:
         item. Status → TRANSFERRED.
 
         For PURCHASE requests: no stock movement; status → ORDERED.
+
+        Stock approval is all-or-nothing: the caller must roll back on error.
         """
         import logging
         from datetime import datetime
@@ -1382,6 +1412,12 @@ class MaterialRequestWebService:
 
         if not request.items:
             raise ValueError("Cannot approve request without items")
+
+        if (
+            request.request_type == MaterialRequestType.ISSUE
+            and getattr(request, "source_system", None) != "sub"
+        ):
+            raise ValueError("Use the line-item issue form for this material request")
 
         # For PURCHASE type: just mark as ordered, no stock movement
         if request.request_type == MaterialRequestType.PURCHASE:
@@ -1441,9 +1477,10 @@ class MaterialRequestWebService:
                         source_document_id=request.request_id,
                         source_document_line_id=line.item_id,
                         reference=request.request_number,
+                        serial_numbers=line.serial_numbers,
                     )
                     InventoryTransactionService.create_issue(
-                        db, organization_id, txn_input, user_id
+                        db, organization_id, txn_input, user_id, auto_commit=False
                     )
                 elif request.request_type == MaterialRequestType.TRANSFER:
                     if not request.transfer_to_warehouse_id:
@@ -1471,6 +1508,7 @@ class MaterialRequestWebService:
                         source_document_line_id=line.item_id,
                         reference=request.request_number,
                         reason_code="MATERIAL_REQUEST_TRANSFER",
+                        serial_numbers=line.serial_numbers,
                     )
                     InventoryTransactionService.create_transfer(
                         db,
@@ -1496,9 +1534,10 @@ class MaterialRequestWebService:
                         source_document_id=request.request_id,
                         source_document_line_id=line.item_id,
                         reference=request.request_number,
+                        serial_numbers=line.serial_numbers,
                     )
                     InventoryTransactionService.create_issue(
-                        db, organization_id, txn_input, user_id
+                        db, organization_id, txn_input, user_id, auto_commit=False
                     )
 
                 # Mark line as fulfilled
@@ -1515,6 +1554,8 @@ class MaterialRequestWebService:
 
         if errors and len(errors) == len(request.items):
             raise ValueError("All items failed to process: " + "; ".join(errors))
+        if errors:
+            raise ValueError("Material request approval failed: " + "; ".join(errors))
 
         # Set final status based on type
         old_status = request.status
@@ -1527,14 +1568,6 @@ class MaterialRequestWebService:
         MaterialRequestWebService._emit_sub_outcome(
             db, organization_id, request, old_status, request.status, user_id
         )
-
-        if errors:
-            logger.warning(
-                "Material request %s approved with %d errors: %s",
-                request.request_number,
-                len(errors),
-                "; ".join(errors),
-            )
 
         return request
 
@@ -1580,6 +1613,7 @@ class MaterialRequestWebService:
             draft_count
             + submitted_count
             + counts.get("PENDING_STOCK", 0)
+            + counts.get("PARTIALLY_ISSUED", 0)
             + counts.get("PARTIALLY_ORDERED", 0)
         )
         completed_count = (
@@ -1598,6 +1632,7 @@ class MaterialRequestWebService:
                         MaterialRequestStatus.DRAFT,
                         MaterialRequestStatus.SUBMITTED,
                         MaterialRequestStatus.PENDING_STOCK,
+                        MaterialRequestStatus.PARTIALLY_ISSUED,
                         MaterialRequestStatus.PARTIALLY_ORDERED,
                     ]
                 ),

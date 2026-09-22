@@ -1334,6 +1334,34 @@ def approve_material_request(
     )
 
 
+@router.post("/material-requests/{request_id}/issue-lines", response_class=HTMLResponse)
+def issue_material_request_lines(
+    request: Request,
+    request_id: str,
+    line_ids: list[str] = Form([]),
+    issue_qty: list[str] = Form([]),
+    issued_before: list[str] = Form([]),
+    out_of_stock: list[str] = Form([]),
+    _perm: WebAuthContext = Depends(
+        require_any_web_permission(
+            ["inv:material_requests:approve", "inventory:material_requests:approve"]
+        )
+    ),
+    auth: WebAuthContext = Depends(require_inventory_access),
+    db: Session = Depends(get_db_for_org),
+):
+    """Issue the edited quantities, leaving marked lines outstanding."""
+    return operations_inv_web_service.issue_material_request_lines_response(
+        request_id=request_id,
+        auth=auth,
+        db=db,
+        line_ids=line_ids,
+        issue_qty=issue_qty,
+        issued_before=issued_before,
+        out_of_stock=out_of_stock,
+    )
+
+
 @router.post("/material-requests/{request_id}/cancel", response_class=HTMLResponse)
 def cancel_material_request(
     request: Request,

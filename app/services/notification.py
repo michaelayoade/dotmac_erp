@@ -356,7 +356,7 @@ class NotificationService:
             title=f"Disciplinary Query Issued - {case_number}",
             message=f"A formal query has been issued regarding case {case_number}. Please respond by {response_due_date}.",
             channel=NotificationChannel.BOTH,
-            action_url=f"/people/self-service/discipline/{case_id}",
+            action_url=f"/people/self/discipline/{case_id}",
             actor_id=actor_id,
         )
 
@@ -383,7 +383,7 @@ class NotificationService:
             title=f"Hearing Scheduled - {case_number}",
             message=f"A disciplinary hearing for case {case_number} has been scheduled for {hearing_date}{location_text}.",
             channel=NotificationChannel.BOTH,
-            action_url=f"/people/self-service/discipline/{case_id}",
+            action_url=f"/people/self/discipline/{case_id}",
             actor_id=actor_id,
         )
 
@@ -411,7 +411,7 @@ class NotificationService:
             title=f"Decision Made - {case_number}",
             message=message,
             channel=NotificationChannel.BOTH,
-            action_url=f"/people/self-service/discipline/{case_id}",
+            action_url=f"/people/self/discipline/{case_id}",
             actor_id=actor_id,
         )
 
@@ -435,7 +435,7 @@ class NotificationService:
             title=f"Case Closed - {case_number}",
             message=f"Disciplinary case {case_number} has been closed.",
             channel=NotificationChannel.BOTH,
-            action_url=f"/people/self-service/discipline/{case_id}",
+            action_url=f"/people/self/discipline/{case_id}",
             actor_id=actor_id,
         )
 
@@ -509,7 +509,7 @@ class NotificationService:
             title=f"Response Due Soon - {case_number}",
             message=f"Your response to disciplinary case {case_number} is due on {due_date}. Please respond promptly.",
             channel=NotificationChannel.BOTH,
-            action_url=f"/people/self-service/discipline/{case_id}",
+            action_url=f"/people/self/discipline/{case_id}",
         )
 
     # ========================================================================

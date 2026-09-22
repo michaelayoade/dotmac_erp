@@ -251,7 +251,8 @@ def _scalar_all(values):
     return result
 
 
-def test_detail_context_explains_pending_stock_shortage() -> None:
+@pytest.mark.parametrize("source_system", ["sub", "erp"])
+def test_detail_context_explains_pending_stock_shortage(source_system: str) -> None:
     db = MagicMock()
     organization_id = uuid.uuid4()
     request_id = uuid.uuid4()
@@ -263,6 +264,7 @@ def test_detail_context_explains_pending_stock_shortage() -> None:
         organization_id=organization_id,
         request_number="MR202609-00013",
         request_type=MaterialRequestType.ISSUE,
+        source_system=source_system,
         status=MaterialRequestStatus.PENDING_STOCK,
         schedule_date=None,
         default_warehouse_id=None,
@@ -318,13 +320,24 @@ def test_detail_context_explains_pending_stock_shortage() -> None:
     assert material_request["stock_required"] is True
     assert material_request["stock_is_sufficient"] is False
     assert material_request["can_approve"] is False
-    assert "EDGE-16" in material_request["approval_blocked_reason"]
+    if source_system == "sub":
+        assert "EDGE-16" in material_request["approval_blocked_reason"]
+        assert material_request["can_issue_lines"] is False
+    else:
+        assert material_request["approval_blocked_reason"] is None
+        assert material_request["can_issue_lines"] is True
     assert detail_line["available_qty_value"] == 0.0
     assert detail_line["shortage_qty_value"] == 1.0
     assert detail_line["has_sufficient_stock"] is False
 
 
-def test_detail_context_allows_stock_ready_pending_request_approval() -> None:
+@pytest.mark.parametrize(
+    ("source_system", "can_approve", "can_issue_lines"),
+    [("sub", True, False), ("erp", False, True)],
+)
+def test_detail_context_stock_ready_actions(
+    source_system: str, can_approve: bool, can_issue_lines: bool
+) -> None:
     db = MagicMock()
     organization_id = uuid.uuid4()
     request_id = uuid.uuid4()
@@ -336,6 +349,7 @@ def test_detail_context_allows_stock_ready_pending_request_approval() -> None:
         organization_id=organization_id,
         request_number="MR202609-00014",
         request_type=MaterialRequestType.ISSUE,
+        source_system=source_system,
         status=MaterialRequestStatus.PENDING_STOCK,
         schedule_date=None,
         default_warehouse_id=warehouse_id,
@@ -390,7 +404,8 @@ def test_detail_context_allows_stock_ready_pending_request_approval() -> None:
     material_request = context["material_request"]
     detail_line = context["material_request_items"][0]
     assert material_request["stock_is_sufficient"] is True
-    assert material_request["can_approve"] is True
+    assert material_request["can_approve"] is can_approve
+    assert material_request["can_issue_lines"] is can_issue_lines
     assert material_request["approval_blocked_reason"] is None
     assert detail_line["available_qty_value"] == 2.0
     assert detail_line["shortage_qty_value"] == 0.0
@@ -418,6 +433,8 @@ def test_approve_request_allows_stock_ready_pending_issue_request() -> None:
     request = MagicMock()
     request.request_id = request_id
     request.request_number = "MR202609-00014"
+    request.source_system = "sub"
+    request.source_reference = str(uuid.uuid4())
     request.organization_id = organization_id
     request.status = MaterialRequestStatus.PENDING_STOCK
     request.request_type = MaterialRequestType.ISSUE
@@ -455,3 +472,24 @@ def test_approve_request_allows_stock_ready_pending_issue_request() -> None:
     assert request.updated_by_id == user_id
     assert line.ordered_qty == line.requested_qty
     mock_create_issue.assert_called_once()
+
+
+def test_legacy_approve_rejects_native_issue_request() -> None:
+    db = MagicMock()
+    request = MagicMock(
+        status=MaterialRequestStatus.SUBMITTED,
+        request_type=MaterialRequestType.ISSUE,
+        source_system="erp",
+        items=[MagicMock()],
+    )
+    db.scalars.return_value.unique.return_value.first.return_value = request
+
+    with pytest.raises(ValueError, match="line-item issue form"):
+        MaterialRequestWebService.approve_request(
+            db=db,
+            organization_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            request_id=str(uuid.uuid4()),
+        )
+
+    assert request.status == MaterialRequestStatus.SUBMITTED

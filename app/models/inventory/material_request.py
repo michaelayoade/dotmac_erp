@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ARRAY,
+    Boolean,
     Date,
     DateTime,
     Enum,
@@ -51,6 +52,7 @@ class MaterialRequestStatus(str, enum.Enum):
     DRAFT = "DRAFT"
     SUBMITTED = "SUBMITTED"
     PENDING_STOCK = "PENDING_STOCK"
+    PARTIALLY_ISSUED = "PARTIALLY_ISSUED"
     PARTIALLY_ORDERED = "PARTIALLY_ORDERED"
     ORDERED = "ORDERED"
     ISSUED = "ISSUED"
@@ -254,6 +256,9 @@ class MaterialRequestItem(Base):
     requested_qty: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     ordered_qty: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=Decimal("0")
+    )
+    out_of_stock: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
     uom: Mapped[str | None] = mapped_column(String(20), nullable=True)
     serial_numbers: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)

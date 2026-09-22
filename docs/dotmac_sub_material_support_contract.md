@@ -67,6 +67,21 @@ Sub applies outcomes through one idempotent resolver. The immediate POST
 response and the polling reconciler call that same resolver; neither writes the
 projection independently. A changed ERP request identifier fails closed.
 
+### Stock approval failures
+
+ERP stock approval through `MaterialRequestWebService.approve_request` is
+all-or-nothing. ISSUE, TRANSFER, and MANUFACTURE transactions receive the saved
+line serial numbers; the inventory transaction service remains responsible for
+validating serial count, availability, warehouse, and stock policy. Missing
+serials must not be bypassed or invented.
+
+A failure on any line prevents a terminal ISSUED/TRANSFERRED state and its Sub
+outcome from being emitted. The exception propagates to the transaction-owning
+caller, which must roll back all stock movements and line updates from that
+approval attempt; it must not commit a partially fulfilled request. Purchase
+approval remains stock-free. Historical partial approvals require an audited
+operational reconciliation, not automatic replay of already-issued lines.
+
 ## Reliability and repair
 
 1. Submission and outbox enqueue are atomic after cutover; there is no separate Sub approval.

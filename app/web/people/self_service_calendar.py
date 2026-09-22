@@ -196,7 +196,7 @@ def _form_context(
         "description": event.description if event else "",
         "event_details": event.event_details if event else "",
         "location": event.location if event else "",
-        "meeting_url": event.meeting_url if event else "",
+        "meeting_url": (event.meeting_url or "") if event else "",
         "timezone": tz_name,
         "all_day": event.all_day if event else False,
         "start_date": (

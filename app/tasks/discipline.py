@@ -367,7 +367,7 @@ def _send_response_reminder(
         title=title,
         message=message,
         channel=NotificationChannel.BOTH,
-        action_url=f"/people/self-service/discipline/{case.case_id}",
+        action_url=f"/people/self/discipline/{case.case_id}",
     )
 
 
@@ -405,7 +405,7 @@ def _send_overdue_response_reminder(
         title=title,
         message=message,
         channel=NotificationChannel.BOTH,
-        action_url=f"/people/self-service/discipline/{case.case_id}",
+        action_url=f"/people/self/discipline/{case.case_id}",
     )
 
 
@@ -458,7 +458,7 @@ def _send_hearing_reminder(
         title=title,
         message=message,
         channel=NotificationChannel.BOTH,
-        action_url=f"/people/self-service/discipline/{case.case_id}",
+        action_url=f"/people/self/discipline/{case.case_id}",
     )
 
 
@@ -521,5 +521,5 @@ def _send_appeal_deadline_reminder(
         title=title,
         message=message,
         channel=NotificationChannel.BOTH,
-        action_url=f"/people/self-service/discipline/{case.case_id}",
+        action_url=f"/people/self/discipline/{case.case_id}",
     )

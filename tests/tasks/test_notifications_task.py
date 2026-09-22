@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.models.email_profile import EmailModule
 from app.models.notification import EntityType
+from app.config import settings
 
 ORG_ID = uuid4()
 
@@ -119,6 +120,39 @@ def test_process_pending_notification_emails_sends_active_notification() -> None
         assert "Review leave" in mock_send_email.call_args.kwargs["body_html"]
 
 
+def test_query_email_contains_absolute_reply_link_in_html_and_text(monkeypatch) -> None:
+    from app.tasks import notifications as notification_tasks
+
+    monkeypatch.setattr(
+        notification_tasks.settings, "app_url", "https://erp.example.test"
+    )
+    case_id = uuid4()
+    notification = _build_notification(
+        entity_type=EntityType.DISCIPLINE,
+        action_url=f"/people/self/discipline/{case_id}",
+    )
+    notification.title = "Disciplinary Query Issued - DC-2026-0001"
+
+    with (
+        patch("app.tasks.notifications.active_organization_ids", return_value=[ORG_ID]),
+        patch("app.tasks.notifications.session_for_org") as mock_session_local,
+        patch("app.tasks.notifications.person_can_receive_email", return_value=True),
+        patch(
+            "app.tasks.notifications.send_email", return_value=True
+        ) as mock_send_email,
+    ):
+        db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = db
+        db.execute.return_value.scalars.return_value.all.return_value = [notification]
+        result = notification_tasks.process_pending_notification_emails(batch_size=1)
+
+    assert result["sent"] == 1
+    expected_url = f"https://erp.example.test/people/self/discipline/{case_id}"
+    sent = mock_send_email.call_args.kwargs
+    assert f'href="{expected_url}"' in sent["body_html"]
+    assert f"View query and respond: {expected_url}" in sent["body_text"]
+
+
 def test_process_pending_notification_emails_routes_ticket_to_support() -> None:
     with (
         patch("app.tasks.notifications.active_organization_ids", return_value=[ORG_ID]),
@@ -145,6 +179,42 @@ def test_process_pending_notification_emails_routes_ticket_to_support() -> None:
         assert result["sent"] == 1
         assert mock_send_email.call_args.kwargs["module"] == EmailModule.SUPPORT
         assert "Open notification" in mock_send_email.call_args.kwargs["body_html"]
+
+
+def test_calendar_email_includes_details_and_absolute_erp_link(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "app_url", "https://erp.example.test")
+    notification = _build_notification(
+        entity_type=EntityType.SYSTEM,
+        action_url="/people/self/calendar/events/event-1",
+    )
+    notification.title = "New calendar event: Operations review"
+    notification.message = "Event: Operations review\nWhen: 01 Oct 2026, 09:00"
+    with (
+        patch("app.tasks.notifications.active_organization_ids", return_value=[ORG_ID]),
+        patch("app.tasks.notifications.session_for_org") as session_factory,
+        patch("app.tasks.notifications.person_can_receive_email", return_value=True),
+        patch("app.tasks.notifications.send_email", return_value=True) as send,
+    ):
+        db = MagicMock()
+        session_factory.return_value.__enter__.return_value = db
+        db.execute.return_value.scalars.return_value.all.return_value = [notification]
+
+        from app.tasks.notifications import process_pending_notification_emails
+
+        result = process_pending_notification_emails(batch_size=1)
+
+    assert result["sent"] == 1
+    assert send.call_args.kwargs["module"] == EmailModule.PEOPLE_PAYROLL
+    assert "When: 01 Oct 2026, 09:00" in send.call_args.kwargs["body_text"]
+    assert (
+        "View calendar event: https://erp.example.test/people/self/calendar/events/event-1"
+        in send.call_args.kwargs["body_text"]
+    )
+    assert (
+        'href="https://erp.example.test/people/self/calendar/events/event-1"'
+        in send.call_args.kwargs["body_html"]
+    )
+    assert "<br>When:" in send.call_args.kwargs["body_html"]
 
 
 def test_process_pending_invoice_mention_email_uses_finance_profile() -> None:

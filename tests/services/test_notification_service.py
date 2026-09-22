@@ -1,7 +1,7 @@
 """Tests for app/services/notification.py."""
 
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.services.notification import NotificationService
@@ -71,6 +71,25 @@ class TestNotificationServiceCreate:
         ]
         db.add_all.assert_called_once_with(notifications)
         db.flush.assert_called_once()
+
+
+def test_discipline_query_notification_links_to_employee_reply_page() -> None:
+    service = NotificationService()
+    case_id = uuid.uuid4()
+    with patch.object(service, "create") as create:
+        service.notify_discipline_query_issued(
+            MagicMock(),
+            organization_id=uuid.uuid4(),
+            case_id=case_id,
+            case_number="DC-2026-0001",
+            employee_id=uuid.uuid4(),
+            response_due_date="September 30, 2026",
+        )
+
+    assert create.call_args.kwargs["action_url"] == (
+        f"/people/self/discipline/{case_id}"
+    )
+    assert create.call_args.kwargs["channel"] == NotificationChannel.BOTH
 
 
 class TestNotificationServiceMarkRead:
