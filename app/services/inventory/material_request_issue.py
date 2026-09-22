@@ -83,6 +83,18 @@ class MaterialRequestIssueService:
         if not out_of_stock_ids <= set(pending):
             raise ValueError("Unknown out-of-stock line")
 
+        # Serialize partial issues of the same item across requests before
+        # reading stock. Lock in a stable order to avoid request-order deadlocks.
+        db.execute(
+            select(Item.item_id)
+            .where(
+                Item.organization_id == organization_id,
+                Item.item_id.in_({line.inventory_item_id for line in pending.values()}),
+            )
+            .order_by(Item.item_id)
+            .with_for_update()
+        ).all()
+
         balances: dict[tuple[UUID, UUID], Decimal] = {}
         selected: list[tuple[MaterialRequestItem, Decimal, UUID]] = []
         for line_id, line in pending.items():
