@@ -247,6 +247,11 @@ def _email_module_for_notification(notification: Notification) -> EmailModule:
 
 def _email_action_label_for_notification(notification: Notification) -> str:
     """Return the email CTA label for a notification."""
+    if (
+        notification.entity_type == EntityType.DISCIPLINE
+        and notification.title.startswith("Disciplinary Query Issued")
+    ):
+        return "View query and respond"
     if notification.entity_type == EntityType.LEAVE:
         return "Review leave"
     return "Open notification"
@@ -355,7 +360,9 @@ def _process_notification_email_batch(
             continue
 
         try:
-            body_text = notification.message
+            body_text = (
+                notification.message or "You have a new notification in Dotmac ERP."
+            )
             safe_message = (
                 html.escape(notification.message) if notification.message else None
             )
@@ -366,10 +373,19 @@ def _process_notification_email_batch(
             )
             if notification.action_url:
                 url = notification.action_url
-                if url.startswith("/") or url.startswith("http"):
-                    safe_url = html.escape(url)
+                if url.startswith("/"):
+                    url = _erp_action_url(url)
+                parsed_url = urlparse(url) if url else None
+                if (
+                    url
+                    and parsed_url
+                    and parsed_url.scheme in {"http", "https"}
+                    and parsed_url.netloc
+                ):
+                    safe_url = html.escape(url, quote=True)
                     action_label = _email_action_label_for_notification(notification)
                     body_html += f'<p><a href="{safe_url}">{action_label}</a></p>'
+                    body_text += f"\n\n{action_label}: {url}"
 
             ok = send_email(
                 db=db,
