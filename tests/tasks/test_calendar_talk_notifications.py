@@ -59,8 +59,6 @@ def test_each_due_reminder_queues_email_and_talk_once() -> None:
         SimpleNamespace(all=lambda: recipient_ids),
     ]
     db.scalar.return_value = event
-    queued = [SimpleNamespace(), SimpleNamespace()]
-
     with (
         patch(
             "app.tasks.notifications.active_organization_ids",
@@ -70,7 +68,10 @@ def test_each_due_reminder_queues_email_and_talk_once() -> None:
         patch("app.tasks.notifications.NotificationService") as service_type,
     ):
         session_factory.return_value.__enter__.return_value = db
-        service_type.return_value.create_many.return_value = queued
+        service_type.return_value.create_many.side_effect = lambda **_kwargs: [
+            SimpleNamespace(),
+            SimpleNamespace(),
+        ]
 
         result = process_due_calendar_reminders.run()
 
