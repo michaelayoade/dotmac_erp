@@ -1,6 +1,6 @@
 """Issue available material-request lines without closing outstanding lines."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -124,7 +124,7 @@ class MaterialRequestIssueService:
 
         if not selected:
             raise ValueError("Enter a quantity to issue on at least one line")
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         fiscal_period = PeriodGuardService.get_period_for_date(
             db, organization_id, now.date()
         )
