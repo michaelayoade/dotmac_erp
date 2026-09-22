@@ -14,7 +14,7 @@ global:
   external_labels:
     app: dotmac_erp
     # This file is bind-mounted, not interpolated by Compose. vmagent expands
-    # %{ENV_VAR}; a Compose-style placeholder would remain a literal label.
+    # percent-brace placeholders; a Compose-style one stays a literal label.
     environment: '%{DEPLOY_ENV}'
 
 scrape_configs:
