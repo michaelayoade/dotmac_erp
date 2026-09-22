@@ -169,7 +169,9 @@ def test_all_failed_lines_keep_the_existing_failure_contract(approval, request_t
 
 
 @pytest.mark.parametrize("missing_field", ["warehouse", "item"])
-def test_missing_line_dependency_cannot_produce_partial_success(approval, missing_field):
+def test_missing_line_dependency_cannot_produce_partial_success(
+    approval, missing_field
+):
     if missing_field == "warehouse":
         approval.request.items[1].warehouse_id = None
     else:
