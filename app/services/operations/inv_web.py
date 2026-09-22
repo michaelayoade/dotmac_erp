@@ -12,7 +12,7 @@ from datetime import date as date_type
 from decimal import Decimal, InvalidOperation
 from io import StringIO
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from uuid import UUID
 
 try:
@@ -767,6 +767,73 @@ class OperationsInventoryWebService:
             logger.warning("Failed to approve material request %s: %s", request_id, e)
         return RedirectResponse(
             f"/inventory/material-requests/{request_id}", status_code=303
+        )
+
+    def issue_material_request_lines_response(
+        self,
+        request_id: str,
+        auth: WebAuthContext,
+        db: Session,
+        line_ids: list[str],
+        issue_qty: list[str],
+        issued_before: list[str],
+        out_of_stock: list[str],
+    ) -> RedirectResponse:
+        """Issue selected material lines after parsing the inline form."""
+        from app.services.inventory.material_request_issue import (
+            MaterialRequestIssueService,
+        )
+
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None or user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        try:
+            if (
+                not line_ids
+                or len(line_ids) != len(issue_qty)
+                or len(line_ids) != len(issued_before)
+            ):
+                raise ValueError("Issue form is incomplete; reload the request")
+            ids = [UUID(value) for value in line_ids]
+            if len(set(ids)) != len(ids):
+                raise ValueError("Issue form has duplicate lines")
+            quantities = {
+                line_id: Decimal(value)
+                for line_id, value in zip(ids, issue_qty, strict=True)
+            }
+            expected = {
+                line_id: Decimal(value)
+                for line_id, value in zip(ids, issued_before, strict=True)
+            }
+            out_ids = {UUID(value) for value in out_of_stock}
+            MaterialRequestIssueService.issue_available(
+                db,
+                org_id,
+                user_id,
+                UUID(request_id),
+                quantities,
+                expected,
+                out_ids,
+            )
+            db.commit()
+        except (ValueError, InvalidOperation, HTTPException) as exc:
+            db.rollback()
+            message = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            return RedirectResponse(
+                f"/inventory/material-requests/{request_id}?error={quote(str(message))}",
+                status_code=303,
+            )
+        except Exception:
+            db.rollback()
+            logger.exception("Failed issuing material request %s", request_id)
+            return RedirectResponse(
+                f"/inventory/material-requests/{request_id}?error=Unable+to+issue+materials",
+                status_code=303,
+            )
+        return RedirectResponse(
+            f"/inventory/material-requests/{request_id}?success=Materials+issued",
+            status_code=303,
         )
 
     def delete_material_request_response(
