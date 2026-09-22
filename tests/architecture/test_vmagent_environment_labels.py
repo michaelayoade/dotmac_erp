@@ -70,3 +70,12 @@ def test_environment_fix_preserves_scrape_authentication_and_targets():
     }
     assert app["static_configs"][0]["targets"] == ["app:8002"]
     assert jobs["dotmac-erp-worker"]["static_configs"][0]["targets"] == ["worker:8004"]
+
+
+def test_all_native_placeholders_are_supplied_even_inside_comments():
+    # Native expansion runs on the entire file before YAML parsing, so example
+    # placeholders in comments would also require real environment variables.
+    variables = set(re.findall(r"%\{([A-Za-z_][A-Za-z0-9_.-]*)\}", CONFIG.read_text()))
+    agent = yaml.safe_load(COMPOSE.read_text())["services"]["vmagent"]
+    assert variables == {"DEPLOY_ENV", "METRICS_TOKEN"}
+    assert variables <= agent["environment"].keys()
