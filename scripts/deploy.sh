@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy DotMac ERP — hardened: backup -> pull -> migrate -> recreate ->
+# Deploy DotMac ERP — hardened: preflight -> backup -> pull -> migrate -> recreate ->
 # health gate -> ordinary auto-rollback or cutover forward repair.
 #
 # Usage:
@@ -401,6 +401,23 @@ validate_metrics_configuration() {
         python3 "$SCRIPT_DIR/validate_metrics_remote_write.py"
 }
 validate_metrics_configuration
+
+# Authenticate the existing migration owner before backup or Git pull. The
+# current image is already present on this host; a stale secret must not spend
+# a backup cycle or move the checkout. The candidate-image contract is checked
+# again after pull below, because its verifier may have changed.
+if [[ -n "$PREV_IMAGE" ]]; then
+    echo "-> Preflight: existing migration executor credential..."
+    if ! docker compose run --rm \
+        -e MIGRATION_DATABASE_URL app \
+        python scripts/bootstrap_database_roles.py --verify-only
+    then
+        echo "DEPLOY STOPPED: migration credential or role contract failed before backup or pull." >&2
+        exit 1
+    fi
+    echo "  existing migration executor verified"
+    echo ""
+fi
 
 # Step 1: pre-migration DB backup (SKIP_BACKUP=1 to skip)
 if [[ "${SKIP_BACKUP:-0}" != "1" ]]; then
