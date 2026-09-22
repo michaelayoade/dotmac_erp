@@ -36,6 +36,16 @@
         </div>
     </div>
     {% else %}
+    {% if request.query_params.get('error') %}
+    <div role='alert' class='rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200'>
+        {{ request.query_params.get('error') }}
+    </div>
+    {% endif %}
+    {% if request.query_params.get('success') %}
+    <div role='status' class='rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'>
+        {{ request.query_params.get('success') }}
+    </div>
+    {% endif %}
     <!-- Header Card -->
     <div class="card p-6">
         <div class="flex items-start justify-between">
@@ -180,10 +190,17 @@
                         <th scope="col">Item</th>
                         <th scope="col">{% if material_request.request_type == 'TRANSFER' %}Source Warehouse{% else %}Warehouse{% endif %}</th>
                         <th scope="col" class="text-right">Requested Qty</th>
-                        <th scope="col" class="text-right">Ordered Qty</th>
+                        <th scope="col" class="text-right">{{ 'Issued Qty' if material_request.request_type == 'ISSUE' else 'Ordered Qty' }}</th>
+                        {% if material_request.request_type == 'ISSUE' %}
+                        <th scope='col' class='text-right'>Outstanding</th>
+                        {% endif %}
                         {% if material_request.stock_required %}
                         <th scope="col" class="text-right">Available</th>
                         <th scope="col" class="text-right">Short</th>
+                        {% endif %}
+                        {% if material_request.can_issue_lines %}
+                        <th scope='col' class='text-right'>Issue now</th>
+                        <th scope='col'>Stock status</th>
                         {% endif %}
                         <th scope="col">UOM</th>
                         <th scope="col">Schedule Date</th>
@@ -191,7 +208,7 @@
                 </thead>
                 <tbody>
                     {% for item in material_request_items %}
-                    <tr>
+                    <tr {% if material_request.can_issue_lines and item.has_pending_qty %}x-data='{ outOfStock: {{ item.out_of_stock | tojson }}, issueQty: {{ ('0' if item.out_of_stock else item.suggested_issue_qty) | tojson }} }'{% endif %}>
                         <td class="text-slate-400 font-mono text-sm">{{ loop.index }}</td>
                         <td class="max-w-[14rem]">
                             <div class="truncate font-mono font-medium text-slate-900 dark:text-white" title="{{ item.item_code }}">{{ item.item_code }}</div>
@@ -206,6 +223,9 @@
                             <span class="text-slate-400">0</span>
                             {% endif %}
                         </td>
+                        {% if material_request.request_type == 'ISSUE' %}
+                        <td class='text-right font-mono text-slate-900 dark:text-white'>{{ item.pending_qty }}</td>
+                        {% endif %}
                         {% if material_request.stock_required %}
                         <td class="text-right font-mono {% if item.has_sufficient_stock %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-700 dark:text-slate-200{% endif %}">{{ item.available_qty }}</td>
                         <td class="text-right font-mono">
@@ -214,6 +234,31 @@
                             {% else %}
                             <span class="text-slate-400">0</span>
                             {% endif %}
+                        </td>
+                        {% endif %}
+                        {% if material_request.can_issue_lines %}
+                        <td class='text-right'>
+                            {% if item.has_pending_qty %}
+                            <input type='hidden' name='line_ids' value='{{ item.item_id }}' form='lineIssueForm'>
+                            <input type='hidden' name='issued_before' value='{{ item.ordered_qty_raw }}' form='lineIssueForm'>
+                            <input aria-label='Quantity to issue for {{ item.item_code }}' type='number' name='issue_qty' form='lineIssueForm'
+                                   min='0' max='{{ item.suggested_issue_qty }}' step='0.000001' required
+                                   x-model='issueQty' :readonly='outOfStock'
+                                   class='form-input w-28 text-right font-mono'>
+                            {% else %}<span class='text-slate-400'>—</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if item.has_pending_qty and (item.available_qty_value <= 0 or item.out_of_stock) %}
+                            <input type='checkbox' name='out_of_stock' value='{{ item.item_id }}' form='lineIssueForm'
+                                   x-model='outOfStock' tabindex='-1' class='sr-only' aria-hidden='true' {% if item.out_of_stock %}checked{% endif %}>
+                            <button type='button' class='badge badge-sm badge-rejected cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500'
+                                    :aria-pressed='outOfStock.toString()'
+                                    @click='outOfStock = !outOfStock; issueQty = outOfStock ? 0 : {{ item.suggested_issue_qty | tojson }}'>
+                                Out of stock <span x-show='outOfStock' x-cloak aria-hidden='true'>Selected</span>
+                            </button>
+                            {% elif not item.has_pending_qty %}{{ status_badge('ISSUED', 'sm') }}
+                            {% elif item.shortage_qty_value > 0 %}{{ status_badge('INSUFFICIENT STOCK', 'sm') }}
+                            {% else %}{{ status_badge('AVAILABLE', 'sm') }}{% endif %}
                         </td>
                         {% endif %}
                         <td class="text-slate-500">{{ item.uom or '-' }}</td>
@@ -226,9 +271,13 @@
                         <td colspan="3" class="font-semibold text-slate-900 dark:text-white">Total</td>
                         <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ material_request.total_requested_qty }}</td>
                         <td class="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">{{ material_request.total_ordered_qty }}</td>
+                        {% if material_request.request_type == 'ISSUE' %}
+                        <td class='text-right font-mono font-semibold'>{{ material_request.total_pending }}</td>
+                        {% endif %}
                         {% if material_request.stock_required %}
                         <td colspan="2"></td>
                         {% endif %}
+                        {% if material_request.can_issue_lines %}<td colspan='2'></td>{% endif %}
                         <td colspan="2"></td>
                     </tr>
                 </tfoot>
@@ -245,6 +294,17 @@
     <div class="card p-6">
         <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Actions</h3>
         <div class="flex flex-wrap gap-3">
+{% if material_request.can_issue_lines and auth is defined and auth.has_any_permission(['inv:material_requests:approve', 'inventory:material_requests:approve']) %}
+            <form id='lineIssueForm' method='post' action='/inventory/material-requests/{{ material_request.request_id }}/issue-lines'
+                  onsubmit='return confirm(this.dataset.confirm)'
+                  data-confirm='Issue the entered quantities now? Marked out-of-stock lines will remain outstanding.'>
+                {{ request.state.csrf_form | safe }}
+                <button type='submit' class='btn btn-success'>
+                    {{ icon_svg('check', 'h-4 w-4 mr-1.5') }} Issue remaining line items
+                </button>
+            </form>
+            <p class='w-full text-sm text-slate-500 dark:text-slate-400'>Edit the Issue now quantity on each line. Click Out of stock for a zero-stock line, then issue the rest. The original requested quantities remain unchanged.</p>
+{% endif %}
 {% if material_request.can_submit and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/submit" class="inline">
                 {{ request.state.csrf_form | safe }}
