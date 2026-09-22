@@ -402,11 +402,22 @@ class BankingAccountWebService:
         from app.models.domain_settings import SettingDomain
         from app.services.settings_spec import resolve_value
 
-        mono_enabled = resolve_value(db, SettingDomain.banking, "mono_enabled")
+        mono_enabled = resolve_value(
+            db,
+            SettingDomain.banking,
+            "mono_enabled",
+            organization_id=auth.organization_id,
+        )
         context["mono_enabled"] = bool(mono_enabled)
         if mono_enabled:
             context["mono_public_key"] = str(
-                resolve_value(db, SettingDomain.banking, "mono_public_key") or ""
+                resolve_value(
+                    db,
+                    SettingDomain.banking,
+                    "mono_public_key",
+                    organization_id=auth.organization_id,
+                )
+                or ""
             )
 
             # Get user email for Mono customer data
