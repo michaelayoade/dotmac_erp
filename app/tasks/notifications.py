@@ -39,6 +39,10 @@ from app.models.organization_calendar import (
     OrganizationCalendarReminder,
     ParticipantMembershipStatus,
 )
+from app.services.calendar_notification_content import (
+    calendar_event_message,
+    reminder_interval,
+)
 from app.services.notification import NotificationService
 from app.services.email import person_can_receive_email, send_email
 from app.tenant_catalog import active_organization_ids
@@ -89,7 +93,7 @@ class CalendarReminderDispatchResults(TypedDict):
 def process_due_calendar_reminders(
     batch_size: int = 100,
 ) -> CalendarReminderDispatchResults:
-    """Turn due ERP calendar reminders into notifications under tenant scope."""
+    """Queue due email/in-app and optional Talk reminders under tenant scope."""
     results: CalendarReminderDispatchResults = {
         "processed": 0,
         "notifications_queued": 0,
@@ -148,6 +152,10 @@ def process_due_calendar_reminders(
                         )
                     ).all()
                 )
+                interval = reminder_interval(reminder.offset_minutes)
+                reminder_message = calendar_event_message(
+                    event, f"Your event starts in {interval}."
+                )
                 notifications = notification_service.create_many(
                     db,
                     organization_id=organization_id,
@@ -155,9 +163,9 @@ def process_due_calendar_reminders(
                     entity_type=EntityType.SYSTEM,
                     entity_id=event.event_id,
                     notification_type=NotificationType.REMINDER,
-                    title=f"Calendar reminder: {event.title}",
-                    message="This event is approaching.",
-                    channel=NotificationChannel.IN_APP,
+                    title=f"Calendar reminder ({interval}): {event.title}",
+                    message=reminder_message,
+                    channel=NotificationChannel.BOTH,
                     action_url=f"/people/self/calendar/events/{event.event_id}",
                 )
                 talk_recipient_ids = list(
@@ -183,8 +191,8 @@ def process_due_calendar_reminders(
                             entity_type=EntityType.SYSTEM,
                             entity_id=event.event_id,
                             notification_type=NotificationType.REMINDER,
-                            title=f"Calendar reminder: {event.title}",
-                            message="This event is approaching.",
+                            title=f"Calendar reminder ({interval}): {event.title}",
+                            message=reminder_message,
                             channel=NotificationChannel.NEXTCLOUD,
                             action_url=f"/people/self/calendar/events/{event.event_id}",
                         )
@@ -254,6 +262,10 @@ def _email_action_label_for_notification(notification: Notification) -> str:
         return "View query and respond"
     if notification.entity_type == EntityType.LEAVE:
         return "Review leave"
+    if notification.action_url == "/people/self/calendar":
+        return "Open My Calendar"
+    if (notification.action_url or "").startswith("/people/self/calendar/events/"):
+        return "View calendar event"
     return "Open notification"
 
 
@@ -366,6 +378,8 @@ def _process_notification_email_batch(
             safe_message = (
                 html.escape(notification.message) if notification.message else None
             )
+            if safe_message:
+                safe_message = safe_message.replace("\n", "<br>")
             body_html = (
                 f"<p>{safe_message}</p>"
                 if safe_message

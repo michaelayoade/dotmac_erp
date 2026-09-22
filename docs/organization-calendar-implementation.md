@@ -1,4 +1,4 @@
-# ERP Calendar and Nextcloud Talk Notifications
+# ERP Calendar Notifications
 
 ## Decision
 
@@ -7,11 +7,12 @@ events. Nextcloud Calendar receives no copy and is not a projection or decision 
 these records. Nextcloud Talk is a delivery channel only.
 
 When ERP publishes, changes, cancels, or reaches a configured reminder time for
-an event, ERP creates durable notification records for the affected employees.
-The existing notification worker sends each record to the employee's mapped
-Nextcloud Talk identity. Every actionable message contains an absolute link to
-the event in ERP. ERP authentication, tenant scope, and participant visibility
-are checked again when that link is opened.
+an event, ERP creates durable in-app and email notification records for the
+affected employees. The email worker sends each record through the configured
+People/Payroll email profile. Employees with a mapped Nextcloud identity also
+receive a Talk message. Actionable email and Talk messages link to the event
+or My Calendar in ERP. ERP authentication, tenant scope, and participant
+visibility are checked again when that link is opened.
 
 Personal events created directly in Nextcloud remain outside ERP. ERP neither
 reads nor modifies Nextcloud calendars.
@@ -20,10 +21,11 @@ reads nor modifies Nextcloud calendars.
 
 - `OrganizationCalendarService` owns event state, participant membership,
   cancellation, reminder definitions, and the decision to notify.
-- `public.notification` is the durable queue and delivery record for Talk.
+- `public.notification` is the durable queue and delivery record for email and Talk.
 - `process_due_calendar_reminders` is the only writer of reminder consequences.
   It locks each due reminder once, creates participant notifications in the
   same database transaction, and records that the reminder was dispatched.
+- `process_pending_notification_emails` owns email delivery and its retry state.
 - `process_pending_nextcloud_notifications` owns Talk delivery. It resolves the
   employee's stored Nextcloud user ID, opens or reuses a one-to-one Talk
   conversation, sends the message, and records provider acceptance.
@@ -35,14 +37,22 @@ reads nor modifies Nextcloud calendars.
 
 ## User behaviour
 
-- Publishing an event sends each selected participant a Talk message.
+- Publishing an event sends each selected participant an email and in-app alert.
+- Direct, department, and designation selections resolve to unique, eligible
+  participants when the event is saved.
 - Adding a participant sends that person a new-event message.
 - Editing a published event sends active participants an update message.
 - Removing a participant sends that person a removal message linking to My
   Calendar rather than an event they can no longer open.
 - Cancelling sends former participants a cancellation message linking to My
   Calendar.
-- Each configured reminder sends active participants a reminder message.
+- Each configured reminder sends active participants its own email and in-app
+  alert at the selected time, with wording for that interval (for example, one
+  week or one day before).
+- An edit does not repeat a reminder already dispatched for the same event time;
+  reminder periods already past are not sent retroactively.
+- Event emails include the title, date and time with time zone, optional location
+  and details, and an absolute link back to ERP.
 - Drafts never notify.
 - Event messages link to the matching My Calendar record in ERP.
 - Talk and device notification settings remain under the employee's control;
@@ -62,9 +72,9 @@ in the code.
 - Each recipient comes from the employee's verified `nextcloud_user_id`.
 - Reminder times come from each event and its selected offsets.
 
-The worker accepts only ERP-relative action paths and combines them with the
-configured absolute `APP_URL`. This prevents a notification record from
-turning Talk into a link to an unrelated site.
+The workers turn ERP-relative action paths into absolute links using `APP_URL`.
+Talk delivery accepts only ERP-relative action paths, so a notification record
+cannot turn Talk into a link to an unrelated site.
 
 ## Identity and security
 
@@ -91,26 +101,33 @@ committed, written to project files, or reused for employee provisioning.
 ## Required setup
 
 1. Configure the deployment's public ERP origin.
-2. Configure the Notifications domain with the Nextcloud server, dedicated
-   Talk sender, and its secret-store-backed app password.
-3. Keep employee-to-Nextcloud identity mappings current when Talk delivery is desired.
-4. Run the reminder and Talk delivery jobs every minute.
+2. Configure an active People/Payroll email profile or working SMTP fallback.
+3. If Talk delivery is desired, configure the Notifications domain with the
+   Nextcloud server, dedicated Talk sender, and its secret-store-backed app
+   password.
+4. Keep employee-to-Nextcloud identity mappings current when Talk delivery is desired.
+5. Run the reminder, email, and Talk delivery jobs every minute.
 
 ## Acceptance gate
 
 Before enabling calendar use broadly, prove in staging that:
 
-1. A selected employee receives a one-to-one Talk message for a new event.
+1. A directly selected employee and employees selected through department or
+   designation each receive one new-event email with the event facts and link.
 2. An unselected employee receives nothing.
-3. The message link opens the correct ERP event after login.
-4. Another employee cannot open that event by copying the link.
-5. Updates, participant additions/removals, cancellations, and reminders each
-   produce the expected single message.
-6. Re-running either worker does not duplicate an accepted notification.
-7. A missing Nextcloud identity remains visible as an undelivered record and
-   does not weaken ERP access rules.
-8. Talk failure does not roll back or alter the authoritative ERP event.
+3. One-week and one-day selections each produce a separate email at their
+   scheduled time, with the correct interval and event facts.
+4. The email link opens the correct ERP event after login.
+5. Another employee cannot open that event by copying the link.
+6. Updates, participant additions/removals, and cancellations each produce
+   the expected single notification.
+7. Re-running the reminder and email workers does not duplicate an accepted
+   email.
+8. Editing an event with no meeting link succeeds without supplying one.
+9. If Talk is enabled, a selected employee receives one Talk message; a
+   missing Nextcloud identity does not block email or ERP access.
 
-Production activation requires a dedicated Talk sender, secret-store-backed
-credentials, healthy Talk delivery, verified employee mappings, and completion
-of this staging gate.
+Production activation requires a working email profile and completion of this
+staging gate. Talk activation also requires a dedicated sender,
+secret-store-backed credentials, healthy delivery, and verified employee
+mappings.

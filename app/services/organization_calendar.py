@@ -1,4 +1,4 @@
-"""ERP-owned calendar service with queued Talk notification consequences."""
+"""ERP-owned calendar service with durable notification consequences."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
+from app.services.calendar_notification_content import calendar_event_message
 from app.services.notification import NotificationService
 
 DEFAULT_TIMEZONE = "Africa/Lagos"
@@ -870,7 +871,7 @@ class OrganizationCalendarService:
         message: str,
         action_url: str | None = None,
     ) -> None:
-        """Create an ERP alert for everyone and Talk delivery when available."""
+        """Queue in-app/email notices and optional Talk delivery."""
         notification_service = NotificationService()
         action_url = (
             action_url
@@ -885,8 +886,12 @@ class OrganizationCalendarService:
             entity_id=event.event_id,
             notification_type=notification_type,
             title=f"{title_prefix}: {event.title}",
-            message=message,
-            channel=NotificationChannel.IN_APP,
+            message=(
+                calendar_event_message(event, message)
+                if action_url == f"/people/self/calendar/events/{event.event_id}"
+                else message
+            ),
+            channel=NotificationChannel.BOTH,
             action_url=action_url,
             actor_id=actor_person_id,
         )
@@ -921,19 +926,35 @@ class OrganizationCalendarService:
             raise CalendarError(f"Use no more than {MAX_REMINDERS} reminders.")
         if any(offset < 0 or offset > 525600 for offset in offsets):
             raise CalendarError("Reminder offsets must be between now and one year.")
+        previously_dispatched = {
+            reminder.offset_minutes: (reminder.scheduled_for, reminder.dispatched_at)
+            for reminder in event.reminders
+            if reminder.dispatched_at is not None
+        }
+        now = datetime.now(UTC)
         # Delete existing rows before inserting replacement offsets so a
         # changed set cannot trip the event/offset unique constraint while the
         # unit of work is ordering deletes and inserts.
         event.reminders.clear()
         self.db.flush()
-        event.reminders.extend(
-            OrganizationCalendarReminder(
-                organization_id=self.organization_id,
-                offset_minutes=offset,
-                scheduled_for=self._reminder_time(event, offset),
+        for offset in offsets:
+            scheduled_for = self._reminder_time(event, offset)
+            previous = previously_dispatched.get(offset)
+            dispatched_at = (
+                previous[1]
+                if previous and previous[0] == scheduled_for
+                else now
+                if scheduled_for < now
+                else None
             )
-            for offset in offsets
-        )
+            event.reminders.append(
+                OrganizationCalendarReminder(
+                    organization_id=self.organization_id,
+                    offset_minutes=offset,
+                    scheduled_for=scheduled_for,
+                    dispatched_at=dispatched_at,
+                )
+            )
 
     @staticmethod
     def _reminder_time(
