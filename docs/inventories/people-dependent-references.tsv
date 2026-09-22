@@ -186,7 +186,7 @@ hr	succession_plan	updated_by_id	public	people	id	mixin_expansion	app/models/peo
 hr	survey	created_by_id	public	people	id	mixin_expansion	app/models/people/hr/survey.py:82 via app/models/people/base.py:61
 hr	survey	updated_by_id	public	people	id	mixin_expansion	app/models/people/hr/survey.py:82 via app/models/people/base.py:66
 hr	survey_response	employee_id	hr	employee	employee_id	explicit	app/models/people/hr/survey.py:239
-inv	material_request	requested_by_id	hr	employee	employee_id	explicit	app/models/inventory/material_request.py:122
+inv	material_request	requested_by_id	hr	employee	employee_id	explicit	app/models/inventory/material_request.py:124
 leave	holiday_list	created_by_id	public	people	id	mixin_expansion	app/models/people/leave/holiday_list.py:32 via app/models/people/base.py:61
 leave	holiday_list	updated_by_id	public	people	id	mixin_expansion	app/models/people/leave/holiday_list.py:32 via app/models/people/base.py:66
 leave	leave_allocation	created_by_id	public	people	id	mixin_expansion	app/models/people/leave/leave_allocation.py:34 via app/models/people/base.py:61

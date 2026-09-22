@@ -108,6 +108,7 @@ app/services/finance/gl/web/period_web.py	PeriodWebService.close_period_response
 app/services/finance/gl/web/period_web.py	PeriodWebService.create_period_response	gl.calendar	gl_internal	retired_with_gl_owner
 app/services/finance/gl/web/period_web.py	PeriodWebService.open_period_response	gl.calendar	gl_internal	retired_with_gl_owner
 app/services/finance/import_export/opening_balance.py	OpeningBalanceImporter.import_file	gl.period_guard	repoint_to_module	caller_repointed
+app/services/inventory/material_request_issue.py	MaterialRequestIssueService.issue_available	gl.period_guard	repoint_to_module	caller_repointed
 app/services/finance/lease/lease_posting_adapter.py	LeasePostingAdapter.post_initial_recognition	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/lease/lease_posting_adapter.py	LeasePostingAdapter.post_interest_accrual	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/lease/lease_posting_adapter.py	LeasePostingAdapter.post_lease_payment	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed

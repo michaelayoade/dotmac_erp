@@ -434,6 +434,7 @@ def test_approve_request_allows_stock_ready_pending_issue_request() -> None:
     request.request_id = request_id
     request.request_number = "MR202609-00014"
     request.source_system = "sub"
+    request.source_reference = str(uuid.uuid4())
     request.organization_id = organization_id
     request.status = MaterialRequestStatus.PENDING_STOCK
     request.request_type = MaterialRequestType.ISSUE

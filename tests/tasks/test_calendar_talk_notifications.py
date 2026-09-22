@@ -68,7 +68,7 @@ def test_each_due_reminder_queues_email_and_talk_once() -> None:
         patch("app.tasks.notifications.NotificationService") as service_type,
     ):
         session_factory.return_value.__enter__.return_value = db
-        service_type.return_value.create_many.side_effect = lambda **_kwargs: [
+        service_type.return_value.create_many.side_effect = lambda *_args, **_kwargs: [
             SimpleNamespace(),
             SimpleNamespace(),
         ]
