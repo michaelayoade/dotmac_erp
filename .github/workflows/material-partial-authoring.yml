@@ -5,23 +5,89 @@ on:
     paths: ['.github/workflows/material-partial-authoring.yml', '.github/material_partial_patch.py']
 permissions:
   contents: read
+concurrency:
+  group: material-partial-authoring-erp
+  cancel-in-progress: false
 jobs:
-  snapshot:
+  publish:
     if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/fix/selfcare-material-partial-issue'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      DATABASE_URL: 'sqlite:///./test.db'
+      REDIS_URL: 'redis://127.0.0.1:9/0'
+      CELERY_BROKER_URL: 'memory://'
+      CELERY_RESULT_BACKEND: 'cache+memory://'
+      DOTMAC_DEV_MODE: 'true'
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - name: Export tracked development sources
+          fetch-depth: 1
+      - name: Locate the reviewed patch
+        id: patch
         run: |
-          git archive --format=tar HEAD | gzip -n > material-source.tgz
-          git rev-parse HEAD > material-source-revision.txt
-      - uses: actions/upload-artifact@v4
+          if test -f .github/material_partial_patch.py; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.patch.outputs.present == 'true'
         with:
-          name: material-source
+          python-version: '3.12'
+      - name: Verify source identities and apply exact patch
+        if: steps.patch.outputs.present == 'true'
+        run: python .github/material_partial_patch.py apply
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        if: steps.patch.outputs.present == 'true'
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - uses: actions/cache@v4
+        if: steps.patch.outputs.present == 'true'
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.12-${{ hashFiles('poetry.lock') }}
+      - name: Install the repository-locked development environment
+        if: steps.patch.outputs.present == 'true'
+        env:
+          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: poetry install --no-interaction
+      - name: Pinned lint and format on changed Python files
+        id: format
+        if: steps.patch.outputs.present == 'true'
+        run: python .github/material_partial_patch.py format
+      - name: Regenerate the real OpenAPI contract manifest
+        id: manifest
+        if: steps.patch.outputs.present == 'true'
+        run: poetry run python scripts/update_openapi_contract.py
+      - name: Focused application regressions
+        id: tests
+        if: steps.patch.outputs.present == 'true'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          poetry run pytest -q tests/ifrs/inv/test_material_request_issue.py tests/ifrs/inv/test_selfcare_material_partial_issue.py tests/ifrs/inv/test_material_request_web_service.py tests/ifrs/inv/test_material_request_approval_integrity.py tests/sync/test_dotmac_sub_sync_service.py 2>&1 | tee "$RUNNER_TEMP/material-validation.txt"
+      - name: Publish feature-branch source for draft review
+        if: always() && steps.format.outcome == 'success' && steps.manifest.outcome == 'success'
+        run: python .github/material_partial_patch.py publish
+      - name: Record validation outcome
+        if: always()
+        env:
+          FOCUSED_TEST_OUTCOME: ${{ steps.tests.outcome }}
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+          MANIFEST_OUTCOME: ${{ steps.manifest.outcome }}
+        run: |
+          printf 'Format: %s\nManifest: %s\nFocused tests: %s\nFull CI, PostgreSQL migration and browser acceptance remain required.\n' "$FORMAT_OUTCOME" "$MANIFEST_OUTCOME" "$FOCUSED_TEST_OUTCOME" | tee "$RUNNER_TEMP/material-validation-status.txt" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: material-validation
           path: |
-            material-source.tgz
-            material-source-revision.txt
-          retention-days: 1
+            ${{ runner.temp }}/material-validation.txt
+            ${{ runner.temp }}/material-validation-status.txt
+          retention-days: 2
