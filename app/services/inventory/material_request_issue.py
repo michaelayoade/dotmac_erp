@@ -62,8 +62,9 @@ def validate_sub_issue_history(
     Both MATERIAL_REQUEST and older Sub_MATERIAL_REQUEST transactions bind the
     same request/line UUIDs. Returns do not reopen an original material request.
     """
-    posted = dict(
-        db.execute(
+    posted: dict[UUID | None, Decimal] = {
+        line_id: issued_qty
+        for line_id, issued_qty in db.execute(
             select(
                 InventoryTransaction.source_document_line_id,
                 func.sum(InventoryTransaction.quantity),
@@ -75,7 +76,7 @@ def validate_sub_issue_history(
             )
             .group_by(InventoryTransaction.source_document_line_id)
         ).all()
-    )
+    }
     if set(posted) - {line.item_id for line in lines}:
         raise ValueError(
             "Historical issue entries cannot be matched to request lines; "
