@@ -4,11 +4,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.inventory import (
+    InventoryTransaction,
     Item,
     MaterialRequest,
     MaterialRequestItem,
@@ -17,10 +18,80 @@ from app.models.inventory import (
     TransactionType,
 )
 from app.services.finance.gl.period_guard import PeriodGuardService
+from app.services.inventory.serial import InventorySerialService
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
+
+
+def _serials_for_issue(
+    line: MaterialRequestItem, quantity: Decimal
+) -> list[str] | None:
+    """Use only the next units from the immutable saved serial selection.
+
+    Missing selections still reach the inventory owner's mandatory validation.
+    Never pick substitute hardware or reuse already-issued saved serials.
+    """
+    serials = InventorySerialService.normalize_serial_numbers(
+        getattr(line, "serial_numbers", None)
+    )
+    if not serials:
+        return None
+    already_issued = line.ordered_qty or Decimal("0")
+    if any(
+        value != value.to_integral_value()
+        for value in (line.requested_qty, already_issued, quantity)
+    ) or len(serials) != int(line.requested_qty):
+        raise ValueError(
+            f"Item #{line.sequence}: saved serial selections must match the "
+            "requested quantity and serialized issues must be whole units"
+        )
+    start = int(already_issued)
+    return serials[start : start + int(quantity)]
+
+
+def validate_sub_issue_history(
+    db: Session,
+    organization_id: UUID,
+    request_id: UUID,
+    lines: list[MaterialRequestItem],
+) -> None:
+    """Refuse ambiguous historical counters without repairing or replaying stock.
+
+    Both MATERIAL_REQUEST and older Sub_MATERIAL_REQUEST transactions bind the
+    same request/line UUIDs. Returns do not reopen an original material request.
+    """
+    posted = dict(
+        db.execute(
+            select(
+                InventoryTransaction.source_document_line_id,
+                func.sum(InventoryTransaction.quantity),
+            )
+            .where(
+                InventoryTransaction.organization_id == organization_id,
+                InventoryTransaction.source_document_id == request_id,
+                InventoryTransaction.transaction_type == TransactionType.ISSUE,
+            )
+            .group_by(InventoryTransaction.source_document_line_id)
+        ).all()
+    )
+    if set(posted) - {line.item_id for line in lines}:
+        raise ValueError(
+            "Historical issue entries cannot be matched to request lines; "
+            "reconcile this request before issuing more stock"
+        )
+    for line in lines:
+        issued = line.ordered_qty or Decimal("0")
+        if (
+            issued < 0
+            or issued > line.requested_qty
+            or posted.get(line.item_id, Decimal("0")) != issued
+        ):
+            raise ValueError(
+                f"Item #{line.sequence}: issued quantity differs from stock history; "
+                "reconcile this request before issuing more stock"
+            )
 
 
 class MaterialRequestIssueService:
@@ -34,7 +105,11 @@ class MaterialRequestIssueService:
         expected_issued: dict[UUID, Decimal],
         out_of_stock_ids: set[UUID],
     ) -> MaterialRequest:
-        """Post the selected issue quantities as one transaction."""
+        """Post selected quantities and the Sub outcome in one caller transaction.
+
+        Creation date and source do not exclude eligible ISSUE requests. The
+        request lock is shared with legacy Sub resends and automatic issuance.
+        """
         request = db.scalars(
             select(MaterialRequest)
             .where(
@@ -42,13 +117,12 @@ class MaterialRequestIssueService:
                 MaterialRequest.organization_id == organization_id,
             )
             .with_for_update()
+            .execution_options(populate_existing=True)
         ).first()
         if request is None:
             raise ValueError("Material request not found")
         if request.request_type != MaterialRequestType.ISSUE:
             raise ValueError("Only material issue requests support line-by-line issue")
-        if request.source_system == "sub":
-            raise ValueError("Sub requests require the existing stock workflow")
         if request.status not in {
             MaterialRequestStatus.SUBMITTED,
             MaterialRequestStatus.PENDING_STOCK,
@@ -65,6 +139,7 @@ class MaterialRequestIssueService:
                 )
                 .order_by(MaterialRequestItem.sequence)
                 .with_for_update()
+                .execution_options(populate_existing=True)
             ).all()
         )
         pending = {
@@ -82,9 +157,10 @@ class MaterialRequestIssueService:
             )
         if not out_of_stock_ids <= set(pending):
             raise ValueError("Unknown out-of-stock line")
+        if request.source_system == "sub":
+            validate_sub_issue_history(db, organization_id, request_id, lines)
 
-        # Serialize partial issues of the same item across requests before
-        # reading stock. Lock in a stable order to avoid request-order deadlocks.
+        # Serialize shared stock buckets in stable order across requests.
         db.execute(
             select(Item.item_id)
             .where(
@@ -128,7 +204,7 @@ class MaterialRequestIssueService:
                     )
             elif available <= 0:
                 raise ValueError(f"Item #{line.sequence}: mark this line out of stock")
-            if quantity > available:
+            if quantity > max(available, Decimal("0")):
                 raise ValueError(f"Item #{line.sequence}: only {available} available")
             balances[key] -= quantity
             if quantity > 0:
@@ -143,6 +219,7 @@ class MaterialRequestIssueService:
         if fiscal_period is None:
             raise ValueError("No open fiscal period exists for today")
 
+        old_status = request.status
         for line, quantity, warehouse_id in selected:
             item = db.get(Item, line.inventory_item_id)
             if item is None or item.organization_id != organization_id:
@@ -162,6 +239,7 @@ class MaterialRequestIssueService:
                 source_document_id=request.request_id,
                 source_document_line_id=line.item_id,
                 reference=request.request_number,
+                serial_numbers=_serials_for_issue(line, quantity),
             )
             InventoryTransactionService.create_issue(
                 db, organization_id, transaction, user_id, auto_commit=False
@@ -176,5 +254,16 @@ class MaterialRequestIssueService:
             else MaterialRequestStatus.PARTIALLY_ISSUED
         )
         request.updated_by_id = user_id
+        request.updated_at = now
         db.flush()
+        if request.source_system == "sub":
+            from app.services.sync.sub.procurement import _ProcurementMixin
+
+            _ProcurementMixin(db)._emit_sub_material_request_status_changed(
+                org_id=organization_id,
+                request=request,
+                old_status=old_status,
+                new_status=request.status,
+                actor_person_id=user_id,
+            )
         return request
