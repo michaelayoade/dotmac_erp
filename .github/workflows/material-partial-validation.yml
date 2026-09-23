@@ -1,0 +1,122 @@
+name: Material partial issue validation
+on:
+  push:
+    branches: ['fix/selfcare-material-partial-issue']
+    paths: ['.github/workflows/material-partial-validation.yml']
+permissions:
+  contents: read
+concurrency:
+  group: material-partial-authoring-erp
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/fix/selfcare-material-partial-issue'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      BRANCH: fix/selfcare-material-partial-issue
+      DATABASE_URL: sqlite:///./test.db
+      REDIS_URL: redis://127.0.0.1:9/0
+      CELERY_BROKER_URL: memory://
+      CELERY_RESULT_BACKEND: cache+memory://
+      DOTMAC_DEV_MODE: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Repair the exact regression fixture
+        id: apply
+        run: |
+          python - <<'PY'
+          import ast, hashlib, pathlib
+          path = pathlib.Path('tests/sync/test_dotmac_sub_sync_service.py')
+          data = path.read_bytes()
+          assert hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest() == '649681826e733bd822e15f8b00db37a90adb8d37'
+          text = data.decode()
+          start = text.index('    def test_create_material_request_issued_posts_issue_transactions(')
+          end = text.index('\n    def ', start + 10)
+          section = text[start:end]
+          assert section.count('        wh_id = uuid.uuid4()') == 1
+          section = section.replace('        wh_id = uuid.uuid4()', '        wh_id = uuid.uuid4()\n        line_id = uuid.uuid4()', 1)
+          text = text[:start] + section + text[end:]
+          ast.parse(text)
+          path.write_text(text)
+          PY
+      - uses: snok/install-poetry@a783c322200f0519c7926aa6faa857c4e23e9263
+        with:
+          version: '2.4.1'
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-3.12-${{ hashFiles('poetry.lock') }}
+      - name: Install locked development environment
+        id: dependencies
+        env:
+          POETRY_HTTP_BASIC_FORGEJO_USERNAME: ci-reader
+          POETRY_HTTP_BASIC_FORGEJO_PASSWORD: ${{ secrets.FORGEJO_READ_TOKEN }}
+        run: poetry install --no-interaction
+      - name: Pinned lint and format
+        id: lint
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          poetry run ruff format app/services/inventory/material_request_issue.py app/services/inventory/material_request_web.py app/schemas/sync/sub_operational.py app/services/sync/sub/procurement.py tests/ifrs/inv/test_material_request_issue.py tests/ifrs/inv/test_selfcare_material_partial_issue.py tests/ifrs/inv/test_material_request_web_service.py tests/sync/test_dotmac_sub_sync_service.py
+          poetry run ruff check app/services/inventory/material_request_issue.py app/services/inventory/material_request_web.py app/schemas/sync/sub_operational.py app/services/sync/sub/procurement.py tests/ifrs/inv/test_material_request_issue.py tests/ifrs/inv/test_selfcare_material_partial_issue.py tests/ifrs/inv/test_material_request_web_service.py tests/sync/test_dotmac_sub_sync_service.py 2>&1 | tee "$RUNNER_TEMP/material-lint.txt"
+      - name: Generate OpenAPI manifest
+        id: manifest
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          poetry run python scripts/update_openapi_contract.py 2>&1 | tee "$RUNNER_TEMP/material-manifest.txt"
+      - name: Focused material regressions
+        id: tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          poetry run pytest -q tests/ifrs/inv/test_selfcare_material_partial_issue.py tests/ifrs/inv/test_material_request_issue.py tests/ifrs/inv/test_material_request_web_service.py tests/ifrs/inv/test_material_request_approval_integrity.py tests/ifrs/inv/test_operations_inventory_web_service.py tests/sync/test_dotmac_sub_sync_service.py tests/architecture/test_openapi_contract_surface.py 2>&1 | tee "$RUNNER_TEMP/material-python-tests.txt"
+      - name: Publish only reviewed fixture and generated formatting/manifest changes
+        id: publish
+        if: always() && steps.apply.outcome == 'success'
+        run: |
+          python - <<'PY'
+          import os, pathlib, subprocess
+          assert os.environ['GITHUB_REPOSITORY'] == 'michaelayoade/dotmac_erp'
+          assert os.environ['GITHUB_REF'] == 'refs/heads/fix/selfcare-material-partial-issue'
+          names = ['app/services/inventory/material_request_issue.py', 'app/services/inventory/material_request_web.py', 'app/schemas/sync/sub_operational.py', 'app/services/sync/sub/procurement.py', 'tests/ifrs/inv/test_material_request_issue.py', 'tests/ifrs/inv/test_selfcare_material_partial_issue.py', 'tests/ifrs/inv/test_material_request_web_service.py', 'tests/sync/test_dotmac_sub_sync_service.py', 'tests/architecture/openapi_contract_surface.json', '.github/workflows/material-partial-validation.yml']
+          pathlib.Path('.github/workflows/material-partial-validation.yml').unlink()
+          dirty = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          assert dirty <= set(names), f'Unexpected modified paths: {dirty - set(names)}'
+          subprocess.run(['git', 'fetch', 'origin', os.environ['BRANCH']], check=True)
+          assert subprocess.check_output(['git', 'rev-parse', 'FETCH_HEAD'], text=True).strip() == os.environ['GITHUB_SHA'], 'Feature branch advanced; refusing overwrite'
+          subprocess.run(['git', 'add', '--', *names], check=True)
+          subprocess.run(['git', '-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com', 'commit', '-m', 'test(inventory): repair partial-issue fixture and regenerate material contract'], check=True)
+          subprocess.run(['git', 'push', 'origin', 'HEAD:refs/heads/' + os.environ['BRANCH']], check=True)
+          subprocess.run(['git', 'rev-parse', 'HEAD'], check=True)
+          PY
+      - name: Record focused validation outcomes
+        if: always()
+        env:
+          LINT: ${{ steps.lint.outcome }}
+          MANIFEST: ${{ steps.manifest.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          PUBLISH: ${{ steps.publish.outcome }}
+        run: |
+          printf 'Lint: %s\nManifest: %s\nTests: %s\nPublish: %s\nFull PR CI, PostgreSQL validation and staging acceptance remain required.\n' "$LINT" "$MANIFEST" "$TESTS" "$PUBLISH" | tee "$RUNNER_TEMP/material-status.txt" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: material-validation
+          path: ${{ runner.temp }}/material-*.txt
+          retention-days: 2
+      - name: Require successful validation
+        if: always()
+        env:
+          VALIDATION_OK: ${{ steps.lint.outcome == 'success' && steps.manifest.outcome == 'success' && steps.tests.outcome == 'success' && steps.publish.outcome == 'success' }}
+        run: test "$VALIDATION_OK" = 'true'
