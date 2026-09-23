@@ -79,6 +79,25 @@ the v2 evidence is absent, malformed, for a different revision, or not blocked,
 the cursor remains parked. The `quarantine_staged` log describes the pending
 transaction; the durable outcome ledger remains the authoritative evidence.
 
+## Stranded unposted journal recovery
+
+A legacy reverse-and-repost collision can leave an invoice linked to a fresh
+`DRAFT`, `SUBMITTED`, or `APPROVED` journal that never reached the immutable
+ledger. On a later accounting-changing resync, ERP may void that linked journal
+and retry posting only when all of these fail-closed checks pass:
+
+- the journal belongs to the same organization and carries the exact
+  `AR` / `INVOICE` / invoice-ID provenance;
+- the journal is not itself a reversal;
+- it has no posting batch, posted timestamp, posted user, reversal link, or
+  `posted_ledger_line` row.
+
+The void is written through `JournalService`, so it remains audited. Any
+posting or ownership contradiction stays blocked for Finance review; the sync
+does not delete or rewrite ledger evidence. Use
+`scripts/find_stranded_reposts.py` as a read-only census for legacy rows
+before any separately approved data repair.
+
 ## Validation after deployment
 
 1. Run one bounded invoice phase in the named non-production environment.
