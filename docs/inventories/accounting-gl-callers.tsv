@@ -1,5 +1,5 @@
 path	symbol	services	disposition	final_state
-app/services/dotmac_sub/sync/_invoices.py	InvoiceSyncMixin._reverse_posted_invoice_gl	gl.reversal	repoint_to_module	caller_repointed
+app/services/dotmac_sub/sync/_invoices.py	InvoiceSyncMixin._reverse_posted_invoice_gl	gl.journal|gl.reversal	repoint_to_module	caller_repointed
 app/services/dotmac_sub/sync/_payments.py	PaymentSyncMixin._ensure_wht_terminal_consequence	gl.journal|gl.posting_adapter|gl.posting_idempotency	repoint_to_module	caller_repointed
 app/services/dotmac_sub/sync/_payments.py	PaymentSyncMixin._record_wht_write_off_tax_reversal	gl.period_guard	repoint_to_module	caller_repointed
 app/services/dotmac_sub/sync/_payments.py	PaymentSyncMixin._reverse_posted_payment_gl	gl.reversal	repoint_to_module	caller_repointed
