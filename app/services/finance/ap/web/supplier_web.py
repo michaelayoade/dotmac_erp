@@ -44,6 +44,7 @@ from app.services.finance.ap.web.base import (
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.settings.bank_directory import OrgBankDirectoryService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -177,7 +178,11 @@ class SupplierWebService:
 
     @staticmethod
     def build_supplier_input(
-        db: Session, form_data: dict, organization_id: UUID
+        db: Session,
+        form_data: dict,
+        organization_id: UUID,
+        *,
+        existing_bank_details: dict[str, Any] | None = None,
     ) -> SupplierInput:
         """Build SupplierInput from form data."""
         payload = dict(form_data)
@@ -185,6 +190,7 @@ class SupplierWebService:
             db=db,
             organization_id=organization_id,
             payload=payload,
+            existing_bank_details=existing_bank_details,
         )
 
     @staticmethod
@@ -373,11 +379,13 @@ class SupplierWebService:
 
         expense_accounts = get_accounts(db, org_id, IFRSCategory.EXPENSES)
         payable_accounts = get_accounts(db, org_id, IFRSCategory.LIABILITIES, "AP")
+        banks = OrgBankDirectoryService(db).list_active_banks(org_id)
 
         context = {
             "supplier": supplier_view,
             "expense_accounts": expense_accounts,
             "payable_accounts": payable_accounts,
+            "banks": banks,
         }
         context.update(get_currency_context(db, organization_id))
 
@@ -749,7 +757,13 @@ class SupplierWebService:
             org_id = auth.organization_id
             if org_id is None:
                 raise HTTPException(status_code=401, detail="Authentication required")
-            input_data = self.build_supplier_input(db, dict(form_data), org_id)
+            existing_supplier = supplier_service.get(db, org_id, supplier_id)
+            input_data = self.build_supplier_input(
+                db,
+                dict(form_data),
+                org_id,
+                existing_bank_details=existing_supplier.bank_details,
+            )
 
             supplier_service.update_supplier(
                 db=db,

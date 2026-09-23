@@ -177,6 +177,105 @@
             </div>
         </div>
 
+        <!-- Payment Destination (optional) -->
+        {% set saved_bank_details = supplier.bank_details if supplier and supplier.bank_details else {} %}
+        {% set selected_bank_code = form_data.get('bank_code') if form_data else saved_bank_details.bank_code %}
+        {% set entered_account_name = form_data.get('bank_account_name') if form_data else saved_bank_details.account_name %}
+        <div class="card stagger-in"
+             style="animation-delay: 150ms;"
+             x-data='{ bankCode: {{ (selected_bank_code or "") | tojson }} }'>
+            <div class="card-header mb-0 p-5 sm:p-6 border-b border-slate-100 dark:border-slate-700">
+                <div class="flex items-center gap-4">
+                    <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                        {{ icon_svg("credit-card", "h-5 w-5", stroke_width="1.5") }}
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white font-display">Payment Destination</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Optional bank details for electronic payments</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-5 sm:p-6 supplier-form-grid">
+                <div>
+                    <label for="supplier-bank-code" class="form-label">Bank</label>
+                    <select id="supplier-bank-code"
+                            name="bank_code"
+                            x-model="bankCode"
+                            class="form-select">
+                        <option value="">No bank selected</option>
+                        {% for bank in banks %}
+                        <option value="{{ bank.bank_sort_code }}" {{ 'selected' if bank.bank_sort_code == selected_bank_code else '' }}>
+                            {{ bank.bank_name }} ({{ bank.bank_sort_code }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if not banks %}
+                    <p class="form-hint text-amber-700 dark:text-amber-400">No active banks are configured for this organization.</p>
+                    {% else %}
+                    <p class="form-hint">Choose from the organization bank directory.</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="supplier-bank-code-display" class="form-label">Bank / NIBSS Code</label>
+                    <input id="supplier-bank-code-display"
+                           type="text"
+                           :value="bankCode"
+                           readonly
+                           class="form-input bg-slate-50 dark:bg-slate-800 font-mono tabular-nums"
+                           placeholder="Selected automatically">
+                </div>
+
+                <div>
+                    <label for="supplier-bank-account-name" class="form-label">Account Name</label>
+                    <input id="supplier-bank-account-name"
+                           type="text"
+                           name="bank_account_name"
+                           value="{{ entered_account_name or '' }}"
+                           maxlength="255"
+                           autocomplete="organization"
+                           class="form-input"
+                           placeholder="Name on the bank account">
+                </div>
+
+                <div>
+                    <label for="supplier-bank-account-number" class="form-label">Account Number</label>
+                    <input id="supplier-bank-account-number"
+                           type="text"
+                           name="bank_account_number"
+                           value=""
+                           inputmode="numeric"
+                           pattern="[0-9]{10}"
+                           minlength="10"
+                           maxlength="10"
+                           autocomplete="off"
+                           class="form-input font-mono tabular-nums"
+                           placeholder="10-digit account number"
+                           aria-describedby="supplier-bank-account-hint">
+                    <p id="supplier-bank-account-hint" class="form-hint">
+                        {% if saved_bank_details and saved_bank_details.account_number_masked %}
+                        Current account: <span class="font-mono">{{ saved_bank_details.account_number_masked }}</span>. Leave blank to keep it.
+                        {% else %}
+                        Optional. It is encrypted before storage.
+                        {% endif %}
+                    </p>
+                </div>
+
+                {% if saved_bank_details %}
+                <div class="sm:col-span-2">
+                    <label class="inline-flex min-h-11 items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
+                        <input type="checkbox"
+                               name="remove_bank_details"
+                               value="true"
+                               class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+                        Remove the saved payment destination
+                    </label>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- GL Accounts -->
         <div class="card stagger-in" style="animation-delay: 150ms;">
             <div class="card-header mb-0 p-5 sm:p-6 border-b border-slate-100 dark:border-slate-700">

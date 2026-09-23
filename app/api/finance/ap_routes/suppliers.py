@@ -14,6 +14,7 @@ from app.schemas.finance.ap import SupplierCreate, SupplierRead, SupplierUpdate
 from app.schemas.finance.common import ListResponse
 from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.ap import SupplierInput, supplier_service
+from app.services.finance.ap.supplier_bank_details import build_supplier_bank_details
 
 
 @router.post(
@@ -26,6 +27,16 @@ def create_supplier(
     db: Session = Depends(get_db_with_org),
 ):
     """Create a new supplier."""
+    bank_details = None
+    if payload.bank_details is not None:
+        bank_details = build_supplier_bank_details(
+            db,
+            organization_id,
+            bank_code=payload.bank_details.bank_code,
+            account_name=payload.bank_details.account_name,
+            account_number=payload.bank_details.account_number.get_secret_value(),
+        )
+
     input_data = SupplierInput(
         supplier_code=payload.supplier_code,
         supplier_type=parse_enum(SupplierType, payload.supplier_type)
@@ -37,6 +48,7 @@ def create_supplier(
         currency_code=payload.currency_code,
         default_expense_account_id=payload.default_expense_account_id,
         default_payable_account_id=payload.default_payable_account_id,
+        bank_details=bank_details,
     )
     return supplier_service.create_supplier(db, organization_id, input_data)
 
@@ -93,6 +105,17 @@ def update_supplier(
 ):
     """Update a supplier (partial update)."""
     update_data = payload.model_dump(exclude_unset=True)
+    if "bank_details" in update_data and update_data["bank_details"] is not None:
+        bank_details = payload.bank_details
+        if bank_details is not None:
+            update_data["bank_details"] = build_supplier_bank_details(
+                db,
+                organization_id,
+                bank_code=bank_details.bank_code,
+                account_name=bank_details.account_name,
+                account_number=bank_details.account_number.get_secret_value(),
+            )
+
     return supplier_service.partial_update_supplier(
         db=db,
         organization_id=organization_id,

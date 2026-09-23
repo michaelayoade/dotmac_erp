@@ -9,13 +9,40 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from app.config import settings
 
 # =============================================================================
 # Supplier
 # =============================================================================
+
+
+class SupplierBankDetailsInput(BaseModel):
+    """Optional supplier payment destination supplied on create/update."""
+
+    bank_code: str = Field(min_length=1, max_length=20)
+    account_name: str = Field(min_length=1, max_length=255)
+    account_number: SecretStr
+
+    @field_validator("account_number")
+    @classmethod
+    def validate_account_number(cls, value: SecretStr) -> SecretStr:
+        """Require a Nigerian ten-digit account number without exposing it."""
+        account_number = value.get_secret_value()
+        if len(account_number) != 10 or not account_number.isdigit():
+            raise ValueError("Account number must contain exactly 10 digits")
+        return value
+
+
+class SupplierBankDetailsRead(BaseModel):
+    """Masked supplier payment destination returned by read APIs."""
+
+    bank_code: str
+    bank_name: str
+    account_name: str
+    account_number_masked: str | None = None
+    is_configured: bool = False
 
 
 class SupplierBase(BaseModel):
@@ -51,6 +78,7 @@ class SupplierBase(BaseModel):
     payment_method: str | None = Field(
         default=None, max_length=30
     )  # BANK_TRANSFER, CHECK, WIRE, CASH
+    bank_details: SupplierBankDetailsInput | None = None
 
 
 class SupplierCreate(SupplierBase):
@@ -72,6 +100,7 @@ class SupplierUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     address: str | None = Field(default=None, max_length=500)
     payment_method: str | None = Field(default=None, max_length=30)
+    bank_details: SupplierBankDetailsInput | None = None
 
 
 class SupplierRead(BaseModel):
@@ -95,6 +124,10 @@ class SupplierRead(BaseModel):
         default=None, validation_alias="ap_control_account_id"
     )
     is_active: bool
+    bank_details: SupplierBankDetailsRead | None = Field(
+        default=None,
+        validation_alias="masked_bank_details",
+    )
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -360,6 +393,8 @@ class BankFileResultRead(BaseModel):
 
 
 __all__ = [
+    "SupplierBankDetailsInput",
+    "SupplierBankDetailsRead",
     "SupplierCreate",
     "SupplierUpdate",
     "SupplierRead",
