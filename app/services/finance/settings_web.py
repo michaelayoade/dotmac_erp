@@ -370,7 +370,12 @@ class SettingsWebService:
         settings = {}
 
         for spec in specs:
-            value = resolve_value(db, SettingDomain.email, spec.key)
+            value = resolve_value(
+                db,
+                SettingDomain.email,
+                spec.key,
+                organization_id=organization_id,
+            )
             settings[spec.key] = {
                 "value": value if not spec.is_secret else "",
                 "default": spec.default,

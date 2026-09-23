@@ -707,6 +707,9 @@ class PaymentBatchService(ListResponseMixin):
             Dictionary with file bytes, filename, metadata
         """
         from app.models.finance.banking.bank_account import BankAccount
+        from app.services.finance.ap.supplier_bank_details import (
+            decrypt_supplier_account_number,
+        )
         from app.services.finance.banking.bank_upload import (
             BankUploadService,
             PaymentItem,
@@ -761,7 +764,20 @@ class PaymentBatchService(ListResponseMixin):
                 )
 
             bank_details = (supplier.bank_details or {}) if supplier else {}
-            account_number = bank_details.get("account_number", "")
+            try:
+                account_number = decrypt_supplier_account_number(db, bank_details) or ""
+            except ValueError:
+                skipped.append(
+                    f"{supplier_name} ({payment.payment_number}): "
+                    "bank account unavailable"
+                )
+                logger.warning(
+                    "Skipping payment %s in bank file — supplier %s bank "
+                    "account could not be decrypted",
+                    payment.payment_number,
+                    supplier_name,
+                )
+                continue
             bank_name = bank_details.get("bank_name", "")
             bank_code = bank_details.get("bank_code")
 

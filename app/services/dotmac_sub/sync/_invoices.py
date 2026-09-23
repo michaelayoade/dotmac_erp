@@ -820,31 +820,104 @@ class InvoiceSyncMixin:
         *,
         reason: str,
     ) -> bool:
+        from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
+        from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
+        from app.services.finance.gl.journal import JournalService
         from app.services.finance.gl.reversal import ReversalService
 
         journal_id = invoice.journal_entry_id
         if journal_id is None:
             return False
-        user_id = created_by_user_id or invoice.created_by_user_id or SYSTEM_USER_ID
-        try:
-            reversal = ReversalService.create_reversal(
-                db=self.db,
-                organization_id=self.organization_id,
-                original_journal_id=journal_id,
-                reversal_date=date.today(),
-                created_by_user_id=user_id,
-                reason=reason,
-                auto_post=True,
-                idempotency_key=(
-                    f"{self.organization_id}:AR:INV:{invoice.invoice_id}:"
-                    f"sub-resync:{journal_id}"
-                ),
+
+        journal = self.db.get(JournalEntry, journal_id)
+        if (
+            journal is None
+            or journal.organization_id != self.organization_id
+            or journal.source_module != "AR"
+            or journal.source_document_type != "INVOICE"
+            or journal.source_document_id != invoice.invoice_id
+            or journal.is_reversal
+        ):
+            logger.error(
+                "Refusing invoice GL recovery for %s: linked journal ownership "
+                "or source provenance does not match",
+                invoice.invoice_id,
             )
-        except Exception:
-            logger.exception("GL reversal errored for invoice %s", invoice.invoice_id)
             return False
-        if not getattr(reversal, "success", False):
+
+        user_id = created_by_user_id or invoice.created_by_user_id or SYSTEM_USER_ID
+        if journal.status == JournalStatus.POSTED:
+            try:
+                reversal = ReversalService.create_reversal(
+                    db=self.db,
+                    organization_id=self.organization_id,
+                    original_journal_id=journal_id,
+                    reversal_date=date.today(),
+                    created_by_user_id=user_id,
+                    reason=reason,
+                    auto_post=True,
+                    idempotency_key=(
+                        f"{self.organization_id}:AR:INV:{invoice.invoice_id}:"
+                        f"sub-resync:{journal_id}"
+                    ),
+                )
+            except Exception:
+                logger.exception(
+                    "GL reversal errored for invoice %s", invoice.invoice_id
+                )
+                return False
+            if not getattr(reversal, "success", False):
+                return False
+        elif journal.status in {
+            JournalStatus.DRAFT,
+            JournalStatus.SUBMITTED,
+            JournalStatus.APPROVED,
+        }:
+            posted_line_id = self.db.scalar(
+                select(PostedLedgerLine.ledger_line_id)
+                .where(
+                    PostedLedgerLine.organization_id == self.organization_id,
+                    PostedLedgerLine.journal_entry_id == journal_id,
+                )
+                .limit(1)
+            )
+            if (
+                journal.posting_batch_id is not None
+                or posted_line_id is not None
+                or journal.posted_at is not None
+                or journal.posted_by_user_id is not None
+                or journal.reversal_journal_id is not None
+            ):
+                logger.error(
+                    "Refusing to void unposted invoice journal %s for invoice %s: "
+                    "posting or reversal evidence exists",
+                    journal_id,
+                    invoice.invoice_id,
+                )
+                return False
+            try:
+                JournalService.void_journal(
+                    db=self.db,
+                    organization_id=self.organization_id,
+                    journal_entry_id=journal_id,
+                    voided_by_user_id=user_id,
+                    reason=reason,
+                )
+            except Exception:
+                logger.exception(
+                    "GL journal void errored for invoice %s", invoice.invoice_id
+                )
+                return False
+        else:
+            logger.error(
+                "Refusing invoice GL recovery for %s: linked journal %s has "
+                "terminal status %s",
+                invoice.invoice_id,
+                journal_id,
+                journal.status.value,
+            )
             return False
+
         invoice.journal_entry_id = None
         invoice.posting_batch_id = None
         invoice.posting_status = "NOT_POSTED"

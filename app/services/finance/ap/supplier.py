@@ -27,6 +27,9 @@ from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.services.common import coerce_uuid
 from app.services.finance.ap.account_validation import require_ap_control_account
 from app.services.finance.ap.input_utils import resolve_currency_code
+from app.services.finance.ap.supplier_bank_details import (
+    supplier_bank_details_from_payload,
+)
 from app.services.finance.common import (
     get_org_scoped_entity,
     parse_enum_safe,
@@ -109,6 +112,8 @@ class SupplierService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         payload: dict,
+        *,
+        existing_bank_details: dict[str, Any] | None = None,
     ) -> SupplierInput:
         """Build SupplierInput from raw payload."""
         org_id = coerce_uuid(organization_id)
@@ -120,6 +125,12 @@ class SupplierService(ListResponseMixin):
             raise ValueError("Invalid payment terms days") from exc
 
         currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
+        bank_details = supplier_bank_details_from_payload(
+            db,
+            org_id,
+            payload,
+            existing_bank_details=existing_bank_details,
+        )
 
         return SupplierInput(
             supplier_code=payload.get("supplier_code", ""),
@@ -142,6 +153,7 @@ class SupplierService(ListResponseMixin):
                 if payload.get("default_expense_account_id")
                 else None
             ),
+            bank_details=bank_details,
             billing_address={
                 "address": payload.get("billing_address", ""),
             }
@@ -371,7 +383,6 @@ class SupplierService(ListResponseMixin):
             "billing_address",
             "remittance_address",
             "primary_contact",
-            "bank_details",
         ]
 
         # Update mapped fields (template name → model name)
@@ -381,6 +392,10 @@ class SupplierService(ListResponseMixin):
                 and update_data[template_field] is not None
             ):
                 setattr(supplier, model_field, update_data[template_field])
+
+        # Bank details may be explicitly cleared with null.
+        if "bank_details" in update_data:
+            supplier.bank_details = update_data["bank_details"]
 
         # Update direct fields (same name in both)
         for field in direct_fields:

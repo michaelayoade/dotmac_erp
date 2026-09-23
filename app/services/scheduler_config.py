@@ -172,10 +172,14 @@ def get_celery_config() -> dict:
     broker = broker or _env_value("REDIS_URL") or "redis://localhost:6379/0"
     backend = backend or _env_value("REDIS_URL") or "redis://localhost:6379/1"
     timezone = timezone or "Africa/Lagos"
-    config: dict[str, str | int] = {
+    config: dict[str, str | int | bool] = {
         "broker_url": broker,
         "result_backend": backend,
         "timezone": timezone,
+        # Celery 6 stops inheriting startup retry from broker_connection_retry.
+        # State the current fail-retry behavior explicitly so a Redis restart
+        # during worker boot remains recoverable across the upgrade.
+        "broker_connection_retry_on_startup": True,
         "beat_max_loop_interval": beat_max_loop_interval,
         "beat_refresh_seconds": beat_refresh_seconds,
     }

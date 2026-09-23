@@ -28,6 +28,30 @@ def _calls(path: str, function_name: str) -> list[ast.Call]:
     ]
 
 
+def test_finance_email_settings_reads_state_requested_scope() -> None:
+    path = "app/services/finance/settings_web.py"
+    tree = ast.parse((ROOT / path).read_text(encoding="utf-8"), filename=path)
+    functions = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "get_email_settings_context"
+    ]
+    assert len(functions) == 1, "expected one finance email settings context builder"
+    calls = [
+        node
+        for node in ast.walk(functions[0])
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "resolve_value"
+    ]
+    assert calls, "expected email settings reads"
+    assert all(
+        any(keyword.arg == "organization_id" for keyword in call.keywords)
+        for call in calls
+    ), "every finance email settings read must state its requested scope"
+
+
 def test_observed_settings_reads_state_their_scope() -> None:
     for path in SETTINGS_CALLERS:
         calls = _calls(path, "resolve_value")
