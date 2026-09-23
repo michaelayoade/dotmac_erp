@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -45,3 +46,37 @@ def test_update_email_settings_uses_existing_password_for_validation():
     validate.assert_called_once()
     config = validate.call_args[0][0]
     assert config["password"] == "secret"
+
+
+
+def test_get_email_settings_context_reads_requested_organization_scope():
+    service = SettingsWebService()
+    db = MagicMock()
+    db.scalar.return_value = None
+    organization_id = uuid.uuid4()
+    spec = SimpleNamespace(
+        key="smtp_host",
+        is_secret=False,
+        default="",
+        value_type=SimpleNamespace(value="string"),
+    )
+
+    with (
+        patch(
+            "app.services.finance.settings_web.list_specs",
+            return_value=[spec],
+        ),
+        patch(
+            "app.services.finance.settings_web.resolve_value",
+            return_value="smtp.tenant.example",
+        ) as resolve,
+    ):
+        context = service.get_email_settings_context(db, organization_id)
+
+    resolve.assert_called_once_with(
+        db,
+        SettingDomain.email,
+        "smtp_host",
+        organization_id=organization_id,
+    )
+    assert context["settings"]["smtp_host"]["value"] == "smtp.tenant.example"

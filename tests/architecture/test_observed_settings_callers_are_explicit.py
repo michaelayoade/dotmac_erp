@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_CALLERS = (
     "app/services/finance/banking/mono_sync.py",
+    "app/services/finance/settings_web.py",
     "app/services/fixed_assets/depreciation.py",
     "app/web/help.py",
     "app/web_home.py",
