@@ -318,6 +318,7 @@ class TestGetCeleryConfig:
         assert "result_backend" in config
         assert "timezone" in config
         assert config["timezone"] == "Africa/Lagos"
+        assert config["broker_connection_retry_on_startup"] is True
         mock_session.close.assert_called_once()
 
     @patch("app.services.scheduler_config.SessionLocal")
