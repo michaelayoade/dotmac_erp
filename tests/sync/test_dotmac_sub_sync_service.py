@@ -1409,7 +1409,7 @@ class TestCreateMaterialRequest:
                 org_id=org_id,
                 request=request,
                 line={
-                    "line_id": uuid.uuid4(),
+                    "line_id": line_id,
                     "item_id": item_id,
                     "warehouse_id": warehouse_id,
                     "requested_qty": Decimal("1"),
@@ -1425,6 +1425,7 @@ class TestCreateMaterialRequest:
         txn_input = mock_create_issue.call_args.args[2]
         assert isinstance(txn_input, TransactionInput)
         assert txn_input.serial_numbers == ["SN-001"]
+        assert request_line.ordered_qty == Decimal("1")
 
     def test_create_material_request_issued_insufficient_stock_pending_stock(
         self, service, org_id, mock_db

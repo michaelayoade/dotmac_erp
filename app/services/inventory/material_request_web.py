@@ -1626,6 +1626,9 @@ class MaterialRequestWebService:
     ) -> None:
         if request.source_system != "sub":
             return
+        # Date the authoritative change before building the cumulative snapshot.
+        request.updated_at = datetime.now(UTC)
+        db.flush()
         from app.services.sync.sub.procurement import _ProcurementMixin
 
         _ProcurementMixin(db)._emit_sub_material_request_status_changed(
