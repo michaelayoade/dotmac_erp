@@ -2549,6 +2549,31 @@ class InventoryTransactionWebService:
                 status_code=303,
             )
 
+        except HTTPException as exc:
+            db.rollback()
+            validation_errors = {
+                "Adjustment would result in negative inventory": "negative_inventory",
+                "Adjustment would result in negative lot quantity": (
+                    "negative_lot_quantity"
+                ),
+            }
+            error_code = validation_errors.get(str(exc.detail))
+            if exc.status_code == 400 and error_code is not None:
+                logger.warning(
+                    "Inventory adjustment rejected for item %s in warehouse %s: %s",
+                    item_id,
+                    warehouse_id,
+                    exc.detail,
+                )
+                return RedirectResponse(
+                    url=f"/inventory/transactions?error={error_code}",
+                    status_code=303,
+                )
+            logger.exception("create_adjustment_response failed")
+            return RedirectResponse(
+                url="/inventory/transactions?error=adjustment_failed",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             logger.exception("create_adjustment_response failed")

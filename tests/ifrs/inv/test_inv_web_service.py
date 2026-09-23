@@ -728,3 +728,95 @@ class TestInvTransactionWebService:
         mock_db.commit.assert_called_once()
         mock_db.rollback.assert_not_called()
         assert response.status_code == 303
+
+    def test_create_adjustment_response_preserves_negative_inventory_feedback(self):
+        """Expected stock safeguards should not be reported as server failures."""
+        from fastapi import HTTPException
+
+        from app.services.inventory.web import InventoryTransactionWebService
+
+        org_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        item_id = uuid.uuid4()
+        warehouse_id = uuid.uuid4()
+
+        mock_auth = MagicMock()
+        mock_auth.organization_id = org_id
+        mock_auth.user_id = user_id
+
+        mock_db = MagicMock()
+        mock_fiscal_period = MagicMock()
+        mock_fiscal_period.fiscal_period_id = uuid.uuid4()
+        mock_db.scalars.return_value.first.return_value = mock_fiscal_period
+
+        with patch(
+            "app.services.inventory.transaction.InventoryTransactionService.create_adjustment",
+            side_effect=HTTPException(
+                status_code=400,
+                detail="Adjustment would result in negative inventory",
+            ),
+        ):
+            response = InventoryTransactionWebService.create_adjustment_response(
+                request=MagicMock(),
+                auth=mock_auth,
+                item_id=str(item_id),
+                warehouse_id=str(warehouse_id),
+                quantity="5",
+                unit_cost="12.50",
+                transaction_date="2026-04-10",
+                adjustment_type="DECREASE",
+                reason="COUNT",
+                reference=None,
+                db=mock_db,
+            )
+
+        mock_db.commit.assert_not_called()
+        mock_db.rollback.assert_called_once()
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            "/inventory/transactions?error=negative_inventory"
+        )
+
+    def test_create_adjustment_response_keeps_unexpected_failures_generic(self):
+        """Unexpected failures should retain traceback logging and a safe response."""
+        from app.services.inventory.web import InventoryTransactionWebService
+
+        org_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        item_id = uuid.uuid4()
+        warehouse_id = uuid.uuid4()
+
+        mock_auth = MagicMock()
+        mock_auth.organization_id = org_id
+        mock_auth.user_id = user_id
+
+        mock_db = MagicMock()
+        mock_fiscal_period = MagicMock()
+        mock_fiscal_period.fiscal_period_id = uuid.uuid4()
+        mock_db.scalars.return_value.first.return_value = mock_fiscal_period
+
+        with patch(
+            "app.services.inventory.transaction.InventoryTransactionService.create_adjustment",
+            side_effect=RuntimeError("database unavailable"),
+        ):
+            response = InventoryTransactionWebService.create_adjustment_response(
+                request=MagicMock(),
+                auth=mock_auth,
+                item_id=str(item_id),
+                warehouse_id=str(warehouse_id),
+                quantity="5",
+                unit_cost="12.50",
+                transaction_date="2026-04-10",
+                adjustment_type="INCREASE",
+                reason="COUNT",
+                reference=None,
+                db=mock_db,
+            )
+
+        mock_db.commit.assert_not_called()
+        mock_db.rollback.assert_called_once()
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            "/inventory/transactions?error=adjustment_failed"
+        )
+
