@@ -1305,6 +1305,7 @@ class TestCreateMaterialRequest:
         fiscal_period = MagicMock()
         fiscal_period.fiscal_period_id = uuid.uuid4()
         wh_id = uuid.uuid4()
+        line_id = uuid.uuid4()
 
         # locked existing MR lookup -> item lookup -> warehouse lookup -> fiscal period lookup
         mock_db.scalar.side_effect = [
