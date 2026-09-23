@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 import uuid
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from app.models.domain_settings import SettingDomain
@@ -46,7 +46,6 @@ def test_update_email_settings_uses_existing_password_for_validation():
     validate.assert_called_once()
     config = validate.call_args[0][0]
     assert config["password"] == "secret"
-
 
 
 def test_get_email_settings_context_reads_requested_organization_scope():
