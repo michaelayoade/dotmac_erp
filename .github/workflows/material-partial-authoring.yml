@@ -1,0 +1,27 @@
+name: Material partial issue authoring
+on:
+  push:
+    branches: ['fix/selfcare-material-partial-issue']
+    paths: ['.github/workflows/material-partial-authoring.yml', '.github/material_partial_patch.py']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.repository == 'michaelayoade/dotmac_erp' && github.ref == 'refs/heads/fix/selfcare-material-partial-issue'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export tracked development sources
+        run: |
+          git archive --format=tar HEAD | gzip -n > material-source.tgz
+          git rev-parse HEAD > material-source-revision.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: material-source
+          path: |
+            material-source.tgz
+            material-source-revision.txt
+          retention-days: 1
