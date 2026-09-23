@@ -320,12 +320,8 @@ def test_detail_context_explains_pending_stock_shortage(source_system: str) -> N
     assert material_request["stock_required"] is True
     assert material_request["stock_is_sufficient"] is False
     assert material_request["can_approve"] is False
-    if source_system == "sub":
-        assert "EDGE-16" in material_request["approval_blocked_reason"]
-        assert material_request["can_issue_lines"] is False
-    else:
-        assert material_request["approval_blocked_reason"] is None
-        assert material_request["can_issue_lines"] is True
+    assert material_request["approval_blocked_reason"] is None
+    assert material_request["can_issue_lines"] is True
     assert detail_line["available_qty_value"] == 0.0
     assert detail_line["shortage_qty_value"] == 1.0
     assert detail_line["has_sufficient_stock"] is False
@@ -333,7 +329,7 @@ def test_detail_context_explains_pending_stock_shortage(source_system: str) -> N
 
 @pytest.mark.parametrize(
     ("source_system", "can_approve", "can_issue_lines"),
-    [("sub", True, False), ("erp", False, True)],
+    [("sub", False, True), ("erp", False, True)],
 )
 def test_detail_context_stock_ready_actions(
     source_system: str, can_approve: bool, can_issue_lines: bool

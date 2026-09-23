@@ -449,6 +449,8 @@ class SubMaterialRequestItemRead(BaseModel):
     item_name: str
     requested_qty: Decimal
     ordered_qty: Decimal
+    sequence: int | None = Field(default=None, ge=1)
+    out_of_stock: bool = False
     uom: str | None = None
     serial_numbers: list[str] | None = None
 
@@ -462,6 +464,8 @@ class SubMaterialRequestStatusRead(BaseModel):
     request_type: str
     items: list[SubMaterialRequestItemRead] = Field(default_factory=list)
     created_at: datetime
+    updated_at: datetime | None = None
+    fulfillment_version: Literal[1] | None = None
 
 
 class SubMaterialStatusWebhookLine(BaseModel):
@@ -471,6 +475,10 @@ class SubMaterialStatusWebhookLine(BaseModel):
 
     sequence: int = Field(ge=1)
     serial_numbers: tuple[str, ...] = ()
+    item_code: str | None = Field(default=None, min_length=1, max_length=80)
+    requested_qty: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
+    issued_qty: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+    out_of_stock: bool = False
 
 
 class SubMaterialStatusWebhook(BaseModel):
@@ -485,6 +493,7 @@ class SubMaterialStatusWebhook(BaseModel):
     new_status: str = Field(min_length=1, max_length=40)
     updated_at: datetime | None = None
     items: tuple[SubMaterialStatusWebhookLine, ...] = ()
+    fulfillment_version: Literal[1] | None = None
 
 
 # ============ Expense Claim Sync (Sub → ERP) ============
