@@ -765,9 +765,7 @@ class PaymentBatchService(ListResponseMixin):
 
             bank_details = (supplier.bank_details or {}) if supplier else {}
             try:
-                account_number = (
-                    decrypt_supplier_account_number(db, bank_details) or ""
-                )
+                account_number = decrypt_supplier_account_number(db, bank_details) or ""
             except ValueError:
                 skipped.append(
                     f"{supplier_name} ({payment.payment_number}): "

@@ -80,9 +80,7 @@ def supplier_bank_details_from_payload(
     cannot be changed accidentally.
     """
     existing = dict(existing_bank_details) if existing_bank_details else None
-    remove_requested = (
-        str(payload.get("remove_bank_details") or "").lower() in _TRUTHY
-    )
+    remove_requested = str(payload.get("remove_bank_details") or "").lower() in _TRUTHY
     bank_code = str(payload.get("bank_code") or "").strip()
     account_name = str(payload.get("bank_account_name") or "").strip()
     account_number = str(payload.get("bank_account_number") or "").strip()
