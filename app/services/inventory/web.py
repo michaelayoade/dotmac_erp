@@ -2552,9 +2552,7 @@ class InventoryTransactionWebService:
         except HTTPException as exc:
             db.rollback()
             validation_errors = {
-                "Adjustment would result in negative inventory": (
-                    "negative_inventory"
-                ),
+                "Adjustment would result in negative inventory": ("negative_inventory"),
                 "Adjustment would result in negative lot quantity": (
                     "negative_lot_quantity"
                 ),

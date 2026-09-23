@@ -819,4 +819,3 @@ class TestInvTransactionWebService:
         assert response.headers["location"] == (
             "/inventory/transactions?error=adjustment_failed"
         )
-
