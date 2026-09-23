@@ -7,7 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SETTINGS_CALLERS = (
     "app/services/finance/banking/mono_sync.py",
-    "app/services/finance/settings_web.py",
     "app/services/fixed_assets/depreciation.py",
     "app/web/help.py",
     "app/web_home.py",
@@ -27,6 +26,30 @@ def _calls(path: str, function_name: str) -> list[ast.Call]:
         and isinstance(node.func, ast.Name)
         and node.func.id == function_name
     ]
+
+
+def test_finance_email_settings_reads_state_requested_scope() -> None:
+    path = "app/services/finance/settings_web.py"
+    tree = ast.parse((ROOT / path).read_text(encoding="utf-8"), filename=path)
+    functions = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "get_email_settings_context"
+    ]
+    assert len(functions) == 1, "expected one finance email settings context builder"
+    calls = [
+        node
+        for node in ast.walk(functions[0])
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "resolve_value"
+    ]
+    assert calls, "expected email settings reads"
+    assert all(
+        any(keyword.arg == "organization_id" for keyword in call.keywords)
+        for call in calls
+    ), "every finance email settings read must state its requested scope"
 
 
 def test_observed_settings_reads_state_their_scope() -> None:
