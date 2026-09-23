@@ -172,6 +172,7 @@ def supplier_form_view(supplier: Supplier) -> dict:
         "currency_code": supplier.currency_code,
         "payment_terms_days": supplier.payment_terms_days,
         "payment_method": None,
+        "bank_details": supplier.masked_bank_details,
         "default_expense_account_id": supplier.default_expense_account_id,
         "default_payable_account_id": supplier.ap_control_account_id,
         "default_tax_code_id": str(supplier.default_tax_code_id)
@@ -224,6 +225,7 @@ def supplier_detail_view(supplier: Supplier, balance: Decimal) -> dict:
         "balance": format_currency(balance, supplier.currency_code),
         "default_expense_account_id": supplier.default_expense_account_id,
         "default_payable_account_id": supplier.ap_control_account_id,
+        "bank_details": supplier.masked_bank_details,
         "email": contact.get("email"),
         "phone": contact.get("phone"),
         "address": (supplier.billing_address or {}).get("address", ""),

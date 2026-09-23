@@ -140,6 +140,26 @@ class Supplier(Base, ERPNextSyncMixin):
         comment="Encrypted/masked",
     )
 
+    @property
+    def masked_bank_details(self) -> dict[str, Any] | None:
+        """Return the supplier payment destination without sensitive values."""
+        details = self.bank_details or {}
+        if not details:
+            return None
+
+        last_four = str(details.get("account_number_last4") or "")
+        if not last_four and details.get("account_number"):
+            last_four = str(details["account_number"])[-4:]
+
+        bank_code = str(details.get("bank_code") or "")
+        return {
+            "bank_code": bank_code,
+            "bank_name": str(details.get("bank_name") or ""),
+            "account_name": str(details.get("account_name") or ""),
+            "account_number_masked": f"******{last_four}" if last_four else None,
+            "is_configured": bool(bank_code and last_four),
+        }
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Audit fields

@@ -171,7 +171,10 @@ def test_generate_bank_file_and_get_batch_payments():
         legal_name=None,
         supplier_code="SUP-001",
         bank_details={
-            "account_number": "0123456789",
+            "schema_version": 1,
+            "account_number_encrypted": "enc:ciphertext",
+            "account_number_last4": "6789",
+            "bank_code": "057",
             "bank_name": "Zenith Bank",
             "account_name": "Supplier Ltd",
         },
@@ -196,6 +199,10 @@ def test_generate_bank_file_and_get_batch_payments():
         patch(
             "app.services.finance.banking.bank_upload.BankUploadService.generate_upload",
             return_value=upload_result,
+        ) as generate_upload,
+        patch(
+            "app.services.finance.ap.supplier_bank_details.decrypt_credential",
+            return_value="0123456789",
         ),
     ):
         dt.now.return_value = datetime(2024, 1, 1, 10, 0, 0)
@@ -207,6 +214,9 @@ def test_generate_bank_file_and_get_batch_payments():
     assert result["payment_count"] == 1
     assert result["content"] == b"excel-content"
     assert result["filename"] == "bank_upload.xlsx"
+    payment_item = generate_upload.call_args.kwargs["items"][0]
+    assert payment_item.account_number == "0123456789"
+    assert payment_item.bank_code == "057"
 
     db.scalars.return_value.first.side_effect = None
     db.scalars.return_value.first.return_value = batch

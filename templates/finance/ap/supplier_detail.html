@@ -114,6 +114,41 @@
         </div>
     </div>
 
+    <div class="card p-6">
+        <div class="flex items-center justify-between gap-4">
+            <div>
+                <h3 class="text-lg font-medium text-slate-900 dark:text-white">Payment Destination</h3>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Bank details are masked for security.</p>
+            </div>
+            {{ icon_svg("credit-card", "h-5 w-5 text-blue-600 dark:text-blue-400", stroke_width="1.5") }}
+        </div>
+
+        {% if supplier.bank_details and supplier.bank_details.is_configured %}
+        <dl class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500">Bank</dt>
+                <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ supplier.bank_details.bank_name }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500">Bank / NIBSS Code</dt>
+                <dd class="mt-1 text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ supplier.bank_details.bank_code }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500">Account Name</dt>
+                <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ supplier.bank_details.account_name }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs uppercase tracking-wide text-slate-500">Account Number</dt>
+                <dd class="mt-1 text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ supplier.bank_details.account_number_masked }}</dd>
+            </div>
+        </dl>
+        {% else %}
+        <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <p class="text-sm text-slate-600 dark:text-slate-300">No bank payment destination has been configured for this supplier.</p>
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Transactions -->
     <div class="card" x-data='{ activeTab: "invoices" }'>
         <div class="border-b border-slate-200 dark:border-slate-700">
