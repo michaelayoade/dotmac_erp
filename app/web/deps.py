@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,50 @@ from app.templates import templates  # noqa: F401 - re-exported for web routes
 logger = logging.getLogger(__name__)
 
 _SESSION_TOUCH_INTERVAL = timedelta(seconds=60)
+
+
+def _touch_web_session_activity(
+    db: Session,
+    *,
+    session_id: UUID,
+    person_id: UUID,
+    last_seen_at: datetime | None,
+    now: datetime,
+) -> None:
+    """Persist a throttled session touch without holding a request-long row lock.
+
+    Session validity and inactivity are checked by the caller before this
+    best-effort bookkeeping update. A failed touch must not turn an otherwise
+    valid authenticated request into a server error.
+    """
+    if last_seen_at and (now - last_seen_at) <= _SESSION_TOUCH_INTERVAL:
+        return
+
+    cutoff = now - _SESSION_TOUCH_INTERVAL
+    try:
+        db.execute(
+            update(AuthSession)
+            .where(
+                AuthSession.id == session_id,
+                AuthSession.person_id == person_id,
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+                or_(
+                    AuthSession.last_seen_at.is_(None),
+                    AuthSession.last_seen_at < cutoff,
+                ),
+            )
+            .values(last_seen_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        db.commit()
+    except OperationalError:
+        db.rollback()
+        logger.warning(
+            "Web session activity touch failed",
+            extra={"event": "web_session_activity_touch_failed"},
+        )
 
 
 def _set_actor_context(request: Request, actor_id: UUID | str) -> None:
@@ -1246,13 +1290,16 @@ def _resolve_session_from_refresh_token(
     )
     if not session or is_session_inactive(session, now):
         return None
-    if (
-        not session.last_seen_at
-        or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
-    ):
-        session.last_seen_at = now
-        db.flush()
-    return session.person_id, session.id
+    person_id = session.person_id
+    session_id = session.id
+    _touch_web_session_activity(
+        db,
+        session_id=session_id,
+        person_id=person_id,
+        last_seen_at=session.last_seen_at,
+        now=now,
+    )
+    return person_id, session_id
 
 
 def _normalize_roles_scopes(
@@ -1391,12 +1438,13 @@ def require_web_auth(
             raise HTTPException(
                 status_code=401, detail="Session expired due to inactivity"
             )
-        if (
-            not session.last_seen_at
-            or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
-        ):
-            session.last_seen_at = now
-            db.flush()
+        _touch_web_session_activity(
+            db,
+            session_id=session_uuid,
+            person_id=person_uuid,
+            last_seen_at=session.last_seen_at,
+            now=now,
+        )
 
         # Web sessions must reflect admin RBAC edits without waiting for the
         # existing access token to expire. Reload DB roles/scopes after the
@@ -1634,12 +1682,13 @@ def optional_web_auth(
         )
         if not session or is_session_inactive(session, now):
             return WebAuthContext(is_authenticated=False)
-        if (
-            not session.last_seen_at
-            or (now - session.last_seen_at) > _SESSION_TOUCH_INTERVAL
-        ):
-            session.last_seen_at = now
-            db.flush()
+        _touch_web_session_activity(
+            db,
+            session_id=session_uuid,
+            person_id=person_uuid,
+            last_seen_at=session.last_seen_at,
+            now=now,
+        )
 
         # Web sessions must reflect admin RBAC edits without waiting for the
         # existing access token to expire. Reload DB roles/scopes after the

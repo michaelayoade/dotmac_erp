@@ -1070,10 +1070,13 @@ class TestCreateMaterialRequest:
         mock_item.item_id = existing_line.inventory_item_id
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
+        mock_item.organization_id = org_id
+        mock_item.item_code = "ITEM001"
+        mock_db.get.return_value = mock_item
         wh_id = existing_line.warehouse_id
 
-        # item lookup -> warehouse lookup -> existing MR lookup
-        mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
+        # locked existing MR lookup -> item lookup -> warehouse lookup
+        mock_db.scalar.side_effect = [existing_mr, mock_item, wh_id]
 
         source_request_id = uuid.uuid4()
         payload = SubMaterialRequestPayload(
@@ -1103,14 +1106,17 @@ class TestCreateMaterialRequest:
         mock_item.item_id = uuid.uuid4()
         mock_item.base_uom = "METER"
         mock_item.track_lots = False
+        mock_item.organization_id = org_id
+        mock_item.item_code = "ITEM001"
+        mock_db.get.return_value = mock_item
         wh_id = uuid.uuid4()
-        # item lookup -> warehouse lookup -> existing MR lookup
+        # locked existing MR lookup -> item lookup -> warehouse lookup
         fiscal_period = MagicMock()
         fiscal_period.fiscal_period_id = uuid.uuid4()
         mock_db.scalar.side_effect = [
+            None,
             mock_item,
             wh_id,
-            None,
             fiscal_period,
             None,
             None,
@@ -1213,15 +1219,18 @@ class TestCreateMaterialRequest:
         mock_item.item_id = uuid.uuid4()
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
+        mock_item.organization_id = org_id
+        mock_item.item_code = "ITEM001"
+        mock_db.get.return_value = mock_item
         project_id = uuid.uuid4()
         ticket_id = uuid.uuid4()
         wh_id = uuid.uuid4()
         fiscal_period = MagicMock()
         fiscal_period.fiscal_period_id = uuid.uuid4()
         mock_db.scalar.side_effect = [
+            None,
             mock_item,
             wh_id,
-            None,
             fiscal_period,
             None,
             None,
@@ -1290,15 +1299,19 @@ class TestCreateMaterialRequest:
         mock_item.item_id = uuid.uuid4()
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
+        mock_item.organization_id = org_id
+        mock_item.item_code = "ITEM001"
+        mock_db.get.return_value = mock_item
         fiscal_period = MagicMock()
         fiscal_period.fiscal_period_id = uuid.uuid4()
         wh_id = uuid.uuid4()
+        line_id = uuid.uuid4()
 
-        # item lookup -> warehouse lookup -> existing MR lookup -> fiscal period lookup
+        # locked existing MR lookup -> item lookup -> warehouse lookup -> fiscal period lookup
         mock_db.scalar.side_effect = [
+            None,
             mock_item,
             wh_id,
-            None,
             fiscal_period,
             None,
             None,
@@ -1326,7 +1339,7 @@ class TestCreateMaterialRequest:
                 "_snapshot_material_request_lines",
                 return_value=[
                     {
-                        "line_id": uuid.uuid4(),
+                        "line_id": line_id,
                         "sequence": 1,
                         "item_id": mock_item.item_id,
                         "warehouse_id": wh_id,
@@ -1383,6 +1396,11 @@ class TestCreateMaterialRequest:
         request.request_id = uuid.uuid4()
         request.request_number = "MAT-MR-2026-00010"
         request.created_by_id = user_id
+        line_id = uuid.uuid4()
+        request_line = MagicMock(
+            item_id=line_id, ordered_qty=Decimal("0"), out_of_stock=False
+        )
+        request.items = [request_line]
 
         with patch(
             "app.services.inventory.transaction.InventoryTransactionService.create_issue"
@@ -1391,7 +1409,7 @@ class TestCreateMaterialRequest:
                 org_id=org_id,
                 request=request,
                 line={
-                    "line_id": uuid.uuid4(),
+                    "line_id": line_id,
                     "item_id": item_id,
                     "warehouse_id": warehouse_id,
                     "requested_qty": Decimal("1"),
@@ -1407,6 +1425,7 @@ class TestCreateMaterialRequest:
         txn_input = mock_create_issue.call_args.args[2]
         assert isinstance(txn_input, TransactionInput)
         assert txn_input.serial_numbers == ["SN-001"]
+        assert request_line.ordered_qty == Decimal("1")
 
     def test_create_material_request_issued_insufficient_stock_pending_stock(
         self, service, org_id, mock_db
@@ -1418,8 +1437,11 @@ class TestCreateMaterialRequest:
         mock_item.item_id = uuid.uuid4()
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
+        mock_item.organization_id = org_id
+        mock_item.item_code = "ITEM001"
+        mock_db.get.return_value = mock_item
         wh_id = uuid.uuid4()
-        mock_db.scalar.side_effect = [mock_item, wh_id, None, None, None, None]
+        mock_db.scalar.side_effect = [None, mock_item, wh_id, None, None, None]
 
         added_objects: list = []
         mock_db.add.side_effect = lambda obj: added_objects.append(obj)
@@ -1470,8 +1492,11 @@ class TestCreateMaterialRequest:
         mock_item.item_id = uuid.uuid4()
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
+        mock_item.organization_id = org_id
+        mock_item.item_code = "ITEM001"
+        mock_db.get.return_value = mock_item
         wh_id = uuid.uuid4()
-        mock_db.scalar.side_effect = [mock_item, wh_id, None, None, None, None]
+        mock_db.scalar.side_effect = [None, mock_item, wh_id, None, None, None]
 
         added_objects: list = []
         mock_db.add.side_effect = lambda obj: added_objects.append(obj)
@@ -1544,8 +1569,11 @@ class TestCreateMaterialRequest:
         mock_item.item_id = existing_line.inventory_item_id
         mock_item.base_uom = "Nos"
         mock_item.track_lots = False
+        mock_item.organization_id = org_id
+        mock_item.item_code = "ITEM001"
+        mock_db.get.return_value = mock_item
         wh_id = existing_line.warehouse_id
-        mock_db.scalar.side_effect = [mock_item, wh_id, existing_mr]
+        mock_db.scalar.side_effect = [existing_mr, mock_item, wh_id]
 
         payload = SubMaterialRequestPayload(
             source_request_id=uuid.uuid4(),
@@ -1613,9 +1641,22 @@ class TestCreateMaterialRequest:
     def test_status_webhook_payload_matches_sub_contract_exactly(self, service):
         from app.models.inventory.material_request import MaterialRequestStatus
 
-        line = MagicMock(sequence=1, serial_numbers=["SN-001"])
+        organization_id = uuid.uuid4()
+        inventory_item_id = uuid.uuid4()
+        line = MagicMock(
+            sequence=1,
+            serial_numbers=["SN-001"],
+            inventory_item_id=inventory_item_id,
+            requested_qty=Decimal("1"),
+            ordered_qty=Decimal("0"),
+            out_of_stock=False,
+        )
+        service.db.get.return_value = MagicMock(
+            organization_id=organization_id, item_code="ITEM001"
+        )
         request = MagicMock(
             source_reference=str(uuid.uuid4()),
+            organization_id=organization_id,
             request_id=uuid.uuid4(),
             request_number="MAT-MR-2026-00022",
             updated_at=datetime.now(UTC),
@@ -1636,8 +1677,17 @@ class TestCreateMaterialRequest:
             "new_status",
             "updated_at",
             "items",
+            "fulfillment_version",
         }
-        assert set(payload["items"][0]) == {"sequence", "serial_numbers"}
+        assert payload["fulfillment_version"] == 1
+        assert set(payload["items"][0]) == {
+            "sequence",
+            "serial_numbers",
+            "item_code",
+            "requested_qty",
+            "issued_qty",
+            "out_of_stock",
+        }
         assert payload["new_status"] == "CANCELLED"
 
 
@@ -1718,6 +1768,8 @@ class TestGetMaterialRequestBySourceReference:
         mock_line.requested_qty = Decimal("10")
         mock_line.ordered_qty = Decimal("0")
         mock_line.uom = "PCS"
+        mock_line.sequence = 1
+        mock_line.out_of_stock = False
 
         mock_mr = MagicMock()
         mock_mr.request_id = uuid.uuid4()
@@ -1726,6 +1778,7 @@ class TestGetMaterialRequestBySourceReference:
         mock_mr.request_type = MaterialRequestType.ISSUE
         mock_mr.items = [mock_line]
         mock_mr.created_at = datetime(2026, 2, 10, tzinfo=UTC)
+        mock_mr.updated_at = mock_mr.created_at
 
         # First scalar: MR lookup
         # Then execute for item names

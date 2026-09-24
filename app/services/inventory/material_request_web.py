@@ -754,6 +754,7 @@ class MaterialRequestWebService:
                     "pending_qty": _format_currency(pending_qty),
                     "has_pending_qty": pending_qty > 0,
                     "suggested_issue_qty": str(suggested_issue_qty),
+                    "saved_serials": list(getattr(item, "serial_numbers", None) or []),
                     "out_of_stock": getattr(item, "out_of_stock", False),
                     "available_qty": _format_currency(available_qty),
                     "available_qty_value": float(available_qty),
@@ -767,10 +768,8 @@ class MaterialRequestWebService:
             )
 
         stock_is_sufficient = not stock_blocking_items
-        inline_issue = (
-            request.request_type == MaterialRequestType.ISSUE
-            and getattr(request, "source_system", None) != "sub"
-        )
+        # Fulfillment eligibility is independent of origin and request age.
+        inline_issue = request.request_type == MaterialRequestType.ISSUE
         approval_blocked_reason = None
         if (
             not inline_issue
@@ -1300,8 +1299,16 @@ class MaterialRequestWebService:
         cancel_reason: str,
     ) -> MaterialRequest:
         """Cancel a material request."""
-        request = db.get(MaterialRequest, coerce_uuid(request_id))
-        if not request or request.organization_id != organization_id:
+        request = db.scalars(
+            select(MaterialRequest)
+            .where(
+                MaterialRequest.request_id == coerce_uuid(request_id),
+                MaterialRequest.organization_id == organization_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).first()
+        if request is None:
             raise ValueError("Material request not found")
 
         if request.status not in [
@@ -1312,6 +1319,17 @@ class MaterialRequestWebService:
             raise ValueError(
                 "Only draft, submitted, or pending-stock requests can be cancelled"
             )
+
+        if request.source_system == "sub":
+            from app.services.inventory.material_request_issue import (
+                validate_sub_issue_history,
+            )
+
+            validate_sub_issue_history(
+                db, organization_id, request.request_id, list(request.items)
+            )
+            if any((line.ordered_qty or Decimal("0")) > 0 for line in request.items):
+                raise ValueError("Issued stock must be reconciled before cancellation")
 
         reason = (cancel_reason or "").strip()
         if not reason:
@@ -1386,6 +1404,8 @@ class MaterialRequestWebService:
                     MaterialRequest.request_id == coerce_uuid(request_id),
                     MaterialRequest.organization_id == organization_id,
                 )
+                .with_for_update(of=MaterialRequest)
+                .execution_options(populate_existing=True)
             )
             .unique()
             .first()
@@ -1428,6 +1448,30 @@ class MaterialRequestWebService:
                 db, organization_id, request, old_status, request.status, user_id
             )
             return request
+
+        if (
+            request.source_system == "sub"
+            and request.request_type == MaterialRequestType.ISSUE
+        ):
+            from app.services.inventory.material_request_issue import (
+                validate_sub_issue_history,
+            )
+
+            validate_sub_issue_history(
+                db, organization_id, request.request_id, list(request.items)
+            )
+            # Share the stock-item lock with inline and automatic issuance.
+            db.execute(
+                select(Item.item_id)
+                .where(
+                    Item.organization_id == organization_id,
+                    Item.item_id.in_(
+                        {line.inventory_item_id for line in request.items}
+                    ),
+                )
+                .order_by(Item.item_id)
+                .with_for_update()
+            ).all()
 
         # For ISSUE and TRANSFER types: create inventory transactions
         now = datetime.now(UTC)
@@ -1582,6 +1626,9 @@ class MaterialRequestWebService:
     ) -> None:
         if request.source_system != "sub":
             return
+        # Date the authoritative change before building the cumulative snapshot.
+        request.updated_at = datetime.now(UTC)
+        db.flush()
         from app.services.sync.sub.procurement import _ProcurementMixin
 
         _ProcurementMixin(db)._emit_sub_material_request_status_changed(

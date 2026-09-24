@@ -137,3 +137,42 @@ to completion. It never restores the retired CRM runtime.
 After one agreed observation window with zero unexplained drift, remove the
 local Sub issue/fulfil endpoints. The retired CRM origin path is already absent;
 ERP and Sub deploy the provider-neutral source-reference fields together.
+
+
+## Partial issue contract — 23 September 2026
+
+`MaterialRequestIssueService.issue_available` accepts eligible ISSUE requests
+irrespective of their source or creation date. The detail page exposes Issue now
+and Issue remaining line items for Submitted, Pending Stock and Partially Issued
+requests with an outstanding balance. RBAC and CSRF are unchanged. The action
+posts stock immediately; it does not rewrite the original requested quantities.
+
+The request and stock item locks are shared by inline issuing, legacy approval,
+automatic issuing and status resends. Stale form counters are refused. Historical
+Sub request counters must reconcile exactly with request/line-bound ISSUE ledger
+entries; unmatched or inconsistent history is blocked rather than repaired or
+replayed. Returns do not reopen the original request. Saved serials are consumed
+in their displayed order, never invented or reused. Every selected batch and its
+hook are atomic; a failure rolls back the entire attempt.
+
+ERP emits `fulfillment_version=1` with an aware source updated_at and every line's
+sequence, item_code, original requested_qty, cumulative issued_qty, out_of_stock
+and original serial selection. The status-read response carries the same facts
+using its existing ordered_qty field. The Sub receiver must be deployed first:
+its previous strict webhook schema rejects the additive fields. No connector
+credentials, ownership settings or production data are changed by this patch.
+
+PARTIALLY_ISSUED stays outstanding in Self-Care (`pending_stock` compatibility
+lifecycle, `partially_issued` display state). No fulfilled event or full work-order
+allocation is allowed until all original quantities are observed issued. Resends
+must not downgrade partial state; cancellation cannot discard already-issued
+stock. Subsequent quantities are issued deliberately from the remaining-line
+form, not by replaying the original request.
+
+Validate in staging with an existing month-old unissued Self-Care request:
+issue fewer units on one line and zero on an out-of-stock line; verify the same
+request IDs and original quantities, ERP and Sub outstanding counts, no early
+fulfilled event, and one later final issue. Repeat the original delivery and a
+stale form; neither may post stock again. Reorder callback/poll delivery and
+confirm non-regression. Already-terminal inconsistent historical records require
+separately authorized reconciliation, not reopening or recreation.

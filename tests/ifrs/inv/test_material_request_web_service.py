@@ -164,7 +164,10 @@ def test_cancel_request_allows_unprocessed_states(status) -> None:
         status=status,
         source_system="sub",
     )
-    db.get.return_value = request
+    request.items = []
+    request.source_system = "sub"
+    db.scalars.return_value.first.return_value = request
+    db.execute.return_value.all.return_value = []
 
     with patch.object(MaterialRequestWebService, "_emit_sub_outcome") as emit:
         result = MaterialRequestWebService.cancel_request(
@@ -196,7 +199,10 @@ def test_cancel_request_rejects_processed_state() -> None:
         organization_id=organization_id,
         status=MaterialRequestStatus.ISSUED,
     )
-    db.get.return_value = request
+    request.items = []
+    request.source_system = "sub"
+    db.scalars.return_value.first.return_value = request
+    db.execute.return_value.all.return_value = []
 
     with pytest.raises(ValueError, match="pending-stock"):
         MaterialRequestWebService.cancel_request(
@@ -217,7 +223,10 @@ def test_cancel_request_requires_reason_and_enforces_tenant() -> None:
         organization_id=organization_id,
         status=MaterialRequestStatus.PENDING_STOCK,
     )
-    db.get.return_value = request
+    request.items = []
+    request.source_system = "sub"
+    db.scalars.return_value.first.return_value = request
+    db.execute.return_value.all.return_value = []
 
     with pytest.raises(ValueError, match="Cancellation reason is required"):
         MaterialRequestWebService.cancel_request(
@@ -228,7 +237,11 @@ def test_cancel_request_requires_reason_and_enforces_tenant() -> None:
             cancel_reason="   ",
         )
 
-    request.organization_id = uuid.uuid4()
+    statement = db.scalars.call_args.args[0]
+    assert organization_id in statement.compile().params.values()
+    assert "organization_id" in str(statement)
+    assert "FOR UPDATE" in str(statement)
+    db.scalars.return_value.first.return_value = None
     with pytest.raises(ValueError, match="Material request not found"):
         MaterialRequestWebService.cancel_request(
             db=db,
@@ -320,12 +333,8 @@ def test_detail_context_explains_pending_stock_shortage(source_system: str) -> N
     assert material_request["stock_required"] is True
     assert material_request["stock_is_sufficient"] is False
     assert material_request["can_approve"] is False
-    if source_system == "sub":
-        assert "EDGE-16" in material_request["approval_blocked_reason"]
-        assert material_request["can_issue_lines"] is False
-    else:
-        assert material_request["approval_blocked_reason"] is None
-        assert material_request["can_issue_lines"] is True
+    assert material_request["approval_blocked_reason"] is None
+    assert material_request["can_issue_lines"] is True
     assert detail_line["available_qty_value"] == 0.0
     assert detail_line["shortage_qty_value"] == 1.0
     assert detail_line["has_sufficient_stock"] is False
@@ -333,7 +342,7 @@ def test_detail_context_explains_pending_stock_shortage(source_system: str) -> N
 
 @pytest.mark.parametrize(
     ("source_system", "can_approve", "can_issue_lines"),
-    [("sub", True, False), ("erp", False, True)],
+    [("sub", False, True), ("erp", False, True)],
 )
 def test_detail_context_stock_ready_actions(
     source_system: str, can_approve: bool, can_issue_lines: bool
@@ -455,6 +464,10 @@ def test_approve_request_allows_stock_ready_pending_issue_request() -> None:
     item.average_cost = Decimal("12")
     item.base_uom = "Nos"
     item.currency_code = "NGN"
+    item.organization_id = organization_id
+    item.item_code = "ITEM001"
+    line.serial_numbers = []
+    line.out_of_stock = False
     db.get.return_value = item
 
     with patch(
@@ -493,3 +506,28 @@ def test_legacy_approve_rejects_native_issue_request() -> None:
         )
 
     assert request.status == MaterialRequestStatus.SUBMITTED
+
+
+def test_sub_outcome_flushes_current_source_time_before_hook() -> None:
+    db = MagicMock()
+    request = SimpleNamespace(source_system="sub", updated_at=None)
+
+    def inspect_hook(**kwargs):
+        assert request.updated_at.tzinfo is not None
+        db.flush.assert_called_once()
+        assert kwargs["request"] is request
+
+    with patch(
+        "app.services.sync.sub.procurement._ProcurementMixin._emit_sub_material_request_status_changed",
+        side_effect=inspect_hook,
+    ) as emit:
+        MaterialRequestWebService._emit_sub_outcome(
+            db,
+            uuid.uuid4(),
+            request,
+            MaterialRequestStatus.SUBMITTED,
+            MaterialRequestStatus.ISSUED,
+            uuid.uuid4(),
+        )
+    emit.assert_called_once()
+    db.commit.assert_not_called()

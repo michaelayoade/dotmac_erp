@@ -202,7 +202,7 @@ def test_duplicate_item_lines_share_one_stock_budget() -> None:
     assert lines[1].out_of_stock is True
 
 
-@pytest.mark.parametrize("problem", ["missing_badge", "too_many", "stale", "sub"])
+@pytest.mark.parametrize("problem", ["missing_badge", "too_many", "stale"])
 def test_rejects_unsafe_issue_without_posting(problem: str) -> None:
     db, org_id, user_id, request, lines = _request_with_lines(1)
     line = lines[0]
@@ -215,8 +215,6 @@ def test_rejects_unsafe_issue_without_posting(problem: str) -> None:
         available = Decimal("10")
     elif problem == "stale":
         expected[line.item_id] = Decimal("1")
-    elif problem == "sub":
-        request.source_system = "sub"
 
     with (
         patch(

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from urllib.parse import urlparse
 
+from sqlalchemy.exc import OperationalError
 from starlette.requests import Request
 
 from app.models.auth import Session as AuthSession
@@ -17,6 +18,67 @@ from app.models.auth import SessionStatus
 from app.services.auth_flow import AuthFlow, hash_session_token
 from app.services.auth_web import auth_web_service
 from app.web.deps import require_web_auth
+
+
+def test_web_session_activity_touch_commits_stale_activity():
+    import app.web.deps as web_deps
+
+    db = MagicMock()
+    now = datetime.now(UTC)
+
+    web_deps._touch_web_session_activity(
+        db,
+        session_id=uuid.uuid4(),
+        person_id=uuid.uuid4(),
+        last_seen_at=now - timedelta(minutes=2),
+        now=now,
+    )
+
+    db.execute.assert_called_once()
+    db.commit.assert_called_once()
+    db.rollback.assert_not_called()
+
+
+def test_web_session_activity_touch_skips_recent_activity():
+    import app.web.deps as web_deps
+
+    db = MagicMock()
+    now = datetime.now(UTC)
+
+    web_deps._touch_web_session_activity(
+        db,
+        session_id=uuid.uuid4(),
+        person_id=uuid.uuid4(),
+        last_seen_at=now - timedelta(seconds=30),
+        now=now,
+    )
+
+    db.execute.assert_not_called()
+    db.commit.assert_not_called()
+    db.rollback.assert_not_called()
+
+
+def test_web_session_activity_touch_rolls_back_lock_timeout():
+    import app.web.deps as web_deps
+
+    db = MagicMock()
+    db.execute.side_effect = OperationalError(
+        "UPDATE sessions",
+        {},
+        TimeoutError("canceling statement due to lock timeout"),
+    )
+    now = datetime.now(UTC)
+
+    web_deps._touch_web_session_activity(
+        db,
+        session_id=uuid.uuid4(),
+        person_id=uuid.uuid4(),
+        last_seen_at=now - timedelta(minutes=2),
+        now=now,
+    )
+
+    db.commit.assert_not_called()
+    db.rollback.assert_called_once()
 
 
 def test_web_session_person_lookup_uses_cross_org_without_default_org(monkeypatch):
