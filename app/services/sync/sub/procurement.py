@@ -125,6 +125,24 @@ class _ProcurementMixin(_SubSyncBase):
                     f"Invalid schedule_date format: {data.schedule_date}. Use YYYY-MM-DD."
                 ) from exc
 
+        existing_stmt = (
+            select(MaterialRequest)
+            .options(joinedload(MaterialRequest.items))
+            .where(
+                MaterialRequest.organization_id == org_id,
+                MaterialRequest.source_system == "sub",
+                MaterialRequest.source_reference == source_request_id,
+            )
+            .with_for_update(of=MaterialRequest)
+            .execution_options(populate_existing=True)
+        )
+        mr = self.db.scalar(existing_stmt)
+        saved_serials = {
+            line.sequence: self._material_request_line_serial_numbers(line)
+            for line in (mr.items if mr is not None else [])
+        }
+        from app.services.inventory.serial import InventorySerialService
+
         # Resolve items + warehouses
         resolved_items: list[dict[str, Any]] = []
         for seq, item_payload in enumerate(data.items, start=1):
@@ -160,13 +178,21 @@ class _ProcurementMixin(_SubSyncBase):
                         item,
                         "track_serial_numbers",
                     ),
-                    "serial_numbers": self._validate_sub_material_request_serials(
-                        org_id=org_id,
-                        item=item,
-                        warehouse_id=warehouse_id,
-                        quantity=item_payload.quantity,
-                        serial_numbers=item_payload.serial_numbers,
-                        require_serials=False,
+                    "serial_numbers": (
+                        saved_serials[seq]
+                        if seq in saved_serials
+                        and saved_serials[seq]
+                        == InventorySerialService.normalize_serial_numbers(
+                            item_payload.serial_numbers
+                        )
+                        else self._validate_sub_material_request_serials(
+                            org_id=org_id,
+                            item=item,
+                            warehouse_id=warehouse_id,
+                            quantity=item_payload.quantity,
+                            serial_numbers=item_payload.serial_numbers,
+                            require_serials=False,
+                        )
                     ),
                 }
             )
@@ -205,16 +231,6 @@ class _ProcurementMixin(_SubSyncBase):
             )
         )
 
-        existing_stmt = (
-            select(MaterialRequest)
-            .options(joinedload(MaterialRequest.items))
-            .where(
-                MaterialRequest.organization_id == org_id,
-                MaterialRequest.source_system == "sub",
-                MaterialRequest.source_reference == source_request_id,
-            )
-        )
-        mr = self.db.scalar(existing_stmt)
         if mr:
             existing_fingerprint = self._build_material_request_existing_fingerprint(mr)
             if incoming_fingerprint != existing_fingerprint:
@@ -276,6 +292,16 @@ class _ProcurementMixin(_SubSyncBase):
                 source_request_id=source_request_id,
             )
 
+        if requested_status == MaterialRequestStatus.ISSUED:
+            self.db.execute(
+                select(Item.item_id)
+                .where(
+                    Item.organization_id == org_id,
+                    Item.item_id.in_({line["item_id"] for line in resolved_items}),
+                )
+                .order_by(Item.item_id)
+                .with_for_update()
+            ).all()
         has_sufficient_stock = True
         if requested_status in {
             MaterialRequestStatus.SUBMITTED,
@@ -404,7 +430,7 @@ class _ProcurementMixin(_SubSyncBase):
                 "warehouse_id": str(item["warehouse_id"])
                 if item["warehouse_id"]
                 else None,
-                "requested_qty": str(item["requested_qty"]),
+                "requested_qty": format(item["requested_qty"].normalize(), "f"),
                 "uom": item["uom"] or "",
             }
             if include_serial_numbers:
@@ -439,7 +465,7 @@ class _ProcurementMixin(_SubSyncBase):
                 "sequence": line.sequence,
                 "item_id": str(line.inventory_item_id),
                 "warehouse_id": str(line.warehouse_id) if line.warehouse_id else None,
-                "requested_qty": str(line.requested_qty),
+                "requested_qty": format(line.requested_qty.normalize(), "f"),
                 "uom": line.uom or "",
             }
             if include_serial_numbers:
@@ -550,6 +576,51 @@ class _ProcurementMixin(_SubSyncBase):
                 source_request_id=request.source_reference,
             )
 
+        if request.status == MaterialRequestStatus.PARTIALLY_ISSUED:
+            if requested_status == MaterialRequestStatus.CANCELLED:
+                request.updated_at = datetime.now(UTC)
+                self.db.flush()
+                self._emit_sub_material_request_status_changed(
+                    org_id=org_id,
+                    request=request,
+                    old_status=old_status,
+                    new_status=request.status,
+                    actor_person_id=actor_person_id,
+                )
+            # Retries and old auto-issue commands never replay the original quantities.
+            return SubMaterialRequestResponse(
+                request_id=request.request_id,
+                request_number=request.request_number,
+                status=request.status.value,
+                source_request_id=request.source_reference,
+            )
+
+        from app.services.inventory.material_request_issue import (
+            validate_sub_issue_history,
+        )
+
+        validate_sub_issue_history(
+            self.db, org_id, request.request_id, list(request.items)
+        )
+        if any((line.ordered_qty or Decimal("0")) > 0 for line in request.items):
+            raise ValueError(
+                "Historical issued stock requires reconciliation before changing this request"
+            )
+        if requested_status == MaterialRequestStatus.ISSUED:
+            from app.models.inventory.item import Item
+
+            self.db.execute(
+                select(Item.item_id)
+                .where(
+                    Item.organization_id == org_id,
+                    Item.item_id.in_(
+                        {line.inventory_item_id for line in request.items}
+                    ),
+                )
+                .order_by(Item.item_id)
+                .with_for_update()
+            ).all()
+
         if requested_status == MaterialRequestStatus.DRAFT:
             target_status = (
                 MaterialRequestStatus.DRAFT
@@ -603,6 +674,7 @@ class _ProcurementMixin(_SubSyncBase):
             )
 
         request.status = target_status
+        request.updated_at = datetime.now(UTC)
         self.db.flush()
         if request.status != old_status:
             self._emit_sub_material_request_status_changed(
@@ -783,6 +855,13 @@ class _ProcurementMixin(_SubSyncBase):
             reason_code="Sub_SYNC_ISSUE",
             serial_numbers=line.get("serial_numbers") or None,
         )
+        request_line = next(
+            (row for row in request.items if row.item_id == line.get("line_id")), None
+        )
+        if request_line is None:
+            raise ValueError(
+                "Material request issue line is missing; reconcile before posting"
+            )
         InventoryTransactionService.create_issue(
             self.db,
             org_id,
@@ -790,6 +869,11 @@ class _ProcurementMixin(_SubSyncBase):
             user_id,
             auto_commit=False,
         )
+        request_line.ordered_qty = (request_line.ordered_qty or Decimal("0")) + line[
+            "requested_qty"
+        ]
+        request_line.out_of_stock = False
+        self.db.flush()
 
     def process_pending_stock_material_requests(
         self,
@@ -817,6 +901,8 @@ class _ProcurementMixin(_SubSyncBase):
                 )
                 .order_by(MaterialRequest.created_at.asc())
                 .limit(limit)
+                .with_for_update(of=MaterialRequest, skip_locked=True)
+                .execution_options(populate_existing=True)
             )
             .unique()
             .all()
@@ -958,6 +1044,16 @@ class _ProcurementMixin(_SubSyncBase):
         new_status,
     ) -> SubMaterialStatusWebhook:
         """Build Sub-facing status event payload for material requests."""
+        from app.models.inventory.item import Item
+
+        item_codes: dict[UUID, str] = {}
+        for line in request.items:
+            item = self.db.get(Item, line.inventory_item_id)
+            if item is None or item.organization_id != request.organization_id:
+                raise ValueError(
+                    "Material request inventory item is missing from its organization"
+                )
+            item_codes[line.inventory_item_id] = item.item_code
         return SubMaterialStatusWebhook(
             source_request_id=UUID(str(request.source_reference)),
             request_id=str(request.request_id),
@@ -967,13 +1063,18 @@ class _ProcurementMixin(_SubSyncBase):
             items=tuple(
                 SubMaterialStatusWebhookLine(
                     sequence=line.sequence,
+                    item_code=item_codes[line.inventory_item_id],
+                    requested_qty=line.requested_qty,
+                    issued_qty=line.ordered_qty or Decimal("0"),
+                    out_of_stock=bool(getattr(line, "out_of_stock", False)),
                     serial_numbers=tuple(
                         self._material_request_line_serial_numbers(line)
                     ),
                 )
                 for line in sorted(request.items, key=lambda item: item.sequence)
             ),
-            updated_at=request.updated_at,
+            updated_at=request.updated_at or request.created_at,
+            fulfillment_version=1,
         )
 
     def get_material_request_by_source_reference(
@@ -1004,7 +1105,7 @@ class _ProcurementMixin(_SubSyncBase):
         items_map: dict[UUID, tuple[str, str]] = {}
         if item_ids:
             items_stmt = select(Item.item_id, Item.item_code, Item.item_name).where(
-                Item.item_id.in_(item_ids)
+                Item.organization_id == org_id, Item.item_id.in_(item_ids)
             )
             items_map = {
                 row[0]: (row[1], row[2]) for row in self.db.execute(items_stmt).all()
@@ -1020,14 +1121,18 @@ class _ProcurementMixin(_SubSyncBase):
                     item_code=items_map.get(line.inventory_item_id, ("", ""))[0],
                     item_name=items_map.get(line.inventory_item_id, ("", ""))[1],
                     requested_qty=line.requested_qty,
-                    ordered_qty=line.ordered_qty,
+                    ordered_qty=line.ordered_qty or Decimal("0"),
+                    sequence=line.sequence,
+                    out_of_stock=bool(getattr(line, "out_of_stock", False)),
                     uom=line.uom,
                     serial_numbers=self._material_request_line_serial_numbers(line)
                     or None,
                 )
-                for line in mr.items
+                for line in sorted(mr.items, key=lambda row: row.sequence)
             ],
             created_at=mr.created_at,
+            updated_at=mr.updated_at or mr.created_at,
+            fulfillment_version=1,
         )
 
     def create_purchase_order(

@@ -213,6 +213,9 @@
                         <td class="max-w-[14rem]">
                             <div class="truncate font-mono font-medium text-slate-900 dark:text-white" title="{{ item.item_code }}">{{ item.item_code }}</div>
                             <div class="truncate text-xs text-slate-500" title="{{ item.item_name }}">{{ item.item_name }}</div>
+                            {% if material_request.can_issue_lines and item.saved_serials %}
+                            <details class="text-xs text-slate-500"><summary>Saved serial order</summary><p class="break-words">{{ item.saved_serials | join(', ') }}</p><p>The next unissued serials in this order will be issued.</p></details>
+                            {% endif %}
                         </td>
                         <td class="text-slate-500">{{ item.warehouse_name or '-' }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ item.requested_qty }}</td>
@@ -303,7 +306,7 @@
                     {{ icon_svg('check', 'h-4 w-4 mr-1.5') }} Issue remaining line items
                 </button>
             </form>
-            <p class='w-full text-sm text-slate-500 dark:text-slate-400'>Edit the Issue now quantity on each line. Click Out of stock for a zero-stock line, then issue the rest. The original requested quantities remain unchanged.</p>
+            <p class='w-full text-sm text-slate-500 dark:text-slate-400'>Edit the Issue now quantity on each line. Click Out of stock for a zero-stock line, then issue the rest. The original requested quantities remain unchanged. This also applies to existing Self-Care requests. Issuing deducts stock immediately; it is not a draft edit.</p>
 {% endif %}
 {% if material_request.can_submit and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/submit" class="inline">
