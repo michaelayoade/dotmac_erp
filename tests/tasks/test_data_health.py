@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -247,6 +248,43 @@ class TestRunDataHealthCheck:
             "unallocated_payments",
         }
         assert expected_keys.issubset(set(result.keys()))
+
+    def test_logs_inventory_as_info_and_anomalies_as_warning(self, caplog) -> None:
+        """Healthy inventory counts do not obscure actionable anomalies."""
+        from app.tasks.data_health import run_data_health_check
+
+        mock_db = MagicMock()
+        mock_db.scalar.side_effect = [
+            0,  # unbalanced journals
+            0,  # false-paid invoices
+            0,  # stuck outbox events
+            0,  # dead outbox events
+            0,  # stale journal drafts
+            750,  # account balance inventory
+            917_376,  # notification inventory
+            917_304,  # unread notification inventory
+            0,  # approved invoices stuck
+            1_059,  # unallocated payments
+        ]
+
+        with (
+            caplog.at_level(logging.INFO, logger="app.tasks.data_health"),
+            patch("app.tasks.data_health.cross_org_session") as mock_session,
+        ):
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            run_data_health_check()
+
+        records = {
+            record.getMessage().strip(): record.levelno
+            for record in caplog.records
+            if ":" in record.getMessage()
+        }
+        assert records["account_balance_rows: 750"] == logging.INFO
+        assert records["notification_total: 917376"] == logging.INFO
+        assert records["notification_unread: 917304"] == logging.INFO
+        assert records["unallocated_payments: 1059"] == logging.WARNING
 
 
 # ── Auto-post approved invoices ──────────────────────────────
