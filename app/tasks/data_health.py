@@ -1077,10 +1077,17 @@ def run_data_health_check(
             )
         results["unallocated_payments"] = db.scalar(unallocated_stmt) or 0
 
-    # Log summary
+    # Inventory counts are measurements, not anomalies merely because they
+    # are non-zero. Actual integrity/reconciliation findings remain warnings.
+    inventory_keys = {
+        "account_balance_rows",
+        "notification_total",
+        "notification_unread",
+    }
     logger.info("=== Data Health Check Results ===")
     for key, value in results.items():
-        level = logging.WARNING if value else logging.INFO
+        is_anomaly = key not in inventory_keys and bool(value)
+        level = logging.WARNING if is_anomaly else logging.INFO
         logger.log(level, "  %s: %s", key, value)
     logger.info("=== End Health Check ===")
 
