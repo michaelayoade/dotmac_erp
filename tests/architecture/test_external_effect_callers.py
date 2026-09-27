@@ -57,8 +57,10 @@ signal even though it was already grandfathered for another one:
         )`` (via assignment, annotated assignment, an attribute target, or
         ``with ... as x``). An inline ``httpx.Client().post(...)`` or
         ``requests.Session().post(...)`` is also included. A client bound at
-        module scope and used there or in a function is included. Scoping
-        function-local bindings to one function's own body is what keeps
+        module scope and used there or in a function is included. A
+        ``self.<attr>`` opened directly or returned by a same-class factory
+        and then used by another method is included. Class-local binding
+        tracking keeps
         two unrelated classes that both happen to use the attribute name
         ``self._client`` from being merged into one false hit (see
         ``app/services/dotmac_sub/client.py``, where
@@ -155,13 +157,11 @@ LIMITATION (stated, not implemented) -- BLIND SPOTS:
   rebinding through variables or dynamic ``importlib`` imports. Method names
   are used as the static proxy for SDK mutation; another unrelated object
   with the same SDK-specific method name may over-match.
-- ``http_write``'s bound-name tracking is per-function (not per-class): a
-  client stored on ``self`` in ``__init__`` and used in a DIFFERENT method
-  is not tracked as bound in that other method's own body (this is a
-  conscious trade against the false-positive this exact shape produced in
-  ``app/services/dotmac_sub/client.py`` -- see the family description
-  above) -- a real cross-method ``self``-held httpx client used only for
-  writes in a method that never opens it would currently evade this family.
+- Cross-method ``self`` tracking stays inside one class. It resolves direct
+  constructors and same-class factories that return a directly constructed
+  client, but not a factory whose result arrives through further helpers,
+  inheritance, or dynamic dispatch. A constructor-injected client without
+  an SDK construction in that class does not count.
 - ``provider_accessor``'s ``.client.<method>`` shape matches ANY base
   expression before ``.client`` once the owning module imports a provider
   package; it does not verify the ``.client`` attribute is actually the
@@ -353,8 +353,8 @@ READ_ONLY_OBSERVATION_MODULES: frozenset[str] = frozenset(
 )
 
 BASELINE_PATH = Path(__file__).with_name("external_effect_caller_baseline.txt")
-REVIEWED_MODULE_COUNT = 33
-REVIEWED_FAMILY_LABEL_COUNT = 43
+REVIEWED_MODULE_COUNT = 34
+REVIEWED_FAMILY_LABEL_COUNT = 44
 
 #: Reason string used for every hit not covered by a more specific reason.
 DEFAULT_REASON = (
@@ -625,6 +625,59 @@ def _http_write_calls(
     )
 
 
+def _class_http_client_bindings(
+    class_node: ast.ClassDef, aliases: _ImportAliases
+) -> dict[str, int]:
+    """Track SDK clients held on ``self`` without merging separate classes."""
+    methods = [
+        node
+        for node in class_node.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    factories: set[str] = set()
+    for method in methods:
+        own_nodes = list(_own_body_nodes(method))
+        local = _http_client_bound_names(own_nodes, aliases)
+        if any(
+            isinstance(node, ast.Return)
+            and node.value is not None
+            and (
+                isinstance(node.value, ast.Call)
+                and _is_http_client_ctor_call(node.value, aliases)
+                or isinstance(node.value, ast.Name)
+                and node.value.id in local
+            )
+            for node in own_nodes
+        ):
+            factories.add(method.name)
+
+    bound: dict[str, int] = {}
+    for method in methods:
+        own_nodes = list(_own_body_nodes(method))
+        for key, line in _http_client_bound_names(own_nodes, aliases).items():
+            if key.startswith("self."):
+                bound[key] = line
+        for node in own_nodes:
+            target: ast.expr | None = None
+            value: ast.expr | None = None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target, value = node.targets[0], node.value
+            elif isinstance(node, ast.AnnAssign):
+                target, value = node.target, node.value
+            key = _target_key(target)
+            if (
+                key is not None
+                and key.startswith("self.")
+                and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Attribute)
+                and isinstance(value.func.value, ast.Name)
+                and value.func.value.id == "self"
+                and value.func.attr in factories
+            ):
+                bound[key] = value.lineno
+    return bound
+
+
 def external_effect_hits(tree: ast.AST) -> set[str]:
     """Return the set of hit family labels found in ``tree`` -- see the
     module docstring's "WHAT IS FLAGGED" section for each family's exact
@@ -711,6 +764,17 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
         if _http_write_calls(own_nodes, http_bound | module_http_bound, aliases):
             hits.add("http_write")
 
+    for class_node in ast.walk(tree):
+        if not isinstance(class_node, ast.ClassDef):
+            continue
+        bound = _class_http_client_bindings(class_node, aliases)
+        if bound and any(
+            _http_write_calls(list(_own_body_nodes(method)), bound, aliases)
+            for method in class_node.body
+            if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ):
+            hits.add("http_write")
+
     return hits
 
 
@@ -734,15 +798,19 @@ def storage_client_constructors(tree: ast.AST) -> set[str]:
     minio_names: set[str] = set()
     minio_modules: set[str] = set()
     boto_modules: set[str] = set()
+    boto_session_modules: set[str] = set()
     boto_client_names: set[str] = set()
     boto_session_names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name == "minio":
-                    minio_modules.add(alias.asname or "minio")
+                if alias.name in {"minio", "minio.api"}:
+                    if alias.asname or alias.name == "minio":
+                        minio_modules.add(alias.asname or "minio")
                 elif alias.name == "boto3":
                     boto_modules.add(alias.asname or "boto3")
+                elif alias.name == "boto3.session" and alias.asname:
+                    boto_session_modules.add(alias.asname)
         elif isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if node.module == "minio" and alias.name == "Minio":
@@ -781,7 +849,8 @@ def storage_client_constructors(tree: ast.AST) -> set[str]:
                             or isinstance(node.func.value.func, ast.Attribute)
                             and node.func.value.func.attr == "Session"
                             and isinstance(node.func.value.func.value, ast.Name)
-                            and node.func.value.func.value.id in boto_modules
+                            and node.func.value.func.value.id
+                            in boto_modules | boto_session_modules
                         )
                     )
                 )
@@ -1179,11 +1248,15 @@ def test_storage_write_guard_canaries() -> None:
     sdk_constructors = _tree(
         """
         from minio import Minio as M
+        import minio.api as api
         import boto3 as aws
+        import boto3.session as bs
         from boto3.session import Session as AwsSession
         first = M("s3.example.test")
         second = aws.client("s3")
         third = AwsSession().client("s3")
+        fourth = api.Minio("s3.example.test")
+        fifth = bs.Session().client("s3")
         """
     )
     assert storage_client_constructors(sdk_constructors) == {"Minio", "boto3.s3"}
@@ -1209,6 +1282,36 @@ def test_http_inline_and_module_scope_client_write_canaries() -> None:
         """
     )
     assert external_effect_hits(module_scope) == {"http_write"}
+
+
+def test_same_class_http_client_binding_across_methods() -> None:
+    factory = _tree(
+        """
+        import requests
+        class LokiHandler:
+            @staticmethod
+            def _new_session():
+                session = requests.Session()
+                return session
+            def __init__(self):
+                self._session = self._new_session()
+            def emit(self):
+                return self._session.post("https://example.test")
+        """
+    )
+    assert external_effect_hits(factory) == {"http_write"}
+
+    direct = _tree(
+        """
+        import httpx
+        class Sender:
+            def __init__(self):
+                self._client = httpx.Client()
+            def send(self):
+                return self._client.post("https://example.test")
+        """
+    )
+    assert external_effect_hits(direct) == {"http_write"}
 
 
 def test_smtplib_smtp_call_branch_is_reachable() -> None:
