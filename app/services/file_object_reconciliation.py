@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Any, Protocol, cast, runtime_checkable
+from uuid import UUID
 
 from dotmac_files import (
     FileState,
@@ -17,11 +19,17 @@ from dotmac_files import (
     TenantStoredFile,
     find_orphan_keys,
 )
-from dotmac_kernel.cache import PlatformScope, Scope, TenantScope
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 _MAX_SUMMARY_EVIDENCE = 100
+
+
+@runtime_checkable
+class _TenantFileScope(Protocol):
+    """Structural view of the tenant scope created by ``app.tenancy``."""
+
+    tenant_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +65,7 @@ class BoundaryDrift:
 
 @dataclass(frozen=True, slots=True)
 class ObjectReconciliationReport:
-    scope: Scope
+    scope: object
     provider_code: str
     older_than: datetime
     objects: tuple[ObjectEvidence, ...]
@@ -68,10 +76,12 @@ class ObjectReconciliationReport:
     def safe_summary(self) -> dict[str, object]:
         """Bounded operational output without raw keys or customer metadata."""
         return {
-            "scope": "tenant" if isinstance(self.scope, TenantScope) else "platform",
+            "scope": (
+                "tenant" if isinstance(self.scope, _TenantFileScope) else "platform"
+            ),
             "tenant_id": (
                 str(self.scope.tenant_id)
-                if isinstance(self.scope, TenantScope)
+                if isinstance(self.scope, _TenantFileScope)
                 else None
             ),
             "provider_code": self.provider_code,
@@ -108,19 +118,17 @@ class ObjectReconciliationReport:
         }
 
 
-def _managed_scope_prefix(scope: Scope) -> str:
+def _managed_scope_prefix(scope: object) -> str:
     """ERP's pinned a4 managed-key contract, checked against public listing."""
-    if isinstance(scope, TenantScope):
+    if isinstance(scope, _TenantFileScope):
         return f"tenants/{scope.tenant_id}/files/"
-    if isinstance(scope, PlatformScope):
-        return "platform/files/"
-    raise TypeError(f"unsupported file scope {type(scope).__name__}")
+    return "platform/files/"
 
 
 def report_file_objects(
     db: Session,
     *,
-    scope: Scope,
+    scope: object,
     provider_code: str,
     observations: tuple[ObjectInfo, ...],
     observed_at: datetime,
@@ -151,12 +159,12 @@ def report_file_objects(
     # observation against the scope prefix before our comparison uses them.
     candidates = find_orphan_keys(
         db,
-        scope=scope,
+        scope=cast(Any, scope),
         provider_code=provider_code,
         observations=observations,
         older_than=older_than,
     )
-    if isinstance(scope, TenantScope):
+    if isinstance(scope, _TenantFileScope):
         query = select(
             TenantStoredFile.storage_key,
             TenantStoredFile.state,
@@ -165,14 +173,12 @@ def report_file_objects(
             TenantStoredFile.tenant_id == scope.tenant_id,
             TenantStoredFile.provider_code == provider_code,
         )
-    elif isinstance(scope, PlatformScope):
+    else:
         query = select(
             PlatformStoredFile.storage_key,
             PlatformStoredFile.state,
             (PlatformStoredFile.created_at < older_than).label("past_grace"),
         ).where(PlatformStoredFile.provider_code == provider_code)
-    else:
-        raise TypeError(f"unsupported file scope {type(scope).__name__}")
     rows = tuple(db.execute(query).all())
     referenced_keys = {key for key, _state, _past_grace in rows}
     objects = tuple(
