@@ -320,10 +320,8 @@ pr = 476
 [[reservation]]
 number = 13
 slug = "external-effects-are-recorded-by-their-owner-before-they-run"
-status = "reserved"
+status = "authored"
 claimed = "2026-09-27"
-visibility = "remote_ref"
-coordinate = "blob 73660e472c96480e1a5136f4c4b52edd68df4c19 on refs/remotes/origin/docs/adr-0013-external-effects"
 
 [[collision]]
 number = 3
