@@ -1,0 +1,189 @@
+# path::Qualname<TAB>reason -- two-directional ratchet baseline for
+# tests/architecture/test_own_session_commits.py. Generated from a full
+# scan of app/, scripts/, tools/ (alembic/ and tests/ are declared
+# unmonitored -- see that file's module docstring). A hit outside this
+# file, or a stale row no longer produced by the live scan, both fail.
+app/api/deps.py::_yield_bypass_session	grandfathered: unreviewed
+app/services/infrastructure_health.py::run_infrastructure_health_checks	grandfathered: unreviewed
+app/services/people/hr/mailbox_provisioning.py::activate_employee_mailbox	grandfathered: unreviewed
+app/services/people/payroll/event_handlers.py::PayrollEventHandlers.handle_run_approved	grandfathered: unreviewed
+app/services/people/payroll/event_handlers.py::PayrollEventHandlers.handle_run_cancelled	grandfathered: unreviewed
+app/services/people/payroll/event_handlers.py::PayrollEventHandlers.handle_run_posted	grandfathered: unreviewed
+app/services/people/payroll/event_handlers.py::PayrollEventHandlers.handle_run_submitted	grandfathered: unreviewed
+app/services/people/payroll/event_handlers.py::PayrollEventHandlers.handle_slip_paid	grandfathered: unreviewed
+app/services/people/payroll/event_handlers.py::PayrollEventHandlers.handle_slip_posted	grandfathered: unreviewed
+app/tasks/analytics.py::_run_computer	grandfathered: unreviewed
+app/tasks/analytics.py::refresh_cash_flow_metrics	adapter-owned: entry point (Celery task decorator)
+app/tasks/analytics.py::refresh_efficiency_metrics	adapter-owned: entry point (Celery task decorator)
+app/tasks/audit_integrity.py::verify_audit_hash_chain	adapter-owned: entry point (Celery task decorator)
+app/tasks/automation.py::execute_workflow_action	adapter-owned: entry point (Celery task decorator)
+app/tasks/automation.py::process_recurring_templates	adapter-owned: entry point (Celery task decorator)
+app/tasks/automation.py::process_scheduled_workflow_rules	adapter-owned: entry point (Celery task decorator)
+app/tasks/banking.py::auto_match_unreconciled_statements	adapter-owned: entry point (Celery task decorator)
+app/tasks/coach.py::_run_org_analyzer	grandfathered: unreviewed
+app/tasks/coach.py::generate_daily_ap_due_insights	adapter-owned: entry point (Celery task decorator)
+app/tasks/coach.py::generate_daily_ar_overdue_insights	adapter-owned: entry point (Celery task decorator)
+app/tasks/coach.py::generate_daily_banking_health_insights	adapter-owned: entry point (Celery task decorator)
+app/tasks/coach.py::generate_daily_data_quality_insights	adapter-owned: entry point (Celery task decorator)
+app/tasks/coach.py::generate_daily_expense_approval_insights	adapter-owned: entry point (Celery task decorator)
+app/tasks/coach.py::generate_weekly_finance_report	adapter-owned: entry point (Celery task decorator)
+app/tasks/coach.py::generate_weekly_hr_report	adapter-owned: entry point (Celery task decorator)
+app/tasks/discipline.py::process_discipline_appeal_deadline_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/discipline.py::process_discipline_hearing_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/discipline.py::process_discipline_response_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/dotmac_sub.py::_enqueue_incremental_sync_workflow	grandfathered: unreviewed
+app/tasks/dotmac_sub.py::_handle_sync_failure	grandfathered: unreviewed
+app/tasks/dotmac_sub.py::cleanup_stale_dotmac_sub_sync_history	adapter-owned: entry point (Celery task decorator)
+app/tasks/dotmac_sub.py::run_dotmac_sub_incremental_sync_phase	adapter-owned: entry point (Celery task decorator)
+app/tasks/dotmac_sub.py::run_dotmac_sub_invoice_accounting_v2_shadow	adapter-owned: entry point (Celery task decorator)
+app/tasks/email.py::_record_workforce_stage	grandfathered: unreviewed
+app/tasks/email.py::run_employee_mailcow_provisioning	adapter-owned: entry point (Celery task decorator)
+app/tasks/email.py::run_employee_nextcloud_provisioning	adapter-owned: entry point (Celery task decorator)
+app/tasks/email.py::send_employee_mailbox_activation	adapter-owned: entry point (Celery task decorator)
+app/tasks/exchange_rates.py::fetch_daily_exchange_rates	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::expire_old_expense_claims	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::post_approved_expense	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::post_cash_advance_disbursement	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::process_expense_expiry_warnings	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::reconcile_unresolved_expense_transfers	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::refresh_period_usage_cache	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::reset_weekly_approver_budgets	adapter-owned: entry point (Celery task decorator)
+app/tasks/expense.py::settle_cash_advance_with_claim	adapter-owned: entry point (Celery task decorator)
+app/tasks/feature_flags.py::archive_expired_feature_flags	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::auto_generate_aging_snapshots	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::process_ar_collection_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::process_bank_reconciliation_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::process_depreciation_gl_reconciliation	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::process_fiscal_period_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::process_subledger_reconciliation	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::process_tax_period_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::rebuild_account_balances	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::refresh_analysis_cubes	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::sync_mono_account	adapter-owned: entry point (Celery task decorator)
+app/tasks/finance.py::sync_paystack_transactions	adapter-owned: entry point (Celery task decorator)
+app/tasks/fleet.py::process_document_expiry_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/fleet.py::process_maintenance_due_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/hooks.py::execute_async_hook	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_birthday_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_certification_expiry_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_contract_expiry_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_onboarding_overdue_activities	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_onboarding_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_performance_review_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_probation_ending_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::process_work_anniversary_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::run_employee_mailcow_offboarding	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::send_hr_birthday_morning_email	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::send_welcome_email	adapter-owned: entry point (Celery task decorator)
+app/tasks/hr.py::sync_leave_attendance	adapter-owned: entry point (Celery task decorator)
+app/tasks/imports.py::process_customer_import_partitions	adapter-owned: entry point (Celery task decorator)
+app/tasks/inventory.py::auto_issue_pending_stock_material_requests	adapter-owned: entry point (Celery task decorator)
+app/tasks/inventory.py::send_low_stock_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/license.py::_notify_admins	grandfathered: unreviewed
+app/tasks/notifications.py::process_due_calendar_reminders	adapter-owned: entry point (Celery task decorator)
+app/tasks/notifications.py::process_pending_push_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/outbox_relay.py::_deliver_one	grandfathered: unreviewed
+app/tasks/outbox_relay.py::reconcile_outbox_balance_projection	adapter-owned: entry point (Celery task decorator)
+app/tasks/payroll.py::auto_generate_draft_payroll	adapter-owned: entry point (Celery task decorator)
+app/tasks/payroll.py::process_payroll_entry_notifications	adapter-owned: entry point (Celery task decorator)
+app/tasks/performance.py::activate_cycle	adapter-owned: entry point (Celery task decorator)
+app/tasks/performance.py::complete_cycle	adapter-owned: entry point (Celery task decorator)
+app/tasks/performance.py::generate_cycle_appraisals	adapter-owned: entry point (Celery task decorator)
+app/tasks/performance.py::process_cycle_phase_transitions	adapter-owned: entry point (Celery task decorator)
+app/tasks/performance.py::process_pms_dispute_sla_enforcement	adapter-owned: entry point (Celery task decorator)
+app/tasks/pms.py::pms_appeal_deadline_check	adapter-owned: entry point (Celery task decorator)
+app/tasks/pms.py::pms_contract_deadline_check	adapter-owned: entry point (Celery task decorator)
+app/tasks/pms.py::pms_monthly_review_reminder	adapter-owned: entry point (Celery task decorator)
+app/tasks/pms.py::pms_pip_review_reminder	adapter-owned: entry point (Celery task decorator)
+app/tasks/pms.py::pms_probation_check	adapter-owned: entry point (Celery task decorator)
+app/tasks/pms.py::pms_quarterly_appraisal_reminder	adapter-owned: entry point (Celery task decorator)
+app/tasks/pms.py::pms_underperformance_detection	adapter-owned: entry point (Celery task decorator)
+app/tasks/project_sla.py::process_project_sla_breaches	adapter-owned: entry point (Celery task decorator)
+app/tasks/staff_sync.py::run_staff_sync_reconcile	adapter-owned: entry point (Celery task decorator)
+app/tasks/staff_sync.py::sync_employee_staff_account	adapter-owned: entry point (Celery task decorator)
+app/tasks/weekly_meeting_reports.py::send_weekly_meeting_report_hr_email	adapter-owned: entry point (Celery task decorator)
+app/tools/backfill_mono_lagos_date.py::run	grandfathered: unreviewed
+app/tools/enforce_paystack_opex_acc_pay_matches.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+app/tools/fix_stuck_paid_expense_claims.py::fix_stuck_claims	grandfathered: unreviewed
+app/tools/post_and_match_paystack_opex_expense_reimbursements.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+app/tools/reclass_expense_wht_balance.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+app/tools/rematch_paystack_opex_expense_claim_payments.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+app/tools/requeue_notification_emails.py::requeue_notification_emails	grandfathered: unreviewed
+app/tools/reset_expense_payment_intent.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/add_missing_contract_staff.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/backfill_2025_tax_returns.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/backfill_ap_invoice_line_vat.py::run	grandfathered: unreviewed
+scripts/archive/backfill_employee_tax_profiles.py::run	grandfathered: unreviewed
+scripts/archive/backfill_employment_contracts.py::run	grandfathered: unreviewed
+scripts/archive/backfill_splynx_tax.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/backfill_tax_transactions.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/clean_slate_resync.py::clean_slate	grandfathered: unreviewed
+scripts/archive/clean_sweep/phase1_delete.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/clean_sweep/phase2_accounts.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/clean_sweep/phase3_import_gl.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/cleanup_chart_of_accounts.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/cleanup_control_accounts.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/cleanup_stale_journals.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/dedup_ar_transactions.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/dedup_customers.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/finish_interbank_matching.py::run	grandfathered: unreviewed
+scripts/archive/fix_abnormal_balances.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_ap_subledger_gap.py::run	grandfathered: unreviewed
+scripts/archive/fix_paystack_consolidation_v2.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_source_merge_coa.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_source_paystack.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_source_pension_ob.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_source_revenue_reclass.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_splynx_credit_note_signs.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_splynx_double_vat.py::fix_invoices	grandfathered: unreviewed
+scripts/archive/fix_trade_receivables_revenue.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/fix_unbalanced_fcy_journals.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/link_reseller_parent_child.py::run	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/match_2025_remaining_ngn.py::run	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/match_2025_unmatched_ngn.py::run	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/match_erpnext_banking_links.py::run	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/match_erpnext_internal_transfer_links.py::run	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/match_interbank_transfers.py::run	grandfathered: unreviewed
+scripts/archive/match_jan_2026_phase2.py::run	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/match_jan_2026_remaining.py::run	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/match_zenith_splynx.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/merge_shadow_accounts.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/migration/2026-06-04_parent_multisite_customers.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/rebuild_inventory_wac_ledger.py::rebuild	grandfathered: unreviewed
+scripts/archive/reclassify_expense_accounts.py::run	grandfathered: unreviewed
+scripts/archive/reclassify_expense_payable.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/reclassify_vat_to_2120.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/reconcile_jan_2026_splynx.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/relink_ticket_projects.py::relink_tickets_to_projects	grandfathered: unreviewed
+scripts/archive/remediate_splynx_credit_note_gl.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/reopen_all_periods.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/reopen_post_reclose_test_period.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/repair_splynx_payment_relationships.py::run_repair	grandfathered: unreviewed
+scripts/archive/repoint_control_journal_lines.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/resync_purchase_invoices.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/sync_salary_assignments.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/sync_splynx.py::run_sync	grandfathered: unreviewed
+scripts/archive/update_org_name.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/archive/void_splynx_duplicate_payments.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/backfill_mailcow_offboarding.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/create_org.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/create_unallocated_payroll_cc.py::run	grandfathered: unreviewed
+scripts/execute_bank_fee_wrong_account_correction.py::run	grandfathered: unreviewed
+scripts/fix_display_names.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/fix_duplicate_ar_journals.py::run	grandfathered: unreviewed
+scripts/import_tb_audit.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/import_uba_statements.py::import_statements	grandfathered: unreviewed
+scripts/import_zenith_statements.py::import_statements	grandfathered: unreviewed
+scripts/one_off/bootstrap_sub_material_integration.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/post_and_match_paystack_opex_expense_reimbursements.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/reconcile_jan_2026_dryrun.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/resend_discipline_query_links.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/review_suspicious_bank_matches.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/seed_admin.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/seed_demo_banking.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/seed_demo_transactions.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/seed_e2e_data.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/seed_nigeria.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/seed_rbac.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/setup_e2e_user.py::setup_e2e_user	adapter-owned: entry point (called from `if __name__ == "__main__":`)
+scripts/update_user_credentials.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
