@@ -186,9 +186,10 @@ COMPOSED_MODULES: Final[tuple[ComposedModule, ...]] = (
         probe_table="stored_files",
         note=(
             "ERP consumes dotmac-files as an object-storage contract over its "
-            "one MinIO adapter; nothing under app/ writes mod_files. This flag "
-            "is what puts that storage under the runtime-identity ratchet when "
-            "a deployment starts using it."
+            "one MinIO adapter; the durable customer import stages tenant "
+            "stored_files rows through dotmac_files.stage_file. No ERP caller "
+            "uses platform_stored_files. This flag puts the tenant storage "
+            "under the runtime-identity ratchet when enabled."
         ),
     ),
     ComposedModule(

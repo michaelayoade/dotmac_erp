@@ -7,11 +7,13 @@ Uses mocked minio client — no real S3/MinIO connection needed.
 from __future__ import annotations
 
 import io
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-from dotmac_files import StorageConflict, StorageUnavailable
+from dotmac_files import StorageConflict, StorageUnavailable, list_objects
+from dotmac_kernel.cache import PlatformScope
 
 from app.services import storage as storage_mod
 from app.services.storage import (
@@ -172,6 +174,40 @@ class TestExists:
 
 
 class TestEnsureBucket:
+    def test_read_provider_lists_without_bucket_creation(self, mock_minio_client):
+        """The dry-run construction has no bucket-existence/write path."""
+        observed_at = datetime(2026, 9, 27, tzinfo=UTC)
+        mock_minio_client.list_objects.return_value = [
+            SimpleNamespace(
+                object_name="platform/files/opaque-id",
+                size=3,
+                last_modified=observed_at,
+            )
+        ]
+        mock_minio_client.bucket_exists.return_value = False
+
+        with (
+            patch.object(storage_mod, "_get_client", return_value=mock_minio_client),
+            patch.object(
+                storage_mod,
+                "_ensure_bucket",
+                side_effect=AssertionError("dry-run reached bucket creation"),
+            ) as ensure_bucket,
+        ):
+            provider = storage_mod.get_dotmac_files_read_provider()
+            observations = list_objects(provider, scope=PlatformScope())
+
+        assert len(observations) == 1
+        assert observations[0].key == "platform/files/opaque-id"
+        mock_minio_client.list_objects.assert_called_once_with(
+            storage_mod.settings.s3_bucket_name,
+            prefix="platform/files/",
+            recursive=True,
+        )
+        ensure_bucket.assert_not_called()
+        mock_minio_client.bucket_exists.assert_not_called()
+        mock_minio_client.make_bucket.assert_not_called()
+
     def test_creates_bucket_when_missing(self, mock_minio_client):
         """Should create bucket when bucket_exists returns False."""
         mock_minio_client.bucket_exists.return_value = False

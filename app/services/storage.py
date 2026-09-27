@@ -128,8 +128,9 @@ class S3StorageService:
     run them in a thread pool if needed.
     """
 
-    def __init__(self) -> None:
-        _ensure_bucket()
+    def __init__(self, *, ensure_bucket: bool = True) -> None:
+        if ensure_bucket:
+            _ensure_bucket()
 
     @property
     def _client(self) -> Minio:
@@ -426,3 +427,8 @@ def get_storage() -> S3StorageService:
 def get_dotmac_files_provider() -> DotmacFilesS3Provider:
     """Return the sole dotmac-files provider used by ERP."""
     return DotmacFilesS3Provider()
+
+
+def get_dotmac_files_read_provider() -> DotmacFilesS3Provider:
+    """Construct a listing provider without checking or creating the bucket."""
+    return DotmacFilesS3Provider(S3StorageService(ensure_bucket=False))

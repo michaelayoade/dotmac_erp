@@ -431,17 +431,16 @@ Denied rows are also removed from the ordinary privilege checks, which would
 otherwise demand `app_user` **hold** the four privileges just refused. One
 decision, one owner.
 
-**Callers.** The legacy role's access to this relation has **no caller in the
-ERP source**. `app/services/storage.py` consumes `dotmac-files` purely as an
-object-storage provider — an S3/MinIO adapter with no session and no domain
-decision — and `app.runtime_admission` already records the fact in a checked-in
-comment: *"ERP consumes dotmac-files as an object-storage contract over its one
-MinIO adapter; nothing under `app/` writes `mod_files`."* A repository-wide
-search for `platform_stored_files`, `mod_files` and `StoredFile` finds only
-governance artefacts — this manifest, `runtime_admission`, the bill of
-materials, the lineage bindings and their tests. Nothing reads or writes the
-relation. That is what allows the legacy grant to be revoked outright at
-retirement rather than migrated.
+**Callers.** The legacy role's access to this **platform** relation has no
+caller in ERP source. The durable customer import does call
+`dotmac_files.stage_file` from
+`app/services/finance/import_export/durable_customers.py`, writing the
+**tenant** `mod_files.stored_files` plane. Its object provider is the
+session-free MinIO adapter in `app/services/storage.py`. The tenant object
+reconciliation report also reads tenant stored-file rows. Neither path reads
+or writes `mod_files.platform_stored_files`; its legacy grant can be revoked
+without migrating an ERP platform caller. This finding is plane-specific and
+does not imply that the tenant runtime already holds every required grant.
 
 ### The invariant these denials keep
 
