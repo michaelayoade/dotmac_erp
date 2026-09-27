@@ -14,10 +14,12 @@
 #      worktree carries anything else. Steps 1 and 2 by hand are still correct
 #      and still checked; the tool exists so they are not done from memory.
 #   2. (By hand, if you must: append a `[[reservation]]` row with
-#      `status = "reserved"`, and raise `next_free` by one.)
+#      `status = "reserved"`, `claimed` set to the claiming commit's author
+#      date, no draft-evidence fields, and raise `next_free` by one.)
 #   3. Commit THAT ALONE, and land it on `main` before you write the ADR.
 #   4. Write the ADR in a later change, and flip your row to
-#      `status = "authored"` in the same change.
+#      `status = "authored"` in the same change. Do not put a predicted
+#      `landed_at` in that PR; only `main` history can establish its date.
 #
 # WHY IT SERIALIZES
 #
@@ -47,25 +49,29 @@
 #   reserved   number claimed, ADR not yet written. No file may exist.
 #   authored   `NNNN-<slug>.md` exists in this directory.
 #   withdrawn  abandoned. The number is spent forever. No file may exist.
-# THE THREE DATE-FREE FIELDS, AND WHY THEY ARE SEPARATE
+# DATE AND DRAFT-EVIDENCE FIELDS, AND WHY THEY ARE SEPARATE
 #
 #   claimed     ONE meaning, always: the git AUTHOR date of the commit that
 #               claimed the number. It is never a merge time. A row whose
 #               `claimed` matches no author date in this repository is wrong
 #               and gets corrected; row 2 was, on 2026-09-05.
-#   landed_at   Optional, and present only when the ADR is on protected
-#               `main`. Derived from `main`'s FIRST-PARENT history, which is
-#               the only history that says a change landed rather than merely
-#               existed. Off-`main` rows have no `landed_at` and never will
-#               until they land -- that absence is the point.
-#   visibility  Present on every row that is NOT on `main`. One of:
+#   landed_at   Optional historical annotation for an authored ADR, derived
+#               only after landing from protected `main`'s FIRST-PARENT
+#               history. Its absence is not evidence that an ADR has not
+#               landed; do not predict a future merge date in an authoring PR.
+#               A bare number reservation never gains this field merely when
+#               its allocation PR lands; the register history records that.
+#   visibility  For a row describing an off-`main` ADR draft, paired with
+#               `coordinate`. A new allocation-only `reserved` row has neither
+#               field because no draft exists yet. Values:
 #                 pr          reachable through an open or merged pull
 #                             request -- anyone can audit it;
 #                 remote_ref  pushed to `origin` but carries no pull request;
 #                 local_only  exists on ONE WORKSTATION and nowhere else.
-#   coordinate  The claimant's strongest IMMUTABLE coordinate: a blob SHA and
-#               the ref carrying it, plus the pull request when there is one.
-#               A branch name alone is not a coordinate -- it moves.
+#   coordinate  The existing ADR draft claimant's strongest IMMUTABLE
+#               coordinate: its blob SHA and carrying ref, plus the pull
+#               request when there is one. A branch name alone moves; a
+#               would-be blob of the allocation row is self-referential.
 #
 # WHY VISIBILITY IS RECORDED RATHER THAN AVERAGED AWAY
 #
@@ -119,8 +125,9 @@
 next_free = 14
 
 # ---------------------------------------------------------------------------
-# On protected `main`. `landed_at` is derived from `main`'s first-parent
-# history and is the only column that says a decision landed.
+# Historical authored decisions on protected `main`. Where present,
+# `landed_at` comes from `main`'s first-parent history. An authoring PR may
+# omit it; the Git history, not this optional column, proves a later landing.
 # ---------------------------------------------------------------------------
 
 [[reservation]]
@@ -192,9 +199,11 @@ correct. The claim was authored on the 25th and reached `main` on the 28th \
 through PR #384. Collapsing them into one column is what made row 2 wrong."""
 
 # ---------------------------------------------------------------------------
-# Claimed off `main`. These are the numbers a new allocation must not take.
-# Every row carries `visibility` and `coordinate`, because "a claim exists" is
-# a different statement depending on who can see it.
+# Existing ADR drafts claimed off `main`. These are numbers a new allocation
+# must not take. Each draft row carries `visibility` and `coordinate`, because
+# "a draft exists" means something different depending on who can see it.
+# A bare allocation-only `reserved` row claims a number before any draft exists
+# and has neither field; its PR and the merged register record that claim.
 # ---------------------------------------------------------------------------
 
 [[reservation]]
