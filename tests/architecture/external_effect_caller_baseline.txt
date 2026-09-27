@@ -6,9 +6,10 @@
 # families no longer match a fresh scan (a module silently gaining or losing
 # a family) also fails CI. See ADR-0013's required "two-directional ratchet"
 # text.
-# Reviewed live inventory: 33 modules, 43 family labels (2026-09-27).
+# Reviewed live inventory: 34 modules, 44 family labels (2026-09-27).
 app/api/finance/payments.py	provider:DotmacSubClient,provider:PaystackClient	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/dependency_health.py	provider:DotmacSubClient,provider:NextcloudTalkClient,provider:PaystackClient,provider:RemitaClient,provider_accessor	grandfathered: read-only provider observation — confirm under ADR-0013
+app/monitoring.py	http_write	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/services/admin/dotmac_sub_sync_web.py	provider:DotmacSubClient	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/services/careers/captcha.py	http_write	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/services/coach/insight_engine.py	http_write	grandfathered: direct external-effect caller — ADR-0013 migration debt
