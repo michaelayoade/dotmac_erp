@@ -110,6 +110,13 @@ at-least-once with a deduplicating receiver. `dotmac_kernel.messaging`'s
 storage/relay remains `defer-db` under its own ledger row; this ADR states the
 target, not its schedule.
 
+**Clarification — 2026-09-27.** ERP-owned object persistence is internal
+durable persistence, not a file delivery effect. The owner uploads the object
+before creating the database row that references it. Ownership requires a
+reconciliation path that observes orphaned objects and missing references;
+controlled cleanup or repair is a separate gate. File delivery to an external
+recipient remains a non-transactional external effect and uses the outbox.
+
 ### 5. Long-running workflow state stays workflow state
 
 A multi-step or long-running operation is a workflow with its own states,

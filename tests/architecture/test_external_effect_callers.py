@@ -1,12 +1,12 @@
 """A ratchet on code that reaches an external effect surface directly --
-constructing a provider client, hitting a raw HTTP/object-store write, using
+constructing a provider client, hitting a raw HTTP write, using
 ``smtplib``, or reaching a provider through its ``.client`` accessor -- from
 outside that surface's own owner.
 
 Why this matters: ADR-0013 ("External effects are recorded by their owner
 before they run") requires every irreversible external effect -- a payment
-capture, a bank API call, a mailbox provisioning request, an outbound email,
-an object-store write -- to be recorded by its owner BEFORE it runs. A caller
+capture, a bank API call, a mailbox provisioning request, an outbound email --
+to be recorded by its owner BEFORE it runs. A caller
 that reaches any of these surfaces directly, anywhere it likes, can perform
 the effect with no such recording having happened. ADR-0013 requires "a
 two-directional ratchet: an architecture test inventories every module that
@@ -35,7 +35,9 @@ signal even though it was already grandfathered for another one:
         ``with X(...) as c:`` form, since a ``with`` statement's context
         expression is itself the same ``ast.Call`` node this scan walks. A
         bare reference or a type annotation naming the class, with no
-        ``Call`` node, is never a hit.
+        ``Call`` node, is never a hit. The symbol must resolve through an
+        import of its actual defining module; a local lookalike is ignored.
+        Construction at module scope is included.
     ``smtplib`` -- a bare ``import smtplib``, a ``from smtplib import ...``,
         or a call to ``SMTP(``/``SMTP_SSL(`` that RESOLVES to smtplib --
         either ``smtplib.SMTP(...)`` (an attribute access on a name bound to
@@ -53,7 +55,10 @@ signal even though it was already grandfathered for another one:
         -- rooted at a name (or ``self.<attr>``) that SAME FUNCTION bound to
         ``httpx.Client(...)``/``httpx.AsyncClient(...)``/``requests.Session(
         )`` (via assignment, annotated assignment, an attribute target, or
-        ``with ... as x``). Scoping to one function's own body is what keeps
+        ``with ... as x``). An inline ``httpx.Client().post(...)`` or
+        ``requests.Session().post(...)`` is also included. A client bound at
+        module scope and used there or in a function is included. Scoping
+        function-local bindings to one function's own body is what keeps
         two unrelated classes that both happen to use the attribute name
         ``self._client`` from being merged into one false hit (see
         ``app/services/dotmac_sub/client.py``, where
@@ -61,14 +66,6 @@ signal even though it was already grandfathered for another one:
         on a constructor-injected client, never one THAT function opened,
         while a wholly different class binds ``self._client = httpx.Client(
         ...)`` in its own, separate method).
-    ``object_store_write`` -- a call to
-        ``.put_object(``/``.fput_object(``/``.remove_object(``/
-        ``.remove_objects(``/``.copy_object(``, the MinIO/boto write
-        surface. Matched by method name alone (not by resolving the base to
-        a MinIO client type) -- a repository-wide grep confirmed these five
-        names are used nowhere except the real MinIO call sites today, so
-        the looser match carries no observed false-positive cost; tightened
-        the day that stops being true.
     ``provider_accessor`` -- in a module that imports (``import`` or
         ``from ... import``) a dotted name starting with one of
         :data:`PROVIDER_PACKAGE_PREFIXES`, either (i) a call of the shape
@@ -81,6 +78,13 @@ signal even though it was already grandfathered for another one:
         class name itself -- the ``app/services/dotmac_sub/sync/_*.py``
         family and ``RRRService`` (``self.client.generate_rrr(...)`` etc.)
         being the motivating real shape.
+
+ERP-OWNED OBJECT PERSISTENCE. Raw MinIO/boto SDK client construction and
+mutation are internal durable persistence and are guarded separately: only
+``app/services/storage.py`` may perform them. Calls through that owner's
+public ``get_storage()``/``S3StorageService`` facade remain legitimate. A new
+raw SDK constructor or mutating call under ``app/``, ``scripts/`` or ``tools/``
+fails the owner-bound guard; these are not external-effect family labels.
 
 EXCLUSIONS, each with its enforceable premise:
 
@@ -144,6 +148,13 @@ LIMITATION (stated, not implemented) -- BLIND SPOTS:
   "PaystackClient")(...)``, ``functools.partial(PaystackClient, ...)``, and
   an ``importlib.import_module``-obtained reference are all invisible to a
   static, import-alias-based resolver.
+- The owner-bound storage scan likewise only resolves direct attribute calls;
+  aliases such as ``write = client.put_object; write(...)`` and dynamic
+  dispatch such as ``getattr(client, "put_object")(...)`` are not detected.
+  The SDK constructor scan resolves direct imports and aliases, but not
+  rebinding through variables or dynamic ``importlib`` imports. Method names
+  are used as the static proxy for SDK mutation; another unrelated object
+  with the same SDK-specific method name may over-match.
 - ``http_write``'s bound-name tracking is per-function (not per-class): a
   client stored on ``self`` in ``__init__`` and used in a DIFFERENT method
   is not tracked as bound in that other method's own body (this is a
@@ -151,8 +162,6 @@ LIMITATION (stated, not implemented) -- BLIND SPOTS:
   ``app/services/dotmac_sub/client.py`` -- see the family description
   above) -- a real cross-method ``self``-held httpx client used only for
   writes in a method that never opens it would currently evade this family.
-- ``object_store_write`` matches on method NAME only, not on the receiver's
-  type -- stated in the family description above.
 - ``provider_accessor``'s ``.client.<method>`` shape matches ANY base
   expression before ``.client`` once the owning module imports a provider
   package; it does not verify the ``.client`` attribute is actually the
@@ -160,8 +169,8 @@ LIMITATION (stated, not implemented) -- BLIND SPOTS:
   ``get_..._client``/``_get_..._client`` call in such a module, regardless of
   what that helper actually returns -- real over-match today:
   ``app/dependency_health.py`` imports several provider packages for its
-  other health probes AND separately calls ``_get_storage_client()`` (the
-  unrelated MinIO/object-store accessor from ``app.services.storage``),
+  other health probes AND separately calls ``_get_storage_client()`` (an
+  unrelated storage accessor from ``app.services.storage``),
   which the regex still counts as ``provider_accessor``. Left over-inclusive
   rather than narrowed, matching ADR-0013's literal instruction to flag
   ``get_*_client``/``_get_*_client`` helper calls; a false positive here
@@ -228,6 +237,12 @@ CLIENT_DEFINING_MODULES: dict[str, str] = {
     "NextcloudTalkClient": "app/services/nextcloud/client.py",
 }
 
+# Checked-in package facades explicitly re-export these exact class symbols.
+PROVIDER_REEXPORT_MODULES: dict[str, frozenset[str]] = {
+    "app.services.dotmac_sub": frozenset({"DotmacSubClient"}),
+    "app.services.finance.payments": frozenset({"PaystackClient"}),
+}
+
 #: EventOutbox relay/delivery modules. See exclusion 2 in the module
 #: docstring -- neither reaches any family today, verified by
 #: :func:`test_event_outbox_modules_construct_no_client`.
@@ -256,11 +271,44 @@ HTTP_WRITE_METHODS: frozenset[str] = frozenset(
     {"post", "put", "patch", "delete", "request"}
 )
 
-#: The MinIO/boto object-store write surface. See the object_store_write
-#: family description in the module docstring for the match-by-name-only
-#: rationale.
-OBJECT_STORE_WRITE_METHODS: frozenset[str] = frozenset(
-    {"put_object", "fput_object", "remove_object", "remove_objects", "copy_object"}
+#: ERP's sole owner for internal object persistence. This is intentionally a
+#: separate owner-bound guard, not an external-effect family.
+STORAGE_OWNER = "app/services/storage.py"
+STORAGE_WRITE_METHODS: frozenset[str] = frozenset(
+    {
+        "put_object",
+        "fput_object",
+        "remove_object",
+        "remove_objects",
+        "copy_object",
+        "compose_object",
+        "restore_object",
+        "delete_object",
+        "delete_objects",
+        "upload_file",
+        "upload_fileobj",
+        "make_bucket",
+        "create_bucket",
+        "delete_bucket",
+        "remove_bucket",
+        "abort_multipart_upload",
+        "complete_multipart_upload",
+        "create_multipart_upload",
+        "upload_part",
+        "upload_part_copy",
+    }
+)
+STORAGE_WRITE_METHOD_PREFIXES: tuple[str, ...] = (
+    "put_bucket_",
+    "delete_bucket_",
+    "put_object_",
+    "delete_object_",
+    "set_bucket_",
+    "set_object_",
+    "remove_bucket_",
+    "remove_object_",
+    "put_public_access_",
+    "delete_public_access_",
 )
 
 #: A module importing a dotted name starting with one of these is considered
@@ -305,6 +353,8 @@ READ_ONLY_OBSERVATION_MODULES: frozenset[str] = frozenset(
 )
 
 BASELINE_PATH = Path(__file__).with_name("external_effect_caller_baseline.txt")
+REVIEWED_MODULE_COUNT = 33
+REVIEWED_FAMILY_LABEL_COUNT = 43
 
 #: Reason string used for every hit not covered by a more specific reason.
 DEFAULT_REASON = (
@@ -314,15 +364,6 @@ DEFAULT_REASON = (
 #: Reason string used for a hand-reviewed read-only-observation module.
 READ_ONLY_REASON = (
     "grandfathered: read-only provider observation — confirm under ADR-0013"
-)
-
-#: Reason string used for a module whose ONLY family is object_store_write --
-#: the object store may turn out to be an internal system of record rather
-#: than an "external effect" in ADR-0013's sense; that scoping question is
-#: explicitly open, not resolved by this test.
-OBJECT_STORE_REASON = (
-    "grandfathered: object-storage write — scope under ADR-0013 to be confirmed "
-    "(internal store vs external effect)"
 )
 
 
@@ -374,6 +415,8 @@ class _ImportAliases:
     def __init__(self) -> None:
         #: local name -> canonical provider client class name
         self.provider: dict[str, str] = {}
+        #: local module alias -> canonical provider client defining module
+        self.provider_modules: dict[str, str] = {}
         #: local name -> "httpx" / "requests" (from `import httpx [as x]`)
         self.http_module: dict[str, str] = {}
         #: local name -> "httpx.Client" etc (from `from httpx import Client
@@ -396,6 +439,10 @@ class _ImportAliases:
                         self.http_module[alias.asname or alias.name] = alias.name
                     if alias.name.startswith(PROVIDER_PACKAGE_PREFIXES):
                         self.imports_provider_package = True
+                    for rel in CLIENT_DEFINING_MODULES.values():
+                        module = rel.removesuffix(".py").replace("/", ".")
+                        if alias.name == module and alias.asname:
+                            self.provider_modules[alias.asname] = module
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if module == "smtplib":
@@ -406,15 +453,38 @@ class _ImportAliases:
                             )
                 if module in ("httpx", "requests"):
                     for alias in node.names:
-                        if alias.name in HTTP_CLIENT_CTORS:
+                        if HTTP_CLIENT_CTORS.get(alias.name) == module:
                             self.http_from[alias.asname or alias.name] = (
                                 f"{module}.{alias.name}"
                             )
                 if module.startswith(PROVIDER_PACKAGE_PREFIXES):
                     self.imports_provider_package = True
                 for alias in node.names:
-                    if alias.name in PROVIDER_CLIENTS:
+                    defining = CLIENT_DEFINING_MODULES.get(alias.name, "")
+                    if (
+                        defining
+                        and module == defining.removesuffix(".py").replace("/", ".")
+                    ) or alias.name in PROVIDER_REEXPORT_MODULES.get(module, ()):
                         self.provider[alias.asname or alias.name] = alias.name
+                    imported_module = f"{module}.{alias.name}"
+                    if imported_module in {
+                        rel.removesuffix(".py").replace("/", ".")
+                        for rel in CLIENT_DEFINING_MODULES.values()
+                    }:
+                        self.provider_modules[alias.asname or alias.name] = (
+                            imported_module
+                        )
+
+
+def _provider_constructor_name(expr: ast.expr, aliases: _ImportAliases) -> str | None:
+    if isinstance(expr, ast.Name):
+        return aliases.provider.get(expr.id)
+    if isinstance(expr, ast.Attribute) and isinstance(expr.value, ast.Name):
+        module = aliases.provider_modules.get(expr.value.id)
+        defining = CLIENT_DEFINING_MODULES.get(expr.attr, "")
+        if defining and module == defining.removesuffix(".py").replace("/", "."):
+            return expr.attr
+    return None
 
 
 def _is_http_client_ctor_call(call: ast.Call, aliases: _ImportAliases) -> bool:
@@ -428,7 +498,7 @@ def _is_http_client_ctor_call(call: ast.Call, aliases: _ImportAliases) -> bool:
             "httpx",
             "requests",
         ):
-            return call.func.attr in HTTP_CLIENT_CTORS
+            return HTTP_CLIENT_CTORS.get(call.func.attr) == aliases.http_module[base.id]
         return False
     if isinstance(call.func, ast.Name):
         return call.func.id in aliases.http_from
@@ -450,7 +520,7 @@ def _rooted_in_bound_name(expr: ast.expr, bound: dict[str, int]) -> bool:
 
 
 def _provider_client_bound_names(
-    own_nodes: list[ast.AST], alias_map: dict[str, str]
+    own_nodes: list[ast.AST], aliases: _ImportAliases
 ) -> dict[str, int]:
     """Names (own-body-scoped) bound to a provider-client construction, via
     plain/annotated assignment, an attribute target, or ``with ... as x``."""
@@ -468,11 +538,7 @@ def _provider_client_bound_names(
 
         if target is None or not isinstance(value, ast.Call):
             continue
-        bare = _call_target_name(value.func)
-        if bare is None:
-            continue
-        canonical = alias_map.get(bare, bare)
-        if canonical in PROVIDER_CLIENTS:
+        if _provider_constructor_name(value.func, aliases):
             key = _target_key(target)
             if key:
                 bound[key] = value.lineno
@@ -526,6 +592,39 @@ def _provider_client_calls(
     return calls
 
 
+def _module_body_nodes(tree: ast.AST) -> list[ast.AST]:
+    """Module descendants without crossing into a function or class body."""
+    found: list[ast.AST] = []
+
+    def walk(node: ast.AST) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            found.append(child)
+            walk(child)
+
+    walk(tree)
+    return found
+
+
+def _http_write_calls(
+    nodes: list[ast.AST], bound: dict[str, int], aliases: _ImportAliases
+) -> bool:
+    return any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in HTTP_WRITE_METHODS
+        and (
+            _rooted_in_bound_name(node.func.value, bound)
+            or (
+                isinstance(node.func.value, ast.Call)
+                and _is_http_client_ctor_call(node.func.value, aliases)
+            )
+        )
+        for node in nodes
+    )
+
+
 def external_effect_hits(tree: ast.AST) -> set[str]:
     """Return the set of hit family labels found in ``tree`` -- see the
     module docstring's "WHAT IS FLAGGED" section for each family's exact
@@ -557,15 +656,6 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
         ):
             hits.add("http_write")
 
-    # object_store_write: matched by method name alone anywhere in the tree.
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr in OBJECT_STORE_WRITE_METHODS
-        ):
-            hits.add("object_store_write")
-
     # provider_accessor: gated on the module importing a provider package.
     if aliases.imports_provider_package:
         for node in ast.walk(tree):
@@ -581,8 +671,20 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
             ):
                 hits.add("provider_accessor")
 
-    # Per-function families: provider construction, and http_write via a
-    # function-locally bound httpx/requests client.
+    # Constructor calls are scanned at every scope, including module/class
+    # scope. The import resolver excludes unrelated same-named local classes.
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            provider = _provider_constructor_name(node.func, aliases)
+            if provider:
+                hits.add(f"provider:{provider}")
+
+    module_nodes = _module_body_nodes(tree)
+    module_http_bound = _http_client_bound_names(module_nodes, aliases)
+    if _http_write_calls(module_nodes, module_http_bound, aliases):
+        hits.add("http_write")
+
+    # Per-function HTTP clients: local bindings plus module-level bindings.
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -592,9 +694,6 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
             if isinstance(n, ast.Call):
                 bare = _call_target_name(n.func)
                 if bare is not None:
-                    canonical = aliases.provider.get(bare, bare)
-                    if canonical in PROVIDER_CLIENTS:
-                        hits.add(f"provider:{canonical}")
                     if isinstance(n.func, ast.Attribute) and bare in (
                         "SMTP",
                         "SMTP_SSL",
@@ -609,19 +708,114 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
                         hits.add("smtplib")
 
         http_bound = _http_client_bound_names(own_nodes, aliases)
-        if http_bound:
-            for attr, _call in _provider_client_calls(own_nodes, http_bound):
-                if attr in HTTP_WRITE_METHODS:
-                    hits.add("http_write")
+        if _http_write_calls(own_nodes, http_bound | module_http_bound, aliases):
+            hits.add("http_write")
 
+    return hits
+
+
+def storage_write_methods(tree: ast.AST) -> set[str]:
+    """Return MinIO/boto write method names called directly in ``tree``."""
+
+    return {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and (
+            node.func.attr in STORAGE_WRITE_METHODS
+            or node.func.attr.startswith(STORAGE_WRITE_METHOD_PREFIXES)
+        )
+    }
+
+
+def storage_client_constructors(tree: ast.AST) -> set[str]:
+    """Direct MinIO and boto3 S3 client constructors, resolved from imports."""
+    minio_names: set[str] = set()
+    minio_modules: set[str] = set()
+    boto_modules: set[str] = set()
+    boto_client_names: set[str] = set()
+    boto_session_names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "minio":
+                    minio_modules.add(alias.asname or "minio")
+                elif alias.name == "boto3":
+                    boto_modules.add(alias.asname or "boto3")
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if node.module == "minio" and alias.name == "Minio":
+                    minio_names.add(alias.asname or alias.name)
+                elif node.module == "boto3" and alias.name in {"client", "resource"}:
+                    boto_client_names.add(alias.asname or alias.name)
+                elif node.module == "boto3.session" and alias.name == "Session":
+                    boto_session_names.add(alias.asname or alias.name)
+
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if (isinstance(node.func, ast.Name) and node.func.id in minio_names) or (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "Minio"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in minio_modules
+        ):
+            found.add("Minio")
+        elif (
+            (isinstance(node.func, ast.Name) and node.func.id in boto_client_names)
+            or (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"client", "resource"}
+                and (
+                    (
+                        isinstance(node.func.value, ast.Name)
+                        and node.func.value.id in boto_modules
+                    )
+                    or (
+                        isinstance(node.func.value, ast.Call)
+                        and (
+                            isinstance(node.func.value.func, ast.Name)
+                            and node.func.value.func.id in boto_session_names
+                            or isinstance(node.func.value.func, ast.Attribute)
+                            and node.func.value.func.attr == "Session"
+                            and isinstance(node.func.value.func.value, ast.Name)
+                            and node.func.value.func.value.id in boto_modules
+                        )
+                    )
+                )
+            )
+        ) and (
+            not node.args
+            or not isinstance(node.args[0], ast.Constant)
+            or node.args[0].value == "s3"
+        ):
+            found.add("boto3.s3")
+    return found
+
+
+def scan_storage_writes(
+    roots: tuple[Path, ...] = SCANNED_ROOTS,
+) -> dict[str, set[str]]:
+    """Return direct object-store write methods grouped by repository path."""
+
+    hits: dict[str, set[str]] = {}
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+            methods = storage_write_methods(tree) | storage_client_constructors(tree)
+            if methods:
+                hits[rel] = methods
     return hits
 
 
 def _classify(rel: str, families: frozenset[str]) -> str:
     if rel in READ_ONLY_OBSERVATION_MODULES:
         return READ_ONLY_REASON
-    if families == frozenset({"object_store_write"}):
-        return OBJECT_STORE_REASON
     return DEFAULT_REASON
 
 
@@ -662,14 +856,48 @@ def _scan() -> dict[str, tuple[frozenset[str], str]]:
     return scan_repo()
 
 
-def _load_baseline() -> dict[str, tuple[frozenset[str], str]]:
+def _parse_baseline(lines: list[str]) -> dict[str, tuple[frozenset[str], str]]:
     baseline: dict[str, tuple[frozenset[str], str]] = {}
-    for line in BASELINE_PATH.read_text(encoding="utf-8").splitlines():
+    previous_path = ""
+    for line in lines:
         if not line.strip() or line.startswith("#"):
             continue
         path, families, reason = line.split("\t")
+        assert path > previous_path, f"duplicate or unsorted baseline row: {path}"
+        previous_path = path
+        labels = families.split(",")
+        assert labels == sorted(set(labels)), f"duplicate or unsorted families: {path}"
         baseline[path] = (frozenset(families.split(",")), reason)
     return baseline
+
+
+def _load_baseline() -> dict[str, tuple[frozenset[str], str]]:
+    return _parse_baseline(BASELINE_PATH.read_text(encoding="utf-8").splitlines())
+
+
+def test_baseline_parser_rejects_duplicate_and_unsorted_rows() -> None:
+    for lines in (
+        ["a.py\thttp_write\tgrandfathered: x"] * 2,
+        ["b.py\thttp_write\tgrandfathered: x", "a.py\thttp_write\tgrandfathered: x"],
+        ["a.py\tprovider:X,http_write\tgrandfathered: x"],
+        ["a.py\thttp_write,http_write\tgrandfathered: x"],
+    ):
+        try:
+            _parse_baseline(lines)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f"malformed baseline accepted: {lines}")
+
+
+def test_reviewed_external_effect_inventory_size() -> None:
+    current = _scan()
+    baseline = _load_baseline()
+    assert current == baseline
+    assert len(current) == len(baseline) == REVIEWED_MODULE_COUNT
+    assert sum(len(families) for families, _ in current.values()) == (
+        REVIEWED_FAMILY_LABEL_COUNT
+    )
 
 
 def test_no_hit_outside_baseline() -> None:
@@ -762,6 +990,8 @@ def test_sensitivity_proof_plants_every_provider_client() -> None:
     ]
     expected: set[str] = set()
     for i, name in enumerate(sorted(PROVIDER_CLIENTS)):
+        module = CLIENT_DEFINING_MODULES[name].removesuffix(".py").replace("/", ".")
+        lines.append(f"from {module} import {name}")
         lines.append(f"def bare_{i}():")
         lines.append(f"    return {name}(config)")
         lines.append("")
@@ -792,10 +1022,6 @@ def test_sensitivity_proof_plants_new_families_and_near_misses() -> None:
         def bound_client_write():
             with httpx.Client() as client:
                 return client.post("https://example.test", json={})
-
-        # --- object_store_write: matched by method name ---
-        def store_write(minio_client):
-            minio_client.put_object("bucket", "key", data, length)
 
         # --- provider_accessor: self.client.<method>() ---
         class Syncer:
@@ -856,12 +1082,6 @@ def test_sensitivity_proof_plants_new_families_and_near_misses() -> None:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr in OBJECT_STORE_WRITE_METHODS
-        ):
-            hits.add("object_store_write")
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
             and isinstance(node.func.value, ast.Attribute)
             and node.func.value.attr == "client"
         ) or (
@@ -880,7 +1100,7 @@ def test_sensitivity_proof_plants_new_families_and_near_misses() -> None:
                 if attr in HTTP_WRITE_METHODS:
                     hits.add("http_write")
 
-    assert hits == {"http_write", "object_store_write", "provider_accessor"}
+    assert hits == {"http_write", "provider_accessor"}
 
     # The real end-to-end detector (import gate OFF, as this tree has no
     # real provider-package import) must NOT report provider_accessor --
@@ -888,9 +1108,107 @@ def test_sensitivity_proof_plants_new_families_and_near_misses() -> None:
     real_hits = external_effect_hits(tree)
     assert "provider_accessor" not in real_hits
     assert "http_write" in real_hits
-    assert "object_store_write" in real_hits
     assert "provider:PaystackClient" not in real_hits
     assert "smtplib" not in real_hits
+
+
+def test_internal_storage_writes_are_not_external_effect_hits() -> None:
+    """Internal durable storage is outside this external-effect ratchet."""
+
+    tree = _tree(
+        """
+        def persist(storage, payload):
+            storage.put_object("bucket", "key", payload, len(payload))
+        """
+    )
+    assert external_effect_hits(tree) == set()
+
+
+def test_storage_writes_stay_with_the_declared_owner() -> None:
+    """Existing direct writes are confined to ERP's storage owner."""
+
+    hits = scan_storage_writes()
+    assert set(hits) == {STORAGE_OWNER}
+    assert hits[STORAGE_OWNER] == {
+        "Minio",
+        "make_bucket",
+        "put_object",
+        "remove_object",
+    }
+
+
+def test_storage_write_guard_canaries() -> None:
+    positive = _tree(
+        """
+        def persist(storage, payload):
+            storage.put_object("bucket", "key", payload, len(payload))
+            storage.make_bucket("archive")
+            storage.upload_fileobj(payload, "bucket", "key")
+            storage.put_bucket_acl("bucket", ACL="private")
+            storage.set_bucket_encryption("bucket", config)
+            storage.set_bucket_tags("bucket", tags)
+            storage.set_bucket_versioning("bucket", config)
+            storage.set_bucket_object_lock_config("bucket", config)
+            storage.put_object_retention("bucket", "key", retention)
+            storage.delete_bucket_policy("bucket")
+        """
+    )
+    negative = _tree(
+        """
+        def read(storage, key):
+            return storage.get_object("bucket", key)
+        def public_facade(storage, key, data):
+            storage.upload(key, data)
+            storage.delete(key)
+        """
+    )
+    assert storage_write_methods(positive) == {
+        "make_bucket",
+        "put_bucket_acl",
+        "set_bucket_encryption",
+        "set_bucket_tags",
+        "set_bucket_versioning",
+        "set_bucket_object_lock_config",
+        "put_object_retention",
+        "delete_bucket_policy",
+        "put_object",
+        "upload_fileobj",
+    }
+    assert storage_write_methods(negative) == set()
+
+    sdk_constructors = _tree(
+        """
+        from minio import Minio as M
+        import boto3 as aws
+        from boto3.session import Session as AwsSession
+        first = M("s3.example.test")
+        second = aws.client("s3")
+        third = AwsSession().client("s3")
+        """
+    )
+    assert storage_client_constructors(sdk_constructors) == {"Minio", "boto3.s3"}
+    assert storage_client_constructors(_tree("class Minio: pass\nMinio()")) == set()
+
+
+def test_http_inline_and_module_scope_client_write_canaries() -> None:
+    inline = _tree(
+        """
+        import httpx
+        def send():
+            return httpx.Client().post("https://example.test")
+        """
+    )
+    assert external_effect_hits(inline) == {"http_write"}
+
+    module_scope = _tree(
+        """
+        import httpx
+        client = httpx.Client()
+        def send():
+            return client.post("https://example.test")
+        """
+    )
+    assert external_effect_hits(module_scope) == {"http_write"}
 
 
 def test_smtplib_smtp_call_branch_is_reachable() -> None:
@@ -950,6 +1268,27 @@ def test_provider_reference_without_a_call_is_not_a_hit() -> None:
     assert external_effect_hits(_tree(planted)) == set()
 
 
+def test_provider_constructor_requires_the_provider_symbol_import() -> None:
+    lookalike = _tree(
+        """
+        from unrelated.module import PaystackClient
+        class DotmacSubClient:
+            pass
+        def local():
+            return PaystackClient(), DotmacSubClient()
+        """
+    )
+    assert external_effect_hits(lookalike) == set()
+
+    module_scope = _tree(
+        """
+        from app.services.finance.payments.paystack_client import PaystackClient
+        client = PaystackClient(config)
+        """
+    )
+    assert external_effect_hits(module_scope) == {"provider:PaystackClient"}
+
+
 def test_cross_method_self_client_is_not_merged_into_one_false_hit() -> None:
     """Real-shape proof for the http_write LIMITATION: a class whose
     constructor-injected ``self._client`` is used for a write in one method,
@@ -993,7 +1332,7 @@ def test_read_only_modules_only_call_allowed_methods() -> None:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             own_nodes = list(_own_body_nodes(node))
-            bound = _provider_client_bound_names(own_nodes, aliases.provider)
+            bound = _provider_client_bound_names(own_nodes, aliases)
             for attr, call in _provider_client_calls(own_nodes, bound):
                 if attr not in allowed:
                     violations.append(f"{rel}: disallowed call `{attr}`")
@@ -1029,7 +1368,7 @@ def test_read_only_modules_only_call_allowed_methods() -> None:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         own_nodes = list(_own_body_nodes(node))
-        bound = _provider_client_bound_names(own_nodes, aliases.provider)
+        bound = _provider_client_bound_names(own_nodes, aliases)
         for attr, _call in _provider_client_calls(own_nodes, bound):
             if attr not in READ_ONLY_ALLOWED_METHODS["app/dependency_health.py"]:
                 found = True
@@ -1053,7 +1392,7 @@ def test_read_only_modules_only_call_allowed_methods() -> None:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         own_nodes = list(_own_body_nodes(node))
-        bound = _provider_client_bound_names(own_nodes, aliases.provider)
+        bound = _provider_client_bound_names(own_nodes, aliases)
         for attr, call in _provider_client_calls(own_nodes, bound):
             if attr == "_request" and not (
                 call.args

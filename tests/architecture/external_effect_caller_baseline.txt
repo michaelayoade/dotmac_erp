@@ -6,6 +6,7 @@
 # families no longer match a fresh scan (a module silently gaining or losing
 # a family) also fails CI. See ADR-0013's required "two-directional ratchet"
 # text.
+# Reviewed live inventory: 33 modules, 43 family labels (2026-09-27).
 app/api/finance/payments.py	provider:DotmacSubClient,provider:PaystackClient	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/dependency_health.py	provider:DotmacSubClient,provider:NextcloudTalkClient,provider:PaystackClient,provider:RemitaClient,provider_accessor	grandfathered: read-only provider observation — confirm under ADR-0013
 app/services/admin/dotmac_sub_sync_web.py	provider:DotmacSubClient	grandfathered: direct external-effect caller — ADR-0013 migration debt
@@ -35,7 +36,6 @@ app/services/people/hr/nextcloud_provisioning.py	provider:NextcloudTalkClient	gr
 app/services/people/hr/offboarding.py	provider:MailcowClient,provider:ManageSieveClient,provider:NextcloudTalkClient,provider:SogoCleanupQueueClient	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/services/push.py	http_write	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/services/remita/rrr_service.py	provider:RemitaClient,provider_accessor	grandfathered: direct external-effect caller — ADR-0013 migration debt
-app/services/storage.py	object_store_write	grandfathered: object-storage write — scope under ADR-0013 to be confirmed (internal store vs external effect)
 app/services/sync/sub/expenses.py	provider:PaystackClient	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/tasks/dotmac_sub.py	provider:DotmacSubClient	grandfathered: direct external-effect caller — ADR-0013 migration debt
 app/tasks/email.py	smtplib	grandfathered: direct external-effect caller — ADR-0013 migration debt
