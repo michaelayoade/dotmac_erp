@@ -129,6 +129,7 @@ fail.
 from __future__ import annotations
 
 import ast
+import functools
 import textwrap
 from pathlib import Path
 
@@ -158,6 +159,15 @@ SPECIAL_SESSION_OPENERS = frozenset({"session_for_org", "cross_org_session"})
 #: ``self._session_factory()``), matched case-sensitively against the bare
 #: attribute/name text.
 INJECTED_FACTORY_SUFFIX = "session_factory"
+
+#: app/db request-scoped generator dependencies that, when advanced by hand
+#: with the builtin ``next(...)`` outside FastAPI's own machinery, yield a
+#: real session to the caller -- the real shape at
+#: ``scripts/import_data.py:463`` (``db = next(get_db_session())``, commits
+#: at :495). Only counted when resolved through an actual import of the name
+#: from ``app.db`` (see ``_collect_alias_map``), never from bare-name
+#: fallback -- both names are common local FastAPI-dependency names too.
+NEXT_WRAPPED_OPENER_NAMES = frozenset({"get_db", "get_db_session"})
 
 #: Helpers manually reviewed (module docstring above) and confirmed to open
 #: their OWN session and commit it on their own exit. Empty today.
@@ -239,7 +249,9 @@ def _collect_alias_map(nodes: list[ast.AST]) -> dict[str, str]:
     ``nodes`` (module-level or function-local -- both are scanned)."""
 
     alias: dict[str, str] = {}
-    canonical_names = SESSION_FACTORY_NAMES | SPECIAL_SESSION_OPENERS
+    canonical_names = (
+        SESSION_FACTORY_NAMES | SPECIAL_SESSION_OPENERS | NEXT_WRAPPED_OPENER_NAMES
+    )
     for node in nodes:
         if isinstance(node, ast.ImportFrom):
             for name in node.names:
@@ -252,6 +264,16 @@ def _is_session_opening_call(call: ast.Call, alias_map: dict[str, str]) -> bool:
     bare = _call_target_name(call.func)
     if bare is None:
         return False
+    if (
+        bare == "next"
+        and isinstance(call.func, ast.Name)
+        and call.args
+        and isinstance(call.args[0], ast.Call)
+    ):
+        inner = _call_target_name(call.args[0].func)
+        # Import-resolved only: a bare local ``get_db`` (a common FastAPI
+        # dependency name) must not count unless it was imported from app.db.
+        return inner in alias_map and alias_map[inner] in NEXT_WRAPPED_OPENER_NAMES
     canonical = alias_map.get(bare, bare)
     if canonical in SESSION_FACTORY_NAMES or canonical in SPECIAL_SESSION_OPENERS:
         return True
@@ -326,7 +348,9 @@ def _is_called_from_main_guard(name: str, module_tree: ast.Module) -> bool:
 
 
 def _classify(
-    func: ast.FunctionDef | ast.AsyncFunctionDef, module_tree: ast.Module
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+    module_tree: ast.Module,
+    qualname: str,
 ) -> str:
     if any(_decorator_name(d) in TASK_DECORATOR_NAMES for d in func.decorator_list):
         return "adapter-owned: entry point (Celery task decorator)"
@@ -334,7 +358,11 @@ def _classify(
         _decorator_name(d) in CLI_COMMAND_DECORATOR_NAMES for d in func.decorator_list
     ):
         return "adapter-owned: entry point (CLI command decorator)"
-    if _is_called_from_main_guard(func.name, module_tree):
+    # Only a MODULE-LEVEL function called by that exact name inside the
+    # module's own ``__main__`` guard is its entry point -- a method or a
+    # nested function that merely shares the name is not.
+    is_module_level = "." not in qualname and func in module_tree.body
+    if is_module_level and _is_called_from_main_guard(func.name, module_tree):
         return 'adapter-owned: entry point (called from `if __name__ == "__main__":`)'
     return "grandfathered: unreviewed"
 
@@ -484,9 +512,16 @@ def scan_repo(
             for qualname, shape in own_session_commit_hits(
                 tree, depends_referenced_names=depends_referenced_names
             ):
-                reason = _classify(by_qualname[qualname], tree)
+                reason = _classify(by_qualname[qualname], tree, qualname)
                 hits[f"{rel}::{qualname}"] = (shape, reason)
     return hits
+
+
+@functools.cache
+def _scan() -> dict[str, tuple[str, str]]:
+    """One repository scan (~13s) shared by every test in this module."""
+
+    return scan_repo()
 
 
 def _load_baseline() -> dict[str, str]:
@@ -500,7 +535,7 @@ def _load_baseline() -> dict[str, str]:
 
 
 def test_no_hit_outside_baseline() -> None:
-    current = scan_repo()
+    current = _scan()
     baseline = _load_baseline()
     new = sorted(set(current) - set(baseline))
     assert not new, (
@@ -512,7 +547,7 @@ def test_no_hit_outside_baseline() -> None:
 
 
 def test_baseline_has_no_stale_entries() -> None:
-    current = scan_repo()
+    current = _scan()
     baseline = _load_baseline()
     stale = sorted(set(baseline) - set(current))
     assert not stale, (
@@ -526,7 +561,7 @@ def test_baseline_reasons_match_the_structural_classifier() -> None:
     classifier produces fresh, today -- a hand-edited reason cannot drift
     from the rule that generates it."""
 
-    current = scan_repo()
+    current = _scan()
     baseline = _load_baseline()
     mismatched = sorted(
         key for key in set(current) & set(baseline) if current[key][1] != baseline[key]
@@ -621,6 +656,7 @@ def test_sensitivity_proof_plants_and_near_misses() -> None:
         from contextlib import contextmanager
 
         from app.db import SessionLocal as _SL
+        from app.db import get_db_session
         from app.db.session_context import session_for_org
 
         # --- shape (a): direct SessionLocal() + .commit() ---
@@ -665,6 +701,11 @@ def test_sensitivity_proof_plants_and_near_misses() -> None:
                 with self._session_factory() as db:
                     db.add(1)
                     db.commit()
+
+        # --- shape (a): an app.db dependency generator advanced by hand ---
+        def advances_get_db_session():
+            db = next(get_db_session())
+            db.commit()
 
         # --- a reviewed commit-on-exit helper (also its own shape-(a) hit) ---
         @contextmanager
@@ -737,6 +778,7 @@ def test_sensitivity_proof_plants_and_near_misses() -> None:
         ("factory_begin_direct", "a"),
         ("calls_session_for_org", "a"),
         ("Handler.handle", "a"),
+        ("advances_get_db_session", "a"),
         ("committing_scope", "a"),
     }
 
@@ -779,8 +821,23 @@ def test_a_reviewed_helper_that_never_commits_is_not_flagged() -> None:
     assert own_session_commit_hits(_tree(planted)) == []
 
 
+def test_a_local_get_db_advanced_by_hand_is_not_an_app_db_session() -> None:
+    """Near-miss: ``next(get_db())`` on a LOCALLY defined ``get_db`` (a
+    common FastAPI dependency name) is not an app.db session opener."""
+
+    planted = """
+        def get_db():
+            yield object()
+
+        def uses_local():
+            db = next(get_db())
+            db.commit()
+    """
+    assert own_session_commit_hits(_tree(planted)) == []
+
+
 def test_app_db_itself_is_excluded_from_the_repo_scan() -> None:
-    hits = scan_repo()
+    hits = _scan()
     assert not any(path.startswith("app/db/") for path in hits), (
         "app/db/ is the session authority and must be excluded wholesale"
     )

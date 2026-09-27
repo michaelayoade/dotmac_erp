@@ -171,6 +171,7 @@ scripts/create_unallocated_payroll_cc.py::run	grandfathered: unreviewed
 scripts/execute_bank_fee_wrong_account_correction.py::run	grandfathered: unreviewed
 scripts/fix_display_names.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
 scripts/fix_duplicate_ar_journals.py::run	grandfathered: unreviewed
+scripts/import_data.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
 scripts/import_tb_audit.py::main	adapter-owned: entry point (called from `if __name__ == "__main__":`)
 scripts/import_uba_statements.py::import_statements	grandfathered: unreviewed
 scripts/import_zenith_statements.py::import_statements	grandfathered: unreviewed
