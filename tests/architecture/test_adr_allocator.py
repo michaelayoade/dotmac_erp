@@ -119,6 +119,33 @@ def test_the_claim_takes_next_free_and_raises_it_by_one() -> None:
     assert rows[3]["slug"] == "a-third-decision"
     assert rows[3]["status"] == "reserved"
     assert rows[3]["claimed"] == "2026-09-05"
+    assert "visibility" not in rows[3]
+    assert "coordinate" not in rows[3]
+
+
+def test_the_real_allocation_passes_the_register_checker_without_draft_evidence() -> None:
+    checker_path = (
+        REPO_ROOT
+        / "tests"
+        / "architecture"
+        / "test_adr_number_allocation.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "_adr_checker", checker_path
+    )
+    assert spec is not None and spec.loader is not None
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+
+    filenames = checker.adr_filenames(REPO_ROOT / "docs" / "adr")
+    allocation = allocate.plan(
+        allocate.read_register(REGISTER),
+        "reservation-protocol-sensitivity",
+        "2026-09-27",
+        filenames,
+    )
+    parsed = tomllib.loads(allocation.text)
+    assert checker.findings(parsed, filenames) == []
 
 
 def test_the_rewrite_keeps_the_registers_prose() -> None:
