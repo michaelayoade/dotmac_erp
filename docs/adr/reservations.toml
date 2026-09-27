@@ -116,7 +116,7 @@
 #              and CI fails. Reconciling the claim is how the branch merges.
 #              No new `contested` row may ever be added.
 
-next_free = 13
+next_free = 14
 
 # ---------------------------------------------------------------------------
 # On protected `main`. `landed_at` is derived from `main`'s first-parent
@@ -307,6 +307,12 @@ claimed = "2026-09-06"
 landed_at = "2026-09-06"
 landed_commit = "6801f960"
 pr = 476
+
+[[reservation]]
+number = 13
+slug = "external-effects-are-recorded-by-their-owner-before-they-run"
+status = "reserved"
+claimed = "2026-09-27"
 
 [[collision]]
 number = 3
