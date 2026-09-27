@@ -87,10 +87,15 @@ These are the repo-level instructions Codex should follow for this workspace.
   `test_adr_allocator.py` (the writer's logic),
   `test_adr_allocator_cli.py` (the entry point, run for real) and
   `.github/workflows/adr-allocation.yml` (a claim changes the register alone).
-  `claimed` is always the git AUTHOR date and never a merge time; `landed_at`
-  is separate and exists only for rows on `main`; every off-`main` row carries
-  `visibility` = `pr`/`remote_ref`/`local_only`, because a claim only one
-  workstation can see does not support a count anyone else is asked to check.
+  `claimed` is always the git AUTHOR date and never a merge time. `landed_at`
+  is optional historical metadata for an authored ADR after it reaches `main`:
+  derive it from first-parent history, never predict it in an authoring PR.
+  Its absence does not say whether the ADR has landed. A new allocation-only
+  `reserved` row has no ADR draft blob, so it has neither `visibility` nor
+  `coordinate`; its PR and the merged register record the number claim. A row
+  describing an off-`main` ADR draft carries both its actual immutable blob
+  coordinate and `visibility` = `pr`/`remote_ref`/`local_only`, because a draft
+  only one workstation can see cannot support a remotely auditable count.
 - `CLAUDE.md` for critical coding rules, workflow, verification steps, and module map.
 - `.claude/rules/` for design system, templates, security, services, and web routes standards.
 - `UI_CONVENTIONS.md` and `CONSISTENCY_CHECKLIST.md` for UI consistency checks.

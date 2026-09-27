@@ -37,6 +37,7 @@ import re
 import shutil
 import subprocess
 import tomllib
+from datetime import date
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +70,16 @@ VISIBILITY_RANK = {"local_only": 0, "remote_ref": 1, "pr": 2}
 
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 BLOB_SHA = re.compile(r"\b[0-9a-f]{8,40}\b")
+
+
+def is_iso_date(value: object) -> bool:
+    if not isinstance(value, str) or not ISO_DATE.fullmatch(value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 def load_register(text: str) -> dict:
@@ -235,7 +246,7 @@ def schema_findings(register: dict) -> list[str]:
         where = f"ADR-{number:04d}"
 
         claimed = row.get("claimed")
-        if not (isinstance(claimed, str) and ISO_DATE.match(claimed)):
+        if not is_iso_date(claimed):
             out.append(
                 f"{where} has `claimed = {claimed!r}`, which is not an ISO date. "
                 f"`claimed` is the git AUTHOR date of the claiming commit and "
@@ -245,28 +256,42 @@ def schema_findings(register: dict) -> list[str]:
 
         landed = row.get("landed_at")
         if status == "authored":
-            if not (isinstance(landed, str) and ISO_DATE.match(landed)):
+            if landed is not None and not is_iso_date(landed):
                 out.append(
-                    f"{where} is authored but has no ISO `landed_at`. A row on "
-                    f"`main` records when it landed, from first-parent history."
+                    f"{where} has non-ISO `landed_at = {landed!r}`. Only a real "
+                    f"first-parent landing date belongs in this field."
                 )
-            elif claimed and landed < claimed:
+            elif landed is not None and claimed and landed < claimed:
                 out.append(
                     f"{where} landed on {landed} but claims {claimed}. A change "
                     f"cannot land before it was authored; one column is wrong."
                 )
             if row.get("visibility") is not None:
                 out.append(
-                    f"{where} is on `main` and also carries `visibility`. "
-                    f"Visibility describes a claim nobody has landed."
+                    f"{where} is authored and also carries `visibility`. "
+                    f"Visibility describes an off-`main` draft claimant."
+                )
+            if row.get("coordinate") is not None:
+                out.append(
+                    f"{where} is authored and also carries `coordinate`. "
+                    f"The authored ADR is already present in this worktree."
                 )
         else:
             if landed is not None:
                 out.append(
                     f"{where} is {status!r} and carries `landed_at = {landed!r}`. "
-                    f"Only a row on `main` has landed."
+                    f"Only an authored ADR records its landing."
                 )
             visibility = row.get("visibility")
+            coordinate = row.get("coordinate")
+            # A new reservation claims a NUMBER, before any ADR blob exists.
+            # Existing off-main draft claims carry both evidence fields; a
+            # half-filled pair must not pass as a bare allocation.
+            bare_reservation = (
+                status == "reserved" and visibility is None and coordinate is None
+            )
+            if bare_reservation:
+                continue
             if visibility not in VISIBILITY_RANK:
                 out.append(
                     f"{where} is {status!r} with visibility {visibility!r}, not "
@@ -284,7 +309,7 @@ def schema_findings(register: dict) -> list[str]:
                     f"declared claimant is only {actual!r}. A local-only claim "
                     f"cannot support a remotely auditable count."
                 )
-            if not BLOB_SHA.search(str(row.get("coordinate", ""))):
+            if not BLOB_SHA.search(str(coordinate or "")):
                 out.append(
                     f"{where} is {status!r} with no blob in `coordinate`. The "
                     f"strongest immutable coordinate is the point of the field."
@@ -430,6 +455,22 @@ CLEAN_FILES = {"0001-alpha.md"}
 def test_the_negative_control_is_clean() -> None:
     """A detector that flags everything would 'catch' every plant below."""
     assert findings(CLEAN, CLEAN_FILES) == []
+
+
+def test_a_bare_number_reservation_needs_no_nonexistent_draft_blob() -> None:
+    bare = {
+        "next_free": 3,
+        "reservation": [
+            CLEAN["reservation"][0],
+            {
+                "number": 2,
+                "slug": "beta",
+                "status": "reserved",
+                "claimed": "2026-01-02",
+            },
+        ],
+    }
+    assert findings(bare, CLEAN_FILES) == []
 
 
 def test_a_planted_duplicate_number_is_named() -> None:
@@ -592,6 +633,7 @@ def test_a_reservation_that_lands_before_its_document_is_not_flagged() -> None:
         )
         == set()
     )
+    assert findings(head, {"0001-alpha.md", "0002-beta.md"}) == []
 
 
 def test_the_readme_parser_reads_a_real_row() -> None:
@@ -646,7 +688,7 @@ def test_a_same_day_claim_and_landing_is_not_flagged() -> None:
     assert findings(same_day, CLEAN_FILES) == []
 
 
-def test_a_planted_authored_row_with_no_landing_is_named() -> None:
+def test_an_authored_row_without_a_future_landing_date_is_valid() -> None:
     planted = {
         "next_free": 3,
         "reservation": [
@@ -654,8 +696,36 @@ def test_a_planted_authored_row_with_no_landing_is_named() -> None:
             CLEAN["reservation"][1],
         ],
     }
+    assert findings(planted, CLEAN_FILES) == []
+
+
+def test_a_planted_invalid_landing_date_is_named() -> None:
+    planted = {
+        "next_free": 3,
+        "reservation": [
+            {**CLEAN["reservation"][0], "landed_at": "2026-99-99"},
+            CLEAN["reservation"][1],
+        ],
+    }
     problems = findings(planted, CLEAN_FILES)
-    assert any("no ISO `landed_at`" in p for p in problems), problems
+    assert any("non-ISO `landed_at" in p for p in problems), problems
+
+
+def test_a_planted_authored_row_with_lone_coordinate_is_named() -> None:
+    planted = {
+        "next_free": 3,
+        "reservation": [
+            {
+                **CLEAN["reservation"][0],
+                "coordinate": f"blob {BLOB_A} on refs/remotes/origin/alpha",
+            },
+            CLEAN["reservation"][1],
+        ],
+    }
+    problems = findings(planted, CLEAN_FILES)
+    assert any("authored and also carries `coordinate`" in p for p in problems), (
+        problems
+    )
 
 
 def test_a_planted_landing_on_an_unlanded_row_is_named() -> None:
@@ -669,10 +739,12 @@ def test_a_planted_landing_on_an_unlanded_row_is_named() -> None:
         ],
     }
     problems = findings(planted, CLEAN_FILES)
-    assert any("Only a row on `main` has landed" in p for p in problems), problems
+    assert any("Only an authored ADR records its landing" in p for p in problems), (
+        problems
+    )
 
 
-def test_a_planted_unlabelled_claim_is_named() -> None:
+def test_a_planted_draft_coordinate_without_visibility_is_named() -> None:
     planted = {
         "next_free": 3,
         "reservation": [
@@ -682,6 +754,37 @@ def test_a_planted_unlabelled_claim_is_named() -> None:
     }
     problems = findings(planted, CLEAN_FILES)
     assert any("with visibility None" in p for p in problems), problems
+
+
+def test_a_planted_draft_visibility_without_coordinate_is_named() -> None:
+    planted = {
+        "next_free": 3,
+        "reservation": [
+            CLEAN["reservation"][0],
+            {k: v for k, v in CLEAN["reservation"][1].items() if k != "coordinate"},
+        ],
+    }
+    problems = findings(planted, CLEAN_FILES)
+    assert any("no blob in `coordinate`" in p for p in problems), problems
+
+
+def test_other_non_authored_rows_still_require_draft_evidence() -> None:
+    planted = {
+        "next_free": 3,
+        "reservation": [
+            CLEAN["reservation"][0],
+            {
+                "number": 2,
+                "slug": "beta",
+                "status": "withdrawn",
+                "claimed": "2026-01-02",
+                "withdrawn_reason": "abandoned before merge",
+            },
+        ],
+    }
+    problems = findings(planted, CLEAN_FILES)
+    assert any("with visibility None" in p for p in problems), problems
+    assert any("no blob in `coordinate`" in p for p in problems), problems
 
 
 def test_a_planted_coordinate_without_a_blob_is_named() -> None:

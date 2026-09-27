@@ -3,7 +3,8 @@
 ``docs/adr/reservations.toml`` is the serialized allocator (see its own header
 for the protocol).  This is the only supported way to execute step 1 and step 2
 of that protocol: take ``next_free``, append a ``reserved`` row, raise
-``next_free`` by one.
+``next_free`` by one. A fresh reservation has no ADR draft and therefore no
+draft blob, visibility label, or coordinate to record.
 
 Three properties are deliberate and are what the tests hold this to.
 
@@ -146,6 +147,8 @@ def plan(text: str, slug: str, claimed: str, authored: set[str]) -> Allocation:
         )
 
     row = (
+        # A number claim precedes the document. Do not synthesize a blob of
+        # this changing register or claim that a not-yet-written draft exists.
         f'\n[[reservation]]\nnumber = {number}\nslug = "{slug}"\n'
         f'status = "reserved"\nclaimed = "{claimed}"\n'
     )
