@@ -739,9 +739,9 @@ def test_a_planted_landing_on_an_unlanded_row_is_named() -> None:
         ],
     }
     problems = findings(planted, CLEAN_FILES)
-    assert any(
-        "Only an authored ADR records its landing" in p for p in problems
-    ), problems
+    assert any("Only an authored ADR records its landing" in p for p in problems), (
+        problems
+    )
 
 
 def test_a_planted_draft_coordinate_without_visibility_is_named() -> None:

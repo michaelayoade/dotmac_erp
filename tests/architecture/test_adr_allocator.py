@@ -123,16 +123,13 @@ def test_the_claim_takes_next_free_and_raises_it_by_one() -> None:
     assert "coordinate" not in rows[3]
 
 
-def test_the_real_allocation_passes_the_register_checker_without_draft_evidence() -> None:
+def test_the_real_allocation_passes_the_register_checker_without_draft_evidence() -> (
+    None
+):
     checker_path = (
-        REPO_ROOT
-        / "tests"
-        / "architecture"
-        / "test_adr_number_allocation.py"
+        REPO_ROOT / "tests" / "architecture" / "test_adr_number_allocation.py"
     )
-    spec = importlib.util.spec_from_file_location(
-        "_adr_checker", checker_path
-    )
+    spec = importlib.util.spec_from_file_location("_adr_checker", checker_path)
     assert spec is not None and spec.loader is not None
     checker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(checker)
