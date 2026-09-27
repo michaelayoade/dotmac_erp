@@ -45,6 +45,13 @@ The existing direct clients are transition debt, not the target execution
 path. The Governance schema-9 ratchet already measures the broader connector
 surface, but no ADR-specific gate proving record-before-effect has been added.
 
+ERP's S3-compatible object store is its durable file persistence. Object
+uploads are outside this ADR's external-effect caller inventory. A database
+rollback after an upload can leave an orphaned object; a separate reconciler
+must compare ERP-owned keys with authoritative database references after a
+grace period, flag references to missing objects, and gather measured dry-run
+evidence before deletion.
+
 ## Decision
 
 1. **Record a committed owner decision before an external effect is eligible
