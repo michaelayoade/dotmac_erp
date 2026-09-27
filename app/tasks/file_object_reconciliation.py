@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from celery import shared_task
@@ -27,7 +27,7 @@ def report_tenant_file_objects(
     org_id = UUID(organization_id)
     scope = OrganizationTenantContext.for_organization(org_id).tenant_scope
     provider = get_dotmac_files_read_provider()
-    observed_at = datetime.now(UTC)
+    observed_at = datetime.now(timezone.utc)
     observations = list_objects(provider, scope=scope)
     with session_for_org(org_id) as db:
         report = report_file_objects(
