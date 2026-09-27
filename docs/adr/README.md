@@ -62,3 +62,4 @@ sequencing call and is not recorded here as though it were settled.
 | [0005](0005-payment-intent-status-has-one-writer.md) | `PaymentIntent.status` has one writer | Accepted |
 | [0007](0007-unobserved-is-not-failed.md) | An unobserved transfer is not a failed one | Accepted |
 | [0012](0012-invoice-sync-failures-are-durable-outcomes.md) | Invoice synchronization failures are durable outcomes | Proposed |
+| [0013](0013-external-effects-are-recorded-by-their-owner-before-they-run.md) | External effects are recorded by their owner before they run | Accepted |
