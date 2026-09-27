@@ -797,20 +797,26 @@ def storage_client_constructors(tree: ast.AST) -> set[str]:
     """Direct MinIO and boto3 S3 client constructors, resolved from imports."""
     minio_names: set[str] = set()
     minio_modules: set[str] = set()
+    minio_api_imported = False
     boto_modules: set[str] = set()
     boto_session_modules: set[str] = set()
+    boto_session_imported = False
     boto_client_names: set[str] = set()
     boto_session_names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name in {"minio", "minio.api"}:
-                    if alias.asname or alias.name == "minio":
-                        minio_modules.add(alias.asname or "minio")
+                    minio_modules.add(alias.asname or "minio")
+                    minio_api_imported |= alias.name == "minio.api" and not alias.asname
                 elif alias.name == "boto3":
                     boto_modules.add(alias.asname or "boto3")
-                elif alias.name == "boto3.session" and alias.asname:
-                    boto_session_modules.add(alias.asname)
+                elif alias.name == "boto3.session":
+                    if alias.asname:
+                        boto_session_modules.add(alias.asname)
+                    else:
+                        boto_modules.add("boto3")
+                        boto_session_imported = True
         elif isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if node.module == "minio" and alias.name == "Minio":
@@ -824,11 +830,23 @@ def storage_client_constructors(tree: ast.AST) -> set[str]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        if (isinstance(node.func, ast.Name) and node.func.id in minio_names) or (
-            isinstance(node.func, ast.Attribute)
-            and node.func.attr == "Minio"
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id in minio_modules
+        if (
+            (isinstance(node.func, ast.Name) and node.func.id in minio_names)
+            or (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "Minio"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id in minio_modules
+            )
+            or (
+                minio_api_imported
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "Minio"
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "api"
+                and isinstance(node.func.value.value, ast.Name)
+                and node.func.value.value.id == "minio"
+            )
         ):
             found.add("Minio")
         elif (
@@ -851,6 +869,13 @@ def storage_client_constructors(tree: ast.AST) -> set[str]:
                             and isinstance(node.func.value.func.value, ast.Name)
                             and node.func.value.func.value.id
                             in boto_modules | boto_session_modules
+                            or boto_session_imported
+                            and isinstance(node.func.value.func, ast.Attribute)
+                            and node.func.value.func.attr == "Session"
+                            and isinstance(node.func.value.func.value, ast.Attribute)
+                            and node.func.value.func.value.attr == "session"
+                            and isinstance(node.func.value.func.value.value, ast.Name)
+                            and node.func.value.func.value.value.id == "boto3"
                         )
                     )
                 )
@@ -1260,6 +1285,14 @@ def test_storage_write_guard_canaries() -> None:
         """
     )
     assert storage_client_constructors(sdk_constructors) == {"Minio", "boto3.s3"}
+    unaliased_minio = _tree(
+        "import minio.api\nclient = minio.api.Minio('s3.example.test')"
+    )
+    unaliased_boto = _tree(
+        "import boto3.session\nclient = boto3.session.Session().client('s3')"
+    )
+    assert storage_client_constructors(unaliased_minio) == {"Minio"}
+    assert storage_client_constructors(unaliased_boto) == {"boto3.s3"}
     assert storage_client_constructors(_tree("class Minio: pass\nMinio()")) == set()
 
 
