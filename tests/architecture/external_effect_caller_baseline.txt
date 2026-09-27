@@ -1,0 +1,24 @@
+# Baseline sidecar for tests/architecture/test_external_effect_callers.py
+# (ADR-0013: "External effects are recorded by their owner before they run").
+# Format: <path>\t<reason>. Two-directional ratchet: a live scan hit outside
+# this file fails CI; a stale row (no longer produced by the live scan) also
+# fails CI. See ADR-0013's required "two-directional ratchet" text.
+app/api/finance/payments.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/dependency_health.py	grandfathered: read-only provider observation — confirm under ADR-0013
+app/services/admin/dotmac_sub_sync_web.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/dotmac_sub/staff_sync.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/dotmac_sub/sync/_base.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/email.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/finance/banking/mono_sync.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/finance/payments/payment_service.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/finance/payments/paystack_customer_sync.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/finance/payments/paystack_sync.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/finance/payments/webhook_service.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/people/hr/mailbox_provisioning.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/people/hr/nextcloud_provisioning.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/people/hr/offboarding.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/remita/rrr_service.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/services/sync/sub/expenses.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/tasks/dotmac_sub.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+app/tasks/email.py	grandfathered: direct external-effect caller — ADR-0013 migration debt
+scripts/archive/paystack_probe_unmatched_statement_refs.py	grandfathered: read-only provider observation — confirm under ADR-0013
