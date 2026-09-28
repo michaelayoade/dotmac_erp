@@ -50,6 +50,7 @@ app/tasks/expense.py::refresh_period_usage_cache	adapter-owned: entry point (Cel
 app/tasks/expense.py::reset_weekly_approver_budgets	adapter-owned: entry point (Celery task decorator)
 app/tasks/expense.py::settle_cash_advance_with_claim	adapter-owned: entry point (Celery task decorator)
 app/tasks/feature_flags.py::archive_expired_feature_flags	adapter-owned: entry point (Celery task decorator)
+app/tasks/file_object_reconciliation.py::clean_tenant_file_objects	adapter-owned: entry point (Celery task decorator)
 app/tasks/finance.py::auto_generate_aging_snapshots	adapter-owned: entry point (Celery task decorator)
 app/tasks/finance.py::process_ar_collection_reminders	adapter-owned: entry point (Celery task decorator)
 app/tasks/finance.py::process_bank_reconciliation_reminders	adapter-owned: entry point (Celery task decorator)

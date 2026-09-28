@@ -401,6 +401,26 @@ class _RecheckProvider:
         return (item for item in self.initial if item.key == prefix)
 
 
+def _fake_record_cleanup_run_started(_db, **_kwargs):
+    """Slice 2b's real recording functions assume the durable
+    ``file_orphan_cleanup_runs``/``file_orphan_cleanup_deletions`` schema
+    (see ``tests/services/test_file_orphan_cleanup_records.py``), which this
+    module's bespoke ``_session()`` fixture does not create -- these tests
+    are about the plan/authorize/recheck behavior, not persistence. Faked
+    here so the full apply round trip still exercises everything up to and
+    including recording's CALL SITES in the task, without a real schema.
+    """
+    return uuid4()
+
+
+def _fake_record_cleanup_key_outcome(_db, **_kwargs) -> None:
+    return None
+
+
+def _fake_record_cleanup_run_finished(_db, **_kwargs) -> None:
+    return None
+
+
 def _run_dry_run_then_apply(
     monkeypatch,
     task_module,
@@ -419,6 +439,15 @@ def _run_dry_run_then_apply(
         yield db
 
     monkeypatch.setattr(task_module, "session_for_org", scoped_session)
+    monkeypatch.setattr(
+        task_module, "record_cleanup_run_started", _fake_record_cleanup_run_started
+    )
+    monkeypatch.setattr(
+        task_module, "record_cleanup_key_outcome", _fake_record_cleanup_key_outcome
+    )
+    monkeypatch.setattr(
+        task_module, "record_cleanup_run_finished", _fake_record_cleanup_run_finished
+    )
     _wire_scope(monkeypatch, task_module, provider, scope)
 
     _FixedClock._times = [dry_run_time]
@@ -505,6 +534,7 @@ def test_clean_task_apply_round_trip_succeeds_when_the_listing_is_unchanged(
     summary = task_module.clean_tenant_file_objects.run(
         str(apply_id),
         apply=True,
+        actor="operator@example.com",
         expected_plan_digest=digest,
         reviewed_older_than=older_than,
         reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -581,6 +611,7 @@ def test_clean_task_apply_succeeds_through_the_real_report_despite_a_fresh_uploa
     summary = task_module.clean_tenant_file_objects.run(
         str(apply_id),
         apply=True,
+        actor="operator@example.com",
         expected_plan_digest=dry_run_summary["plan_digest"],
         reviewed_older_than=dry_run_summary["older_than"],
         reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -635,6 +666,7 @@ def test_clean_task_apply_refuses_when_the_listing_changed_since_review(
         task_module.clean_tenant_file_objects.run(
             str(apply_id),
             apply=True,
+            actor="operator@example.com",
             expected_plan_digest=digest,
             reviewed_older_than=older_than,
             reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -671,6 +703,7 @@ def test_clean_task_apply_refuses_an_expired_plan(monkeypatch) -> None:
         task_module.clean_tenant_file_objects.run(
             str(apply_id),
             apply=True,
+            actor="operator@example.com",
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
             reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -719,6 +752,7 @@ def test_clean_task_apply_refuses_a_digest_reused_against_a_different_org(
         task_module.clean_tenant_file_objects.run(
             str(other_tenant_id),
             apply=True,
+            actor="operator@example.com",
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
             reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -757,6 +791,7 @@ def test_clean_task_apply_refuses_candidates_over_the_cap(monkeypatch) -> None:
             str(apply_id),
             apply=True,
             max_deletions=2,
+            actor="operator@example.com",
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
             reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -803,6 +838,7 @@ def test_clean_task_apply_accepts_a_non_utc_offset_reviewed_older_than(
     summary = task_module.clean_tenant_file_objects.run(
         str(apply_id),
         apply=True,
+        actor="operator@example.com",
         expected_plan_digest=dry_run_summary["plan_digest"],
         reviewed_older_than=equivalent,
         reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -878,6 +914,7 @@ def test_clean_task_recheck_skips_a_key_that_gained_a_reference_mid_loop(
     summary = task_module.clean_tenant_file_objects.run(
         str(apply_id),
         apply=True,
+        actor="operator@example.com",
         expected_plan_digest=dry_run_summary["plan_digest"],
         reviewed_older_than=dry_run_summary["older_than"],
         reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -935,6 +972,7 @@ def test_clean_task_recheck_reports_missing_and_too_new_without_deleting(
     summary = task_module.clean_tenant_file_objects.run(
         str(apply_id),
         apply=True,
+        actor="operator@example.com",
         expected_plan_digest=dry_run_summary["plan_digest"],
         reviewed_older_than=dry_run_summary["older_than"],
         reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -991,6 +1029,7 @@ def test_clean_task_recheck_stops_after_the_first_delete_failure(monkeypatch) ->
         task_module.clean_tenant_file_objects.run(
             str(apply_id),
             apply=True,
+            actor="operator@example.com",
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
             reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -1057,6 +1096,7 @@ def test_clean_task_recheck_records_a_reference_check_failure_as_failed(
         task_module.clean_tenant_file_objects.run(
             str(apply_id),
             apply=True,
+            actor="operator@example.com",
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
             reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
@@ -1068,3 +1108,283 @@ def test_clean_task_recheck_records_a_reference_check_failure_as_failed(
     assert summary["deleted"] == 1
     assert summary["failed_count"] == 1
     assert summary["failure_exception_types"] == ["RuntimeError"]
+
+
+# --- Slice 2b: the durable run/outcome record (2026-09-28) ---
+
+
+def test_clean_task_apply_without_an_actor_is_refused() -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError, match="actor"):
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()),
+            apply=True,
+            expected_plan_digest="x",
+            reviewed_older_than="2026-09-24T00:00:00+00:00",
+            reviewed_plan_observed_at="2026-10-01T00:00:00+00:00",
+        )
+
+
+def test_clean_task_apply_records_the_started_row_before_any_delete_and_outcomes_in_order(
+    monkeypatch,
+) -> None:
+    """One shared events list orders every recording call and every delete
+    call -- proving the "started" row is committed before the FIRST delete,
+    and that each key's outcome is recorded (and committed) immediately, in
+    plan order, one at a time."""
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    key_a, key_b = sorted((prefix + str(uuid4()), prefix + str(uuid4())))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(key_a, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(key_b, 11, dry_run_time - timedelta(days=10)),
+        )
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    events: list[str] = []
+    run_id = uuid4()
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        events.append(f"delete:{key}")
+
+    def fake_started(_db, *, tenant_id, plan, actor, invocation_id):
+        events.append("started")
+        return run_id
+
+    def fake_outcome(
+        _db,
+        *,
+        tenant_id,
+        run_id,
+        storage_key,
+        outcome,
+        error_class=None,
+        observed_last_modified=None,
+    ):
+        events.append(f"outcome:{storage_key}:{outcome}")
+
+    def fake_finished(_db, *, tenant_id, run_id, status, outcome_counts):
+        events.append(f"finished:{status}")
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+    # Re-patch AFTER the dry run (which never touches recording) so these
+    # event-tracking fakes -- not `_run_dry_run_then_apply`'s own no-op
+    # fakes -- are the ones the apply call below actually exercises.
+    monkeypatch.setattr(task_module, "record_cleanup_run_started", fake_started)
+    monkeypatch.setattr(task_module, "record_cleanup_key_outcome", fake_outcome)
+    monkeypatch.setattr(task_module, "record_cleanup_run_finished", fake_finished)
+
+    summary = task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        actor="operator@example.com",
+        expected_plan_digest=dry_run_summary["plan_digest"],
+        reviewed_older_than=dry_run_summary["older_than"],
+        reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
+    )
+
+    assert summary["deleted"] == 2
+    assert events == [
+        "started",
+        f"delete:{key_a}",
+        f"outcome:{key_a}:deleted",
+        f"delete:{key_b}",
+        f"outcome:{key_b}:deleted",
+        "finished:completed",
+    ]
+
+
+def test_clean_task_apply_records_partial_failure_and_stops_further_deletes(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    first_key, second_key = sorted((prefix + str(uuid4()), prefix + str(uuid4())))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(first_key, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(second_key, 11, dry_run_time - timedelta(days=10)),
+        )
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    events: list[str] = []
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        events.append(f"delete:{key}")
+        if key == first_key:
+            raise RuntimeError("boom")
+
+    def fake_outcome(
+        _db,
+        *,
+        tenant_id,
+        run_id,
+        storage_key,
+        outcome,
+        error_class=None,
+        observed_last_modified=None,
+    ):
+        events.append(f"outcome:{storage_key}:{outcome}:{error_class}")
+
+    def fake_finished(_db, *, tenant_id, run_id, status, outcome_counts):
+        events.append(f"finished:{status}")
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+    monkeypatch.setattr(
+        task_module, "record_cleanup_run_started", _fake_record_cleanup_run_started
+    )
+    monkeypatch.setattr(task_module, "record_cleanup_key_outcome", fake_outcome)
+    monkeypatch.setattr(task_module, "record_cleanup_run_finished", fake_finished)
+
+    from app.services.file_object_cleanup import CleanupPartialFailure
+
+    with pytest.raises(CleanupPartialFailure):
+        task_module.clean_tenant_file_objects.run(
+            str(apply_id),
+            apply=True,
+            actor="operator@example.com",
+            expected_plan_digest=dry_run_summary["plan_digest"],
+            reviewed_older_than=dry_run_summary["older_than"],
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
+        )
+
+    # Only the failing key was attempted -- the loop stops at the first
+    # failure, so the second key is never even delete-attempted.
+    assert events == [
+        f"delete:{first_key}",
+        f"outcome:{first_key}:failed:RuntimeError",
+        "finished:partial_failure",
+    ]
+
+
+def test_clean_task_apply_stops_deleting_when_recording_itself_raises(
+    monkeypatch,
+) -> None:
+    """If recording an outcome raises, the exception propagates immediately
+    and no further key is ever delete-attempted -- a delete must never
+    outrun its own durable record."""
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    key_a, key_b = sorted((prefix + str(uuid4()), prefix + str(uuid4())))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(key_a, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(key_b, 11, dry_run_time - timedelta(days=10)),
+        )
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    events: list[str] = []
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        events.append(f"delete:{key}")
+
+    def failing_outcome(_db, **_kwargs):
+        events.append("record_outcome_raises")
+        raise RuntimeError("records database unavailable")
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+    monkeypatch.setattr(task_module, "record_cleanup_key_outcome", failing_outcome)
+
+    with pytest.raises(RuntimeError, match="records database unavailable"):
+        task_module.clean_tenant_file_objects.run(
+            str(apply_id),
+            apply=True,
+            actor="operator@example.com",
+            expected_plan_digest=dry_run_summary["plan_digest"],
+            reviewed_older_than=dry_run_summary["older_than"],
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
+        )
+
+    # The first key's delete ran, its outcome recording raised, and the
+    # loop stopped there -- the second key was never even attempted.
+    assert events == [f"delete:{key_a}", "record_outcome_raises"]
+
+
+def test_clean_task_dry_run_never_records_anything(monkeypatch) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    provider = ListingProvider(())
+    record_calls: list[str] = []
+
+    @contextmanager
+    def scoped_session(_organization_id):
+        yield object()
+
+    def fake_started(*_args, **_kwargs):
+        record_calls.append("started")
+        return uuid4()
+
+    def fake_outcome(*_args, **_kwargs):
+        record_calls.append("outcome")
+
+    def fake_finished(*_args, **_kwargs):
+        record_calls.append("finished")
+
+    monkeypatch.setattr(task_module, "get_dotmac_files_read_provider", lambda: provider)
+    monkeypatch.setattr(task_module, "list_objects", lambda _p, *, scope: ())
+    monkeypatch.setattr(task_module, "session_for_org", scoped_session)
+    monkeypatch.setattr(task_module, "record_cleanup_run_started", fake_started)
+    monkeypatch.setattr(task_module, "record_cleanup_key_outcome", fake_outcome)
+    monkeypatch.setattr(task_module, "record_cleanup_run_finished", fake_finished)
+
+    summary = task_module.clean_tenant_file_objects.run(str(uuid4()))
+
+    assert summary["dry_run"] is True
+    assert record_calls == []

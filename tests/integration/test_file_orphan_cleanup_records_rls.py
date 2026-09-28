@@ -175,3 +175,90 @@ def test_app_user_reads_only_the_selected_tenants_cleanup_runs(engine) -> None:
     finally:
         transaction.rollback()
         connection.close()
+
+
+def test_app_user_cannot_insert_a_cross_tenant_deletion_row(engine) -> None:
+    """Mirrors the runs-table cross-tenant INSERT refusal above, but for
+    ``file_orphan_cleanup_deletions``: with the session pinned to the FIRST
+    organization, an INSERT naming the SECOND organization's id is refused by
+    the table's own ``WITH CHECK`` clause, independently of the runs table's."""
+    first = _organization_values("C")
+    second = _organization_values("D")
+
+    connection = engine.connect()
+    transaction = connection.begin()
+    try:
+        for organization in (first, second):
+            _insert_organization(connection, organization)
+        first_run_id = _insert_run(
+            connection, organization_id=first["organization_id"], invocation_id="run-c"
+        )
+        second_run_id = _insert_run(
+            connection, organization_id=second["organization_id"], invocation_id="run-d"
+        )
+
+        connection.execute(text("SET LOCAL ROLE app_user"))
+        connection.execute(
+            text("SELECT set_config('app.current_organization_id', :org, true)"),
+            {"org": str(first["organization_id"])},
+        )
+
+        # A deletion row honestly tagged with the pinned tenant and its own
+        # run succeeds -- the negative case below isn't vacuous.
+        connection.execute(
+            text(
+                """
+                INSERT INTO public.file_orphan_cleanup_deletions (
+                    id, organization_id, run_id, storage_key, key_digest, outcome
+                ) VALUES (
+                    :id, :organization_id, :run_id, :storage_key, :key_digest, 'deleted'
+                )
+                """
+            ),
+            {
+                "id": uuid4(),
+                "organization_id": first["organization_id"],
+                "run_id": first_run_id,
+                "storage_key": f"tenants/{first['organization_id']}/files/{uuid4()}",
+                "key_digest": "d" * 64,
+            },
+        )
+
+        savepoint = connection.begin_nested()
+        with pytest.raises(DBAPIError):
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO public.file_orphan_cleanup_deletions (
+                        id, organization_id, run_id, storage_key, key_digest, outcome
+                    ) VALUES (
+                        :id, :organization_id, :run_id, :storage_key, :key_digest,
+                        'deleted'
+                    )
+                    """
+                ),
+                {
+                    "id": uuid4(),
+                    "organization_id": second["organization_id"],
+                    "run_id": second_run_id,
+                    "storage_key": (
+                        f"tenants/{second['organization_id']}/files/{uuid4()}"
+                    ),
+                    "key_digest": "e" * 64,
+                },
+            )
+        savepoint.rollback()
+
+        unchanged = list(
+            connection.execute(
+                text(
+                    "SELECT organization_id FROM public.file_orphan_cleanup_deletions "
+                    "WHERE run_id IN (:first_run, :second_run)"
+                ),
+                {"first_run": first_run_id, "second_run": second_run_id},
+            ).scalars()
+        )
+        assert unchanged == [first["organization_id"]]
+    finally:
+        transaction.rollback()
+        connection.close()

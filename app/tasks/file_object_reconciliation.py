@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from celery import shared_task
+from celery import Task, shared_task
 from dotmac_files import ObjectInfo, list_objects
+from sqlalchemy.orm import Session
 
 from app.db.session_context import session_for_org
 from app.services.file_object_cleanup import (
@@ -19,6 +20,9 @@ from app.services.file_object_cleanup import (
     authorize_apply,
     is_storage_key_referenced,
     plan_orphan_cleanup,
+    record_cleanup_key_outcome,
+    record_cleanup_run_finished,
+    record_cleanup_run_started,
 )
 from app.services.file_object_reconciliation import report_file_objects
 from app.services.storage import (
@@ -86,7 +90,13 @@ def _reobserve(provider: DotmacFilesS3Provider, key: str) -> ObjectInfo | None:
 
 
 def _recheck_and_delete(
-    org_id: UUID, plan: OrphanCleanupPlan, provider: DotmacFilesS3Provider
+    org_id: UUID,
+    plan: OrphanCleanupPlan,
+    provider: DotmacFilesS3Provider,
+    *,
+    rec_db: Session,
+    run_id: UUID,
+    tenant_id: UUID,
 ) -> dict[str, object]:
     """Recheck and delete one candidate key at a time, in plan order.
 
@@ -95,12 +105,17 @@ def _recheck_and_delete(
     key as ``failed`` (with the exception's class name) and stops the loop.
     Logs one line per successfully deleted key's digest as it happens (never
     the raw key), and always logs the final summary before returning.
+
+    Every outcome (including ``failed``) is recorded on the caller-owned
+    ``rec_db`` (already bound to ``run_id``) and committed immediately, one
+    key at a time, before the next key is considered — so a durable record
+    exists for exactly the keys actually processed, even if the loop stops
+    partway through. ``rec_db`` is a parameter this function never opens
+    itself; committing on it is the caller's (the task's) responsibility, not
+    a new self-opened session here.
     """
     outcomes: dict[str, list[str]] = {name: [] for name in _RECHECK_OUTCOMES}
     failure_reasons: dict[str, str] = {}
-    if plan.scope_kind != "tenant" or plan.tenant_id is None:
-        raise ValueError("orphan cleanup apply requires a tenant scope")
-    tenant_id = UUID(plan.tenant_id)
 
     for key in plan.candidate_keys:
         try:
@@ -110,14 +125,39 @@ def _recheck_and_delete(
                 )
             if referenced:
                 outcomes["rechecked_referenced"].append(key)
+                record_cleanup_key_outcome(
+                    rec_db,
+                    tenant_id=tenant_id,
+                    run_id=run_id,
+                    storage_key=key,
+                    outcome="rechecked_referenced",
+                )
+                rec_db.commit()
                 continue
 
             info = _reobserve(provider, key)
             if info is None:
                 outcomes["already_absent"].append(key)
+                record_cleanup_key_outcome(
+                    rec_db,
+                    tenant_id=tenant_id,
+                    run_id=run_id,
+                    storage_key=key,
+                    outcome="already_absent",
+                )
+                rec_db.commit()
                 continue
             if not info.last_modified < plan.older_than:
                 outcomes["rechecked_too_new"].append(key)
+                record_cleanup_key_outcome(
+                    rec_db,
+                    tenant_id=tenant_id,
+                    run_id=run_id,
+                    storage_key=key,
+                    outcome="rechecked_too_new",
+                    observed_last_modified=info.last_modified,
+                )
+                rec_db.commit()
                 continue
 
             delete_reviewed_file_orphan(
@@ -133,6 +173,15 @@ def _recheck_and_delete(
                 key_digest,
                 type(exc).__name__,
             )
+            record_cleanup_key_outcome(
+                rec_db,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                storage_key=key,
+                outcome="failed",
+                error_class=type(exc).__name__,
+            )
+            rec_db.commit()
             break
         else:
             outcomes["deleted"].append(key)
@@ -140,6 +189,15 @@ def _recheck_and_delete(
                 "Orphan deleted: key digest %s",
                 hashlib.sha256(key.encode("utf-8")).hexdigest(),
             )
+            record_cleanup_key_outcome(
+                rec_db,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                storage_key=key,
+                outcome="deleted",
+                observed_last_modified=info.last_modified,
+            )
+            rec_db.commit()
 
     result: dict[str, object] = {}
     for name in _RECHECK_OUTCOMES:
@@ -155,8 +213,11 @@ def _recheck_and_delete(
     return result
 
 
-@shared_task(name="app.tasks.file_object_reconciliation.clean_tenant_file_objects")
+@shared_task(
+    bind=True, name="app.tasks.file_object_reconciliation.clean_tenant_file_objects"
+)
 def clean_tenant_file_objects(
+    self: Task,
     organization_id: str,
     *,
     grace_hours: int = MIN_APPLY_GRACE_HOURS,
@@ -165,6 +226,7 @@ def clean_tenant_file_objects(
     expected_plan_digest: str | None = None,
     reviewed_older_than: str | None = None,
     reviewed_plan_observed_at: str | None = None,
+    actor: str | None = None,
 ) -> dict[str, object]:
     """Operator-invoked orphan cleanup: dry-run plan by default.
 
@@ -175,8 +237,9 @@ def clean_tenant_file_objects(
     are exactly what an operator must pass back to apply.
 
     ``apply=True`` requires `expected_plan_digest`, `reviewed_older_than`,
-    and `reviewed_plan_observed_at` (all copied verbatim from the dry-run
-    summary). `reviewed_older_than` must equal
+    `reviewed_plan_observed_at` (all copied verbatim from the dry-run
+    summary), and a non-empty `actor` naming the operator authorizing this
+    delete -- refused outright otherwise. `reviewed_older_than` must equal
     `reviewed_plan_observed_at - MIN_APPLY_GRACE_HOURS` — a self-consistency
     check on the two reviewed values, independent of any I/O. The FRESH
     rebuild then re-lists and re-queries at REAL wall-clock time, but labels
@@ -194,6 +257,16 @@ def clean_tenant_file_objects(
     check in `authorize_apply` passes does the per-object recheck-and-delete
     loop run, one key at a time, through the sole storage seam,
     ``app.services.storage.delete_reviewed_file_orphan``.
+
+    Before any delete, this task opens ONE records session and commits a
+    durable "running" row (``record_cleanup_run_started``); after each key's
+    outcome, it commits one outcome row (``record_cleanup_key_outcome``);
+    after the loop, it commits the terminal status and counts
+    (``record_cleanup_run_finished``). See
+    ``docs/runbooks/managed-file-object-reconciliation.md`` for how to query
+    one run's rows to support a restore, and
+    ``app.services.file_object_cleanup`` for the recording functions
+    themselves.
     """
     if grace_hours < 1:
         raise ValueError("grace_hours must be at least one")
@@ -201,6 +274,8 @@ def clean_tenant_file_objects(
     reviewed_cutoff: datetime | None = None
     reviewed_observed_at: datetime | None = None
     if apply:
+        if not actor:
+            raise ValueError("apply requires a non-empty actor")
         if not expected_plan_digest:
             raise ValueError("apply requires expected_plan_digest")
         if not reviewed_older_than:
@@ -257,8 +332,53 @@ def clean_tenant_file_objects(
 
     if expected_plan_digest is None:
         raise ValueError("apply requires expected_plan_digest")
+    if not actor:
+        raise ValueError("apply requires a non-empty actor")
     authorize_apply(plan, expected_plan_digest=expected_plan_digest, now=real_now)
-    recheck_summary = _recheck_and_delete(org_id, plan, provider)
+    if plan.scope_kind != "tenant" or plan.tenant_id is None:
+        raise ValueError("orphan cleanup apply requires a tenant scope")
+    tenant_id = UUID(plan.tenant_id)
+    request_id = getattr(self.request, "id", None)
+    invocation_id = request_id if request_id else str(uuid4())
+
+    # The records session is opened and committed HERE, in this decorated
+    # task's own body -- never inside a helper -- so the own-session-commit
+    # ratchet classifies it as adapter-owned (see
+    # tests/architecture/test_own_session_commits.py and the baseline row for
+    # this function). The "started" row is committed BEFORE any delete can
+    # run; every per-key outcome commits immediately inside
+    # ``_recheck_and_delete`` (on this same ``rec_db``, passed in -- never
+    # opened there); and the "finished" row commits last. If recording itself
+    # raises anywhere in this block, that exception propagates immediately
+    # and no further keys are deleted.
+    with session_for_org(org_id) as rec_db:
+        run_id = record_cleanup_run_started(
+            rec_db,
+            tenant_id=tenant_id,
+            plan=plan,
+            actor=actor,
+            invocation_id=invocation_id,
+        )
+        rec_db.commit()
+
+        recheck_summary = _recheck_and_delete(
+            org_id, plan, provider, rec_db=rec_db, run_id=run_id, tenant_id=tenant_id
+        )
+
+        status = "partial_failure" if recheck_summary["failed_count"] else "completed"
+        outcome_counts: dict[str, int] = {
+            name: int(recheck_summary[f"{name}_count"])  # type: ignore[call-overload]
+            for name in _RECHECK_OUTCOMES
+        }
+        record_cleanup_run_finished(
+            rec_db,
+            tenant_id=tenant_id,
+            run_id=run_id,
+            status=status,
+            outcome_counts=outcome_counts,
+        )
+        rec_db.commit()
+
     summary = {
         **plan.safe_summary(),
         **recheck_summary,

@@ -282,10 +282,69 @@ session/commit-agnostic recorder functions
 `record_cleanup_run_finished`) live alongside the plan/authorize logic in
 `app/services/file_object_cleanup.py`.
 
-**Nothing in `clean_tenant_file_objects` calls these functions yet.** Wiring
-the task to open a run at the start of apply, record each candidate's
-outcome inside the existing per-object recheck-and-delete loop, and finish
-the run (including on `CleanupPartialFailure`) is slice 2b — a separate,
-not-yet-scoped change. Until then this is inert schema: an apply still
-behaves exactly as described above, with no durable record of what it did
-beyond its Celery result and log line.
+**Slice 2b (2026-09-28): `clean_tenant_file_objects` now writes the durable
+record for every apply.** `apply=True` requires a new, non-empty `actor`
+argument naming the operator authorizing the delete — refused with
+`ValueError` before any I/O if it is empty or missing. The task is now
+`bind=True`; its `invocation_id` is the Celery request id
+(`self.request.id`) when one is present (a real worker dispatch), or a freshly
+generated UUID when called directly (no Celery request context, e.g. in a
+test or a one-off script invocation).
+
+After `authorize_apply` succeeds and strictly BEFORE any delete, the task
+itself — never a helper — opens ONE records session
+(`with session_for_org(org_id) as rec_db:`) and, within it:
+
+1. Calls `record_cleanup_run_started` and commits `rec_db` immediately. No
+   key's delete may run before this "running" row is durably committed.
+2. Passes `rec_db` and the new run's id into the per-object
+   recheck-and-delete loop. After EVERY key's outcome — `deleted`,
+   `rechecked_referenced`, `already_absent`, `rechecked_too_new`, or `failed`
+   (with its exception class name) — the loop calls `record_cleanup_key_outcome`
+   and commits `rec_db` immediately, before considering the next key. The
+   loop still opens its own short, separate read session for the reference
+   recheck (closed before any storage call), exactly as before.
+3. After the loop, calls `record_cleanup_run_finished` with `status=
+   "completed"` (or `"partial_failure"` if any key failed) and the per-outcome
+   counts, then commits `rec_db` one last time. Only after that does the task
+   return the summary, or raise `CleanupPartialFailure`.
+4. If recording itself raises anywhere in this block — the insert, or the
+   commit — that exception propagates immediately: no further key is
+   considered, and a delete can never happen without a preceding, committed
+   "started" row.
+
+This session-open-and-commit shape lives directly in the `@shared_task`(
+`bind=True`)-decorated function body, so
+`tests/architecture/test_own_session_commits.py` classifies it as
+`adapter-owned: entry point (Celery task decorator)`, matching every other
+task in this codebase that owns its own transaction — not a new
+"grandfathered" hit. The per-key commits happen inside
+`_recheck_and_delete`, but on `rec_db`, a parameter that function never opens
+itself, so they are correctly excluded from that ratchet.
+
+**Querying one run's rows (to support a restore).** Every row is tenant-scoped
+by ERP's `app.current_organization_id` RLS predicate — query through a
+tenant-scoped session (or as a superuser bypassing RLS for support), never
+directly as `app_user` across tenants:
+
+```sql
+-- The run itself: plan identity, actor, invocation id, terminal status, counts.
+SELECT id, actor, invocation_id, status, candidate_count, outcome_counts,
+       started_at, finished_at
+FROM public.file_orphan_cleanup_runs
+WHERE id = :run_id;
+
+-- Every candidate key this run processed, in the order recorded.
+SELECT storage_key, key_digest, outcome, error_class, observed_last_modified,
+       recorded_at
+FROM public.file_orphan_cleanup_deletions
+WHERE run_id = :run_id
+ORDER BY recorded_at;
+```
+
+A `deleted` row's `storage_key` is exactly the object a restore must recover
+from the object store's version history (see rollout gate 1 above — this is
+why bucket versioning must be confirmed before the first real apply). A
+`status = "partial_failure"` run's `failed` row names the key that stopped
+the loop; every row before it in `recorded_at` order was durably processed
+(and, for `deleted` rows, actually removed) before the failure.
