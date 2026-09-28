@@ -160,7 +160,7 @@ def test_public_source_revision_is_projected_into_telemetry() -> None:
 
 def test_descriptor_matches_committed_publication_evidence() -> None:
     """Preserve the published digest/source/assembly binding when selecting a release."""
-    evidence_path = REPO_ROOT / "deploy/releases/2026-09-28-1721219d.image-release.json"
+    evidence_path = REPO_ROOT / "deploy/releases/2026-09-28-c098be5e.image-release.json"
     raw = evidence_path.read_text(encoding="utf-8")
     evidence = json.loads(raw)
     spec = _load()
