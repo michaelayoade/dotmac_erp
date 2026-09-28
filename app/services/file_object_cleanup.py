@@ -148,13 +148,22 @@ def is_storage_key_referenced(
     nothing in the slice a report previously compared against. Accepts an
     already-open, caller-owned session for exactly one read; opens and
     closes nothing itself.
+
+    Selects ``storage_key`` rather than ``id``: both exist on the real
+    ``TenantStoredFile`` model, but selecting the column already being
+    filtered on (rather than the primary key) keeps this working against a
+    hand-built test fixture that omits ``id`` and every other real-schema
+    column it doesn't otherwise need — see
+    ``tests/services/test_file_object_cleanup.py``'s ``_session()``.
     """
     return (
         db.execute(
-            select(TenantStoredFile.id).where(
+            select(TenantStoredFile.storage_key)
+            .where(
                 TenantStoredFile.tenant_id == tenant_id,
                 TenantStoredFile.storage_key == storage_key,
             )
+            .limit(1)
         ).first()
         is not None
     )
@@ -174,10 +183,10 @@ def _scope_kind_and_tenant(scope: object) -> tuple[str, str | None]:
     approved platform session boundary (see the runbook). The tenant scope
     is recognised structurally, like ``file_object_reconciliation``'s
     ``_TenantFileScope``, because ``docs/PLATFORM_ADOPTION_LEDGER.md`` admits
-    ``app.tenancy`` as the ONLY importer of ``dotmac_kernel.cache``; services
-    receive the scope from that adapter and never choose it themselves. Any
-    scope that is not a tenant scope -- including the platform scope -- is
-    refused rather than guessed.
+    ``app.tenancy`` as the ONLY importer of the kernel's cache-scope module;
+    services receive the scope from that adapter and never choose it
+    themselves. Any scope that is not a tenant scope -- including the
+    platform scope -- is refused rather than guessed.
     """
     if isinstance(scope, _TenantFileScope):
         return "tenant", str(scope.tenant_id)

@@ -234,13 +234,19 @@ def test_task_lists_before_opening_the_tenant_session(monkeypatch) -> None:
 
 
 def test_clean_task_dry_run_never_calls_the_deletion_seam(monkeypatch) -> None:
+    """``report_file_objects`` always queries the real stored-file table
+    (via ``dotmac_files.find_orphan_keys``) regardless of what was observed,
+    so the fake session here must be a real, schema-bearing SQLite session
+    (``_session()``), not a bare stand-in object -- a bare ``object()``
+    cannot answer ``db.scalars(...)``."""
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     provider = ListingProvider(())
     delete_calls: list[tuple[object, str, str]] = []
+    db = _session()
 
     @contextmanager
     def scoped_session(_organization_id):
-        yield object()
+        yield db
 
     def fake_delete(*, scope, key, expected_provider_code):
         delete_calls.append((scope, key, expected_provider_code))
@@ -1471,13 +1477,17 @@ def test_clean_task_apply_stops_deleting_when_recording_itself_raises(
 
 
 def test_clean_task_dry_run_never_records_anything(monkeypatch) -> None:
+    """As above: ``report_file_objects`` always queries the real
+    stored-file table, so the fake session must be a real, schema-bearing
+    SQLite session, not a bare stand-in object."""
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     provider = ListingProvider(())
     record_calls: list[str] = []
+    db = _session()
 
     @contextmanager
     def scoped_session(_organization_id):
-        yield object()
+        yield db
 
     def fake_started(*_args, **_kwargs):
         record_calls.append("started")
