@@ -192,6 +192,7 @@ import ast
 import functools
 import re
 import textwrap
+from collections.abc import Sequence
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -392,7 +393,9 @@ def _target_key(node: ast.expr | None) -> str | None:
     return None
 
 
-def _own_body_nodes(func: ast.FunctionDef | ast.AsyncFunctionDef):
+def _own_body_nodes(
+    func: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[ast.AST, ...]:
     """Every descendant reachable from ``func`` without crossing into a
     nested function/async function/lambda -- those are separate scan
     units."""
@@ -404,7 +407,7 @@ def _own_body_nodes(func: ast.FunctionDef | ast.AsyncFunctionDef):
             yield child
             yield from _walk(child)
 
-    yield from _walk(func)
+    return tuple(_walk(func))
 
 
 class _ImportAliases:
@@ -429,8 +432,10 @@ class _ImportAliases:
         #: True if this module imports anything from a provider package.
         self.imports_provider_package: bool = False
 
-    def visit(self, tree: ast.AST) -> None:
-        for node in ast.walk(tree):
+    def visit(
+        self, tree: ast.AST, *, nodes: tuple[ast.AST, ...] | None = None
+    ) -> None:
+        for node in nodes if nodes is not None else ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     if alias.name == "smtplib":
@@ -520,7 +525,7 @@ def _rooted_in_bound_name(expr: ast.expr, bound: dict[str, int]) -> bool:
 
 
 def _provider_client_bound_names(
-    own_nodes: list[ast.AST], aliases: _ImportAliases
+    own_nodes: Sequence[ast.AST], aliases: _ImportAliases
 ) -> dict[str, int]:
     """Names (own-body-scoped) bound to a provider-client construction, via
     plain/annotated assignment, an attribute target, or ``with ... as x``."""
@@ -546,7 +551,7 @@ def _provider_client_bound_names(
 
 
 def _http_client_bound_names(
-    own_nodes: list[ast.AST], aliases: _ImportAliases
+    own_nodes: Sequence[ast.AST], aliases: _ImportAliases
 ) -> dict[str, int]:
     """Names (own-body-scoped) bound to httpx.Client/AsyncClient or
     requests.Session, via plain/annotated assignment, an attribute target,
@@ -573,7 +578,7 @@ def _http_client_bound_names(
 
 
 def _provider_client_calls(
-    own_nodes: list[ast.AST], bound: dict[str, int]
+    own_nodes: Sequence[ast.AST], bound: dict[str, int]
 ) -> list[tuple[str, ast.Call]]:
     """Every ``(method_name, call)`` reached by walking the chain back to a
     name in ``bound`` -- a chained call such as
@@ -608,7 +613,7 @@ def _module_body_nodes(tree: ast.AST) -> list[ast.AST]:
 
 
 def _http_write_calls(
-    nodes: list[ast.AST], bound: dict[str, int], aliases: _ImportAliases
+    nodes: Sequence[ast.AST], bound: dict[str, int], aliases: _ImportAliases
 ) -> bool:
     return any(
         isinstance(node, ast.Call)
@@ -626,7 +631,11 @@ def _http_write_calls(
 
 
 def _class_http_client_bindings(
-    class_node: ast.ClassDef, aliases: _ImportAliases
+    class_node: ast.ClassDef,
+    aliases: _ImportAliases,
+    own_nodes_by_function: dict[
+        ast.FunctionDef | ast.AsyncFunctionDef, tuple[ast.AST, ...]
+    ],
 ) -> dict[str, int]:
     """Track SDK clients held on ``self`` without merging separate classes."""
     methods = [
@@ -636,7 +645,7 @@ def _class_http_client_bindings(
     ]
     factories: set[str] = set()
     for method in methods:
-        own_nodes = list(_own_body_nodes(method))
+        own_nodes = own_nodes_by_function[method]
         local = _http_client_bound_names(own_nodes, aliases)
         if any(
             isinstance(node, ast.Return)
@@ -653,7 +662,7 @@ def _class_http_client_bindings(
 
     bound: dict[str, int] = {}
     for method in methods:
-        own_nodes = list(_own_body_nodes(method))
+        own_nodes = own_nodes_by_function[method]
         for key, line in _http_client_bound_names(own_nodes, aliases).items():
             if key.startswith("self."):
                 bound[key] = line
@@ -685,11 +694,17 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
     sensitivity proof below."""
 
     hits: set[str] = set()
+    all_nodes = tuple(ast.walk(tree))
+    own_nodes_by_function = {
+        node: _own_body_nodes(node)
+        for node in all_nodes
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
     aliases = _ImportAliases()
-    aliases.visit(tree)
+    aliases.visit(tree, nodes=all_nodes)
 
     # smtplib: bare imports are a module-wide hit regardless of use.
-    for node in ast.walk(tree):
+    for node in all_nodes:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name == "smtplib":
@@ -699,7 +714,7 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
 
     # Module-level http_write: httpx.post(...)/requests.post(...) etc, not
     # gated on any function-local bound name.
-    for node in ast.walk(tree):
+    for node in all_nodes:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
@@ -711,7 +726,7 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
 
     # provider_accessor: gated on the module importing a provider package.
     if aliases.imports_provider_package:
-        for node in ast.walk(tree):
+        for node in all_nodes:
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
@@ -726,7 +741,7 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
 
     # Constructor calls are scanned at every scope, including module/class
     # scope. The import resolver excludes unrelated same-named local classes.
-    for node in ast.walk(tree):
+    for node in all_nodes:
         if isinstance(node, ast.Call):
             provider = _provider_constructor_name(node.func, aliases)
             if provider:
@@ -738,10 +753,10 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
         hits.add("http_write")
 
     # Per-function HTTP clients: local bindings plus module-level bindings.
-    for node in ast.walk(tree):
+    for node in all_nodes:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        own_nodes = list(_own_body_nodes(node))
+        own_nodes = own_nodes_by_function[node]
 
         for n in own_nodes:
             if isinstance(n, ast.Call):
@@ -764,12 +779,14 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
         if _http_write_calls(own_nodes, http_bound | module_http_bound, aliases):
             hits.add("http_write")
 
-    for class_node in ast.walk(tree):
+    for class_node in all_nodes:
         if not isinstance(class_node, ast.ClassDef):
             continue
-        bound = _class_http_client_bindings(class_node, aliases)
+        bound = _class_http_client_bindings(
+            class_node, aliases, own_nodes_by_function
+        )
         if bound and any(
-            _http_write_calls(list(_own_body_nodes(method)), bound, aliases)
+            _http_write_calls(own_nodes_by_function[method], bound, aliases)
             for method in class_node.body
             if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef))
         ):
