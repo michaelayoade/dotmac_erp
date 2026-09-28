@@ -48,9 +48,9 @@ fleet	fuel_log_entry	employee_id	hr	employee	employee_id	explicit	app/models/fle
 fleet	fuel_log_entry	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/fuel_log.py:26 via app/models/people/base.py:66
 fleet	maintenance_record	created_by_id	public	people	id	mixin_expansion	app/models/fleet/maintenance.py:26 via app/models/people/base.py:61
 fleet	maintenance_record	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/maintenance.py:26 via app/models/people/base.py:66
-fleet	vehicle	assigned_employee_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle.py:224
-fleet	vehicle	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle.py:51 via app/models/people/base.py:61
-fleet	vehicle	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle.py:51 via app/models/people/base.py:66
+fleet	vehicle	assigned_employee_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle.py:230
+fleet	vehicle	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle.py:52 via app/models/people/base.py:61
+fleet	vehicle	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle.py:52 via app/models/people/base.py:66
 fleet	vehicle_assignment	created_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_assignment.py:25 via app/models/people/base.py:61
 fleet	vehicle_assignment	employee_id	hr	employee	employee_id	explicit	app/models/fleet/vehicle_assignment.py:64
 fleet	vehicle_assignment	updated_by_id	public	people	id	mixin_expansion	app/models/fleet/vehicle_assignment.py:25 via app/models/people/base.py:66
