@@ -257,30 +257,85 @@ def test_clean_task_dry_run_never_calls_the_deletion_seam(monkeypatch) -> None:
     assert delete_calls == []
 
 
-def test_clean_task_apply_requires_grace_at_least_72_hours() -> None:
-    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
-    with pytest.raises(ValueError):
-        task_module.clean_tenant_file_objects.run(
-            str(uuid4()), grace_hours=1, apply=True, expected_plan_digest="x"
-        )
-
-
 def test_clean_task_apply_requires_expected_plan_digest() -> None:
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     with pytest.raises(ValueError):
-        task_module.clean_tenant_file_objects.run(str(uuid4()), apply=True)
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()), apply=True, reviewed_older_than="2026-09-24T00:00:00+00:00"
+        )
 
 
-def test_clean_task_apply_calls_the_deletion_seam_exactly_once_with_plan_keys(
+def test_clean_task_apply_requires_reviewed_older_than() -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()), apply=True, expected_plan_digest="x"
+        )
+
+
+def test_clean_task_apply_refuses_a_naive_reviewed_older_than() -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()),
+            apply=True,
+            expected_plan_digest="x",
+            reviewed_older_than="2026-09-24T00:00:00",
+        )
+
+
+def _wire_scope(monkeypatch, task_module, provider, scope) -> None:
+    monkeypatch.setattr(task_module, "get_dotmac_files_read_provider", lambda: provider)
+    monkeypatch.setattr(
+        task_module.OrganizationTenantContext,
+        "for_organization",
+        classmethod(lambda cls, org_id: SimpleNamespace(tenant_scope=scope)),
+    )
+
+
+class _FixedClock(datetime):
+    """A ``datetime`` subclass whose ``now()`` returns a scripted sequence."""
+
+    _times: list[datetime] = []
+
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        return cls._times.pop(0)
+
+
+def test_clean_task_apply_refuses_a_cutoff_under_72_hours_old(monkeypatch) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    tenant_id = uuid4()
+    scope = TenantScope(tenant_id)
+    apply_time = datetime(2026, 9, 27, tzinfo=UTC)
+    reviewed_older_than = (apply_time - timedelta(hours=1)).isoformat()
+
+    _FixedClock._times = [apply_time]
+    monkeypatch.setattr(task_module, "datetime", _FixedClock)
+    _wire_scope(monkeypatch, task_module, ListingProvider(()), scope)
+
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(
+            str(tenant_id),
+            apply=True,
+            expected_plan_digest="x",
+            reviewed_older_than=reviewed_older_than,
+        )
+
+
+def test_clean_task_apply_round_trip_succeeds_when_the_listing_is_unchanged(
     monkeypatch,
 ) -> None:
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
-    now = datetime(2026, 9, 27, tzinfo=UTC)
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=73)
     tenant_id = uuid4()
     prefix = f"tenants/{tenant_id}/files/"
     old_orphan = prefix + str(uuid4())
     scope = TenantScope(tenant_id)
-    provider = ListingProvider((ObjectInfo(old_orphan, 11, now - timedelta(days=10)),))
+    provider = ListingProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
     db = _session()
 
     @contextmanager
@@ -293,25 +348,69 @@ def test_clean_task_apply_calls_the_deletion_seam_exactly_once_with_plan_keys(
         delete_calls.append((scope, keys))
         return len(keys)
 
-    monkeypatch.setattr(task_module, "get_dotmac_files_read_provider", lambda: provider)
-    monkeypatch.setattr(
-        task_module.OrganizationTenantContext,
-        "for_organization",
-        classmethod(lambda cls, org_id: SimpleNamespace(tenant_scope=scope)),
-    )
+    _FixedClock._times = [dry_run_time, apply_time]
+    monkeypatch.setattr(task_module, "datetime", _FixedClock)
+    _wire_scope(monkeypatch, task_module, provider, scope)
     monkeypatch.setattr(task_module, "session_for_org", scoped_session)
     monkeypatch.setattr(task_module, "delete_reviewed_file_orphans", fake_delete)
 
     dry_run_summary = task_module.clean_tenant_file_objects.run(str(tenant_id))
     digest = dry_run_summary["plan_digest"]
+    older_than = dry_run_summary["older_than"]
 
     summary = task_module.clean_tenant_file_objects.run(
         str(tenant_id),
-        grace_hours=72,
         apply=True,
         expected_plan_digest=digest,
+        reviewed_older_than=older_than,
     )
 
     assert delete_calls == [(scope, (old_orphan,))]
     assert summary["dry_run"] is False
     assert summary["deleted"] == 1
+
+
+def test_clean_task_apply_refuses_when_the_listing_changed_since_review(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=73)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    new_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = ListingProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
+    db = _session()
+
+    @contextmanager
+    def scoped_session(_organization_id):
+        yield db
+
+    monkeypatch.setattr(task_module, "session_for_org", scoped_session)
+    _wire_scope(monkeypatch, task_module, provider, scope)
+
+    _FixedClock._times = [dry_run_time]
+    monkeypatch.setattr(task_module, "datetime", _FixedClock)
+    dry_run_summary = task_module.clean_tenant_file_objects.run(str(tenant_id))
+    digest = dry_run_summary["plan_digest"]
+    older_than = dry_run_summary["older_than"]
+
+    provider.objects = (
+        *provider.objects,
+        ObjectInfo(new_orphan, 12, dry_run_time - timedelta(days=10)),
+    )
+    _FixedClock._times = [apply_time]
+
+    from app.services.file_object_cleanup import CleanupPlanDrift
+
+    with pytest.raises(CleanupPlanDrift):
+        task_module.clean_tenant_file_objects.run(
+            str(tenant_id),
+            apply=True,
+            expected_plan_digest=digest,
+            reviewed_older_than=older_than,
+        )
