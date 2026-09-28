@@ -32,9 +32,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from collections.abc import Sequence
+
 from dotmac_files import TenantStoredFile
 from dotmac_kernel.cache import PlatformScope, TenantScope
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.file_orphan_cleanup import (
@@ -43,8 +45,12 @@ from app.models.file_orphan_cleanup import (
 )
 from app.services.file_object_reconciliation import ObjectReconciliationReport
 
+#: ``planned`` is the intent row written for every candidate key BEFORE any
+#: delete is attempted (see :func:`record_cleanup_keys_planned`) — never a
+#: terminal outcome a caller may report through :func:`record_cleanup_key_outcome`.
 _DELETION_OUTCOMES = frozenset(
     {
+        "planned",
         "deleted",
         "rechecked_referenced",
         "already_absent",
@@ -52,6 +58,10 @@ _DELETION_OUTCOMES = frozenset(
         "failed",
     }
 )
+#: The terminal outcomes :func:`record_cleanup_key_outcome` may set. ``planned``
+#: is deliberately excluded: it is the pre-delete intent state written once by
+#: :func:`record_cleanup_keys_planned`, never a final outcome to transition to.
+_FINAL_DELETION_OUTCOMES = _DELETION_OUTCOMES - {"planned"}
 _RUN_STATUSES = frozenset({"running", "completed", "partial_failure"})
 
 _MAX_SUMMARY_EVIDENCE = 100
@@ -408,9 +418,11 @@ def record_cleanup_run_started(
     """Insert the durable run record for one authorized apply invocation.
 
     Takes an already-open, caller-owned session and never commits or opens
-    one of its own — the caller (the Celery task, slice 2b) owns the
-    transaction. Returns the new run's id; the row is flushed but not
-    committed, so the caller can still fail before persisting.
+    one of its own — ``app.tasks.file_object_reconciliation.clean_tenant_file_objects``
+    owns the transaction, committing this row (together with the planned rows
+    from :func:`record_cleanup_keys_planned`) BEFORE any delete is attempted.
+    Returns the new run's id; the row is flushed but not committed, so the
+    caller can still fail before persisting.
     """
     if not actor:
         raise ValueError("actor must be a non-empty operator identity")
@@ -433,6 +445,36 @@ def record_cleanup_run_started(
     return run.id
 
 
+def record_cleanup_keys_planned(
+    db: Session, *, tenant_id: UUID, run_id: UUID, keys: Sequence[str]
+) -> None:
+    """Insert one ``planned`` intent row per candidate key, before any delete.
+
+    This is the durability fix for the gap a plain "started" row leaves: a
+    key deleted just before its own outcome row is written would otherwise
+    leave no durable trace of the raw ``storage_key`` at all, defeating a
+    restore. Writing every key's raw ``storage_key`` as ``outcome='planned'``
+    in the SAME commit as :func:`record_cleanup_run_started` means the raw
+    key is durable BEFORE the first delete, regardless of what happens next.
+    :func:`record_cleanup_key_outcome` later UPDATEs each row to its real
+    terminal outcome. A run whose deletion rows are still ``planned`` after a
+    crash means "possibly deleted, unconfirmed" — see the runbook.
+
+    Takes an already-open, caller-owned session; only flushes, never commits.
+    """
+    for key in keys:
+        db.add(
+            FileOrphanCleanupDeletion(
+                organization_id=tenant_id,
+                run_id=run_id,
+                storage_key=key,
+                key_digest=hashlib.sha256(key.encode("utf-8")).hexdigest(),
+                outcome="planned",
+            )
+        )
+    db.flush()
+
+
 def record_cleanup_key_outcome(
     db: Session,
     *,
@@ -443,28 +485,38 @@ def record_cleanup_key_outcome(
     error_class: str | None = None,
     observed_last_modified: datetime | None = None,
 ) -> None:
-    """Insert one candidate key's outcome row for an in-progress run.
+    """Update one candidate key's PLANNED row to its terminal outcome.
 
-    ``key_digest`` is always derived here from ``storage_key`` (never
-    accepted from the caller) so it cannot drift from the raw key it
-    describes. Takes an already-open, caller-owned session; never commits.
+    UPDATEs the existing ``(organization_id, run_id, storage_key)`` row
+    written by :func:`record_cleanup_keys_planned` — it never inserts a new
+    row, so a key's durable "planned" trace and its terminal outcome are
+    always the same row. Raises ``ValueError`` if no such planned row exists
+    (a caller invoking this before planning ran, or for a key never planned).
+    Takes an already-open, caller-owned session; never commits.
     """
-    if outcome not in _DELETION_OUTCOMES:
+    if outcome not in _FINAL_DELETION_OUTCOMES:
         raise ValueError(
-            f"outcome must be one of {sorted(_DELETION_OUTCOMES)}, got {outcome!r}"
+            f"outcome must be one of {sorted(_FINAL_DELETION_OUTCOMES)}, "
+            f"got {outcome!r}"
         )
-    key_digest = hashlib.sha256(storage_key.encode("utf-8")).hexdigest()
-    db.add(
-        FileOrphanCleanupDeletion(
-            organization_id=tenant_id,
-            run_id=run_id,
-            storage_key=storage_key,
-            key_digest=key_digest,
+    result = db.execute(
+        update(FileOrphanCleanupDeletion)
+        .where(
+            FileOrphanCleanupDeletion.organization_id == tenant_id,
+            FileOrphanCleanupDeletion.run_id == run_id,
+            FileOrphanCleanupDeletion.storage_key == storage_key,
+        )
+        .values(
             outcome=outcome,
             error_class=error_class,
             observed_last_modified=observed_last_modified,
         )
     )
+    if result.rowcount == 0:
+        raise ValueError(
+            f"no planned deletion row found for run {run_id} and this key — "
+            "record_cleanup_keys_planned must run before record_cleanup_key_outcome"
+        )
 
 
 def record_cleanup_run_finished(
@@ -514,6 +566,7 @@ __all__ = [
     "is_storage_key_referenced",
     "plan_orphan_cleanup",
     "record_cleanup_key_outcome",
+    "record_cleanup_keys_planned",
     "record_cleanup_run_finished",
     "record_cleanup_run_started",
 ]

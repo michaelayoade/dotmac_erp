@@ -9,8 +9,14 @@ ERP-owned decision-and-outcome records, distinct from the ``dotmac_files``
 module's own ``mod_files`` schema, which owns the managed-object metadata
 these runs reconcile against.
 
-This is schema-only (slice 2a): nothing in ``app/`` yet writes these rows.
-The Celery task wiring is slice 2b.
+``app.tasks.file_object_reconciliation.clean_tenant_file_objects`` writes
+these rows on every authorized apply: a "started" row and one ``planned``
+intent row per candidate key commit together, before any delete; each key's
+row is then updated to its terminal outcome; the run row is updated to its
+terminal status last. See ``app.services.file_object_cleanup`` for the
+recording functions and
+``docs/runbooks/managed-file-object-reconciliation.md`` for the full design
+and how to query one run's rows to support a restore.
 """
 
 from __future__ import annotations
@@ -76,8 +82,13 @@ class FileOrphanCleanupRun(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
+    # No standalone `index=True` here: the migration's composite
+    # `ix_file_orphan_cleanup_run_org_started (organization_id, started_at)`
+    # already covers an organization_id-only lookup as its leftmost prefix,
+    # and declaring a second single-column index here would drift from what
+    # the migration actually creates.
     organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
+        UUID(as_uuid=True), nullable=False
     )
     plan_digest: Mapped[str] = mapped_column(String(64), nullable=False)
     older_than: Mapped[datetime] = mapped_column(
@@ -128,7 +139,7 @@ class FileOrphanCleanupDeletion(Base):
         ),
         CheckConstraint(
             "outcome IN ("
-            "'deleted', 'rechecked_referenced', 'already_absent', "
+            "'planned', 'deleted', 'rechecked_referenced', 'already_absent', "
             "'rechecked_too_new', 'failed'"
             ")",
             name="ck_file_orphan_cleanup_deletion_outcome",
@@ -146,8 +157,12 @@ class FileOrphanCleanupDeletion(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
+    # No standalone `index=True` here either: the migration's composite
+    # `ix_file_orphan_cleanup_deletion_org_run (organization_id, run_id)`
+    # already covers it — see the matching note on
+    # `FileOrphanCleanupRun.organization_id` above.
     organization_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), nullable=False, index=True
+        UUID(as_uuid=True), nullable=False
     )
     run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     # An opaque, module-generated identifier needed to restore the object

@@ -413,6 +413,10 @@ def _fake_record_cleanup_run_started(_db, **_kwargs):
     return uuid4()
 
 
+def _fake_record_cleanup_keys_planned(_db, **_kwargs) -> None:
+    return None
+
+
 def _fake_record_cleanup_key_outcome(_db, **_kwargs) -> None:
     return None
 
@@ -441,6 +445,9 @@ def _run_dry_run_then_apply(
     monkeypatch.setattr(task_module, "session_for_org", scoped_session)
     monkeypatch.setattr(
         task_module, "record_cleanup_run_started", _fake_record_cleanup_run_started
+    )
+    monkeypatch.setattr(
+        task_module, "record_cleanup_keys_planned", _fake_record_cleanup_keys_planned
     )
     monkeypatch.setattr(
         task_module, "record_cleanup_key_outcome", _fake_record_cleanup_key_outcome
@@ -1160,6 +1167,9 @@ def test_clean_task_apply_records_the_started_row_before_any_delete_and_outcomes
         events.append("started")
         return run_id
 
+    def fake_planned(_db, *, tenant_id, run_id, keys):
+        events.append("planned")
+
     def fake_outcome(
         _db,
         *,
@@ -1191,6 +1201,7 @@ def test_clean_task_apply_records_the_started_row_before_any_delete_and_outcomes
     # event-tracking fakes -- not `_run_dry_run_then_apply`'s own no-op
     # fakes -- are the ones the apply call below actually exercises.
     monkeypatch.setattr(task_module, "record_cleanup_run_started", fake_started)
+    monkeypatch.setattr(task_module, "record_cleanup_keys_planned", fake_planned)
     monkeypatch.setattr(task_module, "record_cleanup_key_outcome", fake_outcome)
     monkeypatch.setattr(task_module, "record_cleanup_run_finished", fake_finished)
 
@@ -1206,12 +1217,96 @@ def test_clean_task_apply_records_the_started_row_before_any_delete_and_outcomes
     assert summary["deleted"] == 2
     assert events == [
         "started",
+        "planned",
         f"delete:{key_a}",
         f"outcome:{key_a}:deleted",
         f"delete:{key_b}",
         f"outcome:{key_b}:deleted",
         "finished:completed",
     ]
+
+
+def test_clean_task_apply_commits_started_and_planned_together_before_first_delete(
+    monkeypatch,
+) -> None:
+    """A dedicated commit spy on the shared records session, proving the
+    FIRST commit happens right after "started" and "planned" are both
+    written, and strictly before the first delete is even attempted."""
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    key_a, key_b = sorted((prefix + str(uuid4()), prefix + str(uuid4())))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(key_a, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(key_b, 11, dry_run_time - timedelta(days=10)),
+        )
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    events: list[str] = []
+    run_id = uuid4()
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        events.append(f"delete:{key}")
+
+    def fake_started(_db, *, tenant_id, plan, actor, invocation_id):
+        events.append("started")
+        return run_id
+
+    def fake_planned(_db, *, tenant_id, run_id, keys):
+        events.append("planned")
+
+    def fake_outcome(_db, **_kwargs):
+        events.append("outcome")
+
+    def fake_finished(_db, **_kwargs):
+        events.append("finished")
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+    monkeypatch.setattr(task_module, "record_cleanup_run_started", fake_started)
+    monkeypatch.setattr(task_module, "record_cleanup_keys_planned", fake_planned)
+    monkeypatch.setattr(task_module, "record_cleanup_key_outcome", fake_outcome)
+    monkeypatch.setattr(task_module, "record_cleanup_run_finished", fake_finished)
+
+    original_commit = db.commit
+
+    def spy_commit():
+        events.append("commit")
+        return original_commit()
+
+    monkeypatch.setattr(db, "commit", spy_commit)
+
+    task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        actor="operator@example.com",
+        expected_plan_digest=dry_run_summary["plan_digest"],
+        reviewed_older_than=dry_run_summary["older_than"],
+        reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
+    )
+
+    # The FIRST commit follows "started" and "planned" directly, and comes
+    # strictly before the first delete -- not just eventually, before it.
+    assert events[:3] == ["started", "planned", "commit"]
+    assert events.index("commit") < events.index(f"delete:{key_a}")
 
 
 def test_clean_task_apply_records_partial_failure_and_stops_further_deletes(
@@ -1272,6 +1367,9 @@ def test_clean_task_apply_records_partial_failure_and_stops_further_deletes(
     monkeypatch.setattr(
         task_module, "record_cleanup_run_started", _fake_record_cleanup_run_started
     )
+    monkeypatch.setattr(
+        task_module, "record_cleanup_keys_planned", _fake_record_cleanup_keys_planned
+    )
     monkeypatch.setattr(task_module, "record_cleanup_key_outcome", fake_outcome)
     monkeypatch.setattr(task_module, "record_cleanup_run_finished", fake_finished)
 
@@ -1301,7 +1399,10 @@ def test_clean_task_apply_stops_deleting_when_recording_itself_raises(
 ) -> None:
     """If recording an outcome raises, the exception propagates immediately
     and no further key is ever delete-attempted -- a delete must never
-    outrun its own durable record."""
+    outrun its own durable record. Also proves the actual FIX this guards:
+    the raw key is already durable (planned) before ANY delete runs, so even
+    though the outcome write for key_a fails, key_a's raw storage key was
+    never only-in-memory."""
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
     apply_time = dry_run_time + timedelta(hours=2)
@@ -1321,9 +1422,17 @@ def test_clean_task_apply_stops_deleting_when_recording_itself_raises(
     )
 
     events: list[str] = []
+    planned_keys: set[str] = set()
 
     def fake_delete(*, scope, key, expected_provider_code):
+        # The raw key must already be durable (planned) BEFORE any delete --
+        # this is the exact gap the planned-row fix closes.
+        assert key in planned_keys, "delete ran before its key was planned"
         events.append(f"delete:{key}")
+
+    def fake_planned(_db, *, tenant_id, run_id, keys):
+        planned_keys.update(keys)
+        events.append("planned")
 
     def failing_outcome(_db, **_kwargs):
         events.append("record_outcome_raises")
@@ -1341,6 +1450,7 @@ def test_clean_task_apply_stops_deleting_when_recording_itself_raises(
         dry_run_time=dry_run_time,
         apply_time=apply_time,
     )
+    monkeypatch.setattr(task_module, "record_cleanup_keys_planned", fake_planned)
     monkeypatch.setattr(task_module, "record_cleanup_key_outcome", failing_outcome)
 
     with pytest.raises(RuntimeError, match="records database unavailable"):
@@ -1353,9 +1463,11 @@ def test_clean_task_apply_stops_deleting_when_recording_itself_raises(
             reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
         )
 
-    # The first key's delete ran, its outcome recording raised, and the
-    # loop stopped there -- the second key was never even attempted.
-    assert events == [f"delete:{key_a}", "record_outcome_raises"]
+    # Both keys were planned (durable) up front; only the first key's delete
+    # ran before its outcome recording raised and the loop stopped there --
+    # the second key was never even delete-attempted.
+    assert planned_keys == {key_a, key_b}
+    assert events == ["planned", f"delete:{key_a}", "record_outcome_raises"]
 
 
 def test_clean_task_dry_run_never_records_anything(monkeypatch) -> None:
@@ -1371,6 +1483,9 @@ def test_clean_task_dry_run_never_records_anything(monkeypatch) -> None:
         record_calls.append("started")
         return uuid4()
 
+    def fake_planned(*_args, **_kwargs):
+        record_calls.append("planned")
+
     def fake_outcome(*_args, **_kwargs):
         record_calls.append("outcome")
 
@@ -1381,6 +1496,7 @@ def test_clean_task_dry_run_never_records_anything(monkeypatch) -> None:
     monkeypatch.setattr(task_module, "list_objects", lambda _p, *, scope: ())
     monkeypatch.setattr(task_module, "session_for_org", scoped_session)
     monkeypatch.setattr(task_module, "record_cleanup_run_started", fake_started)
+    monkeypatch.setattr(task_module, "record_cleanup_keys_planned", fake_planned)
     monkeypatch.setattr(task_module, "record_cleanup_key_outcome", fake_outcome)
     monkeypatch.setattr(task_module, "record_cleanup_run_finished", fake_finished)
 

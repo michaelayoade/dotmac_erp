@@ -21,6 +21,7 @@ from app.services.file_object_cleanup import (
     is_storage_key_referenced,
     plan_orphan_cleanup,
     record_cleanup_key_outcome,
+    record_cleanup_keys_planned,
     record_cleanup_run_finished,
     record_cleanup_run_started,
 )
@@ -106,13 +107,19 @@ def _recheck_and_delete(
     Logs one line per successfully deleted key's digest as it happens (never
     the raw key), and always logs the final summary before returning.
 
-    Every outcome (including ``failed``) is recorded on the caller-owned
-    ``rec_db`` (already bound to ``run_id``) and committed immediately, one
-    key at a time, before the next key is considered — so a durable record
-    exists for exactly the keys actually processed, even if the loop stops
-    partway through. ``rec_db`` is a parameter this function never opens
-    itself; committing on it is the caller's (the task's) responsibility, not
-    a new self-opened session here.
+    Every key already has a durable ``planned`` row (written by the caller,
+    via ``record_cleanup_keys_planned``, in the same commit as the "started"
+    row, before this function ever runs) — ``record_cleanup_key_outcome``
+    here UPDATEs that row to its terminal outcome (including ``failed``) and
+    is committed immediately, one key at a time, before the next key is
+    considered. ``rec_db`` is a parameter this function never opens itself;
+    committing on it is the caller's (the task's) responsibility, not a new
+    self-opened session here.
+
+    On any exception, ``rec_db.rollback()`` runs FIRST, before recording the
+    failure — a session left in a failed-transaction state by whatever threw
+    would otherwise turn the attempt to record ``failed`` into a second,
+    misleading error that hides the real one.
     """
     outcomes: dict[str, list[str]] = {name: [] for name in _RECHECK_OUTCOMES}
     failure_reasons: dict[str, str] = {}
@@ -164,6 +171,7 @@ def _recheck_and_delete(
                 scope=plan.scope, key=key, expected_provider_code=plan.provider_code
             )
         except Exception as exc:
+            rec_db.rollback()
             key_digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
             outcomes["failed"].append(key)
             failure_reasons[key] = type(exc).__name__
@@ -258,13 +266,20 @@ def clean_tenant_file_objects(
     loop run, one key at a time, through the sole storage seam,
     ``app.services.storage.delete_reviewed_file_orphan``.
 
-    Before any delete, this task opens ONE records session and commits a
-    durable "running" row (``record_cleanup_run_started``); after each key's
-    outcome, it commits one outcome row (``record_cleanup_key_outcome``);
-    after the loop, it commits the terminal status and counts
-    (``record_cleanup_run_finished``). See
-    ``docs/runbooks/managed-file-object-reconciliation.md`` for how to query
-    one run's rows to support a restore, and
+    Before any delete, this task opens ONE records session and, in a SINGLE
+    commit, writes a durable "running" row (``record_cleanup_run_started``)
+    AND one ``planned`` intent row per candidate key
+    (``record_cleanup_keys_planned``) — so every raw ``storage_key`` is
+    durable before the first delete is even attempted, closing the gap a
+    "started" row alone would leave (a key deleted just before its own
+    outcome row failed to write would otherwise leave no durable raw key,
+    defeating a restore). After each key's outcome, it UPDATEs that key's
+    planned row to its terminal outcome and commits
+    (``record_cleanup_key_outcome``); after the loop, it commits the terminal
+    status and counts (``record_cleanup_run_finished``). A run's deletion row
+    still ``planned`` after a crash means "possibly deleted, unconfirmed" —
+    see the runbook. See ``docs/runbooks/managed-file-object-reconciliation.md``
+    for how to query one run's rows to support a restore, and
     ``app.services.file_object_cleanup`` for the recording functions
     themselves.
     """
@@ -345,12 +360,14 @@ def clean_tenant_file_objects(
     # task's own body -- never inside a helper -- so the own-session-commit
     # ratchet classifies it as adapter-owned (see
     # tests/architecture/test_own_session_commits.py and the baseline row for
-    # this function). The "started" row is committed BEFORE any delete can
-    # run; every per-key outcome commits immediately inside
-    # ``_recheck_and_delete`` (on this same ``rec_db``, passed in -- never
-    # opened there); and the "finished" row commits last. If recording itself
-    # raises anywhere in this block, that exception propagates immediately
-    # and no further keys are deleted.
+    # this function). The "started" row AND every key's "planned" row commit
+    # TOGETHER, in one commit, BEFORE any delete can run -- so the raw key is
+    # durable even if a delete succeeds but its own outcome row never gets
+    # written. Every per-key outcome then UPDATEs its planned row and commits
+    # immediately inside ``_recheck_and_delete`` (on this same ``rec_db``,
+    # passed in -- never opened there); the "finished" row commits last. If
+    # recording itself raises anywhere in this block, that exception
+    # propagates immediately and no further keys are deleted.
     with session_for_org(org_id) as rec_db:
         run_id = record_cleanup_run_started(
             rec_db,
@@ -358,6 +375,9 @@ def clean_tenant_file_objects(
             plan=plan,
             actor=actor,
             invocation_id=invocation_id,
+        )
+        record_cleanup_keys_planned(
+            rec_db, tenant_id=tenant_id, run_id=run_id, keys=plan.candidate_keys
         )
         rec_db.commit()
 

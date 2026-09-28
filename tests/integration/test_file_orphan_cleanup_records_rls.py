@@ -2,8 +2,10 @@
 
 Mirrors ``tests/integration/test_source_correlation_rls.py``: two
 organizations, the ``app_user`` runtime role, and both the SELECT-visibility
-and cross-org INSERT/UPDATE-rejection checks. Schema-only slice (2a) — no
-task wiring is exercised here, only the tables and their RLS policy.
+and cross-org INSERT/UPDATE-rejection checks. This module proves the tables
+and their RLS policy directly with raw SQL; it does not exercise the Celery
+task's own recording calls — see
+``tests/services/test_file_object_reconciliation.py`` for those.
 """
 
 from __future__ import annotations

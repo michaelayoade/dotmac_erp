@@ -1,14 +1,16 @@
-"""Durable run/deletion record canaries for the orphan cleanup task (slice 2a).
+"""Durable run/deletion record canaries for the orphan cleanup task.
 
-Schema-only slice: these tests cover the three recording functions in
+These tests cover the four recording functions in
 ``app.services.file_object_cleanup`` directly against a bespoke, hand-created
 SQLite schema (mirroring ``tests/services/test_file_object_cleanup.py``'s
 ``_session()`` pattern) rather than the shared ``db_session`` fixture's
 engine, because ``FileOrphanCleanupRun.outcome_counts`` is a Postgres
 ``JSONB`` column that ``Base.metadata.create_all`` cannot compile for SQLite
 (the same reason the shared ``SQLITE_COMPATIBLE_TABLES`` allowlist excludes
-JSONB-bearing models). Nothing wires these functions into the Celery task
-yet — that is slice 2b.
+JSONB-bearing models). ``app.tasks.file_object_reconciliation
+.clean_tenant_file_objects`` is the real caller of all four; see
+``tests/services/test_file_object_reconciliation.py`` for the task-level
+recording-order and failure-mode canaries.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.services.file_object_cleanup import (
     OrphanCleanupPlan,
     record_cleanup_key_outcome,
+    record_cleanup_keys_planned,
     record_cleanup_run_finished,
     record_cleanup_run_started,
 )
@@ -126,7 +129,82 @@ def test_record_cleanup_run_started_refuses_an_empty_actor_or_invocation_id() ->
         )
 
 
-def test_record_cleanup_key_outcome_derives_the_digest_from_the_raw_key() -> None:
+def test_record_cleanup_keys_planned_inserts_one_planned_row_per_key() -> None:
+    db = _session()
+    tenant_id = uuid4()
+    plan = _plan(tenant_id=tenant_id, candidate_keys=("k1", "k2"))
+    run_id = record_cleanup_run_started(
+        db,
+        tenant_id=tenant_id,
+        plan=plan,
+        actor="operator@example.com",
+        invocation_id="task-1",
+    )
+
+    record_cleanup_keys_planned(
+        db, tenant_id=tenant_id, run_id=run_id, keys=plan.candidate_keys
+    )
+    db.flush()
+
+    rows = db.execute(
+        text(
+            "SELECT storage_key, key_digest, outcome "
+            "FROM public.file_orphan_cleanup_deletions "
+            "WHERE run_id = :run_id ORDER BY storage_key"
+        ),
+        {"run_id": str(run_id)},
+    ).all()
+    assert [row.storage_key for row in rows] == ["k1", "k2"]
+    assert [row.outcome for row in rows] == ["planned", "planned"]
+    assert rows[0].key_digest == hashlib.sha256(b"k1").hexdigest()
+
+
+def test_record_cleanup_key_outcome_updates_the_planned_row_in_place() -> None:
+    """The raw key is durable from the planned insert; recording the
+    terminal outcome UPDATEs that same row rather than inserting a new one —
+    a key's planned-then-final history is exactly one row throughout."""
+    db = _session()
+    tenant_id = uuid4()
+    plan = _plan(tenant_id=tenant_id)
+    run_id = record_cleanup_run_started(
+        db,
+        tenant_id=tenant_id,
+        plan=plan,
+        actor="operator@example.com",
+        invocation_id="task-1",
+    )
+    record_cleanup_keys_planned(
+        db, tenant_id=tenant_id, run_id=run_id, keys=("tenants/x/files/y",)
+    )
+    db.flush()
+
+    record_cleanup_key_outcome(
+        db,
+        tenant_id=tenant_id,
+        run_id=run_id,
+        storage_key="tenants/x/files/y",
+        outcome="deleted",
+    )
+
+    rows = db.execute(
+        text(
+            "SELECT storage_key, key_digest, outcome, error_class "
+            "FROM public.file_orphan_cleanup_deletions WHERE run_id = :run_id"
+        ),
+        {"run_id": str(run_id)},
+    ).all()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.storage_key == "tenants/x/files/y"
+    assert row.key_digest == hashlib.sha256(b"tenants/x/files/y").hexdigest()
+    assert row.outcome == "deleted"
+    assert row.error_class is None
+
+
+def test_record_cleanup_key_outcome_raises_when_no_planned_row_exists() -> None:
+    """Recording an outcome before planning ran (or for a key never planned)
+    must raise, not silently insert -- a durable row's raw key must always
+    have existed before any delete could have happened."""
     db = _session()
     tenant_id = uuid4()
     plan = _plan(tenant_id=tenant_id)
@@ -138,26 +216,14 @@ def test_record_cleanup_key_outcome_derives_the_digest_from_the_raw_key() -> Non
         invocation_id="task-1",
     )
 
-    record_cleanup_key_outcome(
-        db,
-        tenant_id=tenant_id,
-        run_id=run_id,
-        storage_key="tenants/x/files/y",
-        outcome="deleted",
-    )
-    db.flush()
-
-    row = db.execute(
-        text(
-            "SELECT storage_key, key_digest, outcome, error_class "
-            "FROM public.file_orphan_cleanup_deletions WHERE run_id = :run_id"
-        ),
-        {"run_id": str(run_id)},
-    ).one()
-    assert row.storage_key == "tenants/x/files/y"
-    assert row.key_digest == hashlib.sha256(b"tenants/x/files/y").hexdigest()
-    assert row.outcome == "deleted"
-    assert row.error_class is None
+    with pytest.raises(ValueError, match="no planned deletion row"):
+        record_cleanup_key_outcome(
+            db,
+            tenant_id=tenant_id,
+            run_id=run_id,
+            storage_key="never-planned",
+            outcome="deleted",
+        )
 
 
 def test_record_cleanup_key_outcome_rejects_an_outcome_outside_the_vocabulary() -> None:
@@ -171,6 +237,8 @@ def test_record_cleanup_key_outcome_rejects_an_outcome_outside_the_vocabulary() 
         actor="operator@example.com",
         invocation_id="task-1",
     )
+    record_cleanup_keys_planned(db, tenant_id=tenant_id, run_id=run_id, keys=("k1",))
+    db.flush()
 
     with pytest.raises(ValueError):
         record_cleanup_key_outcome(
@@ -179,6 +247,32 @@ def test_record_cleanup_key_outcome_rejects_an_outcome_outside_the_vocabulary() 
             run_id=run_id,
             storage_key="k1",
             outcome="not_a_real_outcome",
+        )
+
+
+def test_record_cleanup_key_outcome_rejects_planned_as_a_terminal_outcome() -> None:
+    """``planned`` is the pre-delete intent state, never a terminal outcome a
+    caller may report back through ``record_cleanup_key_outcome``."""
+    db = _session()
+    tenant_id = uuid4()
+    plan = _plan(tenant_id=tenant_id)
+    run_id = record_cleanup_run_started(
+        db,
+        tenant_id=tenant_id,
+        plan=plan,
+        actor="operator@example.com",
+        invocation_id="task-1",
+    )
+    record_cleanup_keys_planned(db, tenant_id=tenant_id, run_id=run_id, keys=("k1",))
+    db.flush()
+
+    with pytest.raises(ValueError):
+        record_cleanup_key_outcome(
+            db,
+            tenant_id=tenant_id,
+            run_id=run_id,
+            storage_key="k1",
+            outcome="planned",
         )
 
 

@@ -23,8 +23,19 @@ not the newer, unguarded ``current_setting(...)::uuid`` form in
 ``20260920_configurable_departmental_kpis.py``, which raises instead of
 degrading to NULL when the GUC is unset.
 
-Wiring the cleanup task to write these rows is slice 2b and is out of scope
-here.
+``app.tasks.file_object_reconciliation.clean_tenant_file_objects`` (slice 2b)
+writes these rows on every authorized apply: a "planned" outcome row is
+written for every candidate key in the SAME commit as the run's "started"
+row, before any delete is attempted, so the raw ``storage_key`` needed for a
+restore is durable even if a delete happens but its own terminal-outcome
+write never lands. ``app_user`` is granted SELECT/INSERT/UPDATE only — never
+DELETE — on both tables: nothing in ERP ever deletes a cleanup record, and
+granting DELETE would let a compromised or buggy tenant-scoped caller erase
+its own deletion evidence.
+
+This migration is irreversible once applied (see ``downgrade()`` below):
+dropping these tables destroys the only durable evidence of what a cleanup
+apply actually did, which a restore may depend on indefinitely.
 """
 
 from __future__ import annotations
@@ -67,7 +78,10 @@ def _protect(table: str) -> None:
             )
         """
     )
-    op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE {qualified} TO app_user")
+    # No DELETE: nothing in ERP ever deletes a cleanup run or outcome row, and
+    # granting DELETE would let a tenant-scoped caller erase its own
+    # deletion evidence -- see the module docstring.
+    op.execute(f"GRANT SELECT, INSERT, UPDATE ON TABLE {qualified} TO app_user")
 
 
 def upgrade() -> None:
@@ -166,7 +180,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint(
             "outcome IN ("
-            "'deleted', 'rechecked_referenced', 'already_absent', "
+            "'planned', 'deleted', 'rechecked_referenced', 'already_absent', "
             "'rechecked_too_new', 'failed'"
             ")",
             name="ck_file_orphan_cleanup_deletion_outcome",
@@ -205,21 +219,18 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        f"DROP POLICY IF EXISTS {DELETION_TABLE}_tenant_isolation ON "
-        f"{SCHEMA}.{DELETION_TABLE}"
+    # Refused outright, unconditionally -- never gated on a row count. A row
+    # count taken under FORCE ROW LEVEL SECURITY is not a valid guard: the
+    # migration connection's role and GUC state determine what it can even
+    # see, so "zero rows visible" is not evidence the tables are empty, and a
+    # guard that can be silently defeated by running as the wrong role is not
+    # a guard. These tables are the only durable evidence of what a cleanup
+    # apply actually deleted; dropping them destroys that evidence and a
+    # restore may depend on it indefinitely. If this revision must ever be
+    # rolled back, do it by hand after confirming, out of band, that no
+    # retained run's evidence is still needed.
+    raise RuntimeError(
+        "file orphan cleanup record tables cannot be downgraded: dropping "
+        "them destroys the only durable evidence of what a cleanup apply "
+        "actually deleted"
     )
-    op.drop_index(
-        "ix_file_orphan_cleanup_deletion_org_run",
-        table_name=DELETION_TABLE,
-        schema=SCHEMA,
-    )
-    op.drop_table(DELETION_TABLE, schema=SCHEMA)
-
-    op.execute(
-        f"DROP POLICY IF EXISTS {RUN_TABLE}_tenant_isolation ON {SCHEMA}.{RUN_TABLE}"
-    )
-    op.drop_index(
-        "ix_file_orphan_cleanup_run_org_started", table_name=RUN_TABLE, schema=SCHEMA
-    )
-    op.drop_table(RUN_TABLE, schema=SCHEMA)

@@ -85,11 +85,29 @@ changes; each is an operational confirmation):**
 1. Bucket versioning on the production object store — confirm it is
    enabled. Deletion is irreversible unless the bucket keeps object
    versions; this was unverified as of this change.
-2. A green PostgreSQL RLS canary run
-   (`tests/integration/test_file_object_reconciliation_rls.py`) against the
-   target deployment.
+2. A green PostgreSQL RLS canary run of BOTH
+   `tests/integration/test_file_object_reconciliation_rls.py` (the managed
+   listing/report boundary) AND
+   `tests/integration/test_file_orphan_cleanup_records_rls.py` (the durable
+   run/deletion record boundary) against the target deployment — one green
+   run does not stand in for the other; they prove different tables.
 3. Verified runtime-role `mod_files` privileges for the deployment's tenant
    database role, consistent with the report task's own rollout note above.
+
+**Operational notes:**
+
+- **A `running` run cannot be resumed.** If a worker dies mid-apply, its run
+  row is left with `status='running'` forever — there is no resume path and
+  no code anywhere transitions a `running` row to a terminal status after
+  the fact. Treat any `running` row as abandoned: reconcile it by hand from
+  its `planned`/terminal deletion rows (see "Durable deletion record" below),
+  then start a FRESH dry-run and apply. Never re-invoke apply against an old,
+  already-authorized plan expecting it to "continue" a `running` run.
+- **`actor` is operator-supplied free text, not an authenticated identity.**
+  The task only refuses an empty string; it does not verify the caller is
+  who they claim, and nothing cross-checks it against a session, a platform
+  admin record, or any auth system. Treat it as an audit-trail label an
+  operator or calling script supplies, not as an authorization control.
 
 ## Listing completeness
 
@@ -128,9 +146,11 @@ The two-step procedure:
    `plan_orphan_cleanup`, passing THIS run's own real `datetime.now(UTC)` as
    `plan_observed_at`. Nothing is deleted. The returned safe summary carries
    counts (including all-age `managed_objects`/`referenced_objects`/
-   `in_flight_unreferenced` for operator visibility, and the digest-bound
-   `old_managed_objects`/`old_referenced_objects`/`missing_references`/
-   `boundary_drift` — see "Digest stability" below), up to 100 candidate-key
+   `in_flight_unreferenced`/`boundary_drift` for operator visibility, and the
+   digest-bound `old_managed_objects`/`old_referenced_objects`/
+   `missing_references`/`old_boundary_drift` — see "Digest stability" below;
+   note `boundary_drift` itself is NOT digest-bound, only its old-filtered
+   twin is), up to 100 candidate-key
    digests, `older_than`, `plan_observed_at`, and a `plan_digest`. Review the
    summary before proceeding, and copy BOTH `older_than` and
    `plan_observed_at` exactly for apply.
@@ -229,8 +249,10 @@ Refusals (all raise before any deletion; none deletes partially):
   never a reviewed value) — `app.services.file_object_cleanup.CleanupPlanExpired`.
 - Every OLD managed object looks unreferenced while candidates exist (this is
   indistinguishable from a hidden-rows or RLS failure making a healthy
-  tenant look fully orphaned), or any OLD metadata row was found outside its
-  declared scope prefix (`boundary_drift > 0`) —
+  tenant look fully orphaned), or any metadata row AT ANY AGE — not just an
+  OLD one — was found outside its declared scope prefix (`boundary_drift > 0`,
+  the ALL-AGE count, deliberately not the old-filtered one; see "Digest
+  stability" below) —
   `app.services.file_object_cleanup.CleanupUnsafeReferenceView`. There is no
   override flag for this refusal in this slice.
 - ANY exception during one candidate's own recheck-and-delete body — a
@@ -266,52 +288,78 @@ are out of scope for the report above; do not extend `expected_plan_digest`
 review or apply to keys outside the `tenants/<uuid>/files/` /
 `platform/files/` prefixes.
 
-## Durable deletion record (schema)
+## Durable deletion record (schema, and `clean_tenant_file_objects` writes it)
 
-Slice 2a (schema only, 2026-09-28): `public.file_orphan_cleanup_runs` (one
-row per apply invocation — plan identity, actor, invocation id, status,
-outcome counts) and `public.file_orphan_cleanup_deletions` (one row per
-candidate key processed — the raw `storage_key`, a `key_digest`, and its
-outcome), both tenant-scoped with the same ERP-native
-`app.current_organization_id` RLS predicate `sync.source_correlation` uses
-(`20260825_retire_dotmac_crm.py`), following the `ar` schema's
-outcome/issue composite-FK pattern (`20260906_invoice_sync_outcomes.py`).
-Models live in `app/models/file_orphan_cleanup.py`; the three
-session/commit-agnostic recorder functions
-(`record_cleanup_run_started`/`record_cleanup_key_outcome`/
+`public.file_orphan_cleanup_runs` (one row per apply invocation — plan
+identity, actor, invocation id, status, outcome counts) and
+`public.file_orphan_cleanup_deletions` (one row per candidate key processed
+— the raw `storage_key`, a `key_digest`, and its outcome), both
+tenant-scoped with the same ERP-native `app.current_organization_id` RLS
+predicate `sync.source_correlation` uses (`20260825_retire_dotmac_crm.py`),
+following the `ar` schema's outcome/issue composite-FK pattern
+(`20260906_invoice_sync_outcomes.py`). Models live in
+`app/models/file_orphan_cleanup.py`; the four session/commit-agnostic
+recorder functions (`record_cleanup_run_started`/
+`record_cleanup_keys_planned`/`record_cleanup_key_outcome`/
 `record_cleanup_run_finished`) live alongside the plan/authorize logic in
-`app/services/file_object_cleanup.py`.
+`app/services/file_object_cleanup.py`. `app_user` is granted SELECT, INSERT,
+and UPDATE only — never DELETE — on either table: nothing in ERP ever
+deletes a cleanup record, and granting DELETE would let a tenant-scoped
+caller erase its own deletion evidence. The migration's `downgrade()` is
+refused outright and unconditionally (`raise RuntimeError`, never gated on a
+row count — a count taken under FORCE ROW LEVEL SECURITY is not a valid
+guard, since the connection's role and GUC state determine what it can even
+see): dropping these tables would destroy the only durable evidence of what
+a cleanup apply actually did.
 
-**Slice 2b (2026-09-28): `clean_tenant_file_objects` now writes the durable
-record for every apply.** `apply=True` requires a new, non-empty `actor`
-argument naming the operator authorizing the delete — refused with
-`ValueError` before any I/O if it is empty or missing. The task is now
-`bind=True`; its `invocation_id` is the Celery request id
-(`self.request.id`) when one is present (a real worker dispatch), or a freshly
-generated UUID when called directly (no Celery request context, e.g. in a
-test or a one-off script invocation).
+`clean_tenant_file_objects` writes this record on every apply. `apply=True`
+requires a non-empty `actor` argument naming the operator authorizing the
+delete — refused with `ValueError` before any I/O if it is empty or missing
+(see "actor is operator-supplied free text" above). The task is `bind=True`;
+its `invocation_id` is the Celery request id (`self.request.id`) when one is
+present (a real worker dispatch), or a freshly generated UUID when called
+directly (no Celery request context, e.g. in a test or a one-off script
+invocation).
 
 After `authorize_apply` succeeds and strictly BEFORE any delete, the task
 itself — never a helper — opens ONE records session
 (`with session_for_org(org_id) as rec_db:`) and, within it:
 
-1. Calls `record_cleanup_run_started` and commits `rec_db` immediately. No
-   key's delete may run before this "running" row is durably committed.
+1. Calls `record_cleanup_run_started`, then `record_cleanup_keys_planned` to
+   write one `outcome='planned'` row per candidate key — its raw
+   `storage_key`, needed for a restore — and commits `rec_db` ONCE for both
+   together. No key's delete may run before this commit. This closes the gap
+   a "started" row alone would leave: without a planned row, a key deleted
+   just before its own terminal-outcome write failed would leave no durable
+   trace of the raw key at all, defeating a restore.
 2. Passes `rec_db` and the new run's id into the per-object
-   recheck-and-delete loop. After EVERY key's outcome — `deleted`,
+   recheck-and-delete loop. For every key, `record_cleanup_key_outcome`
+   UPDATEs that SAME planned row to its terminal outcome — `deleted`,
    `rechecked_referenced`, `already_absent`, `rechecked_too_new`, or `failed`
-   (with its exception class name) — the loop calls `record_cleanup_key_outcome`
-   and commits `rec_db` immediately, before considering the next key. The
-   loop still opens its own short, separate read session for the reference
-   recheck (closed before any storage call), exactly as before.
+   (with its exception class name) — never inserting a second row, and
+   raises if no planned row is found for that key. On any exception, the
+   loop calls `rec_db.rollback()` FIRST (so a session left in a
+   failed-transaction state by whatever threw does not turn the attempt to
+   record `failed` into a second, misleading error that hides the real
+   one), then records `failed` and commits. Every outcome commits
+   immediately, before considering the next key. The loop still opens its
+   own short, separate read session for the reference recheck (closed
+   before any storage call), exactly as before.
 3. After the loop, calls `record_cleanup_run_finished` with `status=
    "completed"` (or `"partial_failure"` if any key failed) and the per-outcome
    counts, then commits `rec_db` one last time. Only after that does the task
    return the summary, or raise `CleanupPartialFailure`.
-4. If recording itself raises anywhere in this block — the insert, or the
-   commit — that exception propagates immediately: no further key is
-   considered, and a delete can never happen without a preceding, committed
-   "started" row.
+4. If recording itself raises anywhere in this block — the insert, the
+   update, or a commit — that exception propagates immediately: no further
+   key is considered, and a delete can never happen without its raw key
+   already being durable via a prior, committed `planned` row.
+
+**A deletion row still `outcome='planned'` after a crash means "possibly
+deleted, unconfirmed" — check the bucket.** The planned row proves the key
+was an authorized candidate whose delete may have been attempted; it does
+not prove the delete ran or succeeded. Confirm the object's actual live
+state (and version history, if the delete did happen) against the bucket
+before treating a `planned` row as either "deleted" or "safe".
 
 This session-open-and-commit shape lives directly in the `@shared_task`(
 `bind=True`)-decorated function body, so
@@ -347,4 +395,6 @@ from the object store's version history (see rollout gate 1 above — this is
 why bucket versioning must be confirmed before the first real apply). A
 `status = "partial_failure"` run's `failed` row names the key that stopped
 the loop; every row before it in `recorded_at` order was durably processed
-(and, for `deleted` rows, actually removed) before the failure.
+(and, for `deleted` rows, actually removed) before the failure. A row still
+`outcome = 'planned'` means its delete was never confirmed — see "a
+deletion row still `outcome='planned'` after a crash" above.
