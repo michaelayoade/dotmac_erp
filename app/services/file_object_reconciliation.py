@@ -207,8 +207,8 @@ def report_file_objects(
             key_digest=hashlib.sha256(key.encode("utf-8")).hexdigest(),
             state=FileState(state),
         )
-        for key, state, _past_grace in rows
-        if not key.startswith(prefix)
+        for key, state, past_grace in rows
+        if not key.startswith(prefix) and past_grace
     )
     return ObjectReconciliationReport(
         scope=scope,

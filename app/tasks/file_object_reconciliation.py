@@ -8,17 +8,16 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from celery import shared_task
-from dotmac_files import ObjectInfo, TenantStoredFile, list_objects
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from dotmac_files import ObjectInfo, list_objects
 
 from app.db.session_context import session_for_org
 from app.services.file_object_cleanup import (
     DEFAULT_MAX_DELETIONS,
     MIN_APPLY_GRACE_HOURS,
-    CleanupPlanDrift,
+    CleanupPartialFailure,
     OrphanCleanupPlan,
     authorize_apply,
+    is_storage_key_referenced,
     plan_orphan_cleanup,
 )
 from app.services.file_object_reconciliation import report_file_objects
@@ -67,25 +66,6 @@ def report_tenant_file_objects(
     return summary
 
 
-def _is_still_referenced(db: Session, *, tenant_id: UUID, key: str) -> bool:
-    """Whether ANY TenantStoredFile row now claims this key.
-
-    Checked across every provider code and every lifecycle state — a
-    candidate is only safe to delete if NOTHING claims its key, not merely
-    nothing in the ``erp_s3``/``available`` slice this report compared
-    against.
-    """
-    return (
-        db.execute(
-            select(TenantStoredFile.id).where(
-                TenantStoredFile.tenant_id == tenant_id,
-                TenantStoredFile.storage_key == key,
-            )
-        ).first()
-        is not None
-    )
-
-
 def _reobserve(provider: DotmacFilesS3Provider, key: str) -> ObjectInfo | None:
     """Re-observe one key's live presence and freshness immediately before delete.
 
@@ -110,41 +90,56 @@ def _recheck_and_delete(
 ) -> dict[str, object]:
     """Recheck and delete one candidate key at a time, in plan order.
 
-    Each iteration: (i) opens a short, separate ``session_for_org`` to check
-    for ANY referencing row and closes it before touching storage — deletion
-    must happen outside a database transaction; (ii) re-observes the live
-    object; (iii) deletes through the sole single-key seam. Stops at the
-    first delete failure so a partial batch is never silently swallowed.
+    Each key's ENTIRE body — the reference recheck, the re-observation, and
+    the delete — is wrapped: any exception anywhere in that body records the
+    key as ``failed`` (with the exception's class name) and stops the loop.
+    Logs one line per successfully deleted key's digest as it happens (never
+    the raw key), and always logs the final summary before returning.
     """
     outcomes: dict[str, list[str]] = {name: [] for name in _RECHECK_OUTCOMES}
+    failure_reasons: dict[str, str] = {}
     if plan.scope_kind != "tenant" or plan.tenant_id is None:
         raise ValueError("orphan cleanup apply requires a tenant scope")
     tenant_id = UUID(plan.tenant_id)
 
     for key in plan.candidate_keys:
-        with session_for_org(org_id) as db:
-            referenced = _is_still_referenced(db, tenant_id=tenant_id, key=key)
-        if referenced:
-            outcomes["rechecked_referenced"].append(key)
-            continue
-
-        info = _reobserve(provider, key)
-        if info is None:
-            outcomes["already_absent"].append(key)
-            continue
-        if not info.last_modified < plan.older_than:
-            outcomes["rechecked_too_new"].append(key)
-            continue
-
         try:
+            with session_for_org(org_id) as db:
+                referenced = is_storage_key_referenced(
+                    db, tenant_id=tenant_id, storage_key=key
+                )
+            if referenced:
+                outcomes["rechecked_referenced"].append(key)
+                continue
+
+            info = _reobserve(provider, key)
+            if info is None:
+                outcomes["already_absent"].append(key)
+                continue
+            if not info.last_modified < plan.older_than:
+                outcomes["rechecked_too_new"].append(key)
+                continue
+
             delete_reviewed_file_orphan(
                 scope=plan.scope, key=key, expected_provider_code=plan.provider_code
             )
-        except Exception:
+        except Exception as exc:
+            key_digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
             outcomes["failed"].append(key)
-            logger.exception("Orphan delete failed; stopping the recheck loop")
+            failure_reasons[key] = type(exc).__name__
+            logger.exception(
+                "Orphan delete failed for key digest %s (%s); stopping the "
+                "recheck loop",
+                key_digest,
+                type(exc).__name__,
+            )
             break
-        outcomes["deleted"].append(key)
+        else:
+            outcomes["deleted"].append(key)
+            logger.info(
+                "Orphan deleted: key digest %s",
+                hashlib.sha256(key.encode("utf-8")).hexdigest(),
+            )
 
     result: dict[str, object] = {}
     for name in _RECHECK_OUTCOMES:
@@ -155,6 +150,8 @@ def _recheck_and_delete(
             for k in keys[:_MAX_OUTCOME_EVIDENCE]
         ]
         result[f"{name}_evidence_omitted"] = max(0, len(keys) - _MAX_OUTCOME_EVIDENCE)
+    if failure_reasons:
+        result["failure_exception_types"] = sorted(set(failure_reasons.values()))
     return result
 
 
@@ -167,59 +164,78 @@ def clean_tenant_file_objects(
     apply: bool = False,
     expected_plan_digest: str | None = None,
     reviewed_older_than: str | None = None,
+    reviewed_plan_observed_at: str | None = None,
 ) -> dict[str, object]:
     """Operator-invoked orphan cleanup: dry-run plan by default.
 
     ``apply=False`` (the default) uses ``grace_hours`` (default
-    :data:`MIN_APPLY_GRACE_HOURS`) to build and return the plan's safe
-    summary only; nothing is deleted. The summary's ``older_than`` and
-    ``plan_digest`` are exactly what an operator must pass back to apply.
+    :data:`MIN_APPLY_GRACE_HOURS`) and this run's own real observation time
+    to build and return the plan's safe summary only; nothing is deleted.
+    The summary's ``older_than``, ``plan_observed_at``, and ``plan_digest``
+    are exactly what an operator must pass back to apply.
 
-    ``apply=True`` requires BOTH ``expected_plan_digest`` and
-    ``reviewed_older_than`` (the dry-run summary's own ``older_than``, a
-    timezone-aware ISO-8601 string). The task never reuses ``now()`` as the
-    apply cutoff — a fresh ``now()`` on every run would make the dry-run and
-    apply plan digests permanently unequal (their ``older_than`` values
-    would never match), so every apply would fail-safe but nothing could
-    ever be deleted. Instead the apply run derives its grace period from
-    THIS run's fresh observation time and the reviewed fixed cutoff, refuses
-    unless that cutoff is still at least :data:`MIN_APPLY_GRACE_HOURS` old,
-    recomputes the plan from a fresh listing and session (never a cached
-    one), confirms the fresh report's cutoff still matches the reviewed one,
-    and authorizes it against the digest, the cap, plan expiry, and the
-    reference-safety checks in ``authorize_apply``. Only then does the
-    per-object recheck-and-delete loop run, one key at a time, through the
-    sole storage seam, ``app.services.storage.delete_reviewed_file_orphan``.
+    ``apply=True`` requires `expected_plan_digest`, `reviewed_older_than`,
+    and `reviewed_plan_observed_at` (all copied verbatim from the dry-run
+    summary). `reviewed_older_than` must equal
+    `reviewed_plan_observed_at - MIN_APPLY_GRACE_HOURS` — a self-consistency
+    check on the two reviewed values, independent of any I/O. The FRESH
+    rebuild then re-lists and re-queries at REAL wall-clock time, but labels
+    the resulting report with `observed_at=reviewed_plan_observed_at` and a
+    FIXED `MIN_APPLY_GRACE_HOURS` grace — never a relative `now() - cutoff`
+    computation, which could never reproduce the reviewed digest and which
+    also could not bound the true age of the review (see
+    ``app.services.file_object_cleanup`` for why an apply-side relative
+    grace both destabilizes the digest and defeats plan expiry). Only a
+    change to data OLDER than that fixed cutoff can therefore ever cause
+    ``CleanupPlanDrift`` — a fresh upload or a fresh metadata row does not.
+    `authorize_apply` then separately compares REAL current time against the
+    plan's `plan_observed_at` (which equals `reviewed_plan_observed_at`
+    exactly) for the unforgeable 24-hour plan-expiry check. Only after every
+    check in `authorize_apply` passes does the per-object recheck-and-delete
+    loop run, one key at a time, through the sole storage seam,
+    ``app.services.storage.delete_reviewed_file_orphan``.
     """
     if grace_hours < 1:
         raise ValueError("grace_hours must be at least one")
 
     reviewed_cutoff: datetime | None = None
+    reviewed_observed_at: datetime | None = None
     if apply:
         if not expected_plan_digest:
             raise ValueError("apply requires expected_plan_digest")
         if not reviewed_older_than:
             raise ValueError("apply requires reviewed_older_than")
+        if not reviewed_plan_observed_at:
+            raise ValueError("apply requires reviewed_plan_observed_at")
         reviewed_cutoff = datetime.fromisoformat(reviewed_older_than)
         if reviewed_cutoff.tzinfo is None or reviewed_cutoff.utcoffset() is None:
             raise ValueError("reviewed_older_than must be timezone-aware")
+        reviewed_observed_at = datetime.fromisoformat(reviewed_plan_observed_at)
+        if (
+            reviewed_observed_at.tzinfo is None
+            or reviewed_observed_at.utcoffset() is None
+        ):
+            raise ValueError("reviewed_plan_observed_at must be timezone-aware")
+        if reviewed_cutoff != reviewed_observed_at - timedelta(
+            hours=MIN_APPLY_GRACE_HOURS
+        ):
+            raise ValueError(
+                "reviewed_older_than is inconsistent with reviewed_plan_observed_at"
+            )
 
     org_id = UUID(organization_id)
     scope = OrganizationTenantContext.for_organization(org_id).tenant_scope
     provider = get_dotmac_files_read_provider()
-    observed_at = datetime.now(timezone.utc)
+    real_now = datetime.now(timezone.utc)
     observations = list_objects(provider, scope=scope)
 
     if apply:
-        if reviewed_cutoff is None:
-            raise ValueError("apply requires reviewed_older_than")
-        grace_period = observed_at - reviewed_cutoff
-        if grace_period < timedelta(hours=MIN_APPLY_GRACE_HOURS):
-            raise ValueError(
-                "reviewed_older_than must be at least "
-                f"{MIN_APPLY_GRACE_HOURS} hours before now"
-            )
+        if reviewed_observed_at is None:
+            raise ValueError("apply requires reviewed_plan_observed_at")
+        plan_observed_at = reviewed_observed_at
+        grace_period = timedelta(hours=MIN_APPLY_GRACE_HOURS)
     else:
+        plan_observed_at = real_now
         grace_period = timedelta(hours=grace_hours)
 
     with session_for_org(org_id) as db:
@@ -228,16 +244,11 @@ def clean_tenant_file_objects(
             scope=scope,
             provider_code=provider.code,
             observations=observations,
-            observed_at=observed_at,
+            observed_at=plan_observed_at,
             grace_period=grace_period,
         )
 
-    if apply and report.older_than != reviewed_cutoff:
-        raise CleanupPlanDrift(
-            "the fresh report's cutoff no longer matches reviewed_older_than"
-        )
-
-    plan = plan_orphan_cleanup(report, max_deletions=max_deletions)
+    plan = plan_orphan_cleanup(report, plan_observed_at, max_deletions=max_deletions)
 
     if not apply:
         summary = plan.safe_summary()
@@ -246,7 +257,7 @@ def clean_tenant_file_objects(
 
     if expected_plan_digest is None:
         raise ValueError("apply requires expected_plan_digest")
-    authorize_apply(plan, expected_plan_digest=expected_plan_digest, now=observed_at)
+    authorize_apply(plan, expected_plan_digest=expected_plan_digest, now=real_now)
     recheck_summary = _recheck_and_delete(org_id, plan, provider)
     summary = {
         **plan.safe_summary(),
@@ -255,6 +266,11 @@ def clean_tenant_file_objects(
         "deleted": recheck_summary["deleted_count"],
     }
     logger.info("Orphan cleanup applied: %s", summary)
+    if recheck_summary["failed_count"]:
+        raise CleanupPartialFailure(
+            "orphan cleanup stopped after a per-object delete failure",
+            summary=summary,
+        )
     return summary
 
 

@@ -125,36 +125,47 @@ The two-step procedure:
    defaulting to 168 (7 days). It lists objects, opens a read-only session,
    builds the same `report_file_objects` report as above, then turns it into
    an `app.services.file_object_cleanup.OrphanCleanupPlan` via
-   `plan_orphan_cleanup`. Nothing is deleted. The returned safe summary
-   carries counts (including `managed_objects`, `referenced_objects`,
-   `in_flight_unreferenced`, `missing_references`, `boundary_drift` — the
-   exact reference-view fields apply will re-verify), up to 100 candidate-key
-   digests, `older_than`, `plan_observed_at`, and a `plan_digest` — a SHA-256
-   over all of the above plus the scope kind, tenant id, and provider code.
-   Review the summary before proceeding.
-2. **Reviewed apply.** Invoke again with `apply=True` and BOTH
-   `expected_plan_digest` and `reviewed_older_than` set to EXACTLY the
-   `plan_digest` and `older_than` fields from the dry-run summary you
-   reviewed. `older_than` is a fixed point in time, not a relative
-   `grace_hours` — the apply run derives its own grace period from this
-   run's fresh observation time minus that fixed cutoff, and refuses unless
-   the cutoff is still at least 168 hours (7 days) old. (A relative
-   `grace_hours` on the apply path was tried and rejected: `older_than =
-   now() - grace` recomputed on a later run can never equal the dry-run's
-   `older_than`, so the plan digest — which binds `older_than` — could never
-   match and apply would always refuse. Binding the review to the dry-run's
-   fixed cutoff instead of a relative window is what makes a real apply
-   possible.) The task recomputes the plan from a fresh listing and a fresh
-   session (never a cached one), confirms the fresh report's cutoff still
-   matches `reviewed_older_than`, and calls `authorize_apply`, which refuses
-   on digest drift, an over-cap candidate count, a plan older than 24 hours
-   (`plan_observed_at`, derived as `older_than + 168h`, compared against
-   "now"), or a reference view that cannot be trusted (see below). Only
-   then does the per-object recheck-and-delete loop run.
+   `plan_orphan_cleanup`, passing THIS run's own real `datetime.now(UTC)` as
+   `plan_observed_at`. Nothing is deleted. The returned safe summary carries
+   counts (including all-age `managed_objects`/`referenced_objects`/
+   `in_flight_unreferenced` for operator visibility, and the digest-bound
+   `old_managed_objects`/`old_referenced_objects`/`missing_references`/
+   `boundary_drift` — see "Digest stability" below), up to 100 candidate-key
+   digests, `older_than`, `plan_observed_at`, and a `plan_digest`. Review the
+   summary before proceeding, and copy BOTH `older_than` and
+   `plan_observed_at` exactly for apply.
+2. **Reviewed apply.** Invoke again with `apply=True` and `expected_plan_digest`,
+   `reviewed_older_than`, AND `reviewed_plan_observed_at` set to EXACTLY the
+   `plan_digest`, `older_than`, and `plan_observed_at` fields from the
+   dry-run summary you reviewed. The task first checks, with no I/O, that
+   `reviewed_older_than == reviewed_plan_observed_at - 168h` — the two
+   reviewed values must be self-consistent. It then re-lists and re-queries
+   at REAL wall-clock time, but labels the resulting report with
+   `observed_at=reviewed_plan_observed_at` and a FIXED 168-hour grace —
+   never a relative `now() - cutoff` computation. (A relative grace on the
+   apply path was tried and rejected twice: first, `older_than = now() -
+   grace` recomputed on a later run could never equal the dry-run's
+   `older_than`, so the digest could never match and apply always refused;
+   second, once fixed, `plan_observed_at` was still DERIVED as `older_than +
+   168h` rather than the plan's real observed time, which let an operator
+   defeat the 24-hour expiry by choosing a smaller dry-run `grace_hours` to
+   manufacture an artificially "fresher"-looking `plan_observed_at` — see
+   `app.services.file_object_cleanup`'s `MAX_PLAN_AGE_HOURS` docstring.
+   Freezing BOTH the grace and the observation label to the reviewed values
+   closes both holes at once.) `authorize_apply` then refuses on digest
+   drift, an over-cap candidate count, a plan older than 24 real hours
+   (comparing REAL current time against `plan_observed_at`, which for the
+   rebuild equals `reviewed_plan_observed_at` exactly), or an untrustworthy
+   OLD-object reference view (see below). Only then does the per-object
+   recheck-and-delete loop run.
 3. **Per-object recheck, one key at a time, in order.** For each candidate
-   key: (i) opens a short, separate `session_for_org` and checks whether ANY
+   key, the ENTIRE body below is wrapped: any exception anywhere in it
+   (not just the delete call) records that key as `failed`, with the
+   exception's class name, and stops the loop immediately.
+   (i) opens a short, separate `session_for_org` and checks whether ANY
    `TenantStoredFile` row now claims that key — any provider code, any
-   state — and closes that session before any storage call; a hit records
+   state, via `app.services.file_object_cleanup.is_storage_key_referenced`
+   — and closes that session before any storage call; a hit records
    `rechecked_referenced` and skips the delete; (ii) re-observes the live
    object (see "Listing completeness" for why this uses the provider's own
    `list`, scoped to the single key, rather than `dotmac_files.observe_object`
@@ -163,45 +174,73 @@ The two-step procedure:
    candidate, which has no row by definition); missing records
    `already_absent`, not-old-enough records `rechecked_too_new`; (iii)
    otherwise deletes that ONE key through
-   `app.services.storage.delete_reviewed_file_orphan`, recording `deleted`
-   or, on an exception, `failed` — and STOPS the loop at the first failure.
-   The summary carries per-outcome counts and up to 100 key digests per
-   outcome; `deleted` is the real, per-object-confirmed count, and raw keys
-   are never logged.
+   `app.services.storage.delete_reviewed_file_orphan` (which itself raises
+   `dotmac_files.ProviderMismatch`, recorded here as `failed` like any other
+   exception, if the live provider's code no longer matches the plan's),
+   and logs one line with that key's digest as it happens. The summary
+   ALWAYS carries per-outcome counts and up to 100 key digests per outcome
+   and is ALWAYS logged; `deleted` is the real, per-object-confirmed count.
+   If any key failed, the task raises
+   `app.services.file_object_cleanup.CleanupPartialFailure` (carrying the
+   full summary as its `.summary` attribute) after logging — the summary is
+   never silently dropped, but a partial run is never reported as a plain
+   success either.
+
+**Digest stability.** The digest binds only values computed over objects
+OLDER than the reviewed cutoff — the OLD-object count, the OLD-referenced
+count, `missing_references` (already past-grace by construction), and
+`boundary_drift` (now also filtered to past-grace rows in
+`report_file_objects`) — plus `candidate_keys`, `older_than`, and
+`plan_observed_at`. A fresh upload or a fresh metadata row appearing between
+a dry-run and its apply is, by construction, not old enough to affect any of
+these, so it can never itself cause `CleanupPlanDrift`. Raw, all-age counts
+stay in the summary for visibility only.
 
 Refusals (all raise before any deletion; none deletes partially):
 
-- `expected_plan_digest` missing on an apply — `ValueError`.
-- `reviewed_older_than` missing, or not a timezone-aware ISO-8601 value, on
-  an apply — `ValueError`.
-- `reviewed_older_than` is less than 168 hours (7 days) before this run's
-  observation time — `ValueError`.
-- The fresh report's cutoff no longer matches `reviewed_older_than`, or the
-  fresh plan's digest does not match `expected_plan_digest` (a key appeared
-  or disappeared, or any reference-view count changed, between review and
-  apply) — `app.services.file_object_cleanup.CleanupPlanDrift`.
+- `expected_plan_digest`, `reviewed_older_than`, or `reviewed_plan_observed_at`
+  missing on an apply — `ValueError`.
+- `reviewed_older_than` or `reviewed_plan_observed_at` not a timezone-aware
+  ISO-8601 value — `ValueError`.
+- `reviewed_older_than != reviewed_plan_observed_at - 168h` — `ValueError`
+  (a self-inconsistent reviewed pair; checked before any I/O).
+- The freshly rebuilt plan's digest does not match `expected_plan_digest`
+  (a candidate key appeared or disappeared, or any OLD-object/missing/
+  boundary-drift count changed, since review) —
+  `app.services.file_object_cleanup.CleanupPlanDrift`.
 - The candidate count exceeds the plan's `max_deletions` (default 100, hard
   ceiling 1000 — a `max_deletions` above the ceiling is refused when the plan
   is built) — `app.services.file_object_cleanup.CleanupCapExceeded`.
-- The reviewed plan is more than 24 hours old (`now - plan_observed_at > 24h`,
-  equivalently: `reviewed_older_than` more than 24h + 168h before now) —
-  `app.services.file_object_cleanup.CleanupPlanExpired`.
-- Every managed object looks unreferenced while candidates exist (this is
+- The reviewed plan is more than 24 REAL hours old
+  (`now - plan_observed_at > 24h`, using the real current wall-clock time,
+  never a reviewed value) — `app.services.file_object_cleanup.CleanupPlanExpired`.
+- Every OLD managed object looks unreferenced while candidates exist (this is
   indistinguishable from a hidden-rows or RLS failure making a healthy
-  tenant look fully orphaned), or any metadata row was found outside its
+  tenant look fully orphaned), or any OLD metadata row was found outside its
   declared scope prefix (`boundary_drift > 0`) —
   `app.services.file_object_cleanup.CleanupUnsafeReferenceView`. There is no
   override flag for this refusal in this slice.
-- The live provider's code does not match the plan's `provider_code` at the
-  moment of an individual delete — `dotmac_files.ProviderMismatch`, raised
-  by `app.services.storage.delete_reviewed_file_orphan`.
+- ANY exception during one candidate's own recheck-and-delete body — a
+  reference-check failure, a re-observation failure, a delete failure
+  (including a live `dotmac_files.ProviderMismatch`) — stops the loop and,
+  once the (always-logged) summary is built, raises
+  `app.services.file_object_cleanup.CleanupPartialFailure`.
 
-**`dotmac_files.delete_orphans` (and the paired `delete_object` /
-`finalize_purge` primitives) may only be called from
-`app/services/storage.py`** — enforced by
-`tests/architecture/test_dotmac_files_delete_owner.py`, with a planted
-sensitivity proof (a direct call, an aliased import, and an attribute-form
-call are all caught; a same-named local function is not).
+**`dotmac_files.delete_orphans`/`delete_object`/`finalize_purge` may only be
+called from `app/services/storage.py`** — enforced by
+`tests/architecture/test_dotmac_files_delete_owner.py` across plain,
+aliased, attribute-form, AND submodule (`dotmac_files.physical`) imports,
+each with a planted sensitivity proof. The same file also asserts, absolutely
+(no legitimate caller exists), that no module anywhere binds
+`get_dotmac_files_provider()`/`get_dotmac_files_read_provider()`'s result to
+a local name and calls `.delete(` on it directly — a bypass that would reach
+the raw provider without `delete_reviewed_file_orphan`'s recheck, digest
+authorization, or provider-identity assertion. A third, separate check — "only
+storage.py may import `get_dotmac_files_provider` at all" — is FALSE against
+this tree (three legitimate non-delete upload callers already import it:
+`app/services/file_upload.py`, `app/api/finance/import_export.py`,
+`app/tasks/imports.py`) and is therefore a two-directional RATCHET over
+today's known callers, not an absolute rule.
 
 Legacy ERP upload prefixes are out of scope for this task, exactly as they
 are out of scope for the report above; do not extend `expected_plan_digest`

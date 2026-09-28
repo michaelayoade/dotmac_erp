@@ -261,7 +261,10 @@ def test_clean_task_apply_requires_expected_plan_digest() -> None:
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     with pytest.raises(ValueError):
         task_module.clean_tenant_file_objects.run(
-            str(uuid4()), apply=True, reviewed_older_than="2026-09-24T00:00:00+00:00"
+            str(uuid4()),
+            apply=True,
+            reviewed_older_than="2026-09-24T00:00:00+00:00",
+            reviewed_plan_observed_at="2026-10-01T00:00:00+00:00",
         )
 
 
@@ -269,7 +272,21 @@ def test_clean_task_apply_requires_reviewed_older_than() -> None:
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     with pytest.raises(ValueError):
         task_module.clean_tenant_file_objects.run(
-            str(uuid4()), apply=True, expected_plan_digest="x"
+            str(uuid4()),
+            apply=True,
+            expected_plan_digest="x",
+            reviewed_plan_observed_at="2026-10-01T00:00:00+00:00",
+        )
+
+
+def test_clean_task_apply_requires_reviewed_plan_observed_at() -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()),
+            apply=True,
+            expected_plan_digest="x",
+            reviewed_older_than="2026-09-24T00:00:00+00:00",
         )
 
 
@@ -281,6 +298,33 @@ def test_clean_task_apply_refuses_a_naive_reviewed_older_than() -> None:
             apply=True,
             expected_plan_digest="x",
             reviewed_older_than="2026-09-24T00:00:00",
+            reviewed_plan_observed_at="2026-10-01T00:00:00+00:00",
+        )
+
+
+def test_clean_task_apply_refuses_a_naive_reviewed_plan_observed_at() -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()),
+            apply=True,
+            expected_plan_digest="x",
+            reviewed_older_than="2026-09-24T00:00:00+00:00",
+            reviewed_plan_observed_at="2026-10-01T00:00:00",
+        )
+
+
+def test_clean_task_apply_refuses_an_inconsistent_reviewed_pair() -> None:
+    """reviewed_older_than must equal reviewed_plan_observed_at - 168h exactly."""
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()),
+            apply=True,
+            expected_plan_digest="x",
+            reviewed_older_than="2026-09-24T00:00:00+00:00",
+            # Off by one hour from older_than + 168h.
+            reviewed_plan_observed_at="2026-10-01T01:00:00+00:00",
         )
 
 
@@ -303,23 +347,28 @@ class _FixedClock(datetime):
         return cls._times.pop(0)
 
 
-def test_clean_task_apply_refuses_a_cutoff_under_168_hours_old(monkeypatch) -> None:
+def test_clean_task_apply_refuses_a_self_consistent_but_too_recent_cutoff() -> None:
+    """Retention is now enforced STRUCTURALLY: apply's rebuild always uses a
+    FIXED 168h grace against reviewed_plan_observed_at, so older_than can
+    never legitimately be less than 168h before reviewed_plan_observed_at.
+    A pair claiming otherwise is simply inconsistent (caught above) --
+    there is no separate "too recent" runtime check left to exercise
+    because the fixed grace makes a shorter retention unconstructible.
+    """
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
-    tenant_id = uuid4()
-    scope = TenantScope(tenant_id)
-    apply_time = datetime(2026, 9, 27, tzinfo=UTC)
-    reviewed_older_than = (apply_time - timedelta(hours=1)).isoformat()
-
-    _FixedClock._times = [apply_time]
-    monkeypatch.setattr(task_module, "datetime", _FixedClock)
-    _wire_scope(monkeypatch, task_module, ListingProvider(()), scope)
+    reviewed_plan_observed_at = "2026-09-27T00:00:00+00:00"
+    # A cutoff only 1 hour before "observed_at" is inconsistent with the
+    # fixed 168h grace, so this is refused as an inconsistent pair, not a
+    # separate "too recent" check.
+    reviewed_older_than = "2026-09-26T23:00:00+00:00"
 
     with pytest.raises(ValueError):
         task_module.clean_tenant_file_objects.run(
-            str(tenant_id),
+            str(uuid4()),
             apply=True,
             expected_plan_digest="x",
             reviewed_older_than=reviewed_older_than,
+            reviewed_plan_observed_at=reviewed_plan_observed_at,
         )
 
 
@@ -386,15 +435,21 @@ def _run_dry_run_then_apply(
 def _seed_healthy_reference(
     provider: _RecheckProvider, db: Session, *, tenant_id, prefix: str, moment: datetime
 ) -> None:
-    """Add one referenced, available object so the reference view looks healthy.
+    """Add one OLD, referenced, available object so the reference view looks
+    healthy under the NEW old-object-only safety check.
 
-    Without at least one referenced object, ``authorize_apply`` refuses with
-    ``CleanupUnsafeReferenceView`` (every managed object would look
-    unreferenced) -- exactly what that check is for, but not what these
-    fixtures are testing.
+    ``authorize_apply`` now refuses on ``old_managed_objects > 0 and
+    old_referenced_objects == 0`` -- so the seeded reference must itself be
+    OLDER than the reviewed cutoff (well past the 168h retention window), or
+    it would not count towards ``old_referenced_objects`` at all and this
+    fixture would trip the very check it exists to satisfy.
     """
     healthy_key = prefix + str(uuid4())
-    provider.initial = (*provider.initial, ObjectInfo(healthy_key, 1, moment))
+    old_enough_moment = moment - timedelta(days=30)
+    provider.initial = (
+        *provider.initial,
+        ObjectInfo(healthy_key, 1, old_enough_moment),
+    )
     db.execute(
         text(
             "INSERT INTO mod_files.stored_files "
@@ -404,7 +459,7 @@ def _seed_healthy_reference(
         {
             "tenant": tenant_id.hex,
             "key": healthy_key,
-            "created_at": moment.strftime("%Y-%m-%d %H:%M:%S.%f"),
+            "created_at": old_enough_moment.strftime("%Y-%m-%d %H:%M:%S.%f"),
         },
     )
 
@@ -452,6 +507,7 @@ def test_clean_task_apply_round_trip_succeeds_when_the_listing_is_unchanged(
         apply=True,
         expected_plan_digest=digest,
         reviewed_older_than=older_than,
+        reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
     )
 
     assert delete_calls == [(scope, old_orphan, "erp_s3")]
@@ -503,6 +559,7 @@ def test_clean_task_apply_refuses_when_the_listing_changed_since_review(
             apply=True,
             expected_plan_digest=digest,
             reviewed_older_than=older_than,
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
         )
 
 
@@ -538,6 +595,7 @@ def test_clean_task_apply_refuses_an_expired_plan(monkeypatch) -> None:
             apply=True,
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
         )
 
 
@@ -585,6 +643,7 @@ def test_clean_task_apply_refuses_a_digest_reused_against_a_different_org(
             apply=True,
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
         )
 
 
@@ -622,6 +681,7 @@ def test_clean_task_apply_refuses_candidates_over_the_cap(monkeypatch) -> None:
             max_deletions=2,
             expected_plan_digest=dry_run_summary["plan_digest"],
             reviewed_older_than=dry_run_summary["older_than"],
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
         )
 
 
@@ -667,6 +727,7 @@ def test_clean_task_apply_accepts_a_non_utc_offset_reviewed_older_than(
         apply=True,
         expected_plan_digest=dry_run_summary["plan_digest"],
         reviewed_older_than=equivalent,
+        reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
     )
     assert summary["dry_run"] is False
     assert summary["deleted"] == 1
@@ -741,6 +802,7 @@ def test_clean_task_recheck_skips_a_key_that_gained_a_reference_mid_loop(
         apply=True,
         expected_plan_digest=dry_run_summary["plan_digest"],
         reviewed_older_than=dry_run_summary["older_than"],
+        reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
     )
 
     assert delete_calls == [key_a]
@@ -797,6 +859,7 @@ def test_clean_task_recheck_reports_missing_and_too_new_without_deleting(
         apply=True,
         expected_plan_digest=dry_run_summary["plan_digest"],
         reviewed_older_than=dry_run_summary["older_than"],
+        reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
     )
 
     assert delete_calls == []
@@ -844,13 +907,84 @@ def test_clean_task_recheck_stops_after_the_first_delete_failure(monkeypatch) ->
         apply_time=apply_time,
     )
 
-    summary = task_module.clean_tenant_file_objects.run(
-        str(apply_id),
-        apply=True,
-        expected_plan_digest=dry_run_summary["plan_digest"],
-        reviewed_older_than=dry_run_summary["older_than"],
-    )
+    from app.services.file_object_cleanup import CleanupPartialFailure
+
+    with pytest.raises(CleanupPartialFailure) as raised:
+        task_module.clean_tenant_file_objects.run(
+            str(apply_id),
+            apply=True,
+            expected_plan_digest=dry_run_summary["plan_digest"],
+            reviewed_older_than=dry_run_summary["older_than"],
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
+        )
 
     assert delete_calls == [first_key, second_key]
+    summary = raised.value.summary
     assert summary["deleted"] == 1
     assert summary["failed_count"] == 1
+    assert summary["failure_exception_types"] == ["RuntimeError"]
+
+
+def test_clean_task_recheck_records_a_reference_check_failure_as_failed(
+    monkeypatch,
+) -> None:
+    """Any exception anywhere in a key's body -- not just the delete call
+    itself -- records that key as failed and stops the loop."""
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    first_key, second_key = sorted((prefix + str(uuid4()), prefix + str(uuid4())))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(first_key, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(second_key, 11, dry_run_time - timedelta(days=10)),
+        )
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    delete_calls: list[str] = []
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        delete_calls.append(key)
+
+    def fake_is_referenced(db, *, tenant_id, storage_key):
+        if storage_key == second_key:
+            raise RuntimeError("db unavailable")
+        return False
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+    monkeypatch.setattr(task_module, "is_storage_key_referenced", fake_is_referenced)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+
+    from app.services.file_object_cleanup import CleanupPartialFailure
+
+    with pytest.raises(CleanupPartialFailure) as raised:
+        task_module.clean_tenant_file_objects.run(
+            str(apply_id),
+            apply=True,
+            expected_plan_digest=dry_run_summary["plan_digest"],
+            reviewed_older_than=dry_run_summary["older_than"],
+            reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
+        )
+
+    assert delete_calls == [first_key]
+    summary = raised.value.summary
+    assert summary["deleted"] == 1
+    assert summary["failed_count"] == 1
+    assert summary["failure_exception_types"] == ["RuntimeError"]

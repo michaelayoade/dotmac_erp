@@ -1,10 +1,24 @@
-"""Pure decision code for managed file-object orphan cleanup.
+"""Decision code for managed file-object orphan cleanup.
 
-This module performs no provider I/O and holds no database session — it only
-turns a read-only :class:`ObjectReconciliationReport` into a reviewable,
-digest-bound :class:`OrphanCleanupPlan`, and refuses to authorize an apply
-unless the digest presented for review still matches a freshly recomputed
-plan, the reference view looks trustworthy, and the review is still fresh.
+This module turns a read-only :class:`ObjectReconciliationReport` into a
+reviewable, digest-bound :class:`OrphanCleanupPlan`, and refuses to authorize
+an apply unless the digest presented for review still matches a freshly
+recomputed plan, the reference view looks trustworthy, and the review is
+still fresh. It performs no PROVIDER I/O and holds no open database
+transaction of its own; ``is_storage_key_referenced`` accepts an
+already-open, short-lived session from its caller for exactly one read — the
+same "adapters query nothing themselves" discipline the rest of the codebase
+applies to router/web thin wrappers, applied here to the Celery task that
+would otherwise embed this query directly.
+
+The digest binds only values computed over objects OLDER than the reviewed
+cutoff (``older_than``): a fresh upload or a fresh metadata row appearing
+between a dry-run and its apply must never itself cause ``CleanupPlanDrift``
+— only a change to the OLD, orphan-eligible picture may. Raw, all-age counts
+(``managed_objects``, ``referenced_objects``, ``in_flight_unreferenced``)
+stay in the summary for operator visibility but are deliberately excluded
+from the digest.
+
 The caller (the Celery task) is responsible for producing a fresh report,
 for the per-object recheck immediately before each delete, and for the one
 single-key deletion seam, ``app.services.storage.delete_reviewed_file_orphan``.
@@ -16,8 +30,12 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from uuid import UUID
 
+from dotmac_files import TenantStoredFile
 from dotmac_kernel.cache import PlatformScope, TenantScope
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.services.file_object_reconciliation import ObjectReconciliationReport
 
@@ -41,6 +59,10 @@ MIN_APPLY_GRACE_HOURS = 168
 #: The maximum age of the reviewed dry-run itself. A plan older than this is
 #: refused even if its digest still matches — a stale review is not
 #: sufficient authorization for a live delete. Decided 2026-09-28 (Michael).
+#: Bound to the plan's REAL observed_at (never derived from reviewed data —
+#: see ``OrphanCleanupPlan.plan_observed_at``), so it cannot be defeated by
+#: choosing a smaller dry-run ``grace_hours`` to manufacture a
+#: later-looking, still-"fresh" cutoff.
 MAX_PLAN_AGE_HOURS = 24
 
 
@@ -60,17 +82,51 @@ class CleanupCapExceeded(OrphanCleanupError):
 class CleanupUnsafeReferenceView(OrphanCleanupError):
     """The reference view underlying this plan cannot be trusted.
 
-    Raised when every managed object looks unreferenced while candidates
-    exist (indistinguishable from a hidden-rows or RLS failure that makes a
-    healthy tenant look fully orphaned), or when any metadata row was found
-    outside its declared scope prefix (``boundary_drift``) — a sign the
-    plan's picture of "what is real" cannot be trusted enough to delete
-    against.
+    Raised when every OLD (past-cutoff) managed object looks unreferenced
+    while candidates exist (indistinguishable from a hidden-rows or RLS
+    failure that makes a healthy tenant look fully orphaned), or when any
+    OLD metadata row was found outside its declared scope prefix
+    (``boundary_drift``) — a sign the plan's picture of "what is real"
+    cannot be trusted enough to delete against.
     """
 
 
 class CleanupPlanExpired(OrphanCleanupError):
     """The reviewed dry-run is older than :data:`MAX_PLAN_AGE_HOURS`."""
+
+
+class CleanupPartialFailure(OrphanCleanupError):
+    """A per-object delete failed partway through the recheck-and-delete loop.
+
+    Carries the full outcome summary (``summary`` attribute) so the caller
+    can report exactly what happened before the loop stopped.
+    """
+
+    def __init__(self, message: str, *, summary: dict[str, object]) -> None:
+        super().__init__(message)
+        self.summary = summary
+
+
+def is_storage_key_referenced(
+    db: Session, *, tenant_id: UUID, storage_key: str
+) -> bool:
+    """Whether ANY ``TenantStoredFile`` row now claims this key.
+
+    Checked across every provider code and every lifecycle state — a
+    candidate is only safe to delete if NOTHING claims its key, not merely
+    nothing in the slice a report previously compared against. Accepts an
+    already-open, caller-owned session for exactly one read; opens and
+    closes nothing itself.
+    """
+    return (
+        db.execute(
+            select(TenantStoredFile.id).where(
+                TenantStoredFile.tenant_id == tenant_id,
+                TenantStoredFile.storage_key == storage_key,
+            )
+        ).first()
+        is not None
+    )
 
 
 def _scope_kind_and_tenant(scope: object) -> tuple[str, str | None]:
@@ -95,13 +151,17 @@ def _plan_digest(
     provider_code: str,
     older_than: datetime,
     candidate_keys: tuple[str, ...],
-    managed_objects: int,
-    referenced_objects: int,
-    in_flight_unreferenced: int,
+    old_managed_objects: int,
+    old_referenced_objects: int,
     missing_references: int,
     boundary_drift: int,
     plan_observed_at: datetime,
 ) -> str:
+    """Digest payload covers ONLY values derived from objects OLDER than
+    ``older_than`` (plus the plan's identity and its real observation time).
+    A fresh upload or a fresh, not-yet-past-grace metadata row must never
+    change any of these — see the module docstring.
+    """
     payload = json.dumps(
         {
             "scope_kind": scope_kind,
@@ -109,9 +169,8 @@ def _plan_digest(
             "provider_code": provider_code,
             "older_than": older_than.isoformat(),
             "candidate_keys": list(candidate_keys),
-            "managed_objects": managed_objects,
-            "referenced_objects": referenced_objects,
-            "in_flight_unreferenced": in_flight_unreferenced,
+            "old_managed_objects": old_managed_objects,
+            "old_referenced_objects": old_referenced_objects,
             "missing_references": missing_references,
             "boundary_drift": boundary_drift,
             "plan_observed_at": plan_observed_at.isoformat(),
@@ -127,10 +186,15 @@ class OrphanCleanupPlan:
 
     ``scope`` is the raw scope object from the report (needed by the caller
     to invoke the storage deletion seam); ``scope_kind``/``tenant_id`` are
-    its safe, loggable projection. ``plan_observed_at`` is derived as
-    ``older_than + MIN_APPLY_GRACE_HOURS`` — the moment the report claims to
-    have been taken, given today's fixed retention window — and is what
-    plan-expiry compares against "now".
+    its safe, loggable projection. ``plan_observed_at`` is the REAL moment
+    this plan's underlying report was observed — supplied by the caller,
+    never derived from ``older_than`` — which is what makes plan expiry
+    unforgeable (see :data:`MAX_PLAN_AGE_HOURS`).
+
+    ``managed_objects``/``referenced_objects``/``in_flight_unreferenced`` are
+    ALL-AGE counts kept for operator visibility only; the digest instead
+    binds ``old_managed_objects``/``old_referenced_objects`` (objects at or
+    past ``older_than``), so a fresh upload cannot destabilize it.
     """
 
     scope: object
@@ -143,6 +207,8 @@ class OrphanCleanupPlan:
     managed_objects: int
     referenced_objects: int
     in_flight_unreferenced: int
+    old_managed_objects: int
+    old_referenced_objects: int
     missing_references: int
     boundary_drift: int
     plan_observed_at: datetime
@@ -160,6 +226,8 @@ class OrphanCleanupPlan:
             "managed_objects": self.managed_objects,
             "referenced_objects": self.referenced_objects,
             "in_flight_unreferenced": self.in_flight_unreferenced,
+            "old_managed_objects": self.old_managed_objects,
+            "old_referenced_objects": self.old_referenced_objects,
             "missing_references": self.missing_references,
             "boundary_drift": self.boundary_drift,
             "plan_observed_at": self.plan_observed_at.isoformat(),
@@ -177,10 +245,17 @@ class OrphanCleanupPlan:
 
 def plan_orphan_cleanup(
     report: ObjectReconciliationReport,
+    observed_at: datetime,
     *,
     max_deletions: int = DEFAULT_MAX_DELETIONS,
 ) -> OrphanCleanupPlan:
     """Build a reviewable, digest-bound cleanup plan from a read-only report.
+
+    ``observed_at`` must be the REAL moment this report's underlying listing
+    and metadata query were taken — for a dry-run, the task's own fresh
+    ``datetime.now(UTC)``; for an apply rebuild, the operator-reviewed
+    ``reviewed_plan_observed_at`` (so the rebuilt plan's digest can match the
+    original). This function never derives it from ``older_than`` itself.
 
     Refuses outright (``CleanupCapExceeded``) if the requested cap itself is
     non-positive or exceeds :data:`MAX_DELETIONS_CEILING`; this does not
@@ -202,21 +277,23 @@ def plan_orphan_cleanup(
     in_flight_unreferenced = sum(
         1 for item in report.objects if not item.referenced and not item.old_enough
     )
+    old_managed_objects = sum(1 for item in report.objects if item.old_enough)
+    old_referenced_objects = sum(
+        1 for item in report.objects if item.referenced and item.old_enough
+    )
     missing_references = len(report.missing_references)
     boundary_drift = len(report.boundary_drift)
-    plan_observed_at = report.older_than + timedelta(hours=MIN_APPLY_GRACE_HOURS)
     plan_digest = _plan_digest(
         scope_kind=scope_kind,
         tenant_id=tenant_id,
         provider_code=report.provider_code,
         older_than=report.older_than,
         candidate_keys=candidate_keys,
-        managed_objects=managed_objects,
-        referenced_objects=referenced_objects,
-        in_flight_unreferenced=in_flight_unreferenced,
+        old_managed_objects=old_managed_objects,
+        old_referenced_objects=old_referenced_objects,
         missing_references=missing_references,
         boundary_drift=boundary_drift,
-        plan_observed_at=plan_observed_at,
+        plan_observed_at=observed_at,
     )
     return OrphanCleanupPlan(
         scope=report.scope,
@@ -229,9 +306,11 @@ def plan_orphan_cleanup(
         managed_objects=managed_objects,
         referenced_objects=referenced_objects,
         in_flight_unreferenced=in_flight_unreferenced,
+        old_managed_objects=old_managed_objects,
+        old_referenced_objects=old_referenced_objects,
         missing_references=missing_references,
         boundary_drift=boundary_drift,
-        plan_observed_at=plan_observed_at,
+        plan_observed_at=observed_at,
         plan_digest=plan_digest,
     )
 
@@ -241,13 +320,18 @@ def authorize_apply(
 ) -> None:
     """Authorize a deletion apply against a freshly recomputed plan.
 
+    ``now`` must be the REAL current wall-clock time (never a reviewed
+    value) — it is compared against ``plan.plan_observed_at``, which for an
+    apply rebuild equals the operator-supplied ``reviewed_plan_observed_at``,
+    to enforce :data:`MAX_PLAN_AGE_HOURS` using two independently
+    unforgeable timestamps.
+
     Raises ``CleanupPlanDrift`` if the reviewed digest no longer matches this
     plan; ``CleanupCapExceeded`` if the candidate count exceeds the plan's
-    own authorized cap; ``CleanupUnsafeReferenceView`` if the reference view
-    looks like a hidden-rows/RLS failure (every managed object looks
-    unreferenced while candidates exist) or any boundary drift was found;
-    and ``CleanupPlanExpired`` if the reviewed dry-run is older than
-    :data:`MAX_PLAN_AGE_HOURS`. Refuses outright rather than deleting a
+    own authorized cap; ``CleanupPlanExpired`` if the reviewed dry-run is
+    older than :data:`MAX_PLAN_AGE_HOURS`; and ``CleanupUnsafeReferenceView``
+    if the OLD-object reference view looks like a hidden-rows/RLS failure or
+    any OLD boundary drift was found. Refuses outright rather than deleting a
     partial or unsafely-derived set.
     """
     if plan.plan_digest != expected_plan_digest:
@@ -264,19 +348,19 @@ def authorize_apply(
             f"the reviewed plan is older than {MAX_PLAN_AGE_HOURS} hours"
         )
     if (
-        plan.managed_objects > 0
-        and plan.referenced_objects == 0
+        plan.old_managed_objects > 0
+        and plan.old_referenced_objects == 0
         and plan.candidate_keys
     ):
         raise CleanupUnsafeReferenceView(
-            "every managed object appears unreferenced while candidates "
+            "every old managed object appears unreferenced while candidates "
             "exist — this is indistinguishable from a hidden-rows or RLS "
             "failure and refuses rather than risk deleting a healthy tenant"
         )
     if plan.boundary_drift > 0:
         raise CleanupUnsafeReferenceView(
-            "metadata rows exist outside their declared scope prefix; the "
-            "reference view cannot be trusted for deletion"
+            "old metadata rows exist outside their declared scope prefix; "
+            "the reference view cannot be trusted for deletion"
         )
 
 
@@ -286,11 +370,13 @@ __all__ = [
     "MAX_PLAN_AGE_HOURS",
     "MIN_APPLY_GRACE_HOURS",
     "CleanupCapExceeded",
+    "CleanupPartialFailure",
     "CleanupPlanDrift",
     "CleanupPlanExpired",
     "CleanupUnsafeReferenceView",
     "OrphanCleanupError",
     "OrphanCleanupPlan",
     "authorize_apply",
+    "is_storage_key_referenced",
     "plan_orphan_cleanup",
 ]
