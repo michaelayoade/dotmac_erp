@@ -65,6 +65,7 @@ only the explicit ``import ... as <alias>`` form is tracked.
 from __future__ import annotations
 
 import ast
+import textwrap
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -335,7 +336,7 @@ def scan_write_provider_imports(roots: tuple[Path, ...] = SCANNED_ROOTS) -> set[
 
 
 def _tree(source: str) -> ast.AST:
-    return ast.parse(source)
+    return ast.parse(textwrap.dedent(source))
 
 
 # ---------------------------------------------------------------------------
