@@ -142,6 +142,53 @@
         </div>
     </div>
 
+    {% if can_read_tracking %}
+    <!-- Tracking foundation; live telemetry remains deferred to Step 2. -->
+    <div class="card">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <h3 class="font-semibold text-slate-900 dark:text-white">Tracking</h3>
+            <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                {{ tracker_connection_status }}
+            </span>
+        </div>
+        <div class="p-4">
+            {% if tracker %}
+            <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Tracker</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ tracker.tracker_manufacturer or '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">IMEI</dt>
+                    <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ tracker.unique_id }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Provider</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ tracker.provider | replace('_', ' ') | title }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Tracker model</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ tracker.tracker_model or '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Connection status</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ tracker_connection_status }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-slate-500 dark:text-slate-400">Last update</dt>
+                    <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ tracker_last_update | format_datetime if tracker_last_update else '—' }}</dd>
+                </div>
+            </dl>
+            {% else %}
+            <div class="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                {{ icon_svg("location-marker", "h-5 w-5 text-slate-400 dark:text-slate-500") }}
+                <span>No active tracker is linked to this vehicle.</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Assignment & Documents -->
     <div class="grid gap-6 lg:grid-cols-2">
         <!-- Current Assignment -->

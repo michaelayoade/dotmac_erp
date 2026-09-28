@@ -53,6 +53,7 @@ from app.services.fleet.fuel_service import FuelService
 from app.services.fleet.incident_service import IncidentService
 from app.services.fleet.maintenance_service import MaintenanceService
 from app.services.fleet.reservation_service import ReservationService
+from app.services.fleet.tracking.traccar_service import FleetTrackingService
 from app.services.fleet.vehicle_service import VehicleService
 from app.services.recent_activity import get_recent_activity_for_record
 from app.models.finance.ap.supplier_invoice import (
@@ -971,6 +972,8 @@ class FleetWebService:
         self,
         organization_id: UUID,
         vehicle_id: UUID,
+        *,
+        include_tracking: bool = False,
     ) -> dict[str, Any]:
         """Build context for vehicle detail page."""
         if not self._fleet_tables_ready():
@@ -985,6 +988,7 @@ class FleetWebService:
         incident_service = IncidentService(self.db, org_id)
         reservation_service = ReservationService(self.db, org_id)
         assignment_service = AssignmentService(self.db, org_id)
+        tracking_service = FleetTrackingService(self.db, org_id)
 
         vehicle = vehicle_service.get_or_raise(vid)
 
@@ -1026,6 +1030,7 @@ class FleetWebService:
 
         # Calculate fuel efficiency
         efficiency = fuel_service.calculate_efficiency(vid)
+        tracker = tracking_service.get_active_tracker(vid) if include_tracking else None
 
         return {
             "vehicle": vehicle,
@@ -1043,6 +1048,10 @@ class FleetWebService:
             "assignments": assignments_result.items,
             "fuel_efficiency": efficiency,
             "statuses": [s.value for s in VehicleStatus],
+            "can_read_tracking": include_tracking,
+            "tracker": tracker,
+            "tracker_connection_status": "Not connected",
+            "tracker_last_update": None,
         }
 
     # ─────────────────────────────────────────────────────────────

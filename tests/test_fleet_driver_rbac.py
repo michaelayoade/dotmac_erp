@@ -43,6 +43,9 @@ def test_driver_role_seed_is_read_only_fleet_subset():
     )
     assert "fleet:vehicles:read" not in ROLE_PERMISSIONS["driver"]
     assert "fleet:reports:read" not in ROLE_PERMISSIONS["driver"]
+    assert "fleet:tracking:read" not in ROLE_PERMISSIONS["driver"]
+    assert "fleet:tracking:manage" not in ROLE_PERMISSIONS["driver"]
+    assert "fleet:commands:send" not in ROLE_PERMISSIONS["driver"]
 
 
 def test_driver_fleet_route_permissions_allow_only_configured_read_areas():
