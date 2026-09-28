@@ -21,6 +21,7 @@ from app.api.fleet.import_export import router as import_router
 from app.api.fleet.incidents import router as incidents_router
 from app.api.fleet.maintenance import router as maintenance_router
 from app.api.fleet.reservations import router as reservations_router
+from app.api.fleet.tracking import router as tracking_router
 from app.api.fleet.vehicles import router as vehicles_router
 
 router = APIRouter(
@@ -61,5 +62,8 @@ router.include_router(
     assignments_router,
     dependencies=[Depends(require_tenant_permission("fleet:vehicles:manage"))],
 )
+# Tracking routes own their read/manage permissions per operation. Do not add
+# the coarse vehicle-management dependency used by the legacy vehicle router.
+router.include_router(tracking_router)
 
 __all__ = ["router"]
