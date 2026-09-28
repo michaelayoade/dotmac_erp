@@ -517,6 +517,84 @@ def test_clean_task_apply_round_trip_succeeds_when_the_listing_is_unchanged(
     assert summary["rechecked_referenced_count"] == 0
 
 
+def test_clean_task_apply_succeeds_through_the_real_report_despite_a_fresh_upload(
+    monkeypatch,
+) -> None:
+    """End-to-end (through the real ``report_file_objects``, not a fake):
+    a brand-new object plus a matching new row appear between the dry-run
+    and the apply. The new object is newer than ``plan_observed_at``, so it
+    is neither old nor a candidate, and the apply still succeeds and deletes
+    only the original orphan.
+    """
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    delete_calls: list[str] = []
+    monkeypatch.setattr(
+        task_module,
+        "delete_reviewed_file_orphan",
+        lambda **kw: delete_calls.append(kw["key"]),
+    )
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+    plan_observed_at = datetime.fromisoformat(dry_run_summary["plan_observed_at"])
+
+    # A brand-new upload -- newer than plan_observed_at -- plus a matching
+    # new row, both appearing after the dry-run was taken.
+    new_key = prefix + str(uuid4())
+    new_moment = plan_observed_at + timedelta(hours=1)
+    provider.initial = (*provider.initial, ObjectInfo(new_key, 5, new_moment))
+    db.execute(
+        text(
+            "INSERT INTO mod_files.stored_files "
+            "(tenant_id, provider_code, storage_key, state, created_at) "
+            "VALUES (:tenant, 'erp_s3', :key, 'available', :created_at)"
+        ),
+        {
+            "tenant": tenant_id.hex,
+            "key": new_key,
+            "created_at": new_moment.strftime("%Y-%m-%d %H:%M:%S.%f"),
+        },
+    )
+
+    summary = task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        expected_plan_digest=dry_run_summary["plan_digest"],
+        reviewed_older_than=dry_run_summary["older_than"],
+        reviewed_plan_observed_at=dry_run_summary["plan_observed_at"],
+    )
+
+    assert delete_calls == [old_orphan]
+    assert summary["dry_run"] is False
+    assert summary["deleted"] == 1
+    # The new object is neither old nor a candidate.
+    assert summary["old_managed_objects"] == dry_run_summary["old_managed_objects"]
+    assert summary["orphan_candidates"] == dry_run_summary["orphan_candidates"]
+    assert new_key not in delete_calls
+
+
 def test_clean_task_apply_refuses_when_the_listing_changed_since_review(
     monkeypatch,
 ) -> None:
@@ -920,6 +998,7 @@ def test_clean_task_recheck_stops_after_the_first_delete_failure(monkeypatch) ->
 
     assert delete_calls == [first_key, second_key]
     summary = raised.value.summary
+    assert summary is not None
     assert summary["deleted"] == 1
     assert summary["failed_count"] == 1
     assert summary["failure_exception_types"] == ["RuntimeError"]
@@ -985,6 +1064,7 @@ def test_clean_task_recheck_records_a_reference_check_failure_as_failed(
 
     assert delete_calls == [first_key]
     summary = raised.value.summary
+    assert summary is not None
     assert summary["deleted"] == 1
     assert summary["failed_count"] == 1
     assert summary["failure_exception_types"] == ["RuntimeError"]

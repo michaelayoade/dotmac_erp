@@ -57,10 +57,18 @@ class MissingReference:
 
 @dataclass(frozen=True, slots=True)
 class BoundaryDrift:
-    """A metadata key outside the scope declared by its row plane."""
+    """A metadata key outside the scope declared by its row plane.
+
+    Reported at EVERY age — the read-only report and dry-run summary must
+    show drift regardless of how recently the row was created.
+    ``old_enough`` (past the reviewed grace cutoff) is carried so a cleanup
+    plan can separately bind only OLD drift into its digest, while the
+    safety refusal in ``authorize_apply`` uses the ALL-AGE count.
+    """
 
     key_digest: str
     state: FileState
+    old_enough: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,9 +214,10 @@ def report_file_objects(
         BoundaryDrift(
             key_digest=hashlib.sha256(key.encode("utf-8")).hexdigest(),
             state=FileState(state),
+            old_enough=past_grace,
         )
         for key, state, past_grace in rows
-        if not key.startswith(prefix) and past_grace
+        if not key.startswith(prefix)
     )
     return ObjectReconciliationReport(
         scope=scope,

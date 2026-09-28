@@ -189,12 +189,25 @@ The two-step procedure:
 **Digest stability.** The digest binds only values computed over objects
 OLDER than the reviewed cutoff — the OLD-object count, the OLD-referenced
 count, `missing_references` (already past-grace by construction), and
-`boundary_drift` (now also filtered to past-grace rows in
-`report_file_objects`) — plus `candidate_keys`, `older_than`, and
-`plan_observed_at`. A fresh upload or a fresh metadata row appearing between
-a dry-run and its apply is, by construction, not old enough to affect any of
-these, so it can never itself cause `CleanupPlanDrift`. Raw, all-age counts
-stay in the summary for visibility only.
+`old_boundary_drift` — plus `candidate_keys`, `older_than`, and
+`plan_observed_at`. `boundary_drift` itself is reported at EVERY age (the
+read-only report and the dry-run summary must show drift regardless of how
+recently the out-of-scope row was created) and is deliberately NOT in the
+digest; only its old-filtered twin, `old_boundary_drift`, is. The
+`CleanupUnsafeReferenceView` safety refusal reads the ALL-AGE
+`boundary_drift` count, not the old-filtered one — any drift, however
+recent, still refuses. A fresh upload or a fresh metadata row appearing
+between a dry-run and its apply is, by construction, not old enough to
+affect any digest-bound value, so it can never itself cause
+`CleanupPlanDrift`. Raw, all-age counts stay in the summary for visibility
+only.
+
+**A normal delete or purge of an OLD file between the dry-run and the apply
+IS expected to refuse.** Deleting or purging a candidate (or any other old,
+in-scope object) between review and apply changes an old-object count, so
+the freshly rebuilt plan's digest no longer matches and apply refuses with
+`CleanupPlanDrift`. This is the correct, safe outcome, not a bug: re-run the
+dry-run and review the new plan before applying again.
 
 Refusals (all raise before any deletion; none deletes partially):
 
@@ -230,17 +243,23 @@ Refusals (all raise before any deletion; none deletes partially):
 called from `app/services/storage.py`** — enforced by
 `tests/architecture/test_dotmac_files_delete_owner.py` across plain,
 aliased, attribute-form, AND submodule (`dotmac_files.physical`) imports,
-each with a planted sensitivity proof. The same file also asserts, absolutely
-(no legitimate caller exists), that no module anywhere binds
-`get_dotmac_files_provider()`/`get_dotmac_files_read_provider()`'s result to
-a local name and calls `.delete(` on it directly — a bypass that would reach
-the raw provider without `delete_reviewed_file_orphan`'s recheck, digest
-authorization, or provider-identity assertion. A third, separate check — "only
-storage.py may import `get_dotmac_files_provider` at all" — is FALSE against
-this tree (three legitimate non-delete upload callers already import it:
-`app/services/file_upload.py`, `app/api/finance/import_export.py`,
-`app/tasks/imports.py`) and is therefore a two-directional RATCHET over
-today's known callers, not an absolute rule.
+each with a planted sensitivity proof (guard 1). The same file also asserts
+that no module anywhere reaches the raw provider and calls `.delete(` on it
+directly (guard 2) — bound to a local name first, or CHAINED
+(`get_dotmac_files_provider().delete(...)`), through a plain import or an
+aliased module import (`import app.services.storage as s` then
+`s.get_dotmac_files_provider()`) — or constructs `DotmacFilesS3Provider(...)`
+directly (guard 3), either of which would reach the raw provider without
+`delete_reviewed_file_orphan`'s recheck, digest authorization, or
+provider-identity assertion. **Known limitation:** guard 2 is an AST-only
+scan and does not resolve a provider object passed in as a function
+PARAMETER (e.g. `def f(provider): provider.delete(x)`) — only a locally
+visible binding or a chained call is followed. A fourth, separate check —
+"only storage.py may import `get_dotmac_files_provider` at all" (guard 4) —
+is FALSE against this tree (three legitimate non-delete upload callers
+already import it: `app/services/file_upload.py`,
+`app/api/finance/import_export.py`, `app/tasks/imports.py`) and is therefore
+a two-directional RATCHET over today's known callers, not an absolute rule.
 
 Legacy ERP upload prefixes are out of scope for this task, exactly as they
 are out of scope for the report above; do not extend `expected_plan_digest`

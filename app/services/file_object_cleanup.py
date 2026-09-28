@@ -85,7 +85,7 @@ class CleanupUnsafeReferenceView(OrphanCleanupError):
     Raised when every OLD (past-cutoff) managed object looks unreferenced
     while candidates exist (indistinguishable from a hidden-rows or RLS
     failure that makes a healthy tenant look fully orphaned), or when any
-    OLD metadata row was found outside its declared scope prefix
+    metadata row AT ANY AGE was found outside its declared scope prefix
     (``boundary_drift``) — a sign the plan's picture of "what is real"
     cannot be trusted enough to delete against.
     """
@@ -99,11 +99,17 @@ class CleanupPartialFailure(OrphanCleanupError):
     """A per-object delete failed partway through the recheck-and-delete loop.
 
     Carries the full outcome summary (``summary`` attribute) so the caller
-    can report exactly what happened before the loop stopped.
+    can report exactly what happened before the loop stopped. ``summary`` is
+    a positional argument with a default of ``None`` and is stored in
+    ``self.args`` (via ``super().__init__``) rather than only as a
+    keyword-only attribute: Celery's result backend reconstructs an
+    exception as ``cls(*exc.args)`` on a pickle/JSON round trip, and a
+    keyword-only, no-default parameter would make that reconstruction raise
+    ``TypeError`` instead of faithfully restoring the exception.
     """
 
-    def __init__(self, message: str, *, summary: dict[str, object]) -> None:
-        super().__init__(message)
+    def __init__(self, message: str, summary: dict[str, object] | None = None) -> None:
+        super().__init__(message, summary)
         self.summary = summary
 
 
@@ -154,13 +160,16 @@ def _plan_digest(
     old_managed_objects: int,
     old_referenced_objects: int,
     missing_references: int,
-    boundary_drift: int,
+    old_boundary_drift: int,
     plan_observed_at: datetime,
 ) -> str:
     """Digest payload covers ONLY values derived from objects OLDER than
     ``older_than`` (plus the plan's identity and its real observation time).
     A fresh upload or a fresh, not-yet-past-grace metadata row must never
-    change any of these — see the module docstring.
+    change any of these — see the module docstring. Note ``boundary_drift``
+    is deliberately NOT here: the digest binds only its OLD-filtered count,
+    ``old_boundary_drift`` — the ALL-AGE ``boundary_drift`` stays summary-only
+    and is what the ``authorize_apply`` safety refusal reads instead.
     """
     payload = json.dumps(
         {
@@ -172,7 +181,7 @@ def _plan_digest(
             "old_managed_objects": old_managed_objects,
             "old_referenced_objects": old_referenced_objects,
             "missing_references": missing_references,
-            "boundary_drift": boundary_drift,
+            "old_boundary_drift": old_boundary_drift,
             "plan_observed_at": plan_observed_at.isoformat(),
         },
         sort_keys=True,
@@ -195,6 +204,11 @@ class OrphanCleanupPlan:
     ALL-AGE counts kept for operator visibility only; the digest instead
     binds ``old_managed_objects``/``old_referenced_objects`` (objects at or
     past ``older_than``), so a fresh upload cannot destabilize it.
+
+    ``boundary_drift`` is likewise the ALL-AGE count — the read-only report
+    and this plan's summary must show drift at every age — and is what
+    ``authorize_apply``'s safety refusal reads; only ``old_boundary_drift``
+    (drift rows past grace) is bound into the digest.
     """
 
     scope: object
@@ -211,6 +225,7 @@ class OrphanCleanupPlan:
     old_referenced_objects: int
     missing_references: int
     boundary_drift: int
+    old_boundary_drift: int
     plan_observed_at: datetime
     plan_digest: str
 
@@ -230,6 +245,7 @@ class OrphanCleanupPlan:
             "old_referenced_objects": self.old_referenced_objects,
             "missing_references": self.missing_references,
             "boundary_drift": self.boundary_drift,
+            "old_boundary_drift": self.old_boundary_drift,
             "plan_observed_at": self.plan_observed_at.isoformat(),
             "candidate_key_digests": [
                 hashlib.sha256(key.encode("utf-8")).hexdigest()
@@ -283,6 +299,7 @@ def plan_orphan_cleanup(
     )
     missing_references = len(report.missing_references)
     boundary_drift = len(report.boundary_drift)
+    old_boundary_drift = sum(1 for item in report.boundary_drift if item.old_enough)
     plan_digest = _plan_digest(
         scope_kind=scope_kind,
         tenant_id=tenant_id,
@@ -292,7 +309,7 @@ def plan_orphan_cleanup(
         old_managed_objects=old_managed_objects,
         old_referenced_objects=old_referenced_objects,
         missing_references=missing_references,
-        boundary_drift=boundary_drift,
+        old_boundary_drift=old_boundary_drift,
         plan_observed_at=observed_at,
     )
     return OrphanCleanupPlan(
@@ -310,6 +327,7 @@ def plan_orphan_cleanup(
         old_referenced_objects=old_referenced_objects,
         missing_references=missing_references,
         boundary_drift=boundary_drift,
+        old_boundary_drift=old_boundary_drift,
         plan_observed_at=observed_at,
         plan_digest=plan_digest,
     )
@@ -331,8 +349,8 @@ def authorize_apply(
     own authorized cap; ``CleanupPlanExpired`` if the reviewed dry-run is
     older than :data:`MAX_PLAN_AGE_HOURS`; and ``CleanupUnsafeReferenceView``
     if the OLD-object reference view looks like a hidden-rows/RLS failure or
-    any OLD boundary drift was found. Refuses outright rather than deleting a
-    partial or unsafely-derived set.
+    any boundary drift (at ANY age) was found. Refuses outright rather than
+    deleting a partial or unsafely-derived set.
     """
     if plan.plan_digest != expected_plan_digest:
         raise CleanupPlanDrift(
@@ -359,8 +377,8 @@ def authorize_apply(
         )
     if plan.boundary_drift > 0:
         raise CleanupUnsafeReferenceView(
-            "old metadata rows exist outside their declared scope prefix; "
-            "the reference view cannot be trusted for deletion"
+            "metadata rows exist outside their declared scope prefix; the "
+            "reference view cannot be trusted for deletion"
         )
 
 

@@ -16,6 +16,7 @@ from app.services.file_object_cleanup import (
     MAX_PLAN_AGE_HOURS,
     MIN_APPLY_GRACE_HOURS,
     CleanupCapExceeded,
+    CleanupPartialFailure,
     CleanupPlanDrift,
     CleanupPlanExpired,
     CleanupUnsafeReferenceView,
@@ -303,7 +304,7 @@ def test_authorize_apply_accepts_when_only_a_fresh_object_is_unreferenced() -> N
     authorize_apply(plan, expected_plan_digest=plan.plan_digest, now=observed_at)
 
 
-def test_authorize_apply_refuses_on_boundary_drift() -> None:
+def test_authorize_apply_refuses_on_old_boundary_drift() -> None:
     older_than = datetime(2026, 9, 24, tzinfo=UTC)
     referenced_evidence = ObjectEvidence(
         key="tenants/x/files/ref",
@@ -312,7 +313,9 @@ def test_authorize_apply_refuses_on_boundary_drift() -> None:
         referenced=True,
         old_enough=True,
     )
-    drift = BoundaryDrift(key_digest="deadbeef", state=FileState.AVAILABLE)
+    drift = BoundaryDrift(
+        key_digest="deadbeef", state=FileState.AVAILABLE, old_enough=True
+    )
     report = _report(
         candidate_keys=(),
         older_than=older_than,
@@ -320,6 +323,38 @@ def test_authorize_apply_refuses_on_boundary_drift() -> None:
         boundary_drift=(drift,),
     )
     plan = plan_orphan_cleanup(report, _observed_at_for(older_than))
+    assert plan.old_boundary_drift == 1
+
+    with pytest.raises(CleanupUnsafeReferenceView):
+        authorize_apply(
+            plan, expected_plan_digest=plan.plan_digest, now=plan.plan_observed_at
+        )
+
+
+def test_authorize_apply_refuses_on_fresh_boundary_drift_too() -> None:
+    """The safety refusal reads the ALL-AGE boundary_drift count -- a fresh
+    (not-yet-past-grace) drift row still refuses, even though it is excluded
+    from the digest itself."""
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    referenced_evidence = ObjectEvidence(
+        key="tenants/x/files/ref",
+        size_bytes=1,
+        last_modified=older_than,
+        referenced=True,
+        old_enough=True,
+    )
+    fresh_drift = BoundaryDrift(
+        key_digest="deadbeef", state=FileState.AVAILABLE, old_enough=False
+    )
+    report = _report(
+        candidate_keys=(),
+        older_than=older_than,
+        objects=(referenced_evidence,),
+        boundary_drift=(fresh_drift,),
+    )
+    plan = plan_orphan_cleanup(report, _observed_at_for(older_than))
+    assert plan.boundary_drift == 1
+    assert plan.old_boundary_drift == 0
 
     with pytest.raises(CleanupUnsafeReferenceView):
         authorize_apply(
@@ -490,3 +525,21 @@ def test_is_storage_key_referenced_true_and_false() -> None:
         )
         is False
     )
+
+
+def test_cleanup_partial_failure_survives_an_args_only_reconstruction() -> None:
+    """Celery's result backend reconstructs an exception as ``cls(*exc.args)``
+    on a pickle/JSON round trip -- this must not raise TypeError, and the
+    summary must survive intact."""
+    summary: dict[str, object] = {"deleted": 1, "failed_count": 1}
+    original = CleanupPartialFailure("stopped after a failure", summary)
+
+    rebuilt = CleanupPartialFailure(*original.args)
+
+    assert rebuilt.summary == summary
+    assert rebuilt.args == original.args
+
+
+def test_cleanup_partial_failure_summary_defaults_to_none() -> None:
+    exc = CleanupPartialFailure("stopped after a failure")
+    assert exc.summary is None
