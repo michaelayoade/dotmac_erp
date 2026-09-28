@@ -39,6 +39,10 @@ from app.models.domain_settings import (  # noqa: F401
     SettingDomain,
     SettingValueType,
 )
+from app.models.file_orphan_cleanup import (  # noqa: F401
+    FileOrphanCleanupDeletion,
+    FileOrphanCleanupRun,
+)
 from app.models.infrastructure_health import (  # noqa: F401
     InfraAlertSeverity,
     InfraAlertStatus,

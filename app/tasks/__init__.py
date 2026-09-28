@@ -116,7 +116,10 @@ from app.tasks.inventory import (
     send_low_stock_notifications,
 )
 from app.tasks.imports import process_customer_import_partitions
-from app.tasks.file_object_reconciliation import report_tenant_file_objects
+from app.tasks.file_object_reconciliation import (
+    clean_tenant_file_objects,
+    report_tenant_file_objects,
+)
 from app.tasks.license import revalidate_license
 from app.tasks.notifications import (
     process_due_calendar_reminders,
@@ -246,8 +249,9 @@ __all__ = [
     "send_low_stock_notifications",
     # Durable import tasks
     "process_customer_import_partitions",
-    # Managed file object report
+    # Managed file object report and orphan cleanup
     "report_tenant_file_objects",
+    "clean_tenant_file_objects",
     # Analytics tasks
     "refresh_cash_flow_metrics",
     "refresh_compliance_metrics",

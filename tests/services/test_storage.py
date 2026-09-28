@@ -321,3 +321,47 @@ class TestDotmacFilesProvider:
 
         assert str(raised.value) == "stored object is unavailable"
         assert "do-not-copy" not in repr(raised.value)
+
+
+class TestDeleteReviewedFileOrphan:
+    """``delete_reviewed_file_orphan`` is the sole single-key deletion seam."""
+
+    def test_refuses_when_the_live_provider_code_does_not_match_the_plan(
+        self, monkeypatch
+    ) -> None:
+        from dotmac_files import ProviderMismatch
+
+        class _OtherProvider:
+            code = "other_code"
+
+        monkeypatch.setattr(
+            storage_mod, "get_dotmac_files_provider", lambda: _OtherProvider()
+        )
+
+        with pytest.raises(ProviderMismatch):
+            storage_mod.delete_reviewed_file_orphan(
+                scope=PlatformScope(),
+                key="platform/files/x",
+                expected_provider_code="erp_s3",
+            )
+
+    def test_deletes_through_the_module_primitive_when_the_code_matches(
+        self, monkeypatch
+    ) -> None:
+        calls: list[tuple[object, object, tuple[str, ...]]] = []
+
+        def fake_delete_orphans(provider, *, scope, keys):
+            calls.append((provider, scope, keys))
+
+        monkeypatch.setattr(
+            "dotmac_files.delete_orphans", fake_delete_orphans, raising=False
+        )
+        provider = DotmacFilesS3Provider(_ProviderStorage())  # type: ignore[arg-type]
+        monkeypatch.setattr(storage_mod, "get_dotmac_files_provider", lambda: provider)
+
+        scope = PlatformScope()
+        storage_mod.delete_reviewed_file_orphan(
+            scope=scope, key="platform/files/x", expected_provider_code=provider.code
+        )
+
+        assert calls == [(provider, scope, ("platform/files/x",))]
