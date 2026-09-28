@@ -140,7 +140,7 @@ Test restart persistence without creating a user or device:
 
 ```bash
 before_db_oid="$(docker exec -u postgres dotmac_traccar_db \
-  psql -At -d postgres -c "select oid from pg_database where datname='traccar'")"
+  psql -U traccar -At -d traccar -c "select oid from pg_database where datname='traccar'")"
 
 docker restart dotmac_traccar_db dotmac_traccar
 
@@ -149,7 +149,7 @@ PUBLIC_HOST=<production-public-ip-or-name> \
 bash deploy/traccar/verify.sh
 
 after_db_oid="$(docker exec -u postgres dotmac_traccar_db \
-  psql -At -d postgres -c "select oid from pg_database where datname='traccar'")"
+  psql -U traccar -At -d traccar -c "select oid from pg_database where datname='traccar'")"
 test -n "${before_db_oid}" && test "${before_db_oid}" = "${after_db_oid}"
 ```
 
@@ -184,6 +184,14 @@ entry beside the existing ERP backup job, but at a non-overlapping time:
   verifiers;
 - `traccar_<timestamp>.dump`: PostgreSQL custom-format database archive.
 
+The script reads `POSTGRES_USER` and `POSTGRES_DB` from the running database
+container and passes that database identity explicitly to `psql`, `pg_dumpall`
+and `pg_dump`. The container process still runs as the image's `postgres`
+operating-system account, but backup connections use the configured `traccar`
+database role. The official PostgreSQL image created that configured role with
+the privileges needed for `pg_dumpall` when it initialized this dedicated
+cluster; the backup does not require or create a database role named `postgres`.
+
 The script validates the archive before upload and retains five complete runs.
 Run it once with `SKIP_UPLOAD=1`, once against the configured remote, and verify
 the two remote objects before enabling cron. A restore rehearsal is required
@@ -199,6 +207,11 @@ gzip -cd traccar_<timestamp>.globals.sql.gz | psql -U postgres -d postgres
 createdb -U postgres -O traccar traccar
 pg_restore -U postgres --clean --if-exists -d traccar traccar_<timestamp>.dump
 ```
+
+Here `postgres` is the administrator of the fresh, isolated restore target; it
+is not expected to exist in the production Traccar cluster. The restored
+`traccar` role's login secret must be reinstalled from OpenBao before Traccar is
+started against the recovered database.
 
 After restoration, start Traccar and run `verify.sh`. The named volumes
 `dotmac_traccar_logs` and `dotmac_traccar_media` may also contain operational

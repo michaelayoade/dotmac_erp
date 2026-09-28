@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import subprocess
 
 import yaml
 
@@ -90,7 +92,69 @@ def test_gps103_is_explicit_and_no_erp_connection_is_configured() -> None:
 def test_backup_targets_the_dedicated_database_and_hides_role_passwords() -> None:
     script = BACKUP_PATH.read_text(encoding="utf-8")
     assert 'DB_CONTAINER="${DB_CONTAINER:-dotmac_traccar_db}"' in script
-    assert 'DB_NAME="${DB_NAME:-traccar}"' in script
+    assert "read_container_env POSTGRES_USER" in script
+    assert "read_container_env POSTGRES_DB" in script
+    assert 'psql -U "${DB_USER}" -d "${DB_NAME}"' in script
+    assert 'pg_dumpall -U "${DB_USER}"' in script
+    assert 'pg_dump -U "${DB_USER}" -d "${DB_NAME}"' in script
+    assert "DB_USER:-postgres" not in script
     assert "--globals-only --no-role-passwords" in script
     assert "pg_restore --list" in script
     assert 'REMOTE_DIR="${REMOTE_DIR:-${REMOTE}/traccar}"' in script
+
+
+def test_backup_executes_with_the_compose_database_role(tmp_path: Path) -> None:
+    database_environment = _compose()["services"]["traccar-db"]["environment"]
+    assert database_environment["POSTGRES_USER"] == "traccar"
+    assert database_environment["POSTGRES_DB"] == "traccar"
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    command_log = tmp_path / "docker-commands.log"
+    fake_docker = bin_dir / "docker"
+    fake_docker.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"${DOCKER_COMMAND_LOG}"
+if [[ "$1" == "inspect" ]]; then
+  printf 'POSTGRES_USER=traccar\nPOSTGRES_DB=traccar\n'
+  exit 0
+fi
+case " $* " in
+  *" psql "*) printf '1\n' ;;
+  *" pg_dumpall "*) printf 'CREATE ROLE traccar;\nALTER ROLE traccar WITH SUPERUSER;\n' ;;
+  *" pg_dump "*) printf 'fake-custom-archive' ;;
+  *" pg_restore --list "*) printf '1; 0 0 TABLE public tc_devices traccar\n' ;;
+  *) printf 'unexpected docker invocation: %s\n' "$*" >&2; exit 64 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_docker.chmod(0o755)
+
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "DOCKER_COMMAND_LOG": str(command_log),
+        "LOCAL_DIR": str(tmp_path / "backups"),
+        "SKIP_UPLOAD": "1",
+    }
+    completed = subprocess.run(  # noqa: S603 - fixed shell and repository path
+        ["/usr/bin/bash", str(BACKUP_PATH)],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    invocations = command_log.read_text(encoding="utf-8")
+    assert "psql -U traccar -d traccar --no-password" in invocations
+    assert "pg_dumpall -U traccar --no-password --globals-only" in invocations
+    assert "pg_dump -U traccar -d traccar --no-password -Fc" in invocations
+    assert " -U postgres" not in invocations
+
+    artifacts = list((tmp_path / "backups").iterdir())
+    assert len(artifacts) == 2
+    assert all(path.stat().st_mode & 0o777 == 0o600 for path in artifacts)
