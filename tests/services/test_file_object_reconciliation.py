@@ -231,3 +231,87 @@ def test_task_lists_before_opening_the_tenant_session(monkeypatch) -> None:
 
     assert task_module.report_tenant_file_objects.run(str(uuid4())) == {"dry_run": True}
     assert events == ["list", "session_open", "compare", "session_closed"]
+
+
+def test_clean_task_dry_run_never_calls_the_deletion_seam(monkeypatch) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    provider = ListingProvider(())
+    delete_calls: list[tuple[object, tuple[str, ...]]] = []
+
+    @contextmanager
+    def scoped_session(_organization_id):
+        yield object()
+
+    def fake_delete(*, scope, keys):
+        delete_calls.append((scope, keys))
+        raise AssertionError("dry-run must never delete")
+
+    monkeypatch.setattr(task_module, "get_dotmac_files_read_provider", lambda: provider)
+    monkeypatch.setattr(task_module, "list_objects", lambda _p, *, scope: ())
+    monkeypatch.setattr(task_module, "session_for_org", scoped_session)
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphans", fake_delete)
+
+    summary = task_module.clean_tenant_file_objects.run(str(uuid4()))
+
+    assert summary["dry_run"] is True
+    assert delete_calls == []
+
+
+def test_clean_task_apply_requires_grace_at_least_72_hours() -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(
+            str(uuid4()), grace_hours=1, apply=True, expected_plan_digest="x"
+        )
+
+
+def test_clean_task_apply_requires_expected_plan_digest() -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    with pytest.raises(ValueError):
+        task_module.clean_tenant_file_objects.run(str(uuid4()), apply=True)
+
+
+def test_clean_task_apply_calls_the_deletion_seam_exactly_once_with_plan_keys(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    now = datetime(2026, 9, 27, tzinfo=UTC)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = ListingProvider((ObjectInfo(old_orphan, 11, now - timedelta(days=10)),))
+    db = _session()
+
+    @contextmanager
+    def scoped_session(_organization_id):
+        yield db
+
+    delete_calls: list[tuple[object, tuple[str, ...]]] = []
+
+    def fake_delete(*, scope, keys):
+        delete_calls.append((scope, keys))
+        return len(keys)
+
+    monkeypatch.setattr(task_module, "get_dotmac_files_read_provider", lambda: provider)
+    monkeypatch.setattr(
+        task_module.OrganizationTenantContext,
+        "for_organization",
+        classmethod(lambda cls, org_id: SimpleNamespace(tenant_scope=scope)),
+    )
+    monkeypatch.setattr(task_module, "session_for_org", scoped_session)
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphans", fake_delete)
+
+    dry_run_summary = task_module.clean_tenant_file_objects.run(str(tenant_id))
+    digest = dry_run_summary["plan_digest"]
+
+    summary = task_module.clean_tenant_file_objects.run(
+        str(tenant_id),
+        grace_hours=72,
+        apply=True,
+        expected_plan_digest=digest,
+    )
+
+    assert delete_calls == [(scope, (old_orphan,))]
+    assert summary["dry_run"] is False
+    assert summary["deleted"] == 1

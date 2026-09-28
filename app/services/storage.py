@@ -432,3 +432,20 @@ def get_dotmac_files_provider() -> DotmacFilesS3Provider:
 def get_dotmac_files_read_provider() -> DotmacFilesS3Provider:
     """Construct a listing provider without checking or creating the bucket."""
     return DotmacFilesS3Provider(S3StorageService(ensure_bucket=False))
+
+
+def delete_reviewed_file_orphans(*, scope: object, keys: tuple[str, ...]) -> int:
+    """Delete a reviewed, digest-authorized set of orphan object keys.
+
+    This is the ONLY deletion path for managed file objects (ADR-0013's
+    external-effect owner rule, enforced by
+    ``tests/architecture/test_external_effect_callers.py``). It never
+    receives an unreviewed key list: the caller must have already produced
+    and authorized an ``app.services.file_object_cleanup.OrphanCleanupPlan``.
+    ``dotmac_files.delete_orphans`` itself refuses any key outside the given
+    scope's prefix and performs the deletes outside a database transaction.
+    """
+    from dotmac_files import delete_orphans
+
+    delete_orphans(get_dotmac_files_provider(), scope=cast(Any, scope), keys=keys)
+    return len(keys)

@@ -57,5 +57,48 @@ per-object recheck of age and authoritative references immediately before
 each delete, a retention policy, and an explicit operator invocation. A
 candidate in this dry-run must never be passed directly to
 `dotmac_files.delete_orphans`; that primitive validates prefix only and does
-not recheck age or references. Automatic deletion is not enabled by this
-change.
+not recheck age or references.
+
+## Cleanup (dry-run, then reviewed apply)
+
+`app.tasks.file_object_reconciliation.clean_tenant_file_objects` is the
+operator-invoked tenant cleanup task. It is **not** scheduled anywhere — there
+is no beat entry, and every invocation is a deliberate operator action.
+
+The two-step procedure:
+
+1. **Dry-run.** Invoke with `apply=False` (the default). It lists objects,
+   opens a read-only session, builds the same `report_file_objects` report as
+   above, then turns it into an `app.services.file_object_cleanup
+   .OrphanCleanupPlan` via `plan_orphan_cleanup`. Nothing is deleted. The
+   returned safe summary carries counts, up to 100 candidate-key digests, and
+   a `plan_digest` — a SHA-256 over the scope kind, tenant id, provider code,
+   `older_than`, and the exact sorted candidate key list. Review the summary
+   (digest count, in-flight/missing/boundary-drift counts) before proceeding.
+2. **Reviewed apply.** Invoke again with `apply=True`, `grace_hours>=72`, and
+   `expected_plan_digest` set to EXACTLY the `plan_digest` from the dry-run
+   you reviewed. The task recomputes the plan from a fresh listing and a
+   fresh session (never a cached one) and only proceeds if that fresh plan's
+   digest still matches what you supplied. Only then does it call the sole
+   deletion seam, `app.services.storage.delete_reviewed_file_orphans`, with
+   the plan's exact keys, and it never logs raw keys — only the same safe
+   summary shape, with `dry_run: False` and a `deleted` count.
+
+Refusals (all raise before any deletion; none deletes partially):
+
+- `grace_hours < 72` on an apply — `ValueError`.
+- `expected_plan_digest` missing on an apply — `ValueError`.
+- The fresh plan's digest does not match `expected_plan_digest` (a key
+  appeared, disappeared, or `older_than` moved between review and apply) —
+  `app.services.file_object_cleanup.CleanupPlanDrift`.
+- The candidate count exceeds the plan's `max_deletions` (default 100, hard
+  ceiling 1000 — a `max_deletions` above the ceiling is refused when the plan
+  is built) — `app.services.file_object_cleanup.CleanupCapExceeded`.
+
+**Deletion is irreversible unless the bucket keeps object versions.**
+Whether the production bucket has versioning enabled is unverified as of this
+change — confirm bucket versioning before the first real apply. Legacy ERP
+upload prefixes are out of scope for this task, exactly as they are out of
+scope for the report above; do not extend `expected_plan_digest` review or
+apply to keys outside the `tenants/<uuid>/files/` / `platform/files/`
+prefixes.
