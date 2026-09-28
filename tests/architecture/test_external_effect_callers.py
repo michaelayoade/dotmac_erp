@@ -432,9 +432,7 @@ class _ImportAliases:
         #: True if this module imports anything from a provider package.
         self.imports_provider_package: bool = False
 
-    def visit(
-        self, tree: ast.AST, *, nodes: tuple[ast.AST, ...] | None = None
-    ) -> None:
+    def visit(self, tree: ast.AST, *, nodes: tuple[ast.AST, ...] | None = None) -> None:
         for node in nodes if nodes is not None else ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -782,9 +780,7 @@ def external_effect_hits(tree: ast.AST) -> set[str]:
     for class_node in all_nodes:
         if not isinstance(class_node, ast.ClassDef):
             continue
-        bound = _class_http_client_bindings(
-            class_node, aliases, own_nodes_by_function
-        )
+        bound = _class_http_client_bindings(class_node, aliases, own_nodes_by_function)
         if bound and any(
             _http_write_calls(own_nodes_by_function[method], bound, aliases)
             for method in class_node.body
