@@ -1,0 +1,118 @@
+name: dotmac-traccar
+
+services:
+  traccar-db:
+    image: postgres:16.15-bookworm@sha256:efedf3595f1d6f415c08568ba171029bf54052e754cc9f030e3f2412b21f3d67
+    platform: linux/amd64
+    container_name: dotmac_traccar_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: traccar
+      POSTGRES_USER: traccar
+      POSTGRES_PASSWORD_FILE: /run/secrets/traccar_db_password
+    secrets:
+      - traccar_db_password
+    volumes:
+      - traccar_db_data:/var/lib/postgresql/data
+    networks:
+      - traccar_data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traccar -d traccar"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  traccar:
+    image: traccar/traccar:6.15.3@sha256:35346b4af46d57adaeff69a548a7d2cb189a2487fe9c24c99044ee7aa104b5df
+    platform: linux/amd64
+    container_name: dotmac_traccar
+    restart: unless-stopped
+    depends_on:
+      traccar-db:
+        condition: service_healthy
+        restart: true
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        database_password="$$(cat /run/secrets/traccar_db_password)"
+        test -n "$${database_password}"
+        export DATABASE_PASSWORD="$${database_password}"
+        exec /opt/traccar/jre/bin/java -XX:+ExitOnOutOfMemoryError -jar tracker-server.jar conf/traccar.xml
+    environment:
+      CONFIG_USE_ENVIRONMENT_VARIABLES: "true"
+      DATABASE_DRIVER: org.postgresql.Driver
+      DATABASE_URL: jdbc:postgresql://traccar-db:5432/traccar
+      DATABASE_USER: traccar
+      DATABASE_CHECKCONNECTION: SELECT 1
+      DATABASE_REGISTERUNKNOWN: "false"
+      GPS103_PORT: "5001"
+      LOGGER_LEVEL: info
+      WEB_CONSOLE: "false"
+      WEB_PORT: "8082"
+    secrets:
+      - traccar_db_password
+    ports:
+      - name: gps103
+        target: 5001
+        published: "5001"
+        host_ip: 0.0.0.0
+        protocol: tcp
+        app_protocol: gps103
+      - name: traccar-http-loopback
+        target: 8082
+        published: "8082"
+        host_ip: 127.0.0.1
+        protocol: tcp
+        app_protocol: http
+    volumes:
+      - traccar_logs:/opt/traccar/logs
+      - traccar_media:/opt/traccar/media
+    networks:
+      - traccar_data
+      - traccar_api
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -q --spider http://127.0.0.1:8082/api/health &&
+          nc -z 127.0.0.1 5001
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+secrets:
+  traccar_db_password:
+    file: ${TRACCAR_DB_PASSWORD_FILE:?Set TRACCAR_DB_PASSWORD_FILE to the host secret file}
+
+volumes:
+  traccar_db_data:
+    name: dotmac_traccar_db_data
+  traccar_logs:
+    name: dotmac_traccar_logs
+  traccar_media:
+    name: dotmac_traccar_media
+
+networks:
+  traccar_data:
+    name: dotmac_traccar_data
+    internal: true
+  traccar_api:
+    name: dotmac_traccar_api
