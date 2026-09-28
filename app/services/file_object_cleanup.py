@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from dotmac_files import TenantStoredFile
@@ -37,7 +37,22 @@ from dotmac_kernel.cache import PlatformScope, TenantScope
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.file_orphan_cleanup import (
+    FileOrphanCleanupDeletion,
+    FileOrphanCleanupRun,
+)
 from app.services.file_object_reconciliation import ObjectReconciliationReport
+
+_DELETION_OUTCOMES = frozenset(
+    {
+        "deleted",
+        "rechecked_referenced",
+        "already_absent",
+        "rechecked_too_new",
+        "failed",
+    }
+)
+_RUN_STATUSES = frozenset({"running", "completed", "partial_failure"})
 
 _MAX_SUMMARY_EVIDENCE = 100
 
@@ -269,7 +284,7 @@ def plan_orphan_cleanup(
 
     ``observed_at`` must be the REAL moment this report's underlying listing
     and metadata query were taken — for a dry-run, the task's own fresh
-    ``datetime.now(UTC)``; for an apply rebuild, the operator-reviewed
+    ``datetime.now(timezone.utc)``; for an apply rebuild, the operator-reviewed
     ``reviewed_plan_observed_at`` (so the rebuilt plan's digest can match the
     original). This function never derives it from ``older_than`` itself.
 
@@ -382,6 +397,107 @@ def authorize_apply(
         )
 
 
+def record_cleanup_run_started(
+    db: Session,
+    *,
+    tenant_id: UUID,
+    plan: OrphanCleanupPlan,
+    actor: str,
+    invocation_id: str,
+) -> UUID:
+    """Insert the durable run record for one authorized apply invocation.
+
+    Takes an already-open, caller-owned session and never commits or opens
+    one of its own — the caller (the Celery task, slice 2b) owns the
+    transaction. Returns the new run's id; the row is flushed but not
+    committed, so the caller can still fail before persisting.
+    """
+    if not actor:
+        raise ValueError("actor must be a non-empty operator identity")
+    if not invocation_id:
+        raise ValueError("invocation_id must be a non-empty string")
+    run = FileOrphanCleanupRun(
+        organization_id=tenant_id,
+        plan_digest=plan.plan_digest,
+        older_than=plan.older_than,
+        plan_observed_at=plan.plan_observed_at,
+        provider_code=plan.provider_code,
+        candidate_count=len(plan.candidate_keys),
+        actor=actor,
+        invocation_id=invocation_id,
+        status="running",
+        outcome_counts={},
+    )
+    db.add(run)
+    db.flush()
+    return run.id
+
+
+def record_cleanup_key_outcome(
+    db: Session,
+    *,
+    tenant_id: UUID,
+    run_id: UUID,
+    storage_key: str,
+    outcome: str,
+    error_class: str | None = None,
+    observed_last_modified: datetime | None = None,
+) -> None:
+    """Insert one candidate key's outcome row for an in-progress run.
+
+    ``key_digest`` is always derived here from ``storage_key`` (never
+    accepted from the caller) so it cannot drift from the raw key it
+    describes. Takes an already-open, caller-owned session; never commits.
+    """
+    if outcome not in _DELETION_OUTCOMES:
+        raise ValueError(
+            f"outcome must be one of {sorted(_DELETION_OUTCOMES)}, got {outcome!r}"
+        )
+    key_digest = hashlib.sha256(storage_key.encode("utf-8")).hexdigest()
+    db.add(
+        FileOrphanCleanupDeletion(
+            organization_id=tenant_id,
+            run_id=run_id,
+            storage_key=storage_key,
+            key_digest=key_digest,
+            outcome=outcome,
+            error_class=error_class,
+            observed_last_modified=observed_last_modified,
+        )
+    )
+
+
+def record_cleanup_run_finished(
+    db: Session,
+    *,
+    tenant_id: UUID,
+    run_id: UUID,
+    status: str,
+    outcome_counts: dict[str, int],
+) -> None:
+    """Mark a run's terminal status and per-outcome counts.
+
+    Loads the run by its composite (id, tenant) key so a caller can never
+    finish another tenant's run even if it somehow obtained the bare id.
+    Takes an already-open, caller-owned session; never commits.
+    """
+    if status not in _RUN_STATUSES:
+        raise ValueError(
+            f"status must be one of {sorted(_RUN_STATUSES)}, got {status!r}"
+        )
+    run = db.execute(
+        select(FileOrphanCleanupRun).where(
+            FileOrphanCleanupRun.id == run_id,
+            FileOrphanCleanupRun.organization_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if run is None:
+        raise ValueError(f"no cleanup run {run_id} found for tenant {tenant_id}")
+    run.status = status
+    run.outcome_counts = dict(outcome_counts)
+    run.finished_at = datetime.now(timezone.utc)
+
+
 __all__ = [
     "DEFAULT_MAX_DELETIONS",
     "MAX_DELETIONS_CEILING",
@@ -397,4 +513,7 @@ __all__ = [
     "authorize_apply",
     "is_storage_key_referenced",
     "plan_orphan_cleanup",
+    "record_cleanup_key_outcome",
+    "record_cleanup_run_finished",
+    "record_cleanup_run_started",
 ]

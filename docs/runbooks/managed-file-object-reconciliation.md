@@ -265,3 +265,27 @@ Legacy ERP upload prefixes are out of scope for this task, exactly as they
 are out of scope for the report above; do not extend `expected_plan_digest`
 review or apply to keys outside the `tenants/<uuid>/files/` /
 `platform/files/` prefixes.
+
+## Durable deletion record (schema)
+
+Slice 2a (schema only, 2026-09-28): `public.file_orphan_cleanup_runs` (one
+row per apply invocation — plan identity, actor, invocation id, status,
+outcome counts) and `public.file_orphan_cleanup_deletions` (one row per
+candidate key processed — the raw `storage_key`, a `key_digest`, and its
+outcome), both tenant-scoped with the same ERP-native
+`app.current_organization_id` RLS predicate `sync.source_correlation` uses
+(`20260825_retire_dotmac_crm.py`), following the `ar` schema's
+outcome/issue composite-FK pattern (`20260906_invoice_sync_outcomes.py`).
+Models live in `app/models/file_orphan_cleanup.py`; the three
+session/commit-agnostic recorder functions
+(`record_cleanup_run_started`/`record_cleanup_key_outcome`/
+`record_cleanup_run_finished`) live alongside the plan/authorize logic in
+`app/services/file_object_cleanup.py`.
+
+**Nothing in `clean_tenant_file_objects` calls these functions yet.** Wiring
+the task to open a run at the start of apply, record each candidate's
+outcome inside the existing per-object recheck-and-delete loop, and finish
+the run (including on `CleanupPartialFailure`) is slice 2b — a separate,
+not-yet-scoped change. Until then this is inert schema: an apply still
+behaves exactly as described above, with no durable record of what it did
+beyond its Celery result and log line.
