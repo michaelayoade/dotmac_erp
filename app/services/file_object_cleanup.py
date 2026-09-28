@@ -29,13 +29,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from collections.abc import Sequence
 
 from dotmac_files import TenantStoredFile
-from dotmac_kernel.cache import PlatformScope, TenantScope
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -160,19 +160,30 @@ def is_storage_key_referenced(
     )
 
 
-def _scope_kind_and_tenant(scope: object) -> tuple[str, str | None]:
-    """Return the plan-safe scope kind and tenant id, or refuse a stranger.
+@runtime_checkable
+class _TenantFileScope(Protocol):
+    """Structural view of the tenant scope created by ``app.tenancy``."""
 
-    Deliberately checks the concrete ``dotmac_kernel.cache`` scope types
-    (the same pattern ``dotmac_files.physical.scope_prefix`` uses) rather
-    than defaulting an unrecognized scope to "platform" — an unclassified
-    scope is a bug to surface, not treat as the platform plane.
+    tenant_id: UUID
+
+
+def _scope_kind_and_tenant(scope: object) -> tuple[str, str | None]:
+    """Return the plan-safe scope kind and tenant id, or refuse anything else.
+
+    Cleanup is tenant-only: the platform plane has no ERP task adapter or
+    approved platform session boundary (see the runbook). The tenant scope
+    is recognised structurally, like ``file_object_reconciliation``'s
+    ``_TenantFileScope``, because ``docs/PLATFORM_ADOPTION_LEDGER.md`` admits
+    ``app.tenancy`` as the ONLY importer of ``dotmac_kernel.cache``; services
+    receive the scope from that adapter and never choose it themselves. Any
+    scope that is not a tenant scope -- including the platform scope -- is
+    refused rather than guessed.
     """
-    if isinstance(scope, TenantScope):
+    if isinstance(scope, _TenantFileScope):
         return "tenant", str(scope.tenant_id)
-    if isinstance(scope, PlatformScope):
-        return "platform", None
-    raise TypeError(f"unsupported file scope type {type(scope).__name__}")
+    raise TypeError(
+        f"orphan cleanup supports only a tenant file scope, not {type(scope).__name__}"
+    )
 
 
 def _plan_digest(

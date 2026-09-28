@@ -238,14 +238,14 @@ def test_authorize_apply_refuses_a_scope_neither_tenant_nor_platform() -> None:
         )
 
 
-def test_scope_kind_accepts_platform_scope() -> None:
+def test_scope_kind_refuses_the_platform_scope() -> None:
+    """Cleanup is tenant-only; the platform plane has no adapter."""
     older_than = datetime(2026, 9, 24, tzinfo=UTC)
-    plan = plan_orphan_cleanup(
-        _report(candidate_keys=(), older_than=older_than, scope=PlatformScope()),
-        _observed_at_for(older_than),
-    )
-    assert plan.scope_kind == "platform"
-    assert plan.tenant_id is None
+    with pytest.raises(TypeError, match="only a tenant file scope"):
+        plan_orphan_cleanup(
+            _report(candidate_keys=(), older_than=older_than, scope=PlatformScope()),
+            _observed_at_for(older_than),
+        )
 
 
 def test_authorize_apply_refuses_when_every_old_object_looks_unreferenced() -> None:
