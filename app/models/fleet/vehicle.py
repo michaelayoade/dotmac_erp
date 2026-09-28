@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from app.models.fleet.vehicle_document import VehicleDocument
     from app.models.fleet.vehicle_incident import VehicleIncident
     from app.models.fleet.vehicle_reservation import VehicleReservation
+    from app.models.fleet.vehicle_tracker import VehicleTracker
     from app.models.people.hr.employee import Employee
 
 
@@ -73,6 +74,11 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin):
             "organization_id",
             "vehicle_code",
             name="uq_fleet_vehicle_org_code",
+        ),
+        UniqueConstraint(
+            "vehicle_id",
+            "organization_id",
+            name="uq_fleet_vehicle_id_org",
         ),
         Index("idx_fleet_vehicle_status", "organization_id", "status"),
         Index("idx_fleet_vehicle_type", "organization_id", "vehicle_type"),
@@ -360,6 +366,14 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin):
         cascade="all, delete-orphan",
         order_by="desc(VehicleReservation.start_datetime)",
         lazy="dynamic",
+    )
+
+    trackers: Mapped[list["VehicleTracker"]] = relationship(
+        "VehicleTracker",
+        back_populates="vehicle",
+        cascade="all, delete-orphan",
+        order_by="desc(VehicleTracker.assigned_at)",
+        lazy="selectin",
     )
 
     # ─────────────────────────────────────────────────────────────

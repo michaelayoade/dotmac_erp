@@ -548,7 +548,13 @@ def vehicle_detail(
     web_service = FleetWebService(db)
     try:
         context.update(
-            web_service.vehicle_detail_context(auth.organization_id, vehicle_id)
+            web_service.vehicle_detail_context(
+                auth.organization_id,
+                vehicle_id,
+                include_tracking=auth.has_any_permission(
+                    ["fleet:tracking:read", "fleet:tracking:manage"]
+                ),
+            )
         )
         return templates.TemplateResponse(request, "fleet/vehicle_detail.html", context)
     except NotFoundError:

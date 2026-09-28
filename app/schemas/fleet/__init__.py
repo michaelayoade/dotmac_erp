@@ -48,6 +48,11 @@ from app.schemas.fleet.reservation import (
     ReservationReject,
     ReservationUpdate,
 )
+from app.schemas.fleet.tracking import (
+    TrackerMappingCreate,
+    TrackerMappingRead,
+    TrackerMappingUpdate,
+)
 from app.schemas.fleet.vehicle import (
     FleetSummary,
     OdometerUpdate,
@@ -112,4 +117,8 @@ __all__ = [
     "AssignmentUpdate",
     "AssignmentRead",
     "AssignmentEnd",
+    # Tracking
+    "TrackerMappingCreate",
+    "TrackerMappingUpdate",
+    "TrackerMappingRead",
 ]

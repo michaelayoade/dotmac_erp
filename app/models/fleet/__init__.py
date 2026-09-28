@@ -33,6 +33,7 @@ from app.models.fleet.vehicle_assignment import VehicleAssignment
 from app.models.fleet.vehicle_document import VehicleDocument
 from app.models.fleet.vehicle_incident import VehicleIncident
 from app.models.fleet.vehicle_reservation import VehicleReservation
+from app.models.fleet.vehicle_tracker import VehicleTracker
 
 __all__ = [
     # Enums
@@ -57,4 +58,5 @@ __all__ = [
     "FuelLogEntry",
     "VehicleIncident",
     "VehicleReservation",
+    "VehicleTracker",
 ]

@@ -65,7 +65,7 @@ class Settings:
     branding_url_prefix: str = os.getenv("BRANDING_URL_PREFIX", "/static/branding")
 
     # Branding
-    app_version: str = os.getenv("APP_VERSION", "1.36.1")
+    app_version: str = os.getenv("APP_VERSION", "1.37.0")
     brand_name: str = os.getenv("BRAND_NAME", "Dotmac ERP")
     brand_tagline: str = os.getenv(
         "BRAND_TAGLINE",
@@ -153,6 +153,17 @@ class Settings:
         os.getenv("IMPORT_PARTITION_MAX_BYTES", str(8 * 1024 * 1024))
     )
     import_validation_workers: int = int(os.getenv("IMPORT_VALIDATION_WORKERS", "2"))
+
+    # ==========================================================================
+    # Traccar Fleet Tracking (server-side foundation only)
+    # ==========================================================================
+    traccar_base_url: str = os.getenv("TRACCAR_BASE_URL", "")
+    # Username/password may be literal deployment values or OpenBao references.
+    # They are resolved only inside the server-side Traccar client boundary.
+    traccar_username: str | None = os.getenv("TRACCAR_USERNAME") or None
+    traccar_password: str | None = os.getenv("TRACCAR_PASSWORD") or None
+    traccar_connect_timeout: float = float(os.getenv("TRACCAR_CONNECT_TIMEOUT", "5.0"))
+    traccar_read_timeout: float = float(os.getenv("TRACCAR_READ_TIMEOUT", "15.0"))
 
     # ==========================================================================
     # Remita Integration (RRR for government payments)

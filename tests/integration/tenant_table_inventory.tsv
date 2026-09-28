@@ -125,6 +125,7 @@ fin_inst	instrument_valuation	inherited	false	false	app_admin	0	false	--	--
 fin_inst	interest_accrual	inherited	false	false	app_admin	0	false	--	--
 fleet	fuel_log_entry	direct	false	false	app_admin	0	false	--	--
 fleet	maintenance_record	direct	false	false	app_admin	0	false	--	--
+fleet	vehicle_tracker	direct	true	true	app_admin	1	false	--	--
 fleet	vehicle	direct	false	false	app_admin	0	false	--	--
 fleet	vehicle_assignment	direct	false	false	app_admin	0	false	--	--
 fleet	vehicle_document	direct	false	false	app_admin	0	false	--	--

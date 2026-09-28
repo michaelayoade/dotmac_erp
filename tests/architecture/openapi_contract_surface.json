@@ -187,6 +187,18 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "DELETE /api/v1/fleet/tracking/vehicles/{vehicle_id}/tracker": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:vehicle_id!"
+   ],
+   "request": null,
+   "responses": {
+    "204": "cc5fd302f9c4",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "DELETE /api/v1/fleet/vehicles/{vehicle_id}": {
    "params": [
     "cookie:access_token",
@@ -1738,6 +1750,18 @@
    "request": null,
    "responses": {
     "200": "76fcb4a4acc6",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "GET /api/v1/fleet/tracking/vehicles/{vehicle_id}/tracker": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:vehicle_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "5488b9b952e0",
     "422": "a11c9d9b2af8"
    }
   },
@@ -4886,6 +4910,18 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "PATCH /api/v1/fleet/tracking/vehicles/{vehicle_id}/tracker": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:vehicle_id!"
+   ],
+   "request": "07cdd40b365e",
+   "responses": {
+    "200": "5488b9b952e0",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "PATCH /api/v1/fleet/vehicles/{vehicle_id}": {
    "params": [
     "cookie:access_token",
@@ -6718,6 +6754,18 @@
    "request": "2ab7518964d4",
    "responses": {
     "200": "76fcb4a4acc6",
+    "422": "a11c9d9b2af8"
+   }
+  },
+  "POST /api/v1/fleet/tracking/vehicles/{vehicle_id}/tracker": {
+   "params": [
+    "cookie:access_token",
+    "header:authorization",
+    "path:vehicle_id!"
+   ],
+   "request": "eb71a982700e",
+   "responses": {
+    "201": "5488b9b952e0",
     "422": "a11c9d9b2af8"
    }
   },
@@ -10024,6 +10072,9 @@
   "TimesheetDay": "902db5915e3f",
   "TimesheetWeek": "72ee8b89931d",
   "TokenResponse": "b55a164b5612",
+  "TrackerMappingCreate": "35865aaf6d77",
+  "TrackerMappingRead": "f9ca566c3774",
+  "TrackerMappingUpdate": "a6f68efc5e78",
   "TransactionCreate": "23a6e64adb4d",
   "TransactionRead": "811342cd83eb",
   "TrialBalanceLineRead": "d910700fa4cd",
