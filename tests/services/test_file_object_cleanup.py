@@ -1,4 +1,4 @@
-"""Plan digest, drift, and cap-authorization canaries for orphan cleanup."""
+"""Plan digest, drift, safety, and expiry canaries for orphan cleanup."""
 
 from __future__ import annotations
 
@@ -7,34 +7,46 @@ from uuid import uuid4
 
 import pytest
 from dotmac_files import ObjectInfo, list_objects
-from dotmac_kernel.cache import TenantScope
+from dotmac_kernel.cache import PlatformScope, TenantScope
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.services.file_object_cleanup import (
     MAX_DELETIONS_CEILING,
+    MAX_PLAN_AGE_HOURS,
+    MIN_APPLY_GRACE_HOURS,
     CleanupCapExceeded,
     CleanupPlanDrift,
+    CleanupPlanExpired,
+    CleanupUnsafeReferenceView,
     authorize_apply,
     plan_orphan_cleanup,
 )
 from app.services.file_object_reconciliation import (
+    BoundaryDrift,
+    FileState,
+    ObjectEvidence,
     ObjectReconciliationReport,
     report_file_objects,
 )
 
 
 def _report(
-    *, candidate_keys: tuple[str, ...], older_than: datetime, scope: object = None
+    *,
+    candidate_keys: tuple[str, ...],
+    older_than: datetime,
+    scope: object = None,
+    objects: tuple[ObjectEvidence, ...] = (),
+    boundary_drift: tuple[BoundaryDrift, ...] = (),
 ) -> ObjectReconciliationReport:
     return ObjectReconciliationReport(
         scope=scope if scope is not None else TenantScope(uuid4()),
         provider_code="erp_s3",
         older_than=older_than,
-        objects=(),
+        objects=objects,
         candidate_keys=candidate_keys,
         missing_references=(),
-        boundary_drift=(),
+        boundary_drift=boundary_drift,
     )
 
 
@@ -73,7 +85,9 @@ def test_digest_drifts_when_a_candidate_key_is_added_or_removed() -> None:
     assert base.plan_digest != removed.plan_digest
 
     with pytest.raises(CleanupPlanDrift):
-        authorize_apply(added, expected_plan_digest=base.plan_digest)
+        authorize_apply(
+            added, expected_plan_digest=base.plan_digest, now=added.plan_observed_at
+        )
 
 
 def test_digest_drifts_when_older_than_changes() -> None:
@@ -95,7 +109,11 @@ def test_digest_drifts_when_older_than_changes() -> None:
 
     assert plan_a.plan_digest != plan_b.plan_digest
     with pytest.raises(CleanupPlanDrift):
-        authorize_apply(plan_b, expected_plan_digest=plan_a.plan_digest)
+        authorize_apply(
+            plan_b,
+            expected_plan_digest=plan_a.plan_digest,
+            now=plan_b.plan_observed_at,
+        )
 
 
 def test_authorize_apply_refuses_when_candidates_exceed_the_cap() -> None:
@@ -104,7 +122,9 @@ def test_authorize_apply_refuses_when_candidates_exceed_the_cap() -> None:
     plan = plan_orphan_cleanup(report, max_deletions=2)
 
     with pytest.raises(CleanupCapExceeded):
-        authorize_apply(plan, expected_plan_digest=plan.plan_digest)
+        authorize_apply(
+            plan, expected_plan_digest=plan.plan_digest, now=plan.plan_observed_at
+        )
 
 
 def test_plan_orphan_cleanup_refuses_a_cap_above_the_ceiling() -> None:
@@ -125,10 +145,116 @@ def test_plan_orphan_cleanup_refuses_a_non_positive_cap() -> None:
 
 def test_authorize_apply_accepts_a_matching_digest_within_the_cap() -> None:
     older_than = datetime(2026, 9, 24, tzinfo=UTC)
-    report = _report(candidate_keys=("k1", "k2"), older_than=older_than)
+    referenced_evidence = ObjectEvidence(
+        key="tenants/x/files/ref",
+        size_bytes=1,
+        last_modified=older_than,
+        referenced=True,
+        old_enough=True,
+    )
+    report = _report(
+        candidate_keys=("k1", "k2"),
+        older_than=older_than,
+        objects=(referenced_evidence,),
+    )
     plan = plan_orphan_cleanup(report, max_deletions=10)
 
-    authorize_apply(plan, expected_plan_digest=plan.plan_digest)
+    authorize_apply(
+        plan, expected_plan_digest=plan.plan_digest, now=plan.plan_observed_at
+    )
+
+
+def test_authorize_apply_refuses_a_scope_neither_tenant_nor_platform() -> None:
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    with pytest.raises(TypeError):
+        plan_orphan_cleanup(
+            _report(candidate_keys=(), older_than=older_than, scope=object())
+        )
+
+
+def test_scope_kind_accepts_platform_scope() -> None:
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    plan = plan_orphan_cleanup(
+        _report(candidate_keys=(), older_than=older_than, scope=PlatformScope())
+    )
+    assert plan.scope_kind == "platform"
+    assert plan.tenant_id is None
+
+
+def test_authorize_apply_refuses_when_every_object_looks_unreferenced() -> None:
+    """Managed objects exist, none look referenced, candidates exist.
+
+    Indistinguishable from a hidden-rows or RLS failure making a healthy
+    tenant look fully orphaned; must refuse rather than delete.
+    """
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    unreferenced = ObjectEvidence(
+        key="tenants/x/files/orphan",
+        size_bytes=1,
+        last_modified=older_than - timedelta(days=1),
+        referenced=False,
+        old_enough=True,
+    )
+    report = _report(
+        candidate_keys=("tenants/x/files/orphan",),
+        older_than=older_than,
+        objects=(unreferenced,),
+    )
+    plan = plan_orphan_cleanup(report)
+
+    with pytest.raises(CleanupUnsafeReferenceView):
+        authorize_apply(
+            plan, expected_plan_digest=plan.plan_digest, now=plan.plan_observed_at
+        )
+
+
+def test_authorize_apply_refuses_on_boundary_drift() -> None:
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    referenced_evidence = ObjectEvidence(
+        key="tenants/x/files/ref",
+        size_bytes=1,
+        last_modified=older_than,
+        referenced=True,
+        old_enough=True,
+    )
+    drift = BoundaryDrift(key_digest="deadbeef", state=FileState.AVAILABLE)
+    report = _report(
+        candidate_keys=(),
+        older_than=older_than,
+        objects=(referenced_evidence,),
+        boundary_drift=(drift,),
+    )
+    plan = plan_orphan_cleanup(report)
+
+    with pytest.raises(CleanupUnsafeReferenceView):
+        authorize_apply(
+            plan, expected_plan_digest=plan.plan_digest, now=plan.plan_observed_at
+        )
+
+
+def test_authorize_apply_refuses_an_expired_plan() -> None:
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    report = _report(candidate_keys=(), older_than=older_than)
+    plan = plan_orphan_cleanup(report)
+    too_late = plan.plan_observed_at + timedelta(hours=MAX_PLAN_AGE_HOURS, minutes=1)
+
+    with pytest.raises(CleanupPlanExpired):
+        authorize_apply(plan, expected_plan_digest=plan.plan_digest, now=too_late)
+
+
+def test_authorize_apply_accepts_a_plan_within_the_expiry_window() -> None:
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    report = _report(candidate_keys=(), older_than=older_than)
+    plan = plan_orphan_cleanup(report)
+    just_in_time = plan.plan_observed_at + timedelta(hours=MAX_PLAN_AGE_HOURS)
+
+    authorize_apply(plan, expected_plan_digest=plan.plan_digest, now=just_in_time)
+
+
+def test_plan_observed_at_is_older_than_plus_retention() -> None:
+    older_than = datetime(2026, 9, 24, tzinfo=UTC)
+    plan = plan_orphan_cleanup(_report(candidate_keys=(), older_than=older_than))
+    assert plan.plan_observed_at == older_than + timedelta(hours=MIN_APPLY_GRACE_HOURS)
 
 
 class _ListingProvider:
@@ -197,3 +323,38 @@ def test_referenced_and_in_grace_objects_never_reach_the_plan() -> None:
     assert plan.candidate_keys == (old_orphan,)
     assert referenced not in plan.candidate_keys
     assert in_flight not in plan.candidate_keys
+
+
+def test_list_objects_consumes_a_multi_page_generator_completely() -> None:
+    """The module trusts the provider's ``list`` to be a complete iterable.
+
+    ``dotmac_files.list_objects`` performs no pagination of its own -- see
+    ``physical.list_objects`` (a4): ``tuple(provider.list(prefix))``. ERP's
+    provider (``DotmacFilesS3Provider.list``) fully materializes minio-py's
+    ``list_objects(..., recursive=True)`` generator, and minio-py's own
+    generator internally issues further ListObjectsV2 calls with a
+    continuation token until the bucket is exhausted -- so completeness is a
+    property of that SDK behaviour, not of ``dotmac_files``. This proves the
+    consuming side: a provider whose ``list`` yields a large multi-batch
+    generator is still fully drained into the returned tuple.
+    """
+    now = datetime(2026, 9, 27, tzinfo=UTC)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    page_size = 137
+    total_pages = 3
+    keys = [f"{prefix}{i:06d}" for i in range(page_size * total_pages)]
+
+    class _PaginatingProvider:
+        code = "erp_s3"
+
+        def list(self, requested_prefix: str):
+            # Yield lazily, across many logical "pages", to prove the caller
+            # drains the WHOLE generator rather than an early batch.
+            for key in keys:
+                if key.startswith(requested_prefix):
+                    yield ObjectInfo(key, 1, now - timedelta(days=10))
+
+    observations = list_objects(_PaginatingProvider(), scope=TenantScope(tenant_id))
+    assert len(observations) == len(keys)
+    assert {item.key for item in observations} == set(keys)

@@ -434,18 +434,36 @@ def get_dotmac_files_read_provider() -> DotmacFilesS3Provider:
     return DotmacFilesS3Provider(S3StorageService(ensure_bucket=False))
 
 
-def delete_reviewed_file_orphans(*, scope: object, keys: tuple[str, ...]) -> int:
-    """Delete a reviewed, digest-authorized set of orphan object keys.
+def delete_reviewed_file_orphan(
+    *, scope: object, key: str, expected_provider_code: str
+) -> None:
+    """Delete ONE reviewed, digest-authorized orphan object key.
 
-    This is the ONLY deletion path for managed file objects (ADR-0013's
-    external-effect owner rule, enforced by
+    This is the ONLY module permitted to call ``dotmac_files.delete_orphans``
+    (ADR-0013's external-effect owner rule; enforced by
+    ``tests/architecture/test_dotmac_files_delete_owner.py`` and
     ``tests/architecture/test_external_effect_callers.py``). It never
-    receives an unreviewed key list: the caller must have already produced
-    and authorized an ``app.services.file_object_cleanup.OrphanCleanupPlan``.
-    ``dotmac_files.delete_orphans`` itself refuses any key outside the given
-    scope's prefix and performs the deletes outside a database transaction.
-    """
-    from dotmac_files import delete_orphans
+    receives an unreviewed key: the caller must have already produced and
+    authorized an ``app.services.file_object_cleanup.OrphanCleanupPlan`` and
+    performed its own per-object recheck immediately before this call.
 
-    delete_orphans(get_dotmac_files_provider(), scope=cast(Any, scope), keys=keys)
-    return len(keys)
+    Takes exactly one key, never a batch: the caller rechecks and deletes one
+    object at a time so a mid-batch failure stops the loop with an accurate
+    per-object outcome instead of an opaque partial batch result.
+
+    Asserts the LIVE provider identity still matches the plan's
+    ``provider_code`` before deleting — a provider swap between review and
+    apply must never silently delete under the wrong provider identity — and
+    raises ``dotmac_files.ProviderMismatch`` otherwise.
+    ``dotmac_files.delete_orphans`` itself refuses a key outside the given
+    scope's prefix and performs the delete outside a database transaction.
+    """
+    from dotmac_files import ProviderMismatch, delete_orphans
+
+    provider = get_dotmac_files_provider()
+    if provider.code != expected_provider_code:
+        raise ProviderMismatch(
+            f"live provider {provider.code!r} does not match the plan's "
+            f"provider {expected_provider_code!r}"
+        )
+    delete_orphans(provider, scope=cast(Any, scope), keys=(key,))

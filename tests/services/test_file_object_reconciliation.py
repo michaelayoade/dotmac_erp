@@ -236,20 +236,20 @@ def test_task_lists_before_opening_the_tenant_session(monkeypatch) -> None:
 def test_clean_task_dry_run_never_calls_the_deletion_seam(monkeypatch) -> None:
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     provider = ListingProvider(())
-    delete_calls: list[tuple[object, tuple[str, ...]]] = []
+    delete_calls: list[tuple[object, str, str]] = []
 
     @contextmanager
     def scoped_session(_organization_id):
         yield object()
 
-    def fake_delete(*, scope, keys):
-        delete_calls.append((scope, keys))
+    def fake_delete(*, scope, key, expected_provider_code):
+        delete_calls.append((scope, key, expected_provider_code))
         raise AssertionError("dry-run must never delete")
 
     monkeypatch.setattr(task_module, "get_dotmac_files_read_provider", lambda: provider)
     monkeypatch.setattr(task_module, "list_objects", lambda _p, *, scope: ())
     monkeypatch.setattr(task_module, "session_for_org", scoped_session)
-    monkeypatch.setattr(task_module, "delete_reviewed_file_orphans", fake_delete)
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
 
     summary = task_module.clean_tenant_file_objects.run(str(uuid4()))
 
@@ -303,7 +303,7 @@ class _FixedClock(datetime):
         return cls._times.pop(0)
 
 
-def test_clean_task_apply_refuses_a_cutoff_under_72_hours_old(monkeypatch) -> None:
+def test_clean_task_apply_refuses_a_cutoff_under_168_hours_old(monkeypatch) -> None:
     task_module = importlib.import_module("app.tasks.file_object_reconciliation")
     tenant_id = uuid4()
     scope = TenantScope(tenant_id)
@@ -323,69 +323,48 @@ def test_clean_task_apply_refuses_a_cutoff_under_72_hours_old(monkeypatch) -> No
         )
 
 
-def test_clean_task_apply_round_trip_succeeds_when_the_listing_is_unchanged(
+class _RecheckProvider:
+    """A provider whose per-key recheck answer differs from its full listing.
+
+    ``list()`` is called two ways by the task: with the SCOPE prefix
+    (ends with ``/``) for the initial full listing, and with an exact KEY
+    (the recheck immediately before delete). This double lets tests control
+    each independently -- e.g. an object present at listing time but gone,
+    or freshened, by the time of the per-object recheck.
+    """
+
+    code = "erp_s3"
+
+    def __init__(
+        self,
+        initial: tuple[ObjectInfo, ...],
+        recheck_by_key: dict[str, ObjectInfo | None] | None = None,
+    ) -> None:
+        self.initial = initial
+        self.recheck_by_key = recheck_by_key or {}
+
+    def list(self, prefix: str):
+        if prefix.endswith("/"):
+            return (item for item in self.initial if item.key.startswith(prefix))
+        if prefix in self.recheck_by_key:
+            value = self.recheck_by_key[prefix]
+            return (value,) if value is not None else ()
+        return (item for item in self.initial if item.key == prefix)
+
+
+def _run_dry_run_then_apply(
     monkeypatch,
-) -> None:
-    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
-    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
-    apply_time = dry_run_time + timedelta(hours=73)
-    tenant_id = uuid4()
-    prefix = f"tenants/{tenant_id}/files/"
-    old_orphan = prefix + str(uuid4())
-    scope = TenantScope(tenant_id)
-    provider = ListingProvider(
-        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
-    )
-    db = _session()
-
-    @contextmanager
-    def scoped_session(_organization_id):
-        yield db
-
-    delete_calls: list[tuple[object, tuple[str, ...]]] = []
-
-    def fake_delete(*, scope, keys):
-        delete_calls.append((scope, keys))
-        return len(keys)
-
-    _FixedClock._times = [dry_run_time, apply_time]
-    monkeypatch.setattr(task_module, "datetime", _FixedClock)
-    _wire_scope(monkeypatch, task_module, provider, scope)
-    monkeypatch.setattr(task_module, "session_for_org", scoped_session)
-    monkeypatch.setattr(task_module, "delete_reviewed_file_orphans", fake_delete)
-
-    dry_run_summary = task_module.clean_tenant_file_objects.run(str(tenant_id))
-    digest = dry_run_summary["plan_digest"]
-    older_than = dry_run_summary["older_than"]
-
-    summary = task_module.clean_tenant_file_objects.run(
-        str(tenant_id),
-        apply=True,
-        expected_plan_digest=digest,
-        reviewed_older_than=older_than,
-    )
-
-    assert delete_calls == [(scope, (old_orphan,))]
-    assert summary["dry_run"] is False
-    assert summary["deleted"] == 1
-
-
-def test_clean_task_apply_refuses_when_the_listing_changed_since_review(
-    monkeypatch,
-) -> None:
-    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
-    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
-    apply_time = dry_run_time + timedelta(hours=73)
-    tenant_id = uuid4()
-    prefix = f"tenants/{tenant_id}/files/"
-    old_orphan = prefix + str(uuid4())
-    new_orphan = prefix + str(uuid4())
-    scope = TenantScope(tenant_id)
-    provider = ListingProvider(
-        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
-    )
-    db = _session()
-
+    task_module,
+    *,
+    tenant_id,
+    scope,
+    provider,
+    db,
+    dry_run_time: datetime,
+    apply_time: datetime,
+    max_deletions: int = 100,
+    apply_org_id=None,
+):
     @contextmanager
     def scoped_session(_organization_id):
         yield db
@@ -395,22 +374,483 @@ def test_clean_task_apply_refuses_when_the_listing_changed_since_review(
 
     _FixedClock._times = [dry_run_time]
     monkeypatch.setattr(task_module, "datetime", _FixedClock)
-    dry_run_summary = task_module.clean_tenant_file_objects.run(str(tenant_id))
+    dry_run_summary = task_module.clean_tenant_file_objects.run(
+        str(tenant_id), max_deletions=max_deletions
+    )
+
+    _FixedClock._times = [apply_time]
+    apply_id = apply_org_id if apply_org_id is not None else tenant_id
+    return dry_run_summary, apply_id
+
+
+def _seed_healthy_reference(
+    provider: _RecheckProvider, db: Session, *, tenant_id, prefix: str, moment: datetime
+) -> None:
+    """Add one referenced, available object so the reference view looks healthy.
+
+    Without at least one referenced object, ``authorize_apply`` refuses with
+    ``CleanupUnsafeReferenceView`` (every managed object would look
+    unreferenced) -- exactly what that check is for, but not what these
+    fixtures are testing.
+    """
+    healthy_key = prefix + str(uuid4())
+    provider.initial = (*provider.initial, ObjectInfo(healthy_key, 1, moment))
+    db.execute(
+        text(
+            "INSERT INTO mod_files.stored_files "
+            "(tenant_id, provider_code, storage_key, state, created_at) "
+            "VALUES (:tenant, 'erp_s3', :key, 'available', :created_at)"
+        ),
+        {
+            "tenant": tenant_id.hex,
+            "key": healthy_key,
+            "created_at": moment.strftime("%Y-%m-%d %H:%M:%S.%f"),
+        },
+    )
+
+
+def test_clean_task_apply_round_trip_succeeds_when_the_listing_is_unchanged(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    delete_calls: list[tuple[object, str, str]] = []
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        delete_calls.append((scope, key, expected_provider_code))
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
     digest = dry_run_summary["plan_digest"]
     older_than = dry_run_summary["older_than"]
 
-    provider.objects = (
-        *provider.objects,
+    summary = task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        expected_plan_digest=digest,
+        reviewed_older_than=older_than,
+    )
+
+    assert delete_calls == [(scope, old_orphan, "erp_s3")]
+    assert summary["dry_run"] is False
+    assert summary["deleted"] == 1
+    assert summary["deleted_count"] == 1
+    assert summary["rechecked_referenced_count"] == 0
+
+
+def test_clean_task_apply_refuses_when_the_listing_changed_since_review(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    new_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
+    db = _session()
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+    digest = dry_run_summary["plan_digest"]
+    older_than = dry_run_summary["older_than"]
+
+    provider.initial = (
+        *provider.initial,
         ObjectInfo(new_orphan, 12, dry_run_time - timedelta(days=10)),
     )
-    _FixedClock._times = [apply_time]
 
     from app.services.file_object_cleanup import CleanupPlanDrift
 
     with pytest.raises(CleanupPlanDrift):
         task_module.clean_tenant_file_objects.run(
-            str(tenant_id),
+            str(apply_id),
             apply=True,
             expected_plan_digest=digest,
             reviewed_older_than=older_than,
         )
+
+
+def test_clean_task_apply_refuses_an_expired_plan(monkeypatch) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=200)  # far past the 24h window
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
+    db = _session()
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+
+    from app.services.file_object_cleanup import CleanupPlanExpired
+
+    with pytest.raises(CleanupPlanExpired):
+        task_module.clean_tenant_file_objects.run(
+            str(apply_id),
+            apply=True,
+            expected_plan_digest=dry_run_summary["plan_digest"],
+            reviewed_older_than=dry_run_summary["older_than"],
+        )
+
+
+def test_clean_task_apply_refuses_a_digest_reused_against_a_different_org(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    other_tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
+    db = _session()
+
+    dry_run_summary, _ = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+
+    # Re-wire the scope lookup to a DIFFERENT tenant for the apply call --
+    # the fresh plan's tenant_id changes, so its digest can never match.
+    other_scope = TenantScope(other_tenant_id)
+    monkeypatch.setattr(
+        task_module.OrganizationTenantContext,
+        "for_organization",
+        classmethod(lambda cls, org_id: SimpleNamespace(tenant_scope=other_scope)),
+    )
+
+    from app.services.file_object_cleanup import CleanupPlanDrift
+
+    with pytest.raises(CleanupPlanDrift):
+        task_module.clean_tenant_file_objects.run(
+            str(other_tenant_id),
+            apply=True,
+            expected_plan_digest=dry_run_summary["plan_digest"],
+            reviewed_older_than=dry_run_summary["older_than"],
+        )
+
+
+def test_clean_task_apply_refuses_candidates_over_the_cap(monkeypatch) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    orphans = tuple(prefix + str(uuid4()) for _ in range(3))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        tuple(ObjectInfo(key, 11, dry_run_time - timedelta(days=10)) for key in orphans)
+    )
+    db = _session()
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+        max_deletions=2,
+    )
+
+    from app.services.file_object_cleanup import CleanupCapExceeded
+
+    with pytest.raises(CleanupCapExceeded):
+        task_module.clean_tenant_file_objects.run(
+            str(apply_id),
+            apply=True,
+            max_deletions=2,
+            expected_plan_digest=dry_run_summary["plan_digest"],
+            reviewed_older_than=dry_run_summary["older_than"],
+        )
+
+
+def test_clean_task_apply_accepts_a_non_utc_offset_reviewed_older_than(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    old_orphan = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (ObjectInfo(old_orphan, 11, dry_run_time - timedelta(days=10)),)
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", lambda **_kw: None)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+
+    # Re-express the exact same instant with a non-UTC offset string.
+    from datetime import timezone as _tz
+
+    older_than_value = datetime.fromisoformat(dry_run_summary["older_than"])
+    equivalent = older_than_value.astimezone(_tz(timedelta(hours=5))).isoformat()
+
+    summary = task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        expected_plan_digest=dry_run_summary["plan_digest"],
+        reviewed_older_than=equivalent,
+    )
+    assert summary["dry_run"] is False
+    assert summary["deleted"] == 1
+
+
+def test_clean_task_recheck_skips_a_key_that_gained_a_reference_mid_loop(
+    monkeypatch,
+) -> None:
+    """A key referenced only AFTER the fresh plan snapshot is not deleted.
+
+    A row appearing before the fresh report is built already shows up as
+    digest drift (``CleanupPlanDrift``) via the plan rebuild itself -- that
+    is not what per-object recheck is for. The recheck instead guards a
+    narrower race: something claims a key WHILE the recheck-and-delete loop
+    is already running (i.e. between the fresh snapshot and this specific
+    key's own turn). Simulated here by having key A's delete succeed with a
+    side effect that inserts a reference row for key B, then asserting key
+    B's independent, freshly-opened recheck sees it and skips.
+    """
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    key_a, key_b = sorted((prefix + str(uuid4()), prefix + str(uuid4())))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(key_a, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(key_b, 11, dry_run_time - timedelta(days=10)),
+        )
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    delete_calls: list[str] = []
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        delete_calls.append(key)
+        if key == key_a:
+            # A concurrent claim on key_b appears while key_a is deleting.
+            db.execute(
+                text(
+                    "INSERT INTO mod_files.stored_files "
+                    "(tenant_id, provider_code, storage_key, state, created_at) "
+                    "VALUES (:tenant, 'erp_s3', :key, 'available', :created_at)"
+                ),
+                {
+                    "tenant": tenant_id.hex,
+                    "key": key_b,
+                    "created_at": "2026-09-24 00:00:00.000000",
+                },
+            )
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+
+    summary = task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        expected_plan_digest=dry_run_summary["plan_digest"],
+        reviewed_older_than=dry_run_summary["older_than"],
+    )
+
+    assert delete_calls == [key_a]
+    assert summary["deleted"] == 1
+    assert summary["rechecked_referenced_count"] == 1
+
+
+def test_clean_task_recheck_reports_missing_and_too_new_without_deleting(
+    monkeypatch,
+) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    vanished = prefix + str(uuid4())
+    freshened = prefix + str(uuid4())
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(vanished, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(freshened, 12, dry_run_time - timedelta(days=10)),
+        ),
+        recheck_by_key={
+            vanished: None,
+            freshened: ObjectInfo(freshened, 12, apply_time - timedelta(minutes=1)),
+        },
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    delete_calls: list[str] = []
+    monkeypatch.setattr(
+        task_module,
+        "delete_reviewed_file_orphan",
+        lambda **kw: delete_calls.append(kw["key"]),
+    )
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+
+    summary = task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        expected_plan_digest=dry_run_summary["plan_digest"],
+        reviewed_older_than=dry_run_summary["older_than"],
+    )
+
+    assert delete_calls == []
+    assert summary["deleted"] == 0
+    assert summary["already_absent_count"] == 1
+    assert summary["rechecked_too_new_count"] == 1
+
+
+def test_clean_task_recheck_stops_after_the_first_delete_failure(monkeypatch) -> None:
+    task_module = importlib.import_module("app.tasks.file_object_reconciliation")
+    dry_run_time = datetime(2026, 9, 24, tzinfo=UTC)
+    apply_time = dry_run_time + timedelta(hours=2)
+    tenant_id = uuid4()
+    prefix = f"tenants/{tenant_id}/files/"
+    first_key, second_key = sorted((prefix + str(uuid4()), prefix + str(uuid4())))
+    scope = TenantScope(tenant_id)
+    provider = _RecheckProvider(
+        (
+            ObjectInfo(first_key, 11, dry_run_time - timedelta(days=10)),
+            ObjectInfo(second_key, 11, dry_run_time - timedelta(days=10)),
+        )
+    )
+    db = _session()
+    _seed_healthy_reference(
+        provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
+    )
+
+    delete_calls: list[str] = []
+
+    def fake_delete(*, scope, key, expected_provider_code):
+        delete_calls.append(key)
+        if key == second_key:
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
+
+    dry_run_summary, apply_id = _run_dry_run_then_apply(
+        monkeypatch,
+        task_module,
+        tenant_id=tenant_id,
+        scope=scope,
+        provider=provider,
+        db=db,
+        dry_run_time=dry_run_time,
+        apply_time=apply_time,
+    )
+
+    summary = task_module.clean_tenant_file_objects.run(
+        str(apply_id),
+        apply=True,
+        expected_plan_digest=dry_run_summary["plan_digest"],
+        reviewed_older_than=dry_run_summary["older_than"],
+    )
+
+    assert delete_calls == [first_key, second_key]
+    assert summary["deleted"] == 1
+    assert summary["failed_count"] == 1
