@@ -9,7 +9,7 @@ from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session_context import prime_tenant_context
@@ -221,6 +221,11 @@ def _form_context(
     }
     if submitted:
         initial.update(submitted)
+    selected_options = service.participant_options_for_selection(
+        initial["selected_participants"],
+        initial["selected_departments"],
+        initial["selected_designations"],
+    )
     context = base_context(
         request,
         auth,
@@ -239,6 +244,8 @@ def _form_context(
             "excluded_reason_counts": _excluded_reason_counts(excluded),
             "error": error,
             "can_add_everyone": auth.has_permission("calendar:participants:add_all"),
+            "participant_options": selected_options,
+            "participant_search_url": "/calendar/participant-options",
         }
     )
     return context
@@ -447,6 +454,27 @@ def new_event_page(
             else None,
         ),
     )
+
+
+@router.get("/participant-options")
+def participant_options(
+    q: str = Query(default="", max_length=100),
+    limit: int = Query(default=20, ge=1, le=20),
+    auth: WebAuthContext = Depends(
+        require_any_web_permission(
+            [
+                "calendar:events:create",
+                "calendar:events:update_own",
+                "calendar:events:update_all",
+            ]
+        )
+    ),
+    db: Session = Depends(get_db_for_org),
+):
+    items = OrganizationCalendarService(
+        db, auth.organization_id
+    ).search_participant_options(q, limit=limit)
+    return JSONResponse({"items": items})
 
 
 @router.post("/events/new", response_class=HTMLResponse)
