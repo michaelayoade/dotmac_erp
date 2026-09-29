@@ -405,12 +405,12 @@ def _manifest(**overrides: Any) -> dict[str, Any]:
     return {"tool": {"poetry": poetry}}
 
 
-def test_the_repositorys_own_manifest_declares_the_old_files_pin_once() -> None:
+def test_the_repositorys_own_manifest_declares_the_new_files_pin_once() -> None:
     """NON-VACUITY, against the two real files."""
 
     with (ROOT / "pyproject.toml").open("rb") as handle:
         manifest = tomllib.load(handle)
-    assert movement_problems(manifest, OLDS) == []
+    assert movement_problems(manifest, TARGETS) == []
     assert movement_problems(manifest, IMMUTABLE_PINS) == []
 
 
