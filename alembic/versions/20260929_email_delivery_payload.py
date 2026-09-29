@@ -44,13 +44,6 @@ def upgrade() -> None:
         "platform.event_outbox ((payload ->> 'delivery_id')) "
         "WHERE event_name = 'email.delivery.requested'"
     )
-    # Match the checked-in ERP identity-cutover contract for this existing
-    # platform relation. Fresh databases have not run that cutover grant file.
-    op.execute("GRANT USAGE ON SCHEMA platform TO app_user")
-    op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE "
-        "ON TABLE platform.event_outbox TO app_user"
-    )
     op.create_table(
         "email_delivery",
         sa.Column(
@@ -102,18 +95,54 @@ def upgrade() -> None:
     op.execute(
         "GRANT SELECT, INSERT, DELETE ON TABLE public.email_delivery TO app_user"
     )
+    # app_user has no access to the non-RLS outbox at migration heads. Its
+    # private-row DELETE policy needs only a yes/no retention decision, not
+    # outbox rows. Match the tenant-catalog definer's owner and search-path
+    # contract; migration authentication must not silently change that owner.
+    owner = op.get_bind().scalar(sa.text("SELECT current_user"))
+    if owner != "app_admin":
+        raise RuntimeError(
+            f"email retention definer must be owned by app_admin, not {owner!r}"
+        )
+    op.execute(
+        """
+        CREATE FUNCTION public.email_delivery_mature_for_purge(
+            requested_delivery_id uuid, requested_organization_id uuid
+        ) RETURNS boolean
+        LANGUAGE sql STABLE SECURITY DEFINER
+        SET search_path = pg_catalog
+        AS $function$
+            SELECT COALESCE(
+                NULLIF(current_setting('app.current_organization_id', true), '')
+                    = requested_organization_id::text,
+                false
+            ) AND EXISTS (
+                SELECT 1 FROM platform.event_outbox AS event
+                WHERE event.event_name = 'email.delivery.requested'
+                  AND event.payload ->> 'delivery_id' = requested_delivery_id::text
+                  AND event.headers ->> 'organization_id'
+                      = requested_organization_id::text
+                  AND event.status IN ('PUBLISHED', 'DEAD')
+                  AND event.terminal_at < now() - interval '30 days'
+            )
+        $function$
+        """
+    )
+    op.execute(
+        "REVOKE ALL ON FUNCTION public.email_delivery_mature_for_purge(uuid, uuid) "
+        "FROM PUBLIC"
+    )
+    op.execute(
+        "GRANT EXECUTE ON FUNCTION public.email_delivery_mature_for_purge(uuid, uuid) "
+        "TO app_user"
+    )
     op.execute(
         """
         CREATE POLICY email_delivery_mature_terminal_delete
             ON public.email_delivery AS RESTRICTIVE FOR DELETE TO app_user
             USING (
-                EXISTS (
-                    SELECT 1 FROM platform.event_outbox AS event
-                    WHERE event.event_name = 'email.delivery.requested'
-                      AND event.payload ->> 'delivery_id' = delivery_id::text
-                      AND event.headers ->> 'organization_id' = organization_id::text
-                      AND event.status IN ('PUBLISHED', 'DEAD')
-                      AND event.terminal_at < now() - interval '30 days'
+                public.email_delivery_mature_for_purge(
+                    delivery_id, organization_id
                 )
             )
         """

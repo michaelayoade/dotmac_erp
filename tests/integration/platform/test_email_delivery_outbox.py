@@ -96,7 +96,6 @@ def _create_terminal_email(
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
-            _scope_app_user(connection, organization_id)
             with Session(bind=connection) as db:
                 event = enqueue_email(
                     db,
@@ -134,7 +133,6 @@ def test_replay_then_permanent_failure_restarts_retention_clock(engine) -> None:
         with engine.connect() as connection:
             transaction = connection.begin()
             try:
-                _scope_app_user(connection, organization_id)
                 with Session(bind=connection) as db:
                     OutboxPublisher.requeue_dead_event(db, event_id)
                     OutboxPublisher.mark_dead(db, event_id, "permanent failure")
@@ -145,6 +143,7 @@ def test_replay_then_permanent_failure_restarts_retention_clock(engine) -> None:
                     ),
                     {"id": event_id},
                 )
+                _scope_app_user(connection, organization_id)
                 assert (
                     connection.execute(
                         text(
@@ -201,7 +200,6 @@ def _enqueue_competitor(engine, organization_id: UUID, marker: str, ready: Event
     with engine.connect() as connection:
         transaction = connection.begin()
         try:
-            _scope_app_user(connection, organization_id)
             connection.execute(
                 text("SELECT set_config('application_name', :name, true)"),
                 {"name": marker},
@@ -251,7 +249,6 @@ def test_email_enqueue_is_atomic_and_tenant_private(engine) -> None:
         try:
             first = _insert_organization(connection, "A")
             second = _insert_organization(connection, "B")
-            connection.execute(text("SET LOCAL ROLE app_user"))
             connection.execute(
                 text("SELECT set_config('app.current_organization_id', :org, true)"),
                 {"org": str(first)},
@@ -275,6 +272,7 @@ def test_email_enqueue_is_atomic_and_tenant_private(engine) -> None:
                     "source": "email",
                 }
 
+            connection.execute(text("SET LOCAL ROLE app_user"))
             row = connection.execute(
                 text(
                     "SELECT organization_id, body_html, attachments "
@@ -366,35 +364,41 @@ def test_email_delivery_table_has_forced_rls_and_minimal_app_grants(engine) -> N
             )
         ).one()
         assert grants == (True, True, False, True)
-        legacy_outbox_grants = connection.execute(
+        outbox_grants = connection.execute(
             text(
                 """
                 SELECT
-                    has_schema_privilege('app_user', 'platform', 'USAGE'),
-                    has_schema_privilege('app_user', 'platform', 'CREATE'),
-                    has_table_privilege('app_user', 'platform.event_outbox', 'SELECT'),
-                    has_table_privilege('app_user', 'platform.event_outbox', 'INSERT'),
-                    has_table_privilege('app_user', 'platform.event_outbox', 'UPDATE'),
-                    has_table_privilege('app_user', 'platform.event_outbox', 'DELETE'),
-                    has_table_privilege('app_user', 'platform.event_outbox', 'TRUNCATE'),
-                    has_table_privilege('app_user', 'platform.event_outbox', 'REFERENCES'),
-                    has_table_privilege('app_user', 'platform.event_outbox', 'TRIGGER')
+                    has_schema_privilege('app_user', namespace.oid, 'USAGE'),
+                    has_schema_privilege('app_user', namespace.oid, 'CREATE'),
+                    has_table_privilege('app_user', relation.oid, 'SELECT'),
+                    has_table_privilege('app_user', relation.oid, 'INSERT'),
+                    has_table_privilege('app_user', relation.oid, 'UPDATE'),
+                    has_table_privilege('app_user', relation.oid, 'DELETE'),
+                    has_table_privilege('app_user', relation.oid, 'TRUNCATE'),
+                    has_table_privilege('app_user', relation.oid, 'REFERENCES'),
+                    has_table_privilege('app_user', relation.oid, 'TRIGGER')
+                FROM pg_catalog.pg_namespace AS namespace
+                JOIN pg_catalog.pg_class AS relation
+                  ON relation.relnamespace = namespace.oid
+                WHERE namespace.nspname = 'platform'
+                  AND relation.relname = 'event_outbox'
+                  AND relation.relkind = 'r'
                 """
             )
         ).one()
-        assert legacy_outbox_grants == (
-            True,
+        assert outbox_grants == (
             False,
-            True,
-            True,
-            True,
-            True,
+            False,
+            False,
+            False,
+            False,
+            False,
             False,
             False,
             False,
         )
-        # Effective access may come from PUBLIC, ownership or membership. The
-        # cutover contract requires these grants to name app_user directly.
+        # The cutover manifest is future authority. At migration heads the
+        # runtime role must still have no direct or PUBLIC outbox access.
         app_user_oid = connection.scalar(text("SELECT 'app_user'::regrole::oid"))
         acl_rows = connection.execute(
             text(
@@ -427,7 +431,7 @@ def test_email_delivery_table_has_forced_rls_and_minimal_app_grants(engine) -> N
                 """
             )
         ).all()
-        required_direct = {
+        forbidden = {
             ("schema", "USAGE"),
             ("table", "SELECT"),
             ("table", "INSERT"),
@@ -444,8 +448,53 @@ def test_email_delivery_table_has_forced_rls_and_minimal_app_grants(engine) -> N
             for object_type, grantee, privilege in acl_rows
             if grantee == 0
         }
-        assert direct == required_direct
-        assert not required_direct & via_public
+        assert not forbidden & direct
+        assert not forbidden & via_public
+
+        definer = connection.execute(
+            text(
+                """
+                SELECT pg_catalog.pg_get_userbyid(proc.proowner),
+                       proc.prosecdef, proc.proconfig,
+                       pg_catalog.has_function_privilege(
+                           'app_user', proc.oid, 'EXECUTE'
+                       )
+                FROM pg_catalog.pg_proc AS proc
+                WHERE proc.oid =
+                    'public.email_delivery_mature_for_purge(uuid,uuid)'::regprocedure
+                """
+            )
+        ).one()
+        assert definer == (
+            "app_admin",
+            True,
+            ["search_path=pg_catalog"],
+            True,
+        )
+        definer_acl = connection.execute(
+            text(
+                """
+                SELECT acl.grantee, acl.privilege_type::text
+                FROM pg_catalog.pg_proc AS proc
+                CROSS JOIN LATERAL pg_catalog.aclexplode(
+                    COALESCE(
+                        proc.proacl,
+                        pg_catalog.acldefault('f', proc.proowner)
+                    )
+                ) AS acl
+                WHERE proc.oid =
+                    'public.email_delivery_mature_for_purge(uuid,uuid)'::regprocedure
+                """
+            )
+        ).all()
+        assert {
+            privilege for grantee, privilege in definer_acl if grantee == app_user_oid
+        } == {"EXECUTE"}
+        assert not {privilege for grantee, privilege in definer_acl if grantee == 0}
+
+        connection.execute(text("SET LOCAL ROLE app_user"))
+        with pytest.raises(DBAPIError, match="permission denied"):
+            connection.execute(text("SELECT 1 FROM platform.event_outbox LIMIT 1"))
 
 
 def test_app_user_can_delete_email_content_only_after_terminal_retention(
@@ -460,7 +509,6 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
         with engine.connect() as connection:
             transaction = connection.begin()
             try:
-                _scope_app_user(connection, organization_id)
                 with Session(bind=connection) as db:
                     event = enqueue_email(
                         db,
@@ -472,6 +520,7 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
                     )
                     event_id = event.event_id
                     private_id = UUID(event.payload["delivery_id"])
+                _scope_app_user(connection, organization_id)
                 assert (
                     connection.execute(
                         text(
@@ -495,28 +544,36 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
                 ),
                 {"id": event_id},
             )
+            assert settle.scalar(
+                text(
+                    "SELECT terminal_at > now() - interval '1 day' "
+                    "FROM platform.event_outbox WHERE event_id = :id"
+                ),
+                {"id": event_id},
+            )
 
         with engine.connect() as attacker:
             transaction = attacker.begin()
             try:
                 _scope_app_user(attacker, organization_id)
-                attacker.execute(
-                    text(
-                        "UPDATE platform.event_outbox "
-                        "SET terminal_at = now() - interval '31 days' "
-                        "WHERE event_id = :id"
-                    ),
-                    {"id": event_id},
-                )
-                assert attacker.scalar(
-                    text(
-                        "SELECT terminal_at > now() - interval '1 day' "
-                        "FROM platform.event_outbox WHERE event_id = :id"
-                    ),
-                    {"id": event_id},
-                )
-                assert (
+                with pytest.raises(DBAPIError, match="permission denied"):
                     attacker.execute(
+                        text(
+                            "UPDATE platform.event_outbox "
+                            "SET terminal_at = now() - interval '31 days' "
+                            "WHERE event_id = :id"
+                        ),
+                        {"id": event_id},
+                    )
+            finally:
+                transaction.rollback()
+
+        with engine.connect() as connection:
+            transaction = connection.begin()
+            try:
+                _scope_app_user(connection, organization_id)
+                assert (
+                    connection.execute(
                         text(
                             "DELETE FROM public.email_delivery WHERE delivery_id = :id"
                         ),
@@ -531,6 +588,31 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
 
         with engine.begin() as settle:
             _age_terminal_event_as_test_admin(settle, event_id)
+
+        with engine.begin() as predicate:
+            predicate.execute(text("SET LOCAL ROLE app_user"))
+            check = text(
+                "SELECT public.email_delivery_mature_for_purge("
+                "CAST(:delivery_id AS uuid), CAST(:organization_id AS uuid))"
+            )
+            arguments = {
+                "delivery_id": str(private_id),
+                "organization_id": str(organization_id),
+            }
+            predicate.execute(
+                text("SELECT set_config('app.current_organization_id', '', true)")
+            )
+            assert predicate.scalar(check, arguments) is False
+            predicate.execute(
+                text("SELECT set_config('app.current_organization_id', :org, true)"),
+                {"org": str(other_organization_id)},
+            )
+            assert predicate.scalar(check, arguments) is False
+            predicate.execute(
+                text("SELECT set_config('app.current_organization_id', :org, true)"),
+                {"org": str(organization_id)},
+            )
+            assert predicate.scalar(check, arguments) is True
 
         with engine.connect() as other_tenant:
             transaction = other_tenant.begin()
@@ -572,7 +654,7 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
             transaction = attacker.begin()
             try:
                 _scope_app_user(attacker, organization_id)
-                with pytest.raises(DBAPIError, match="mature published status"):
+                with pytest.raises(DBAPIError, match="permission denied"):
                     attacker.execute(
                         text("DELETE FROM platform.event_outbox WHERE event_id = :id"),
                         {"id": event_id},
@@ -665,7 +747,6 @@ def test_concurrent_same_key_enqueue_keeps_one_event_and_one_private_row(
         with engine.connect() as winner_connection:
             winner_transaction = winner_connection.begin()
             try:
-                _scope_app_user(winner_connection, organization_id)
                 with Session(bind=winner_connection) as db:
                     winner = enqueue_email(
                         db,
@@ -763,8 +844,26 @@ def test_cleanup_task_deletes_published_pair_and_rolls_back_failed_pair(
     engine, monkeypatch
 ) -> None:
     """Run discovery, tenant lock, recheck and atomic delete against PostgreSQL."""
+    import app.db.session_context as session_context
+
     from app.tasks.outbox_relay import cleanup_terminal_email_deliveries
 
+    # tests/conftest.py replaces app.rls with a SQLite no-op even in this PG
+    # lane. Restore only this canary's connection-level tenant primer so the
+    # production session_for_org after_begin path reaches the trigger with
+    # real transaction-local GUCs.
+    def set_real_scope(connection, organization_id: UUID) -> None:
+        connection.execute(
+            text(
+                "SELECT set_config('app.current_organization_id', :org, true), "
+                "set_config('app.current_tenant', :org, true)"
+            ),
+            {"org": str(organization_id)},
+        )
+
+    monkeypatch.setattr(
+        session_context, "set_current_organization_on_connection", set_real_scope
+    )
     monkeypatch.setattr(
         "app.db.SessionLocal",
         sessionmaker(bind=engine, autoflush=False, autocommit=False),
