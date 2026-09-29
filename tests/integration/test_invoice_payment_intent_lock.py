@@ -91,6 +91,7 @@ def test_two_sessions_mint_only_one_reference_for_an_invoice(engine, monkeypatch
         setup.commit()
 
     first_before_commit = threading.Event()
+    first_ready = threading.Event()
     release_first = threading.Event()
     second_connected = threading.Event()
     first_commit_seen = False
@@ -105,6 +106,7 @@ def test_two_sessions_mint_only_one_reference_for_an_invoice(engine, monkeypatch
             if not first_commit_seen:
                 first_commit_seen = True
                 first_before_commit.set()
+                first_ready.set()
                 if not release_first.wait(timeout=30):
                     raise TimeoutError("first checkout was never released")
             super().commit()
@@ -150,6 +152,8 @@ def test_two_sessions_mint_only_one_reference_for_an_invoice(engine, monkeypatch
                     outcomes[name] = intent
                 except BaseException as exc:  # noqa: BLE001 - asserted by main thread
                     outcomes[name] = exc
+                    if name == "first":
+                        first_ready.set()
                 finally:
                     db.rollback()
 
@@ -162,9 +166,8 @@ def test_two_sessions_mint_only_one_reference_for_an_invoice(engine, monkeypatch
         )
         threads.append(first)
         first.start()
-        assert first_before_commit.wait(timeout=15), (
-            "first checkout never reached its intent commit"
-        )
+        assert first_ready.wait(timeout=15), "first checkout never produced a result"
+        assert first_before_commit.is_set(), outcomes.get("first")
 
         second = threading.Thread(
             target=attempt, args=("second", sessions), daemon=True

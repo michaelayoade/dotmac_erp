@@ -233,7 +233,7 @@ class PaymentService:
                 Invoice.invoice_id == inv_id,
                 Invoice.organization_id == self.organization_id,
             )
-            .with_for_update()
+            .with_for_update(of=Invoice)
         )
         if not invoice:
             raise HTTPException(
