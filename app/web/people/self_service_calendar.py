@@ -10,7 +10,7 @@ from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
@@ -233,6 +233,13 @@ def _form_context(
     }
     if submitted:
         initial.update(submitted)
+    service = OrganizationCalendarService(db, auth.organization_id)
+    selected_options = service.participant_options_for_selection(
+        initial["selected_participants"],
+        initial["selected_departments"],
+        initial["selected_designations"],
+        exclude_person_id=auth.person_id,
+    )
     context = base_context(
         request,
         auth,
@@ -245,9 +252,9 @@ def _form_context(
             "event": event,
             "form_data": initial,
             "employees": eligible,
-            "recipient_groups": OrganizationCalendarService(
-                db, auth.organization_id
-            ).recipient_groups(),
+            "recipient_groups": service.recipient_groups(),
+            "participant_options": selected_options,
+            "participant_search_url": "/self/calendar/participant-options",
             "excluded_count": len(excluded),
             "can_invite": auth.has_permission("calendar:personal:invite"),
             "error": error,
@@ -388,6 +395,23 @@ def my_calendar(
         "people/self/calendar/index.html",
         _calendar_context(request, auth, db, _parse_month(month)),
     )
+
+
+@router.get("/participant-options")
+def participant_options(
+    q: str = Query(default="", max_length=100),
+    limit: int = Query(default=20, ge=1, le=20),
+    auth: WebAuthContext = Depends(require_personal_event_create),
+    db: Session = Depends(get_db_for_org),
+):
+    if not auth.has_permission("calendar:personal:invite"):
+        raise HTTPException(
+            status_code=403, detail="Participant invite permission required"
+        )
+    items = OrganizationCalendarService(
+        db, auth.organization_id
+    ).search_participant_options(q, limit=limit, exclude_person_id=auth.person_id)
+    return JSONResponse({"items": items})
 
 
 @router.get("/events/new", response_class=HTMLResponse)

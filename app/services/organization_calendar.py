@@ -175,6 +175,185 @@ class OrganizationCalendarService:
             ],
         }
 
+    def search_participant_options(
+        self,
+        query: str,
+        *,
+        limit: int = 20,
+        exclude_person_id: uuid.UUID | None = None,
+    ) -> list[dict[str, str]]:
+        """Return tenant-scoped, eligible employee and active group options."""
+        bounded_limit = max(1, min(limit, 20))
+        needle = query.strip().casefold()
+        if len(needle) < 2:
+            return []
+
+        employee_rows = self.db.execute(
+            select(
+                Employee,
+                Person,
+                Department.department_name,
+                Designation.designation_name,
+            )
+            .join(Person, Person.id == Employee.person_id)
+            .outerjoin(Department, Department.department_id == Employee.department_id)
+            .outerjoin(
+                Designation, Designation.designation_id == Employee.designation_id
+            )
+            .where(Employee.organization_id == self.organization_id)
+            .order_by(Person.first_name, Person.last_name, Employee.employee_code)
+        ).all()
+        items: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        today = date.today()
+        for employee, person, department_name, designation_name in employee_rows:
+            if exclude_person_id and person.id == exclude_person_id:
+                continue
+            if self._eligibility_failure(employee, person, today=today):
+                continue
+            search_text = " ".join(
+                value or ""
+                for value in (
+                    person.name,
+                    person.email,
+                    employee.employee_code,
+                    department_name,
+                    designation_name,
+                )
+            ).casefold()
+            if needle not in search_text:
+                continue
+            key = ("employee", str(person.id))
+            if key in seen:
+                continue
+            seen.add(key)
+            subtitle = " · ".join(
+                value
+                for value in (
+                    (person.email or "").strip().lower(),
+                    department_name,
+                    designation_name,
+                )
+                if value
+            )
+            items.append(
+                {
+                    "kind": "employee",
+                    "id": str(person.id),
+                    "label": person.name or employee.employee_code,
+                    "subtitle": subtitle,
+                }
+            )
+
+        for department in self.db.scalars(
+            select(Department)
+            .where(
+                Department.organization_id == self.organization_id,
+                Department.is_active.is_(True),
+            )
+            .order_by(Department.department_name)
+        ).all():
+            if needle not in department.department_name.casefold():
+                continue
+            key = ("department", str(department.department_id))
+            if key not in seen:
+                seen.add(key)
+                items.append(
+                    {
+                        "kind": "department",
+                        "id": str(department.department_id),
+                        "label": department.department_name,
+                        "subtitle": "Department",
+                    }
+                )
+
+        for designation in self.db.scalars(
+            select(Designation)
+            .where(
+                Designation.organization_id == self.organization_id,
+                Designation.is_active.is_(True),
+            )
+            .order_by(Designation.designation_name)
+        ).all():
+            if needle not in designation.designation_name.casefold():
+                continue
+            key = ("designation", str(designation.designation_id))
+            if key not in seen:
+                seen.add(key)
+                items.append(
+                    {
+                        "kind": "designation",
+                        "id": str(designation.designation_id),
+                        "label": designation.designation_name,
+                        "subtitle": "Designation",
+                    }
+                )
+
+        kind_order = {"employee": 0, "department": 1, "designation": 2}
+        items.sort(
+            key=lambda item: (
+                kind_order[item["kind"]],
+                item["label"].casefold(),
+                item["id"],
+            )
+        )
+        return items[:bounded_limit]
+
+    def participant_options_for_selection(
+        self,
+        participant_ids: set[str],
+        department_ids: set[str],
+        designation_ids: set[str],
+        *,
+        exclude_person_id: uuid.UUID | None = None,
+    ) -> list[dict[str, str]]:
+        """Build safe chip metadata for existing or invalid-form selections."""
+        eligible, _excluded = self.eligible_participants()
+        selected: list[dict[str, str]] = []
+        for candidate in eligible:
+            if exclude_person_id and candidate.person_id == exclude_person_id:
+                continue
+            if str(candidate.person_id) in participant_ids:
+                subtitle = " · ".join(
+                    value
+                    for value in (
+                        candidate.email,
+                        candidate.department_name,
+                        candidate.designation_name,
+                    )
+                    if value
+                )
+                selected.append(
+                    {
+                        "kind": "employee",
+                        "id": str(candidate.person_id),
+                        "label": candidate.name,
+                        "subtitle": subtitle,
+                    }
+                )
+        groups = self.recipient_groups()
+        for group in groups["departments"]:
+            if str(group["id"]) in department_ids:
+                selected.append(
+                    {
+                        "kind": "department",
+                        "id": str(group["id"]),
+                        "label": str(group["name"]),
+                        "subtitle": "Department",
+                    }
+                )
+        for group in groups["designations"]:
+            if str(group["id"]) in designation_ids:
+                selected.append(
+                    {
+                        "kind": "designation",
+                        "id": str(group["id"]),
+                        "label": str(group["name"]),
+                        "subtitle": "Designation",
+                    }
+                )
+        return selected
+
     @staticmethod
     def _eligibility_failure(
         employee: Employee, person: Person, *, today: date

@@ -1,0 +1,102 @@
+{% set accent = accent | default('accent') %}
+{% set selected_options = participant_options | default([]) %}
+<div
+    x-data="{
+        query: '',
+        selected: {{ selected_options | tojson | forceescape }},
+        results: [],
+        loading: false,
+        error: false,
+        open: false,
+        activeIndex: -1,
+        everyone: {{ 'true' if everyone | default(false) else 'false' }},
+        timer: null,
+        requestId: 0,
+        optionKey(item) { return item.kind + ':' + item.id },
+        isSelected(item) { return this.selected.some(selected => this.optionKey(selected) === this.optionKey(item)) },
+        async search() {
+            const query = this.query.trim();
+            this.open = true;
+            this.activeIndex = -1;
+            this.error = false;
+            if (query.length < 2) { this.results = []; this.loading = false; return; }
+            if (this.timer) window.clearTimeout(this.timer);
+            this.loading = true;
+            const requestId = ++this.requestId;
+            this.timer = window.setTimeout(async () => {
+                try {
+                    const response = await fetch('{{ participant_search_url }}?q=' + encodeURIComponent(query) + '&limit=20', { headers: { 'Accept': 'application/json' } });
+                    if (!response.ok) throw new Error('participant search failed');
+                    const data = await response.json();
+                    if (requestId === this.requestId) this.results = (data.items || []).filter(item => !this.isSelected(item));
+                } catch (error) {
+                    if (requestId === this.requestId) { this.results = []; this.error = true; }
+                } finally {
+                    if (requestId === this.requestId) this.loading = false;
+                }
+            }, 250);
+        },
+        choose(item) {
+            if (this.isSelected(item)) return;
+            this.selected.push(item);
+            this.results = this.results.filter(result => this.optionKey(result) !== this.optionKey(item));
+            this.query = '';
+            this.open = false;
+            this.activeIndex = -1;
+            this.everyone = false;
+        },
+        remove(item) {
+            this.selected = this.selected.filter(selected => this.optionKey(selected) !== this.optionKey(item));
+            this.everyone = false;
+        },
+        clear() { this.selected = []; this.everyone = false; this.query = ''; this.results = []; this.open = false; },
+        addEveryone() { this.everyone = true; this.selected = []; this.query = ''; this.results = []; this.open = false; },
+        move(delta) {
+            if (!this.results.length) return;
+            this.activeIndex = (this.activeIndex + delta + this.results.length) % this.results.length;
+        },
+        chooseActive() { if (this.activeIndex >= 0) this.choose(this.results[this.activeIndex]); },
+        inputKeydown(event) {
+            if (event.key === 'ArrowDown') { event.preventDefault(); this.open = true; this.move(1); }
+            else if (event.key === 'ArrowUp') { event.preventDefault(); this.open = true; this.move(-1); }
+            else if (event.key === 'Enter') { event.preventDefault(); this.chooseActive(); }
+            else if (event.key === 'Escape') { this.open = false; this.activeIndex = -1; }
+        }
+    }"
+    @click.outside="open = false; activeIndex = -1"
+    class="relative"
+>
+    <div class="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 focus-within:border-{{ accent }}-500 focus-within:ring-2 focus-within:ring-{{ accent }}-500/20 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Selected participants">
+        <template x-for="item in selected" :key="optionKey(item)">
+            <span class="inline-flex max-w-full items-center gap-1 rounded-full bg-{{ accent }}-50 px-2.5 py-1 text-xs font-medium text-{{ accent }}-700 dark:bg-{{ accent }}-900/30 dark:text-{{ accent }}-300">
+                <span class="truncate" x-text="item.label"></span>
+                <button type="button" class="rounded-full p-0.5 hover:bg-{{ accent }}-100 focus:outline-none focus:ring-2 focus:ring-{{ accent }}-500 dark:hover:bg-{{ accent }}-900/50" :aria-label="'Remove ' + item.label" @click="remove(item)">×</button>
+            </span>
+        </template>
+        <span x-show="everyone" class="inline-flex items-center gap-1 rounded-full bg-{{ accent }}-50 px-2.5 py-1 text-xs font-medium text-{{ accent }}-700 dark:bg-{{ accent }}-900/30 dark:text-{{ accent }}-300">Everyone <button type="button" class="rounded-full p-0.5 focus:outline-none focus:ring-2 focus:ring-{{ accent }}-500" aria-label="Remove Everyone selection" @click="everyone = false">×</button></span>
+        <label for="{{ picker_id }}" class="sr-only">Search participants</label>
+        <input id="{{ picker_id }}" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" :aria-expanded="open && (loading || results.length > 0 || error)" aria-controls="{{ picker_id }}-results" :aria-activedescendant="activeIndex >= 0 ? '{{ picker_id }}-option-' + activeIndex : ''" x-model="query" @input="search()" @keydown="inputKeydown($event)" @focus="open = query.length >= 2" class="min-w-[12rem] flex-1 border-0 bg-transparent px-2 py-1 text-sm text-slate-900 outline-none focus:ring-0 dark:text-white" placeholder="Search employees, departments, or designations">
+    </div>
+    <input type="hidden" name="add_everyone" :value="everyone ? '1' : '0'">
+    <template x-for="item in selected" :key="'input-' + optionKey(item)">
+        <input type="hidden" :name="item.kind === 'employee' ? 'participant_ids' : item.kind === 'department' ? 'department_ids' : 'designation_ids'" :value="item.id">
+    </template>
+    <div id="{{ picker_id }}-results" x-show="open && (loading || results.length > 0 || error || (query.trim().length >= 2 && !loading))" x-cloak class="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800" role="listbox" aria-label="Participant search results">
+        <div x-show="loading" class="px-4 py-3 text-sm text-slate-500" role="status" aria-live="polite">Searching participants…</div>
+        <div x-show="error" class="px-4 py-3 text-sm text-red-600" role="alert">Unable to search participants. Try again.</div>
+        <div x-show="!loading && !error && query.trim().length >= 2 && results.length === 0" class="px-4 py-3 text-sm text-slate-500">No matching participants.</div>
+        <template x-for="(item, index) in results" :key="optionKey(item)">
+            <button type="button" :id="'{{ picker_id }}-option-' + index" role="option" :aria-selected="activeIndex === index" @mouseenter="activeIndex = index" @click="choose(item)" :class="activeIndex === index ? 'bg-slate-100 dark:bg-slate-700' : ''" class="flex w-full items-start gap-3 px-4 py-3 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-{{ accent }}-500">
+                <span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100" x-text="item.label"></span><span class="block truncate text-xs text-slate-500 dark:text-slate-400" x-text="item.subtitle"></span></span>
+                <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400" x-text="item.kind"></span>
+            </button>
+        </template>
+    </div>
+    <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p class="text-xs text-slate-500"><span x-text="everyone ? 'Everyone' : selected.length"></span><span x-show="!everyone"> selected</span></p>
+        <div class="flex gap-2">
+            {% if can_add_everyone | default(false) %}<button type="button" @click="addEveryone()" class="rounded-lg bg-{{ accent }}-50 px-3 py-2 text-xs font-semibold text-{{ accent }}-700 hover:bg-{{ accent }}-100 dark:bg-{{ accent }}-900/20 dark:text-{{ accent }}-300">Add everyone</button>{% endif %}
+            <button type="button" @click="clear()" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300">Clear</button>
+        </div>
+    </div>
+</div>
