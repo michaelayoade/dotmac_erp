@@ -343,25 +343,60 @@ class TestDeleteReviewedFileOrphan:
                 scope=PlatformScope(),
                 key="platform/files/x",
                 expected_provider_code="erp_s3",
+                older_than=datetime(2026, 9, 20, tzinfo=UTC),
+                is_referenced=lambda _key: False,
             )
 
     def test_deletes_through_the_module_primitive_when_the_code_matches(
         self, monkeypatch
     ) -> None:
-        calls: list[tuple[object, object, tuple[str, ...]]] = []
+        from dotmac_files import OrphanRecheckResult
 
-        def fake_delete_orphans(provider, *, scope, keys):
-            calls.append((provider, scope, keys))
+        calls: list[tuple[object, object, str, str, datetime, object]] = []
+
+        def fake_recheck(
+            provider, *, scope, key, expected_provider_code, older_than, is_referenced
+        ):
+            calls.append(
+                (
+                    provider,
+                    scope,
+                    key,
+                    expected_provider_code,
+                    older_than,
+                    is_referenced,
+                )
+            )
+            return OrphanRecheckResult("deleted")
 
         monkeypatch.setattr(
-            "dotmac_files.delete_orphans", fake_delete_orphans, raising=False
+            "dotmac_files.recheck_and_delete_orphan", fake_recheck, raising=False
         )
         provider = DotmacFilesS3Provider(_ProviderStorage())  # type: ignore[arg-type]
         monkeypatch.setattr(storage_mod, "get_dotmac_files_provider", lambda: provider)
 
         scope = PlatformScope()
-        storage_mod.delete_reviewed_file_orphan(
-            scope=scope, key="platform/files/x", expected_provider_code=provider.code
+        older_than = datetime(2026, 9, 20, tzinfo=UTC)
+
+        def reference_check(_key: str) -> bool:
+            return False
+
+        result = storage_mod.delete_reviewed_file_orphan(
+            scope=scope,
+            key="platform/files/x",
+            expected_provider_code=provider.code,
+            older_than=older_than,
+            is_referenced=reference_check,
         )
 
-        assert calls == [(provider, scope, ("platform/files/x",))]
+        assert result == OrphanRecheckResult("deleted")
+        assert calls == [
+            (
+                provider,
+                scope,
+                "platform/files/x",
+                provider.code,
+                older_than,
+                reference_check,
+            )
+        ]
