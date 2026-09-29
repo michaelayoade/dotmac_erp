@@ -188,12 +188,12 @@ def test_calendar_ui_keeps_month_grid_detail_and_sidebar_actions() -> None:
     assert "/people/calendar/events/{{ row.event.event_id }}" in index
     assert "}} Edit" in index
     assert "}} Delete" in index
-    picker = (ROOT / "templates" / "components" / "calendar_participant_picker.html").read_text(
-        encoding="utf-8"
-    )
-    assert 'calendar_participant_picker.html' in form
+    picker = (
+        ROOT / "templates" / "components" / "calendar_participant_picker.html"
+    ).read_text(encoding="utf-8")
+    assert "calendar_participant_picker.html" in form
     assert "Add everyone" in picker
-    assert 'item.kind === \'employee\' ? \'participant_ids\'' in picker
+    assert "item.kind === 'employee' ? 'participant_ids'" in picker
     assert 'name="reminder_offsets"' in form
     assert '{% extends "people/base_people.html" %}' in index
 
@@ -212,8 +212,8 @@ def test_calendar_participant_picker_is_shared_and_has_accessible_contract() -> 
     assert 'include "components/calendar_participant_picker.html"' in self_service
     for contract in (
         'role="combobox"',
-        'aria-expanded',
-        'aria-controls',
+        "aria-expanded",
+        "aria-controls",
         'role="listbox"',
         'role="option"',
         "ArrowDown",
@@ -222,7 +222,7 @@ def test_calendar_participant_picker_is_shared_and_has_accessible_contract() -> 
         "No matching participants",
         "Unable to search participants",
         "@click.outside",
-        "Remove \' + item.label",
+        "Remove ' + item.label",
         "item.kind === 'employee' ? 'participant_ids'",
         "item.kind === 'department' ? 'department_ids'",
         "'designation_ids'",
@@ -242,7 +242,7 @@ def test_participant_search_service_contract_is_tenant_safe_and_bounded() -> Non
     service = (ROOT / "app" / "services" / "organization_calendar.py").read_text(
         encoding="utf-8"
     )
-    method = service[service.index("def search_participant_options"):]
+    method = service[service.index("def search_participant_options") :]
     assert "Employee.organization_id == self.organization_id" in method
     assert "Department.organization_id == self.organization_id" in method
     assert "Designation.organization_id == self.organization_id" in method
@@ -294,7 +294,9 @@ def test_participant_search_matches_employee_and_group_fields(
         status=PersonStatus.active,
         nextcloud_user_id=None,
     )
-    department = SimpleNamespace(department_id=department_id, department_name="Engineering")
+    department = SimpleNamespace(
+        department_id=department_id, department_name="Engineering"
+    )
     designation = SimpleNamespace(
         designation_id=designation_id, designation_name="Senior Manager"
     )
@@ -331,6 +333,7 @@ def test_participant_search_excludes_inactive_and_self_and_deduplicates() -> Non
         status=EmployeeStatus.RESIGNED,
         date_of_leaving=None,
     )
+
     def person(person_id, name):
         return SimpleNamespace(
             id=person_id,
@@ -340,6 +343,7 @@ def test_participant_search_excludes_inactive_and_self_and_deduplicates() -> Non
             status=PersonStatus.active,
             nextcloud_user_id=None,
         )
+
     owner = person(owner_id, "Owner")
     other = person(uuid4(), "Other")
     db = MagicMock()
@@ -649,11 +653,11 @@ def test_my_calendar_uses_self_service_layout_and_expected_actions() -> None:
     assert "Personal" in index and "Organizational" in index
     assert "/people/self/calendar/events/{{ row.event.event_id }}/edit" in index
     assert "/people/self/calendar/events/{{ row.event.event_id }}/delete" in index
-    picker = (ROOT / "templates" / "components" / "calendar_participant_picker.html").read_text(
-        encoding="utf-8"
-    )
-    assert 'calendar_participant_picker.html' in form
-    assert 'item.kind === \'employee\' ? \'participant_ids\'' in picker
+    picker = (
+        ROOT / "templates" / "components" / "calendar_participant_picker.html"
+    ).read_text(encoding="utf-8")
+    assert "calendar_participant_picker.html" in form
+    assert "item.kind === 'employee' ? 'participant_ids'" in picker
     assert 'name="reminder_offsets"' in form
     assert "Only you and employees you explicitly invite" in form
     assert "is_personal and is_owner" in detail
