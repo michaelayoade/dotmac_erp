@@ -158,10 +158,16 @@
         "fingerprint": "2b429df85fe39fe006f8bf5c79a2038cbddefd5ff91c2388910fa6f17eba1597"
       },
       {
+        "path": "tests/tasks/test_outbox_relay.py",
+        "symbol": "test_email_handler_dead_letters_permanent_smtp_error",
+        "category": "outbound_transport",
+        "fingerprint": "6bc63b552c27b8334cdb4d63382292eb5ec464dc07e7fb63d800a88bd275f63d"
+      },
+      {
         "path": "tests/test_email_services.py",
         "symbol": "TestSendEmail",
         "category": "outbound_transport",
-        "fingerprint": "3f68ce03993841ef2d5b9414ad191ff46940c5ee104aa9c04482315f9ff52461"
+        "fingerprint": "940f495c96637f0a97e7e96ac826447d79914a2ad09998132aeb81d0142499d3"
       }
     ]
   }
