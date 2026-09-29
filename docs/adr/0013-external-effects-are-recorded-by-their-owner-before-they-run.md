@@ -138,15 +138,16 @@ Purchase-order approval and project SLA customer updates now enqueue
 email service assigns a stable outbox key from a business delivery identity,
 rejects reuse of that identity with changed content or tenant, and preserves
 module routing and attachments in `public.email_delivery`, a tenant-scoped
-table with forced row-level security. `platform.event_outbox` has no RLS and
-is readable by `app_user`, so its email command holds only an opaque delivery
-reference and organization identity. The EventOutbox relay delivers each
-committed command under its organization context and owns retry and terminal
-status; callers do not record a separate delivery state. A
-permanent SMTP refusal dead-letters, while a transient or uncertain failure
-uses the outbox retry ladder. SMTP acceptance and outbox settlement cannot be
-atomic: a crash or commit failure after acceptance can send a duplicate. The
-relay repeats the same RFC Message-ID across attempts, which may help receiving
+table with forced row-level security. `platform.event_outbox` has no RLS, so
+`app_user` has no grant to read or mutate it at the current migration heads.
+Its email command holds only an opaque delivery reference and organization
+identity. The EventOutbox relay delivers each committed command under its
+organization context and owns retry and terminal status; callers do not record
+a separate delivery state. A permanent SMTP refusal dead-letters, while a
+transient or uncertain failure uses the outbox retry ladder. SMTP acceptance
+and outbox settlement cannot be atomic: a crash or commit failure after
+acceptance can send a duplicate. The relay repeats the same RFC Message-ID
+across attempts, which may help receiving
 systems deduplicate but does not promise exactly-once delivery.
 
 Purchase-order approval now propagates a rendering or outbox-write failure,
@@ -162,13 +163,17 @@ recipient fields and attachments are retained until 30 days after the outbox
 event reaches `PUBLISHED` or `DEAD`, then purged. `terminal_at` is written in
 the same transaction as the terminal status, with a database trigger using the
 database clock so the runtime role cannot backdate it; `published_at` alone
-could not date a dead letter. A restrictive RLS DELETE policy requires both the tenant
-scope and a mature terminal outbox row. The hourly email cleanup locks and
-rechecks each event in its tenant session, deletes private content, and records
-the purge for retained dead letters. Published email events are deleted in the
-same transaction as their private content; the generic published-outbox cleanup
-excludes email events so it cannot remove the reference first. The database
-trigger permits email event deletion only for mature PUBLISHED events after
+could not date a dead letter. A restrictive RLS DELETE policy calls a narrow
+`app_admin`-owned security-definer predicate that returns only whether the
+private row belongs to the current tenant and has a matching mature terminal
+outbox event. The function grants `app_user` execution, revokes PUBLIC
+execution, and does not grant `app_user` access to the shared outbox. The
+hourly email cleanup locks and rechecks each event in its tenant session,
+deletes private content, and records the purge for retained dead letters.
+Published email events are deleted in the same transaction as their private
+content; the generic published-outbox cleanup excludes email events so it
+cannot remove the reference first. The database trigger permits email event
+deletion only for mature PUBLISHED events after
 their private content is gone; DEAD evidence stays. Pending and
 retryable failed deliveries retain their content regardless of age. Replay
 clears the previous terminal clock, and a purged dead letter cannot be replayed.

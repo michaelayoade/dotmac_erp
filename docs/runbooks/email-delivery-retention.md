@@ -7,12 +7,14 @@ events are still actionable and are not eligible for content deletion.
 
 `platform.event_outbox` is the durable delivery owner. It holds only a random
 `delivery_id` reference and organization identity for email commands; rendered
-content lives in `public.email_delivery` under forced tenant RLS. The relay
-stages terminal settlement, and a database trigger stamps `terminal_at` from
-the database clock on the transition to `PUBLISHED` or `DEAD`. An `app_user`
-UPDATE cannot backdate it. Replaying a dead event clears the terminal clock;
-a later terminal failure starts a fresh 30-day window. Once private content
-is purged, both replay APIs reject the event. A published event also retains
+content lives in `public.email_delivery` under forced tenant RLS. The current
+`app_user` role has no schema or table grant on the shared, non-RLS outbox.
+The relay stages terminal settlement, and a database trigger stamps
+`terminal_at` from the database clock on the transition to `PUBLISHED` or
+`DEAD`. An `app_user` UPDATE cannot backdate it. Replaying a dead event clears
+the terminal clock; a later terminal failure starts a fresh 30-day window.
+Once private content is purged, both replay APIs reject the event. A published
+event also retains
 `published_at` for the general outbox lifecycle. Historical
 dead events without a reliable terminal timestamp are not guessed into the
 retention window.
@@ -21,11 +23,14 @@ retention window.
 minute 20, up to 5,000 terminal candidates per run. It discovers candidates
 from the non-RLS outbox, then opens one tenant session per event, locks and
 rechecks the event, and deletes its private row. The database's restrictive
-DELETE policy independently refuses a delete before 30 days or outside the
-tenant. For a published event, the task deletes the outbox row in the same
-transaction, so neither record can be removed alone. A dead event keeps its
-outbox error/status evidence and records `email_payload_purged_at` to prevent
-repeat work. The database trigger refuses deletion of DEAD email events and
+DELETE policy calls an `app_admin`-owned security-definer predicate that returns
+only a yes/no retention decision for the current tenant and matching event.
+PUBLIC cannot execute it, and it gives `app_user` no direct outbox access. The
+policy refuses a delete before 30 days or outside the tenant. For a published
+event, the task deletes the outbox row in the same transaction, so neither
+record can be removed alone. A dead event keeps its outbox error/status
+evidence and records `email_payload_purged_at` to prevent repeat work. The
+database trigger refuses deletion of DEAD email events and
 of PUBLISHED email events before their retention window. Invalid references
 remain queued for investigation; the task reports an `invalid` count and logs
 only the event UUID.
