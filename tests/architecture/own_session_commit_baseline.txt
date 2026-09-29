@@ -84,6 +84,7 @@ app/tasks/license.py::_notify_admins	grandfathered: unreviewed
 app/tasks/notifications.py::process_due_calendar_reminders	adapter-owned: entry point (Celery task decorator)
 app/tasks/notifications.py::process_pending_push_notifications	adapter-owned: entry point (Celery task decorator)
 app/tasks/outbox_relay.py::_deliver_one	grandfathered: unreviewed
+app/tasks/outbox_relay.py::cleanup_terminal_email_deliveries	adapter-owned: entry point (Celery task decorator)
 app/tasks/outbox_relay.py::reconcile_outbox_balance_projection	adapter-owned: entry point (Celery task decorator)
 app/tasks/payroll.py::auto_generate_draft_payroll	adapter-owned: entry point (Celery task decorator)
 app/tasks/payroll.py::process_payroll_entry_notifications	adapter-owned: entry point (Celery task decorator)
