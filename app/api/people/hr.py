@@ -827,7 +827,7 @@ def create_employee(
         emp = svc.create_employee(payload.person_id, data)
     except EmployeeAlreadyExistsError as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            status_code=status.HTTP_409_CONFLICT, detail=exc.message
         ) from exc
     employee_id = emp.employee_id
     response = EmployeeRead.model_validate(emp)
