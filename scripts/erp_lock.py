@@ -1,28 +1,26 @@
 """The refusals `.github/workflows/erp-lock.yml` needs, out of the YAML.
 
-ERP repinned `dotmac-files` 0.1.0a2 -> 0.1.0a4 and `dotmac-tax`
-0.1.0a3 -> 0.1.0a4 through this workflow: protected run 34768603169 performed
-that specific, one-shot movement and its artifact is what is applied in the
-tree today. `ALLOWED_MOVEMENTS` below still names that exact "from" version on
-each side, so a re-dispatch against a tree that no longer declares it fails
-the refusal check by design, not by accident. Both packages are published to
-the same PRIVATE Forgejo index that
+ERP's pending one-shot movement is `dotmac-files` 0.1.0a4 -> 0.1.0a5.
+`dotmac-tax` stays at 0.1.0a4, and its lock entry is immutable under the
+whole-lock drift check. Once the resolved pair is applied, a re-dispatch
+against that tree fails the old-version check. Both packages use the same
+PRIVATE Forgejo index that
 `dotmac_vendor_control_plane`'s `kernel-lock.yml` / `scripts/kernel_lock.py`
 resolve `dotmac-kernel` against, and a lock entry for a privately-published
 distribution is the one part of a pin change that cannot be written by hand:
 its sha256 values are facts about published artifacts, obtainable only by
 resolving against the index that holds them. That workflow's shape and
-reasoning are reused here; this module is not a copy of it — ERP moves TWO
-packages, not one, and ERP's manifest carries a pre-existing legitimate git
-dependency the kernel-lock guard would have refused outright (see
+reasoning are reused here; this module is not a copy of it — ERP's manifest
+carries a pre-existing legitimate git dependency the kernel-lock guard would
+have refused outright (see
 `ALLOWED_OFF_INDEX_DEPENDENCIES` below).
 
 ## The closed allowlist of movements
 
-`ALLOWED_MOVEMENTS` names exactly two moves. A caller cannot ask this module to
-move `dotmac-files` to `0.1.0a5`, or move a third package at all — that would
-be a different, unreviewed change, and extending the allowlist is itself an
-edit to this file that a human reviews, not a workflow input.
+`ALLOWED_MOVEMENTS` names exactly one move. A caller cannot ask this module to
+move `dotmac-tax`, move `dotmac-files` to another version, or move a third
+package at all. Extending the allowlist is a reviewed edit to this file,
+not a workflow input.
 
 ## The one accommodation ERP's own manifest needs
 
@@ -40,8 +38,8 @@ and every other off-index form is refused exactly as upstream refuses it.
 
 ## The subjects
 
-* `set-versions` — move both pins in the manifest, refusing unless the ref's
-  OWN tree declares the exact allowed OLD version for each package, exactly
+* `set-versions` — move the files pin in the manifest, refusing unless the ref's
+  OWN tree declares the exact allowed OLD version, exactly
   once, and refusing again unless the rewrite lands on the exact allowed NEW
   version, exactly once — enumerated across every dependency surface Poetry
   and PEP 621 / PEP 735 accept.
@@ -59,10 +57,10 @@ and every other off-index form is refused exactly as upstream refuses it.
 * `off-index-lock` — every pinned off-index dependency's LOCK entry (not just
   the manifest's declared pin) agrees with `ALLOWED_OFF_INDEX_DEPENDENCIES` on
   name, repository, tag, and resolved commit — see `off_index_lock_problems`.
-* `verify` — the lock's hashes for BOTH moved packages are the bytes the index
+* `verify` — the lock's hashes for the moved package are the bytes the index
   published.
-* `drift` — the whole lock outside the two moved entries must be identical;
-  each moved entry may differ only in `version`, `files`, and `dependencies`
+* `drift` — the whole lock outside the moved entry must be identical;
+  that entry may differ only in `version`, `files`, and `dependencies`
   — and `dependencies` is bounded separately, by `wheel-dependencies`, to
   names the acquired wheel's own `Requires-Dist` actually declares.
 * `evidence` — the manifest/lock PAIR, bound to each other and to the run, with
@@ -93,17 +91,27 @@ import dependency_normalisation
 # ── the closed allowlist of movements ───────────────────────────────────────
 
 #: The ONLY movements this workflow may perform. A version outside this table
-#: — for either side of either package — is refused BY NAME, not silently
+#: — on either side of the move — is refused BY NAME, not silently
 #: coerced or ignored. Extending this table is a reviewed diff to this file,
-#: never a workflow input. Both movements below are now historical: protected
-#: run 34768603169 already performed them and the "from" side is no longer
-#: what the tree declares, so a re-dispatch fails the refusal check that
-#: compares against the currently declared version — that failure is the
-#: intended behaviour of a one-shot movement, not a bug to route around by
-#: editing this table.
+#: never a workflow input. After this move is applied, a re-dispatch fails
+#: the refusal check against the currently declared version by design.
 ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {
-    "dotmac-files": ("0.1.0a2", "0.1.0a4"),
-    "dotmac-tax": ("0.1.0a3", "0.1.0a4"),
+    "dotmac-files": ("0.1.0a4", "0.1.0a5"),
+}
+
+#: Private pin that must stay at this version throughout this one-shot move.
+IMMUTABLE_PINS = {"dotmac-tax": "0.1.0a4"}
+
+#: The released wheel's digest, reviewed independently of the index this run
+#: reads. Starter's merged release verification record at d74bf8dd names
+#: `dotmac-files-v0.1.0a5` (peeled 895ce0e4) and verification run
+#: 36558827348. A runtime index replacement must fail before resolve sees it.
+RELEASED_WHEEL_DIGESTS = {
+    (
+        "dotmac-files",
+        "0.1.0a5",
+        "dotmac_files-0.1.0a5-py3-none-any.whl",
+    ): "e6b0a4aa4cdaed5bdeff9aeb3b948e26db287aae18e118afaf759e6d5211a7c7",
 }
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
@@ -134,8 +142,9 @@ INDEX_USERNAME = "ci-reader"
 #: listing.
 CREDENTIAL_ENV = "FORGEJO_CREDENTIAL"
 
-#: The two packages this workflow exists to move. Everything else in the lock
-#: is required to be identical. These two may additionally change `version`,
+#: The package this workflow exists to move. Everything else in the lock,
+#: including `dotmac-tax`, is required to be identical. Files may change
+#: `version`,
 #: `files` and `dependencies` — `dependencies` ONLY because a version move can
 #: legitimately shift the moved package's own floor on a transitive
 #: dependency (e.g. a new `dotmac-files` release raising its `dotmac-kernel`
@@ -398,7 +407,7 @@ def _load_toml(path: Path) -> dict[str, Any]:
 _normalised = dependency_normalisation.normalise_name_for_identity
 
 
-# ── set-versions: move both pins, or refuse ─────────────────────────────────
+# ── set-versions: move the allowed pin, or refuse ───────────────────────────
 
 
 def _declaration_pattern(package: str) -> re.Pattern[str]:
@@ -741,7 +750,7 @@ def manifest_problems(
     """Everything about this manifest that would misdirect the credential.
 
     `target_versions` is the NEW version expected for each moved package,
-    e.g. `{"dotmac-files": "0.1.0a4", "dotmac-tax": "0.1.0a4"}`.
+    e.g. `{"dotmac-files": "0.1.0a5"}`.
     """
 
     problems: list[str] = []
@@ -773,6 +782,7 @@ def manifest_problems(
         )
 
     problems += dependency_problems(manifest)
+    problems += movement_problems(manifest, IMMUTABLE_PINS)
 
     if "requires-plugins" in manifest.get("tool", {}).get("poetry", {}):
         problems.append(
@@ -781,7 +791,7 @@ def manifest_problems(
             "the step that holds the credential"
         )
 
-    for package, version in sorted(target_versions.items()):
+    for package, version in sorted((target_versions | IMMUTABLE_PINS).items()):
         table_entries = dict(_poetry_constraint_tables(manifest))
         spec = None
         for deps in table_entries.values():
@@ -1029,7 +1039,7 @@ def artifact_names(package: str, version: str) -> set[str]:
 
 # ── bounding `dependencies` to the wheel's own metadata, no credential ──────
 #
-# Point 7's second half: for the two moved packages, `dependencies` is one of
+# For the moved package, `dependencies` is one of
 # the fields a pin move may change, but it should not be free to say anything.
 # The wheel ITSELF (already downloaded, already hashed, no further credential
 # needed) carries its own `Requires-Dist` in `*.dist-info/METADATA`, and that
@@ -1227,7 +1237,22 @@ def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
         for filename, url in sorted(wanted.items()):
             target = files_dir / filename
             fetch(url, target)
-            digests[filename] = sha256_hex(target.read_bytes())
+            digest = sha256_hex(target.read_bytes())
+            if package in ALLOWED_MOVEMENTS and filename.endswith(".whl"):
+                expected_digest = RELEASED_WHEEL_DIGESTS.get(
+                    (package, version, filename)
+                )
+                if expected_digest is None:
+                    raise Refusal(
+                        f"no reviewed release digest for {package} {version} "
+                        f"wheel {filename}"
+                    )
+                if digest != expected_digest:
+                    raise Refusal(
+                        f"{package} {version} wheel {filename} sha256 {digest} "
+                        f"does not match reviewed release digest {expected_digest}"
+                    )
+            digests[filename] = digest
 
         if package in ALLOWED_MOVEMENTS:
             wheel_names = parseable_wheels(wanted)
@@ -1408,11 +1433,19 @@ def _moved_entry_problems(
 
 
 def drift_problems(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
-    """Everything outside the two moved pins that is not identical."""
+    """Everything outside the moved pin that is not identical."""
 
     problems: list[str] = []
     old = _entries(before)
     new = _entries(after)
+
+    for package, version in sorted(IMMUTABLE_PINS.items()):
+        for label, entries in (("before", old), ("after", new)):
+            found = [key[1] for key in entries if key[0] == package]
+            if found != [version]:
+                problems.append(
+                    f"{label} lock must pin {package} at {version}, found {found!r}"
+                )
 
     old_other = {
         key: value for key, value in old.items() if key[0] not in MUTABLE_PACKAGES

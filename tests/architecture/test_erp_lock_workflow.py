@@ -7,10 +7,9 @@ structural repair (the credential and the resolver never share a job; the
 resolver is never handed something it must build). Two things are genuinely
 different here, not merely renamed, and each has its own tests below:
 
-1. ERP moves TWO packages (`dotmac-files` 0.1.0a2 -> 0.1.0a4, `dotmac-tax`
-   0.1.0a3 -> 0.1.0a4) against a CLOSED allowlist of movements — a caller
-   cannot ask for a third package or a different version, and the check says
-   so by name.
+1. ERP moves `dotmac-files` 0.1.0a4 -> 0.1.0a5 against a CLOSED allowlist;
+   `dotmac-tax` remains at 0.1.0a4. A caller cannot ask for another package
+   or version, and the whole-lock drift gate holds tax immutable.
 2. ERP's own `pyproject.toml` already declares a legitimate, unrelated git
    dependency (`dotmac-integration-client`). The guard this is adapted from
    refuses every off-index dependency form anywhere in the manifest; applied
@@ -47,11 +46,13 @@ import erp_lock  # noqa: E402
 from erp_lock import (  # noqa: E402
     ALLOWED_MOVEMENTS,
     ARTIFACT_ORIGIN,
+    IMMUTABLE_PINS,
     INDEX_SOURCE_NAME,
     INDEX_USERNAME,
     LOCK_INDEX_URL,
     MANIFEST_INDEX_URL,
     OFF_INDEX_DEPENDENCY_KEYS,
+    RELEASED_WHEEL_DIGESTS,
     Refusal,
     acquire,
     acquisition_plan,
@@ -87,6 +88,7 @@ from erp_lock import (  # noqa: E402
 TARGETS = {name: pair[1] for name, pair in ALLOWED_MOVEMENTS.items()}
 OLDS = {name: pair[0] for name, pair in ALLOWED_MOVEMENTS.items()}
 FILES, TAX = "dotmac-files", "dotmac-tax"
+TAX_VERSION = "0.1.0a4"
 
 # ── fixtures for the lock comparison ────────────────────────────────────────
 
@@ -138,20 +140,19 @@ def _before() -> dict[str, Any]:
             _package("attrs", "24.2.0"),
             _package("dotmac-kernel", "0.1.0a98", source=_INDEX_SOURCE),
             _package(FILES, OLDS[FILES], source=_INDEX_SOURCE),
-            _package(TAX, OLDS[TAX], source=_INDEX_SOURCE),
+            _package(TAX, TAX_VERSION, source=_INDEX_SOURCE),
         ],
         "content-hash-before",
     )
 
 
 def _after() -> dict[str, Any]:
-    """The only clean shape: both target entries moved, the content-hash moved."""
+    """The only clean shape: files and the content-hash moved; tax did not."""
 
     resolved = _before()
     resolved["package"][FILES_ENTRY] = _package(
         FILES, TARGETS[FILES], source=_INDEX_SOURCE
     )
-    resolved["package"][TAX_ENTRY] = _package(TAX, TARGETS[TAX], source=_INDEX_SOURCE)
     resolved["metadata"]["content-hash"] = "content-hash-after"
     return resolved
 
@@ -162,10 +163,10 @@ def _plant(index: int, field: str, value: Any) -> dict[str, Any]:
     return resolved
 
 
-# ── the near-miss: only the two named packages moved ────────────────────────
+# ── the near-miss: only the named package moved ─────────────────────────────
 
 
-def test_a_resolution_that_moved_only_the_two_named_packages_is_accepted() -> None:
+def test_a_resolution_that_moved_only_files_is_accepted() -> None:
     """SENSITIVITY. A gate that refuses everything proves nothing."""
 
     assert drift_problems(_before(), _after()) == []
@@ -206,7 +207,6 @@ def test_every_other_field_of_an_unrelated_entry_is_compared(
     assert field in named[0], named
 
 
-@pytest.mark.parametrize("index", [FILES_ENTRY, TAX_ENTRY])
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -218,29 +218,24 @@ def test_every_other_field_of_an_unrelated_entry_is_compared(
         ("description", "quietly rewritten"),
     ],
 )
-def test_metadata_drift_on_either_moved_entry_itself_is_refused(
-    index: int, field: str, value: Any
-) -> None:
-    """Neither moved entry is a blank cheque, unlike a gate that exempted the
-    whole entry — see kernel_lock.py's amendment 5 for the defect this
-    guards. `dependencies` is deliberately NOT in this list — see the test
-    below for why it is permitted, and separately bounded."""
+def test_metadata_drift_on_moved_entry_is_refused(field: str, value: Any) -> None:
+    """The moved entry is not a blank cheque. Dependencies are bounded
+    separately against the acquired wheel's own metadata."""
 
-    resolved = _plant(index, field, value)
-    package = resolved["package"][index]["name"]
+    resolved = _plant(FILES_ENTRY, field, value)
+    package = FILES
     named = [p for p in drift_problems(_before(), resolved) if package in p]
     assert named, f"a changed `{field}` on {package} was not named"
     assert any(field in p for p in named), named
 
 
-@pytest.mark.parametrize("index", [FILES_ENTRY, TAX_ENTRY])
-def test_either_moved_entry_may_still_move_its_version_and_files(index: int) -> None:
+def test_moved_entry_may_still_move_its_version_and_files() -> None:
     """SENSITIVITY the other way. Refusing a moved `files` list would refuse
     every real run."""
 
     resolved = _after()
-    package = resolved["package"][index]["name"]
-    resolved["package"][index]["files"] = [
+    package = FILES
+    resolved["package"][FILES_ENTRY]["files"] = [
         {
             "file": f"{package.replace('-', '_')}-{TARGETS[package]}-py3-none-any.whl",
             "hash": "sha256:new",
@@ -249,18 +244,17 @@ def test_either_moved_entry_may_still_move_its_version_and_files(index: int) -> 
     assert drift_problems(_before(), resolved) == []
 
 
-@pytest.mark.parametrize("index", [FILES_ENTRY, TAX_ENTRY])
-def test_a_moved_entry_may_also_change_its_dependencies_table(index: int) -> None:
+def test_moved_entry_may_also_change_its_dependencies_table() -> None:
     """Unlike `kernel_lock.py`'s KERNEL_MUTABLE_FIELDS (which holds even the
     kernel's own `dependencies` immutable), point 7 of this workflow's brief
-    explicitly permits `dependencies` to differ on the TWO moved packages — a
+    explicitly permits `dependencies` to differ on the moved package — a
     version move can legitimately raise the moved package's own floor on a
     transitive dependency. `drift_problems` alone does not bound WHAT it may
     say; `wheel_dependency_problems` does, in the resolver job, against the
     acquired wheel's own Requires-Dist (proven separately above)."""
 
-    resolved = _plant(index, "dependencies", {"dotmac-kernel": ">=0.1.0a99"})
-    package = resolved["package"][index]["name"]
+    resolved = _plant(FILES_ENTRY, "dependencies", {"dotmac-kernel": ">=0.1.0a99"})
+    package = FILES
     assert not any(
         package in p and "dependencies" in p
         for p in drift_problems(_before(), resolved)
@@ -284,15 +278,40 @@ def test_an_unchanged_content_hash_is_a_refusal() -> None:
     assert any("content-hash" in p for p in problems), problems
 
 
-def test_only_one_of_the_two_moving_is_still_named_as_a_refusal() -> None:
-    """A resolution that moves `dotmac-files` but leaves `dotmac-tax` behind
-    is not "half done and fine" — the workflow asked for both, and a lock
-    describing only one movement is not the lock the dispatch requested."""
+def test_files_must_move() -> None:
+    """The workflow cannot emit an unchanged files entry."""
 
     resolved = _after()
-    resolved["package"][TAX_ENTRY] = _package(TAX, OLDS[TAX], source=_INDEX_SOURCE)
+    resolved["package"][FILES_ENTRY] = _package(
+        FILES, OLDS[FILES], source=_INDEX_SOURCE
+    )
     problems = drift_problems(_before(), resolved)
-    assert any("dotmac-tax" in p and "did not move" in p for p in problems), problems
+    assert any(FILES in p and "did not move" in p for p in problems), problems
+
+
+@pytest.mark.parametrize("field", ["version", "files", "dependencies", "source"])
+def test_tax_entry_is_immutable(field: str) -> None:
+    values: dict[str, Any] = {
+        "version": "0.1.0a5",
+        "files": [],
+        "dependencies": {"surprise": "*"},
+        "source": _ELSEWHERE,
+    }
+    problems = drift_problems(_before(), _plant(TAX_ENTRY, field, values[field]))
+    assert any(
+        TAX in p and (field in p or (field == "version" and "0.1.0a5" in p))
+        for p in problems
+    ), problems
+
+
+def test_tax_pin_is_a4_on_both_sides_even_if_identical() -> None:
+    before = _before()
+    after = _after()
+    for lock in (before, after):
+        lock["package"][TAX_ENTRY] = _package(TAX, "0.1.0a5", source=_INDEX_SOURCE)
+    problems = drift_problems(before, after)
+    assert any("before lock must pin" in p and TAX in p for p in problems), problems
+    assert any("after lock must pin" in p and TAX in p for p in problems), problems
 
 
 def test_two_entries_for_one_name_and_version_refuse() -> None:
@@ -305,11 +324,19 @@ def test_two_entries_for_one_name_and_version_refuse() -> None:
 # ── the closed allowlist of movements ────────────────────────────────────────
 
 
-def test_the_allowlist_names_exactly_the_two_decided_movements() -> None:
+def test_the_allowlist_names_exactly_the_decided_movement() -> None:
     assert ALLOWED_MOVEMENTS == {
-        "dotmac-files": ("0.1.0a2", "0.1.0a4"),
-        "dotmac-tax": ("0.1.0a3", "0.1.0a4"),
+        FILES: ("0.1.0a4", "0.1.0a5"),
     }
+    assert IMMUTABLE_PINS == {TAX: TAX_VERSION}
+    expected_released_wheels = {
+        (
+            FILES,
+            TARGETS[FILES],
+            "dotmac_files-0.1.0a5-py3-none-any.whl",
+        ): "e6b0a4aa4cdaed5bdeff9aeb3b948e26db287aae18e118afaf759e6d5211a7c7"
+    }
+    assert expected_released_wheels == RELEASED_WHEEL_DIGESTS
 
 
 def test_a_third_package_is_refused_by_name() -> None:
@@ -317,29 +344,33 @@ def test_a_third_package_is_refused_by_name() -> None:
         erp_lock._parse_movement_args(  # noqa: SLF001
             [
                 f"dotmac-files={TARGETS[FILES]}",
-                f"dotmac-tax={TARGETS[TAX]}",
                 "dotmac-kernel=0.1.0a99",
             ]
         )
 
 
 def test_an_unlisted_version_of_a_listed_package_is_refused_by_name() -> None:
-    with pytest.raises(Refusal, match="0.1.0a5"):
+    with pytest.raises(Refusal, match="0.1.0a6"):
+        erp_lock._parse_movement_args(["dotmac-files=0.1.0a6"])  # noqa: SLF001
+
+
+def test_a_tax_movement_is_refused() -> None:
+    with pytest.raises(Refusal, match="dotmac-tax"):
         erp_lock._parse_movement_args(  # noqa: SLF001
-            ["dotmac-files=0.1.0a5", f"dotmac-tax={TARGETS[TAX]}"]
+            [f"dotmac-files={TARGETS[FILES]}", "dotmac-tax=0.1.0a5"]
         )
 
 
 def test_a_missing_movement_is_refused() -> None:
     with pytest.raises(Refusal, match="expected a --movement for each"):
-        erp_lock._parse_movement_args([f"dotmac-files={TARGETS[FILES]}"])  # noqa: SLF001
+        erp_lock._parse_movement_args([])  # noqa: SLF001
 
 
-def test_the_one_allowed_pair_is_accepted() -> None:
+def test_the_one_allowed_movement_is_accepted() -> None:
     """SENSITIVITY. The real dispatch shape must not be refused."""
 
     result = erp_lock._parse_movement_args(  # noqa: SLF001
-        [f"dotmac-files={TARGETS[FILES]}", f"dotmac-tax={TARGETS[TAX]}"]
+        [f"dotmac-files={TARGETS[FILES]}"]
     )
     assert result == TARGETS
 
@@ -352,7 +383,7 @@ def _manifest(**overrides: Any) -> dict[str, Any]:
         "dependencies": {
             "python": ">=3.11,<3.13",
             FILES: {"version": OLDS[FILES], "source": INDEX_SOURCE_NAME},
-            TAX: {"version": OLDS[TAX], "source": INDEX_SOURCE_NAME},
+            TAX: {"version": TAX_VERSION, "source": INDEX_SOURCE_NAME},
             "dotmac-integration-client": {
                 "git": "https://github.com/michaelayoade/dotmac-integration-client.git",
                 "tag": "v0.2.0",
@@ -372,12 +403,21 @@ def _manifest(**overrides: Any) -> dict[str, Any]:
     return {"tool": {"poetry": poetry}}
 
 
-def test_the_repositorys_own_manifest_is_declared_exactly_once_each() -> None:
+def test_the_repositorys_own_manifest_declares_the_old_files_pin_once() -> None:
     """NON-VACUITY, against the two real files."""
 
     with (ROOT / "pyproject.toml").open("rb") as handle:
         manifest = tomllib.load(handle)
-    assert movement_problems(manifest, TARGETS) == []
+    assert movement_problems(manifest, OLDS) == []
+    assert movement_problems(manifest, IMMUTABLE_PINS) == []
+
+
+def test_manifest_guard_refuses_a_tax_version_change() -> None:
+    manifest = _manifest()
+    manifest["tool"]["poetry"]["dependencies"][FILES]["version"] = TARGETS[FILES]
+    manifest["tool"]["poetry"]["dependencies"][TAX]["version"] = "0.1.0a5"
+    problems = manifest_problems(manifest, TARGETS)
+    assert any(TAX in p and TAX_VERSION in p for p in problems), problems
 
 
 def test_a_second_declaration_of_a_moved_package_is_refused() -> None:
@@ -412,7 +452,7 @@ def test_the_edit_moves_exactly_the_pin_in_the_real_manifest() -> None:
     assert (
         manifest["tool"]["poetry"]["dependencies"][FILES]["version"] == TARGETS[FILES]
     )
-    assert manifest["tool"]["poetry"]["dependencies"][TAX]["version"] == TARGETS[TAX]
+    assert manifest["tool"]["poetry"]["dependencies"][TAX]["version"] == TAX_VERSION
     assert manifest_problems(manifest, TARGETS) == []
 
 
@@ -425,7 +465,7 @@ def test_the_edit_moves_exactly_the_pin_in_the_real_manifest() -> None:
 )
 def test_the_edit_refuses_anything_but_one_declaration(text: str) -> None:
     with pytest.raises(Refusal):
-        replace_version(text, FILES, "0.1.0a4")
+        replace_version(text, FILES, TARGETS[FILES])
 
 
 # ── manifest-guard: ERP's own legitimate git dependency is accommodated ─────
@@ -448,7 +488,7 @@ def test_a_synthetic_clean_manifest_passes() -> None:
         dependencies={
             **_manifest()["tool"]["poetry"]["dependencies"],
             FILES: {"version": TARGETS[FILES], "source": INDEX_SOURCE_NAME},
-            TAX: {"version": TARGETS[TAX], "source": INDEX_SOURCE_NAME},
+            TAX: {"version": TAX_VERSION, "source": INDEX_SOURCE_NAME},
         }
     )
     assert manifest_problems(manifest, TARGETS) == []
@@ -676,10 +716,10 @@ def test_a_redirect_is_refused_rather_than_followed() -> None:
 # ── acquisition_plan: the bundle is closed, and a gap refuses ──────────────
 
 
-def test_the_bundle_closes_over_both_moved_packages() -> None:
+def test_the_bundle_closes_over_moved_files_and_unchanged_tax() -> None:
     plan = acquisition_plan(_manifest(), _before(), TARGETS)
     assert plan[FILES] == TARGETS[FILES]
-    assert plan[TAX] == TARGETS[TAX]
+    assert plan[TAX] == TAX_VERSION
 
 
 def test_a_private_dependency_that_is_not_an_exact_pin_refuses() -> None:
@@ -699,23 +739,23 @@ def test_the_repositorys_real_manifest_and_lock_produce_a_closed_plan() -> None:
         lock = tomllib.load(handle)
     plan = acquisition_plan(manifest, lock, TARGETS)
     assert plan[FILES] == TARGETS[FILES]
-    assert plan[TAX] == TARGETS[TAX]
+    assert plan[TAX] == TAX_VERSION
 
 
 @pytest.mark.parametrize(
     ("filename", "expected"),
     [
-        ("dotmac_files-0.1.0a4-py3-none-any.whl", True),
-        ("dotmac_files-0.1.0a4.tar.gz", True),
-        ("dotmac_files-0.1.0a40.tar.gz", False),
-        ("dotmac_files_extra-0.1.0a4.tar.gz", False),
-        ("dotmac_files-0.1.0a2.tar.gz", False),
+        ("dotmac_files-0.1.0a5-py3-none-any.whl", True),
+        ("dotmac_files-0.1.0a5.tar.gz", True),
+        ("dotmac_files-0.1.0a50.tar.gz", False),
+        ("dotmac_files_extra-0.1.0a5.tar.gz", False),
+        ("dotmac_files-0.1.0a4.tar.gz", False),
     ],
 )
 def test_an_artifact_is_matched_to_its_exact_version(
     filename: str, expected: bool
 ) -> None:
-    assert artifact_belongs_to(filename, FILES, "0.1.0a4") is expected
+    assert artifact_belongs_to(filename, FILES, TARGETS[FILES]) is expected
 
 
 def test_the_lock_must_name_the_bytes_that_were_downloaded() -> None:
@@ -993,8 +1033,8 @@ def test_a_near_miss_is_not_reported(tmp_path: Path) -> None:
 _LOCK_TOML = """\
 [[package]]
 name = "dotmac-files"
-version = "0.1.0a4"
-files = [{file = "dotmac_files-0.1.0a4-py3-none-any.whl", hash = "sha256:a"}]
+version = "0.1.0a5"
+files = [{file = "dotmac_files-0.1.0a5-py3-none-any.whl", hash = "sha256:a"}]
 
 [metadata]
 lock-version = "2.1"
@@ -1015,7 +1055,11 @@ def _generated(tmp_path: Path) -> Path:
         out,
         manifest,
         lock,
-        {"ref": "a" * 40, "dotmac_files_version": "0.1.0a4", "workflow_run": "123"},
+        {
+            "ref": "a" * 40,
+            "dotmac_files_version": TARGETS[FILES],
+            "workflow_run": "123",
+        },
         proof,
     )
     assert sightings == []
@@ -1100,8 +1144,8 @@ def _fake_index(monkeypatch: pytest.MonkeyPatch, offered: dict[str, list[str]]) 
         elif package.endswith(".whl"):
             with zipfile.ZipFile(target, "w") as archive:
                 archive.writestr(
-                    "dotmac_files-0.1.0a4.dist-info/METADATA",
-                    "Metadata-Version: 2.1\nName: dotmac-files\nVersion: 0.1.0a4\n"
+                    "dotmac_files-0.1.0a5.dist-info/METADATA",
+                    "Metadata-Version: 2.1\nName: dotmac-files\nVersion: 0.1.0a5\n"
                     "Requires-Dist: dotmac-kernel (>=0.1.0a56)\n",
                 )
         else:
@@ -1133,10 +1177,29 @@ def test_the_bundle_records_requires_dist_for_a_moved_package(
         monkeypatch,
         {FILES: sorted(artifact_names(FILES, TARGETS[FILES]))},
     )
+    wheel_name = "dotmac_files-0.1.0a5-py3-none-any.whl"
+    fake_wheel = tmp_path / wheel_name
+    erp_lock.fetch(f"{LOCK_INDEX_URL}/files/{wheel_name}", fake_wheel)
+    monkeypatch.setattr(
+        erp_lock,
+        "RELEASED_WHEEL_DIGESTS",
+        {(FILES, TARGETS[FILES], wheel_name): sha256_hex(fake_wheel.read_bytes())},
+    )
     out = tmp_path / "bundle"
     acquire({FILES: TARGETS[FILES]}, out)
     requires = json.loads((out / "requires" / f"{FILES}.json").read_text())
     assert requires == ["dotmac-kernel (>=0.1.0a56)"]
+
+
+def test_acquire_refuses_a_replaced_released_wheel_before_bundle_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_index(monkeypatch, {FILES: sorted(artifact_names(FILES, TARGETS[FILES]))})
+    out = tmp_path / "bundle"
+    with pytest.raises(Refusal, match="does not match reviewed release digest"):
+        acquire({FILES: TARGETS[FILES]}, out)
+    assert not (out / "digests.json").exists()
+    assert not (out / "requires" / f"{FILES}.json").exists()
 
 
 # ── the workflow's own shape ─────────────────────────────────────────────────
@@ -1516,19 +1579,17 @@ def test_it_is_dispatch_only() -> None:
         assert trigger not in text, trigger
 
 
-def test_only_the_two_allowed_versions_are_named_as_valid_in_the_dispatch_gate() -> (
-    None
-):
-    """The workflow's own bash refusal names the closed pair literally — the
+def test_only_the_allowed_version_is_named_as_valid_in_the_dispatch_gate() -> None:
+    """The workflow's own bash refusal names the closed move literally — the
     Python-side `_parse_movement_args` is the authoritative check (proven
-    above), and this asserts the workflow's first-line refusal agrees with it
-    rather than drifting to a different pair."""
+    above), and this asserts the workflow's first-line refusal agrees with it."""
 
     text = WORKFLOW.read_text()
     acquire_job = _jobs()["acquire"][0]
     assert TARGETS[FILES] in acquire_job
-    assert TARGETS[TAX] in acquire_job
-    assert TARGETS[FILES] in text and TARGETS[TAX] in text
+    assert TARGETS[FILES] in text
+    assert "dotmac_tax_version" not in text
+    assert "dotmac-tax=${TAX_VERSION}" not in text
 
 
 def test_no_poetry_binary_setting_is_relied_on_for_this() -> None:
