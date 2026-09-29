@@ -36,7 +36,7 @@ environment = "production"
 # identity, module versions and persistence-plane selections are one release
 # fact; the digest below is the SHA-256 of the committed canonical bytes.
 manifest_path = "deploy/product-manifest.json"
-manifest_digest = "sha256:e70ace992c9829accc46adcf33b0979c01d73cb19b412b770edf716a11c651a3"
+manifest_digest = "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6"
 
 [image]
 # A digest, never a tag — and as of this change that is true of the LIVE
