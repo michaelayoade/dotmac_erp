@@ -19,7 +19,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "erp-lock.yml"
-REQUIRED_GATE_SHELL = "/bin/bash -p --noprofile --norc -eo pipefail {0}"
+REQUIRED_GATE_SHELL = "/bin/bash --noprofile --norc -p -eo pipefail {0}"
 ALLOWED_SECRET_EXPRESSION = "${{ secrets.FORGEJO_READ_TOKEN }}"
 CREDENTIAL_REFERENCE = re.compile(
     r"secrets\s*(?:\.\s*FORGEJO_READ_TOKEN(?![A-Za-z0-9_])|\[\s*(?:'FORGEJO_READ_TOKEN'|"
