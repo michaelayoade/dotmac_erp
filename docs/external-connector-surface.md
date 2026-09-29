@@ -17,8 +17,8 @@ centrally, and reports every untracked Python source as an error.
 ## Accepted baseline
 
 Remeasured on 2026-08-25 in the direct-CRM retirement change with the pinned
-schema-9 engine. The exact file inventory below and the profile baselines are
-lowered together; nine conserved findings remain.
+schema-9 engine. That review left nine conserved findings at the time. The
+current profile and ledger below contain twelve after later reviewed additions.
 
 Reviewed again on 2026-08-29 for PR #416 after connector failure coverage
 changed the source files containing three test-only conserved symbols. Their
@@ -119,7 +119,8 @@ revision, so its two entries also preserve that stronger dead-code signal.
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_circuit_opens_after_transport_failure` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_retries_transient_server_error_with_exact_body` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
 | `tests/tasks/test_hooks_tasks.py` | `TestExecuteAsyncHook` | `delivery_retry` | `2b429df85fe39fe006f8bf5c79a2038cbddefd5ff91c2388910fa6f17eba1597` |
-| `tests/test_email_services.py` | `TestSendEmail` | `outbound_transport` | `3f68ce03993841ef2d5b9414ad191ff46940c5ee104aa9c04482315f9ff52461` |
+| `tests/tasks/test_outbox_relay.py` | `test_email_handler_dead_letters_permanent_smtp_error` | `outbound_transport` | `6bc63b552c27b8334cdb4d63382292eb5ec464dc07e7fb63d800a88bd275f63d` |
+| `tests/test_email_services.py` | `TestSendEmail` | `outbound_transport` | `940f495c96637f0a97e7e96ac826447d79914a2ad09998132aeb81d0142499d3` |
 
 ## Review rule
 

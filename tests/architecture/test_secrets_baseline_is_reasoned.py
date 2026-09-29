@@ -67,8 +67,9 @@ BASELINE = REPO_ROOT / ".secrets.baseline"
 REASONS = {
     ".dotmac/standards-profile.json": (
         "Public integrity identifiers: the pinned governance commit (hard "
-        "rule 15) and schema-9 conservation fingerprints. Both are hex by "
-        "definition; neither authenticates an actor or grants access."
+        "rule 15) and schema-9 conservation fingerprints, including the new "
+        "permanent-SMTP-refusal test fingerprint. These are hex by definition; "
+        "none authenticates an actor or grants access."
     ),
     ".github/dependency-bundle-policy.json": (
         "Public immutable Git commit ID for the one permitted off-index "
@@ -164,7 +165,9 @@ def test_the_suppression_count_only_shrinks() -> None:
     This release's 12-character projection no longer crosses the entropy
     detector's threshold, removing one reviewed public immutable-release
     fingerprint. The dependency-bundle policy still adds one public immutable
-    Git commit ID, so the reviewed suppression total is 28.
+    Git commit ID. The email-outbox slice adds one schema-9 conservation
+    fingerprint for its permanent SMTP refusal test, bringing the reviewed
+    suppression total to 29.
 
     The v3 composition record no longer consumes a baseline slot: it is a
     closed digest-only envelope whose SHA-pinned verifier independently
@@ -172,19 +175,19 @@ def test_the_suppression_count_only_shrinks() -> None:
     expected digests with an entropy heuristic would add eleven findings
     without increasing secret coverage.
 
-    Every entry above the reviewed 28 would be unexplained, and the reason
+    Every entry above the reviewed 29 would be unexplained, and the reason
     check above only fires per FILE — a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
-    two-directional, and an UNEXPLAINED drop below 28 (a finding quietly
+    two-directional, and an UNEXPLAINED drop below 29 (a finding quietly
     disappearing without its `REASONS` entry being removed by
     `test_no_reason_outlives_its_finding`, or a finding merging into another
     file's count) is exactly as worth surfacing as a rise -- either way,
     someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total == 28, (
-        f"{total} suppressed findings, expected exactly 28. A rise means fix "
+    assert total == 29, (
+        f"{total} suppressed findings, expected exactly 29. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
         "change -- never leave a stale number unexamined either direction."
