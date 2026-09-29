@@ -67,6 +67,13 @@ class EventOutbox(Base):
         ),
         Index("idx_outbox_pending", "status", "next_retry_at"),
         Index("idx_outbox_claim", "status", "lease_expires_at"),
+        Index(
+            "idx_outbox_email_terminal",
+            "event_name",
+            "status",
+            "terminal_at",
+            "email_payload_purged_at",
+        ),
         Index("idx_outbox_aggregate", "aggregate_type", "aggregate_id"),
         Index("idx_outbox_correlation", "correlation_id"),
         {"schema": "platform"},
@@ -89,6 +96,16 @@ class EventOutbox(Base):
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+    terminal_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Committed time of PUBLISHED or DEAD settlement",
+    )
+    email_payload_purged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Tenant-private email content was removed after retention",
     )
 
     # Event metadata

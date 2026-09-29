@@ -384,6 +384,7 @@ public	coach_report	direct	false	false	app_admin	0	false	--	--
 public	device_token	direct	false	false	app_admin	0	false	--	--
 public	domain_setting_history	direct	false	false	app_admin	0	false	--	--
 public	domain_settings	direct	false	false	app_admin	0	false	--	--
+public	email_delivery	direct	true	true	app_admin	2	false	rw	--
 public	email_profile	direct	false	false	app_admin	0	false	--	--
 public	feature_flag_registry	inherited	false	false	app_admin	0	false	--	--
 public	federated_identities	inherited	false	false	app_admin	0	false	--	--

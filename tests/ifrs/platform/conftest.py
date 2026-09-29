@@ -264,6 +264,8 @@ class MockEventOutbox:
         last_error: str | None = None,
         occurred_at: datetime = None,
         published_at: datetime | None = None,
+        terminal_at: datetime | None = None,
+        email_payload_purged_at: datetime | None = None,
         created_at: datetime = None,
         error_class: str | None = None,
         terminal_reason: str | None = None,
@@ -289,6 +291,8 @@ class MockEventOutbox:
         self.last_error = last_error
         self.occurred_at = occurred_at or datetime.now(UTC)
         self.published_at = published_at
+        self.terminal_at = terminal_at
+        self.email_payload_purged_at = email_payload_purged_at
         self.created_at = created_at or datetime.now(UTC)
         self.error_class = error_class
         self.terminal_reason = terminal_reason

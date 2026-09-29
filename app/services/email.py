@@ -1,20 +1,27 @@
+import base64
+import hashlib
+import json
 import logging
 import os
 import smtplib
 import socket
 import ssl
 import threading
+import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
+from datetime import datetime
 from email import encoders
 from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import quote
 from uuid import UUID
 
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
@@ -24,6 +31,9 @@ from app.services.people.hr.invite_email import (
     default_employee_invite_email_template,
     render_employee_invite_email_template,
 )
+
+if TYPE_CHECKING:
+    from app.models.finance.platform.event_outbox import EventOutbox
 
 logger = logging.getLogger(__name__)
 
@@ -425,6 +435,8 @@ def send_email(
     *,
     module: EmailModule | None = EmailModule.ADMIN,
     organization_id: UUID | None = None,
+    message_id: str | None = None,
+    outbox_event_id: UUID | None = None,
 ) -> bool:
     """
     Send an email using SMTP settings from database or environment.
@@ -457,6 +469,8 @@ def send_email(
     msg["Subject"] = subject
     msg["From"] = f"{config['from_name']} <{config['from_email']}>"
     msg["To"] = to_email
+    if message_id:
+        msg["Message-ID"] = message_id
 
     # Add Reply-To header if configured
     reply_to = config.get("reply_to")
@@ -495,10 +509,20 @@ def send_email(
     try:
         with _smtp_pool.get_connection(config) as server:
             server.sendmail(config["from_email"], to_email, msg.as_string())
-        logger.info("Email sent to %s", to_email)
+        if outbox_event_id is not None:
+            logger.info("Email sent for outbox event %s", outbox_event_id)
+        else:
+            logger.info("Email sent to %s", to_email)
         return True
     except Exception as exc:
-        logger.error("Failed to send email to %s: %s", to_email, exc)
+        if outbox_event_id is not None:
+            logger.error(
+                "Email failed for outbox event %s (%s)",
+                outbox_event_id,
+                type(exc).__name__,
+            )
+        else:
+            logger.error("Failed to send email to %s: %s", to_email, exc)
         if raise_on_error:
             raise
         return False
@@ -536,6 +560,203 @@ def send_password_reset_email(
         module=EmailModule.ADMIN,
         organization_id=organization_id,
     )
+
+
+EMAIL_DELIVERY_EVENT = "email.delivery.requested"
+EMAIL_DELIVERY_RETENTION_DAYS = 30
+MAX_EMAIL_ATTACHMENTS = 5
+MAX_EMAIL_ATTACHMENT_BYTES = 5 * 1024 * 1024
+MAX_EMAIL_TOTAL_ATTACHMENT_BYTES = 10 * 1024 * 1024
+EMAIL_ATTACHMENT_MIME_TYPES = frozenset(
+    {"application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv"}
+)
+
+
+def validate_email_attachments(
+    attachments: list[tuple[str, bytes, str]],
+) -> None:
+    """Apply the same content boundary before storage and before SMTP."""
+    if len(attachments) > MAX_EMAIL_ATTACHMENTS:
+        raise ValueError("Too many email attachments")
+    total = 0
+    for filename, data, mime_type in attachments:
+        if (
+            not isinstance(filename, str)
+            or not filename
+            or len(filename) > 255
+            or filename != filename.strip()
+            or filename in {".", ".."}
+            or "/" in filename
+            or "\\" in filename
+            or any(ord(char) < 32 or ord(char) == 127 for char in filename)
+        ):
+            raise ValueError("Unsafe email attachment filename")
+        if mime_type not in EMAIL_ATTACHMENT_MIME_TYPES:
+            raise ValueError("Unsupported email attachment MIME type")
+        if not isinstance(data, bytes) or len(data) > MAX_EMAIL_ATTACHMENT_BYTES:
+            raise ValueError("Email attachment exceeds size limit")
+        total += len(data)
+    if total > MAX_EMAIL_TOTAL_ATTACHMENT_BYTES:
+        raise ValueError("Email attachments exceed total size limit")
+
+
+def enqueue_email(
+    db: Session,
+    *,
+    delivery_id: str,
+    organization_id: UUID,
+    to_email: str,
+    subject: str,
+    body_html: str,
+    body_text: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+    module: EmailModule | None = EmailModule.ADMIN,
+) -> "EventOutbox":
+    """Record an email in the caller's transaction; never contact SMTP here.
+
+    ``delivery_id`` identifies one business consequence, not one invocation.
+    Replays with changed content fail rather than silently reusing an old row.
+    The caller owns commit/rollback and must pass its own organization scope.
+    """
+    from app.models.email_delivery import EmailDelivery
+    from app.models.finance.platform.event_outbox import EventOutbox
+    from app.services.finance.platform.outbox_publisher import OutboxPublisher
+
+    if not delivery_id.strip() or not to_email.strip():
+        raise ValueError("Email delivery_id and recipient are required")
+    if not isinstance(organization_id, UUID):
+        raise ValueError("Email delivery requires an organization UUID")
+    if not subject or not body_html:
+        raise ValueError("Email subject and HTML body are required")
+    if len(to_email) > 320 or len(subject) > 998:
+        raise ValueError("Email recipient or subject exceeds size limit")
+    attachments = attachments or []
+    validate_email_attachments(attachments)
+
+    identity = hashlib.sha256(f"{organization_id}:{delivery_id}".encode()).hexdigest()
+    key = f"email:{identity}"
+    content = {
+        "to_email": to_email,
+        "subject": subject,
+        "body_html": body_html,
+        "body_text": body_text,
+        "module": module.value if module else None,
+        "attachments": [
+            {
+                "filename": filename,
+                "data_b64": base64.b64encode(data).decode("ascii"),
+                "mime_type": mime_type,
+            }
+            for filename, data, mime_type in attachments
+        ],
+    }
+    content_digest = hashlib.sha256(
+        json.dumps(content, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    def _reload() -> EventOutbox | None:
+        existing = db.scalar(
+            select(EventOutbox).where(EventOutbox.idempotency_key == key)
+        )
+        if existing is None:
+            return None
+        if (
+            existing.event_name != EMAIL_DELIVERY_EVENT
+            or existing.headers.get("organization_id") != str(organization_id)
+            or set(existing.payload) != {"delivery_id"}
+        ):
+            raise ValueError(
+                "Email delivery identity was reused with different content"
+            )
+        try:
+            stored_id = UUID(existing.payload["delivery_id"])
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                "Email delivery identity has an invalid reference"
+            ) from exc
+        stored = db.get(EmailDelivery, stored_id)
+        if stored is None or stored.organization_id != organization_id:
+            raise ValueError("Email delivery identity has no tenant payload")
+        if stored.content_digest != content_digest:
+            raise ValueError(
+                "Email delivery identity was reused with different content"
+            )
+        return existing
+
+    existing = _reload()
+    if existing is not None:
+        return existing
+
+    try:
+        with db.begin_nested():
+            private_id = uuid.uuid4()
+            db.add(
+                EmailDelivery(
+                    delivery_id=private_id,
+                    organization_id=organization_id,
+                    content_digest=content_digest,
+                    **content,
+                )
+            )
+            event = OutboxPublisher.publish_event(
+                db,
+                event_name=EMAIL_DELIVERY_EVENT,
+                aggregate_type="EmailDelivery",
+                aggregate_id=identity,
+                payload={"delivery_id": str(private_id)},
+                headers={"organization_id": str(organization_id), "source": "email"},
+                producer_module="email",
+                correlation_id=identity,
+                idempotency_key=key,
+            )
+        return event
+    except IntegrityError:
+        # A concurrent writer won the unique outbox key. begin_nested rolled
+        # back our private payload too, leaving the caller transaction usable.
+        existing = _reload()
+        if existing is None:
+            raise
+        return existing
+
+
+def purge_mature_email_delivery(
+    db: Session,
+    event: "EventOutbox",
+    *,
+    organization_id: UUID,
+    cutoff: datetime,
+) -> None:
+    """Delete tenant-private content only after a terminal 30-day window.
+
+    The caller holds the outbox event lock and commits this deletion with any
+    PUBLISHED event cleanup. PostgreSQL's restrictive DELETE policy checks the
+    same terminal timestamp and tenant against the outbox record.
+    """
+    from app.models.email_delivery import EmailDelivery
+    from app.models.finance.platform.event_outbox import EventStatus
+
+    if event.event_name != EMAIL_DELIVERY_EVENT:
+        raise ValueError("Not an email delivery event")
+    if event.status not in {EventStatus.PUBLISHED, EventStatus.DEAD}:
+        raise ValueError("Email delivery is not terminal")
+    if event.terminal_at is None or event.terminal_at >= cutoff:
+        raise ValueError("Email delivery has not reached retention age")
+    try:
+        if UUID(str(event.headers["organization_id"])) != organization_id:
+            raise ValueError("Email delivery organization does not match")
+        if set(event.payload) != {"delivery_id"}:
+            raise ValueError("Email delivery reference is malformed")
+        private_id = UUID(str(event.payload["delivery_id"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Email delivery reference is malformed") from exc
+
+    delivery = db.get(EmailDelivery, private_id)
+    if delivery is None:
+        raise ValueError("Email delivery content is unavailable in tenant scope")
+    if delivery.organization_id != organization_id:
+        raise ValueError("Email delivery organization does not match")
+    db.delete(delivery)
+    db.flush()
 
 
 def send_mailbox_activation_email(

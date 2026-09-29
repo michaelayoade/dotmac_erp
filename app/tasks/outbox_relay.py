@@ -34,6 +34,8 @@ which is additive — is not per-item idempotent).
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import os
 import socket
@@ -283,6 +285,94 @@ def handle_automation_workflow_requested(db: Session, event: Any) -> None:
         raise RuntimeError(execution.error_message or "workflow action failed")
 
 
+def handle_email_delivery_requested(db: Session, event: Any) -> None:
+    """Send a committed email command with a stable RFC Message-ID.
+
+    SMTP acceptance is not an atomic transaction with outbox settlement. If
+    settlement fails after acceptance, a retry can deliver a duplicate. The
+    Message-ID remains stable across retries to help downstream deduplication,
+    but SMTP does not guarantee exactly-once delivery.
+    """
+    from app.models.email_delivery import EmailDelivery
+    from app.models.email_profile import EmailModule
+    from app.services.email import (
+        MAX_EMAIL_ATTACHMENT_BYTES,
+        MAX_EMAIL_ATTACHMENTS,
+        send_email,
+        validate_email_attachments,
+    )
+    from app.tasks.email import PermanentEmailError, classify_email_error
+
+    try:
+        org_id = UUID(str(event.headers["organization_id"]))
+        if set(event.payload) != {"delivery_id"}:
+            raise ValueError("Outbox email command contains unexpected data")
+        private_id = UUID(event.payload["delivery_id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise NonRetryableEventError("Invalid email delivery reference") from exc
+    delivery = db.get(EmailDelivery, private_id)
+    if delivery is None or delivery.organization_id != org_id:
+        raise NonRetryableEventError(
+            "Email delivery payload unavailable in tenant scope"
+        )
+
+    try:
+        if not delivery.to_email or not delivery.subject or not delivery.body_html:
+            raise ValueError("Missing email recipient, subject, or HTML body")
+        if len(delivery.to_email) > 320 or len(delivery.subject) > 998:
+            raise ValueError("Email recipient or subject exceeds size limit")
+        module = EmailModule(delivery.module) if delivery.module is not None else None
+        if not isinstance(delivery.attachments, list):
+            raise ValueError("Invalid email attachment collection")
+        if len(delivery.attachments) > MAX_EMAIL_ATTACHMENTS:
+            raise ValueError("Too many email attachments")
+        for item in delivery.attachments:
+            if not isinstance(item, dict) or set(item) != {
+                "filename",
+                "data_b64",
+                "mime_type",
+            }:
+                raise ValueError("Invalid email attachment")
+            encoded = item["data_b64"]
+            if not isinstance(encoded, str) or len(encoded) > 4 * (
+                (MAX_EMAIL_ATTACHMENT_BYTES + 2) // 3
+            ):
+                raise ValueError("Email attachment exceeds size limit")
+        attachments = [
+            (
+                item["filename"],
+                base64.b64decode(item["data_b64"], validate=True),
+                item["mime_type"],
+            )
+            for item in delivery.attachments
+        ]
+        validate_email_attachments(attachments)
+    except (KeyError, TypeError, ValueError, binascii.Error) as exc:
+        raise NonRetryableEventError("Invalid email delivery payload") from exc
+
+    try:
+        send_email(
+            db,
+            delivery.to_email,
+            delivery.subject,
+            delivery.body_html,
+            delivery.body_text,
+            attachments=attachments,
+            raise_on_error=True,
+            module=module,
+            organization_id=org_id,
+            message_id=f"<{event.event_id}@erp.dotmac.io>",
+            outbox_event_id=event.event_id,
+        )
+    except Exception as exc:
+        error = f"SMTP failure ({type(exc).__name__})"
+        if classify_email_error(exc) is PermanentEmailError:
+            raise NonRetryableEventError(f"Permanent {error}") from None
+        # The outbox stores exception text in a platform-visible column.
+        # SMTP errors may include addresses or provider responses.
+        raise RuntimeError(f"Transient {error}") from None
+
+
 # Register built-in handlers
 register_handler("ledger.posting.completed", handle_ledger_posting_completed)
 register_handler(
@@ -294,6 +384,7 @@ register_handler(
     handle_staff_access_projection_changed,
 )
 register_handler("automation.workflow.requested", handle_automation_workflow_requested)
+register_handler("email.delivery.requested", handle_email_delivery_requested)
 register_handler("organization.calendar.upserted", handle_organization_calendar_changed)
 register_handler(
     "organization.calendar.cancelled", handle_organization_calendar_changed
@@ -697,6 +788,99 @@ def reconcile_outbox_balance_projection(lookback_hours: int = 26) -> dict[str, A
 
 
 @shared_task
+def cleanup_terminal_email_deliveries(batch_size: int = 500) -> dict[str, int]:
+    """Purge tenant-private email content 30 days after terminal settlement.
+
+    Discovery uses only the non-RLS outbox. Each deletion runs under its
+    declared organization scope, with the event locked and rechecked. The
+    tenant table's restrictive DELETE policy independently enforces the same
+    terminal-age condition. Published event deletion shares the transaction
+    with private-content deletion; dead-letter evidence remains in the outbox.
+    """
+    from sqlalchemy import select
+
+    from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+    from app.services.email import (
+        EMAIL_DELIVERY_EVENT,
+        EMAIL_DELIVERY_RETENTION_DAYS,
+        purge_mature_email_delivery,
+    )
+
+    if batch_size < 1:
+        raise ValueError("Email cleanup batch_size must be positive")
+    cutoff = datetime.now(UTC) - timedelta(days=EMAIL_DELIVERY_RETENTION_DAYS)
+    with _task_db_session() as discovery:
+        candidates = list(
+            discovery.execute(
+                select(EventOutbox.event_id, EventOutbox.headers)
+                .where(
+                    EventOutbox.event_name == EMAIL_DELIVERY_EVENT,
+                    EventOutbox.status.in_([EventStatus.PUBLISHED, EventStatus.DEAD]),
+                    EventOutbox.terminal_at < cutoff,
+                    EventOutbox.email_payload_purged_at.is_(None),
+                )
+                .order_by(EventOutbox.terminal_at, EventOutbox.event_id)
+                .limit(batch_size)
+            ).all()
+        )
+
+    purged = 0
+    published_deleted = 0
+    invalid = 0
+    locked = 0
+    for event_id, headers in candidates:
+        try:
+            organization_id = UUID(str(headers["organization_id"]))
+        except (KeyError, TypeError, ValueError):
+            invalid += 1
+            logger.error("Email cleanup event %s has invalid tenant identity", event_id)
+            continue
+        with session_for_org(organization_id) as db:
+            event = db.scalar(
+                select(EventOutbox)
+                .where(EventOutbox.event_id == event_id)
+                .with_for_update(skip_locked=True)
+            )
+            if event is None:
+                locked += 1
+                continue
+            if event.email_payload_purged_at is not None:
+                continue
+            try:
+                purge_mature_email_delivery(
+                    db, event, organization_id=organization_id, cutoff=cutoff
+                )
+            except ValueError:
+                db.rollback()
+                invalid += 1
+                logger.error(
+                    "Email cleanup event %s has invalid retention data", event_id
+                )
+                continue
+            event.email_payload_purged_at = datetime.now(UTC)
+            if event.status == EventStatus.PUBLISHED:
+                db.delete(event)
+                published_deleted += 1
+            db.commit()
+            purged += 1
+
+    logger.info(
+        "Email cleanup: %d payloads purged, %d published events removed, "
+        "%d invalid, %d locked",
+        purged,
+        published_deleted,
+        invalid,
+        locked,
+    )
+    return {
+        "purged": purged,
+        "published_deleted": published_deleted,
+        "invalid": invalid,
+        "locked": locked,
+    }
+
+
+@shared_task
 def cleanup_published_outbox_events(
     retention_days: int = 30,
     batch_size: int = 5000,
@@ -721,6 +905,7 @@ def cleanup_published_outbox_events(
         from sqlalchemy import delete
 
         from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
+        from app.services.email import EMAIL_DELIVERY_EVENT
 
         cutoff = datetime.now(UTC) - timedelta(days=retention_days)
 
@@ -728,6 +913,7 @@ def cleanup_published_outbox_events(
             delete(EventOutbox).where(
                 EventOutbox.status == EventStatus.PUBLISHED,
                 EventOutbox.published_at < cutoff,
+                EventOutbox.event_name != EMAIL_DELIVERY_EVENT,
             )
         )
         deleted = cast(CursorResult[Any], result).rowcount or 0

@@ -128,6 +128,7 @@ from app.tasks.notifications import (
 )
 from app.tasks.outbox_relay import (
     cleanup_published_outbox_events,
+    cleanup_terminal_email_deliveries,
     reconcile_outbox_balance_projection,
     relay_outbox_events,
 )
@@ -296,6 +297,7 @@ __all__ = [
     # Outbox relay tasks
     "relay_outbox_events",
     "cleanup_published_outbox_events",
+    "cleanup_terminal_email_deliveries",
     "reconcile_outbox_balance_projection",
     "run_infrastructure_health_checks_task",
     "send_weekly_meeting_report_hr_email",

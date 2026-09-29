@@ -39,6 +39,7 @@ from app.models.domain_settings import (  # noqa: F401
     SettingDomain,
     SettingValueType,
 )
+from app.models.email_delivery import EmailDelivery  # noqa: F401
 from app.models.file_orphan_cleanup import (  # noqa: F401
     FileOrphanCleanupDeletion,
     FileOrphanCleanupRun,

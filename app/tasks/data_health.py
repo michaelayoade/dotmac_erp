@@ -188,6 +188,7 @@ def process_stuck_outbox_events(
             try:
                 if event.retry_count >= 5:
                     event.status = EventStatus.DEAD
+                    event.terminal_at = now
                     event.last_error = "Exceeded max retries (stuck recovery)"
                     marked_dead += 1
                 else:
