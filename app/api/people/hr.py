@@ -82,6 +82,7 @@ from app.services.people.hr import (
     DesignationCreateData,
     DesignationFilters,
     DesignationUpdateData,
+    EmployeeAlreadyExistsError,
     EmployeeCreateData,
     EmployeeFilters,
     EmployeeGradeCreateData,
@@ -822,7 +823,12 @@ def create_employee(
         notes=payload.notes,
         personal_email=str(payload.personal_email) if payload.personal_email else None,
     )
-    emp = svc.create_employee(payload.person_id, data)
+    try:
+        emp = svc.create_employee(payload.person_id, data)
+    except EmployeeAlreadyExistsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
     employee_id = emp.employee_id
     response = EmployeeRead.model_validate(emp)
     app_url = _resolve_app_url(request)
