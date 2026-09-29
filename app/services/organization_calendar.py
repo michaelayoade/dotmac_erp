@@ -290,7 +290,13 @@ class OrganizationCalendarService:
                 )
 
         kind_order = {"employee": 0, "department": 1, "designation": 2}
-        items.sort(key=lambda item: (kind_order[item["kind"]], item["label"].casefold(), item["id"]))
+        items.sort(
+            key=lambda item: (
+                kind_order[item["kind"]],
+                item["label"].casefold(),
+                item["id"],
+            )
+        )
         return items[:bounded_limit]
 
     def participant_options_for_selection(
