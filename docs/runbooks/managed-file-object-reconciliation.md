@@ -111,7 +111,7 @@ changes; each is an operational confirmation):**
 
 ## Listing completeness
 
-`dotmac_files.physical.list_objects` (a4) performs NO pagination of its
+`dotmac_files.physical.list_objects` (a5) performs NO pagination of its
 own — it is exactly `tuple(provider.list(prefix))`. Completeness is
 therefore a property of the PROVIDER, not of `dotmac_files`. ERP's provider
 (`DotmacFilesS3Provider.list`, `app/services/storage.py`) calls minio-py's
@@ -178,7 +178,10 @@ The two-step procedure:
    rebuild equals `reviewed_plan_observed_at` exactly), or an untrustworthy
    OLD-object reference view (see below). Only then does the per-object
    recheck-and-delete loop run.
-3. **Per-object recheck, one key at a time, in order.** For each candidate
+3. **Per-object recheck, one key at a time, in order.** ERP delegates each
+   key's live reference, exact-key presence, age, provider and scope recheck,
+   and physical delete to `dotmac_files.recheck_and_delete_orphan` through
+   `app.services.storage.delete_reviewed_file_orphan`. For each candidate
    key, the ENTIRE body below is wrapped: any exception anywhere in it
    (not just the delete call) records that key as `failed`, with the
    exception's class name, and stops the loop immediately.
@@ -186,17 +189,11 @@ The two-step procedure:
    `TenantStoredFile` row now claims that key — any provider code, any
    state, via `app.services.file_object_cleanup.is_storage_key_referenced`
    — and closes that session before any storage call; a hit records
-   `rechecked_referenced` and skips the delete; (ii) re-observes the live
-   object (see "Listing completeness" for why this uses the provider's own
-   `list`, scoped to the single key, rather than `dotmac_files.observe_object`
-   — that primitive requires an existing metadata row and returns presence
-   only, never a modification time, so it cannot be given an orphan
-   candidate, which has no row by definition); missing records
+   `rechecked_referenced` and skips the delete; (ii) the module lists the
+   exact key to recover presence and modification time; missing records
    `already_absent`, not-old-enough records `rechecked_too_new`; (iii)
-   otherwise deletes that ONE key through
-   `app.services.storage.delete_reviewed_file_orphan` (which itself raises
-   `dotmac_files.ProviderMismatch`, recorded here as `failed` like any other
-   exception, if the live provider's code no longer matches the plan's),
+   otherwise the module deletes that ONE key, and ERP records its result
+   (a live `dotmac_files.ProviderMismatch` is recorded as `failed`),
    and logs one line with that key's digest as it happens. The summary
    ALWAYS carries per-outcome counts and up to 100 key digests per outcome
    and is ALWAYS logged; `deleted` is the real, per-object-confirmed count.
@@ -261,7 +258,7 @@ Refusals (all raise before any deletion; none deletes partially):
   once the (always-logged) summary is built, raises
   `app.services.file_object_cleanup.CleanupPartialFailure`.
 
-**`dotmac_files.delete_orphans`/`delete_object`/`finalize_purge` may only be
+**`dotmac_files.recheck_and_delete_orphan`/`delete_orphans`/`delete_object`/`finalize_purge` may only be
 called from `app/services/storage.py`** — enforced by
 `tests/architecture/test_dotmac_files_delete_owner.py` across plain,
 aliased, attribute-form, AND submodule (`dotmac_files.physical`) imports,
@@ -325,13 +322,29 @@ After `authorize_apply` succeeds and strictly BEFORE any delete, the task
 itself — never a helper — opens ONE records session
 (`with session_for_org(org_id) as rec_db:`) and, within it:
 
-1. Calls `record_cleanup_run_started`, then `record_cleanup_keys_planned` to
+1. Calls `record_cleanup_run_started`, locks candidate keys in sorted order
+   with PostgreSQL transaction advisory locks, rechecks every key for any
+   metadata reference under those locks, then calls
+   `record_cleanup_keys_planned` to
    write one `outcome='planned'` row per candidate key — its raw
    `storage_key`, needed for a restore — and commits `rec_db` ONCE for both
    together. No key's delete may run before this commit. This closes the gap
    a "started" row alone would leave: without a planned row, a key deleted
    just before its own terminal-outcome write failed would leave no durable
    trace of the raw key at all, defeating a restore.
+   A key with any earlier cleanup reservation is refused before new planned
+   rows commit, so two apply invocations cannot both own its deletion.
+   The customer-import metadata writer takes the same key lock before
+   `dotmac_files.stage_file`, checks for any historic cleanup row regardless
+   of outcome, and refuses a reserved key. The writer and cleanup therefore
+   cannot commit a new metadata reference and a deletion reservation for the
+   same tenant/key in either order. PostgreSQL `read committed` isolation is
+   required so reads after a waited-on lock see the preceding commit; both
+   paths fail closed if that premise cannot be established. The stage-file caller
+   guard is `tests/architecture/test_file_stage_reservation_owner.py`; the
+   two-backend race canaries prove the waiting transaction sees the preceding
+   commit without restarting; they are
+   `tests/integration/test_file_object_cleanup_reservation_pg.py`.
 2. Passes `rec_db` and the new run's id into the per-object
    recheck-and-delete loop. For every key, `record_cleanup_key_outcome`
    UPDATEs that SAME planned row to its terminal outcome — `deleted`,

@@ -19,24 +19,23 @@ between a dry-run and its apply must never itself cause ``CleanupPlanDrift``
 stay in the summary for operator visibility but are deliberately excluded
 from the digest.
 
-The caller (the Celery task) is responsible for producing a fresh report,
-for the per-object recheck immediately before each delete, and for the one
-single-key deletion seam, ``app.services.storage.delete_reviewed_file_orphan``.
+The caller (the Celery task) produces a fresh report and delegates each
+single-key recheck and delete through ``app.services.storage`` to dotmac-files.
+This service also reserves candidate keys against concurrent metadata writes.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
 from datetime import datetime, timedelta, timezone
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
-from collections.abc import Sequence
-
-from dotmac_files import TenantStoredFile
-from sqlalchemy import select, update
+from dotmac_files import PreparedFile, TenantStoredFile, stage_file
+from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from app.models.file_orphan_cleanup import (
@@ -167,6 +166,80 @@ def is_storage_key_referenced(
         ).first()
         is not None
     )
+
+
+def _lock_file_key(db: Session, *, tenant_id: UUID, key: str) -> None:
+    """Serialize a cleanup reservation with every ERP tenant-file stage.
+
+    Both callers keep this PostgreSQL transaction lock through their commit.
+    Read committed is required so a read after waiting sees the other
+    transaction's committed row. Either missing premise fails closed.
+    """
+    if db.get_bind().dialect.name != "postgresql":
+        raise CleanupUnsafeReferenceView("file-key reservation requires PostgreSQL")
+    isolation = db.execute(text("SHOW transaction_isolation")).scalar_one()
+    if isolation.lower() != "read committed":
+        raise CleanupUnsafeReferenceView(
+            "file-key reservation requires read committed isolation"
+        )
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))"),
+        {"identity": f"erp-file-orphan:{tenant_id}:{key}"},
+    )
+
+
+def reserve_cleanup_keys(db: Session, *, tenant_id: UUID, keys: Sequence[str]) -> None:
+    """Lock and recheck all candidate keys before planned rows commit.
+
+    Both this cleanup and the writer check historic reservation rows under
+    the same lock. Once this transaction commits its rows, a later writer or
+    cleanup cannot claim any key here.
+    """
+    if len(set(keys)) != len(keys):
+        raise CleanupUnsafeReferenceView("cleanup candidate keys are duplicated")
+    for key in sorted(keys):
+        _lock_file_key(db, tenant_id=tenant_id, key=key)
+        if is_storage_key_referenced(db, tenant_id=tenant_id, storage_key=key):
+            raise CleanupUnsafeReferenceView(
+                "a candidate gained a reference before cleanup reservation"
+            )
+        reserved = db.execute(
+            select(FileOrphanCleanupDeletion.id)
+            .where(
+                FileOrphanCleanupDeletion.organization_id == tenant_id,
+                FileOrphanCleanupDeletion.storage_key == key,
+            )
+            .limit(1)
+        ).first()
+        if reserved is not None:
+            raise CleanupUnsafeReferenceView(
+                "a candidate already has a cleanup reservation"
+            )
+
+
+def stage_tenant_file_if_unreserved(db: Session, *, prepared: PreparedFile) -> None:
+    """Stage a tenant file only when no cleanup run has reserved its key.
+
+    The caller commits the metadata transaction. A historic intent stays a
+    tombstone even after its outcome changes or a worker crashes.
+    """
+    if not isinstance(prepared.scope, _TenantFileScope):
+        raise TypeError("ERP file staging requires a tenant scope")
+    tenant_id = prepared.scope.tenant_id
+    if prepared.storage_key != f"tenants/{tenant_id}/files/{prepared.id}":
+        raise CleanupUnsafeReferenceView("prepared file has a noncanonical key")
+    _lock_file_key(db, tenant_id=tenant_id, key=prepared.storage_key)
+    reserved = db.execute(
+        select(FileOrphanCleanupDeletion.id)
+        .where(
+            FileOrphanCleanupDeletion.organization_id == tenant_id,
+            FileOrphanCleanupDeletion.storage_key == prepared.storage_key,
+        )
+        .limit(1)
+    ).first()
+    if reserved is not None:
+        raise CleanupUnsafeReferenceView("file key has a cleanup reservation")
+    stage_file(db, prepared=prepared)
 
 
 @runtime_checkable
@@ -589,4 +662,6 @@ __all__ = [
     "record_cleanup_keys_planned",
     "record_cleanup_run_finished",
     "record_cleanup_run_started",
+    "reserve_cleanup_keys",
+    "stage_tenant_file_if_unreserved",
 ]

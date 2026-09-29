@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from dotmac_files import FileState, ObjectInfo, list_objects
+from dotmac_files import FileState, ObjectInfo, PreparedFile, list_objects
 from dotmac_kernel.cache import PlatformScope, TenantScope
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -23,6 +24,8 @@ from app.services.file_object_cleanup import (
     authorize_apply,
     is_storage_key_referenced,
     plan_orphan_cleanup,
+    reserve_cleanup_keys,
+    stage_tenant_file_if_unreserved,
 )
 from app.services.file_object_reconciliation import (
     BoundaryDrift,
@@ -54,6 +57,179 @@ def _report(
 def _observed_at_for(older_than: datetime) -> datetime:
     """A REAL observed_at consistent with the default retention window."""
     return older_than + timedelta(hours=MIN_APPLY_GRACE_HOURS)
+
+
+def test_cleanup_reservation_fails_closed_without_postgresql() -> None:
+    db = _session()
+    with pytest.raises(CleanupUnsafeReferenceView, match="requires PostgreSQL"):
+        reserve_cleanup_keys(db, tenant_id=uuid4(), keys=("key",))
+
+
+def test_cleanup_reservation_refuses_stale_snapshot_isolation() -> None:
+    class Db:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, statement, params=None):
+            assert str(statement) == "SHOW transaction_isolation"
+            return SimpleNamespace(scalar_one=lambda: "repeatable read")
+
+    with pytest.raises(CleanupUnsafeReferenceView, match="read committed"):
+        reserve_cleanup_keys(Db(), tenant_id=uuid4(), keys=("key",))
+
+
+def test_file_staging_fails_closed_without_postgresql() -> None:
+    tenant_id = uuid4()
+    file_id = uuid4()
+    prepared = PreparedFile(
+        id=file_id,
+        scope=TenantScope(tenant_id),
+        provider_code="erp_s3",
+        storage_key=f"tenants/{tenant_id}/files/{file_id}",
+        original_filename="import.csv",
+        size_bytes=1,
+        declared_media_type="text/csv",
+        detected_media_type="text/csv",
+        checksum_sha256="sha256:" + "a" * 64,
+    )
+    with pytest.raises(CleanupUnsafeReferenceView, match="requires PostgreSQL"):
+        stage_tenant_file_if_unreserved(_session(), prepared=prepared)
+
+
+def test_cleanup_reservation_locks_sorted_keys_before_reads(monkeypatch) -> None:
+    import app.services.file_object_cleanup as cleanup
+
+    events: list[str] = []
+    tenant_id = uuid4()
+
+    class Db:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, statement, params=None):
+            if str(statement) == "SHOW transaction_isolation":
+                return SimpleNamespace(scalar_one=lambda: "read committed")
+            if params is not None:
+                events.append(f"lock:{params['identity']}")
+                return None
+            events.append("reservation_query")
+            return SimpleNamespace(first=lambda: None)
+
+    def unreferenced(_db, *, tenant_id, storage_key):
+        events.append(f"read:{storage_key}")
+        return False
+
+    monkeypatch.setattr(cleanup, "is_storage_key_referenced", unreferenced)
+    cleanup.reserve_cleanup_keys(Db(), tenant_id=tenant_id, keys=("b", "a"))
+    assert events == [
+        f"lock:erp-file-orphan:{tenant_id}:a",
+        "read:a",
+        "reservation_query",
+        f"lock:erp-file-orphan:{tenant_id}:b",
+        "read:b",
+        "reservation_query",
+    ]
+
+
+def test_cleanup_reservation_refuses_a_reference_before_planning(monkeypatch) -> None:
+    import app.services.file_object_cleanup as cleanup
+
+    events: list[str] = []
+
+    class Db:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, statement, params=None):
+            if str(statement) == "SHOW transaction_isolation":
+                return SimpleNamespace(scalar_one=lambda: "read committed")
+            events.append("lock")
+
+    monkeypatch.setattr(cleanup, "is_storage_key_referenced", lambda *_a, **_kw: True)
+    with pytest.raises(CleanupUnsafeReferenceView, match="gained a reference"):
+        cleanup.reserve_cleanup_keys(Db(), tenant_id=uuid4(), keys=("key",))
+    assert events == ["lock"]
+
+
+def test_stage_refuses_historic_cleanup_key_after_lock(monkeypatch) -> None:
+    import app.services.file_object_cleanup as cleanup
+
+    tenant_id = uuid4()
+    file_id = uuid4()
+    prepared = PreparedFile(
+        id=file_id,
+        scope=TenantScope(tenant_id),
+        provider_code="erp_s3",
+        storage_key=f"tenants/{tenant_id}/files/{file_id}",
+        original_filename="import.csv",
+        size_bytes=1,
+        declared_media_type="text/csv",
+        detected_media_type="text/csv",
+        checksum_sha256="sha256:" + "a" * 64,
+    )
+    events: list[str] = []
+
+    class Db:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, statement, params=None):
+            if str(statement) == "SHOW transaction_isolation":
+                return SimpleNamespace(scalar_one=lambda: "read committed")
+            if params is not None:
+                events.append("lock")
+                return None
+            events.append("reservation_query")
+            return SimpleNamespace(first=lambda: (uuid4(),))
+
+    monkeypatch.setattr(
+        cleanup, "stage_file", lambda *_a, **_kw: events.append("stage")
+    )
+    with pytest.raises(CleanupUnsafeReferenceView, match="cleanup reservation"):
+        cleanup.stage_tenant_file_if_unreserved(Db(), prepared=prepared)
+    assert events == ["lock", "reservation_query"]
+
+
+def test_cleanup_refuses_a_second_reservation_for_the_same_key(monkeypatch) -> None:
+    import app.services.file_object_cleanup as cleanup
+
+    events: list[str] = []
+
+    class Db:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, statement, params=None):
+            if str(statement) == "SHOW transaction_isolation":
+                return SimpleNamespace(scalar_one=lambda: "read committed")
+            if params is not None:
+                events.append("lock")
+                return None
+            events.append("reservation_query")
+            return SimpleNamespace(first=lambda: (uuid4(),))
+
+    monkeypatch.setattr(cleanup, "is_storage_key_referenced", lambda *_a, **_kw: False)
+    with pytest.raises(CleanupUnsafeReferenceView, match="already has"):
+        cleanup.reserve_cleanup_keys(Db(), tenant_id=uuid4(), keys=("key",))
+    assert events == ["lock", "reservation_query"]
+
+
+def test_customer_dry_run_rejects_a_foreign_tenant_before_staging(monkeypatch) -> None:
+    import app.services.finance.import_export.durable_customers as customers
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        customers,
+        "stage_tenant_file_if_unreserved",
+        lambda *_a, **_kw: calls.append("stage"),
+    )
+    foreign_file = SimpleNamespace(scope=TenantScope(uuid4()), storage_key="foreign")
+    prepared = SimpleNamespace(source_file=foreign_file, partition_files=())
+    with pytest.raises(TypeError, match="match the requested tenant"):
+        customers.record_customer_dry_run(
+            object(), tenant_id=uuid4(), created_by=uuid4(), prepared=prepared
+        )
+    assert calls == []
 
 
 def test_plan_digest_is_independent_of_candidate_observation_order() -> None:

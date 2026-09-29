@@ -1,6 +1,6 @@
 """Only ``app/services/storage.py`` may reach a ``dotmac_files`` delete primitive.
 
-``dotmac_files.delete_orphans`` performs an irreversible provider delete
+``dotmac_files.recheck_and_delete_orphan`` performs an irreversible provider delete
 outside a database transaction; ``delete_object`` and ``finalize_purge`` are
 the paired primitives for the ordinary managed-file deletion lifecycle. ADR-
 0013's external-effect owner rule requires exactly one module to reach any of
@@ -75,7 +75,9 @@ SCANNED_ROOTS: tuple[Path, ...] = (
     REPO_ROOT / "tools",
 )
 OWNER = "app/services/storage.py"
-GUARDED_NAMES = frozenset({"delete_orphans", "delete_object", "finalize_purge"})
+GUARDED_NAMES = frozenset(
+    {"recheck_and_delete_orphan", "delete_orphans", "delete_object", "finalize_purge"}
+)
 PROVIDER_FACTORY_NAMES = frozenset(
     {"get_dotmac_files_provider", "get_dotmac_files_read_provider"}
 )
@@ -352,10 +354,10 @@ def test_only_storage_py_reaches_a_dotmac_files_delete_primitive() -> None:
     )
 
 
-def test_storage_py_actually_reaches_delete_orphans() -> None:
+def test_storage_py_actually_reaches_recheck_and_delete_orphan() -> None:
     """A guard covering zero real call sites proves nothing about itself."""
     tree = ast.parse((REPO_ROOT / OWNER).read_text(encoding="utf-8"), filename=OWNER)
-    assert find_dotmac_files_delete_calls(tree) == {"delete_orphans"}
+    assert find_dotmac_files_delete_calls(tree) == {"recheck_and_delete_orphan"}
 
 
 def test_sensitivity_a_planted_direct_call_is_caught() -> None:

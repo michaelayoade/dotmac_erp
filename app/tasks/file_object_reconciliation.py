@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from celery import Task, shared_task
-from dotmac_files import ObjectInfo, list_objects
+from dotmac_files import list_objects
 from sqlalchemy.orm import Session
 
 from app.db.session_context import session_for_org
@@ -24,10 +24,10 @@ from app.services.file_object_cleanup import (
     record_cleanup_keys_planned,
     record_cleanup_run_finished,
     record_cleanup_run_started,
+    reserve_cleanup_keys,
 )
 from app.services.file_object_reconciliation import report_file_objects
 from app.services.storage import (
-    DotmacFilesS3Provider,
     delete_reviewed_file_orphan,
     get_dotmac_files_read_provider,
 )
@@ -71,29 +71,9 @@ def report_tenant_file_objects(
     return summary
 
 
-def _reobserve(provider: DotmacFilesS3Provider, key: str) -> ObjectInfo | None:
-    """Re-observe one key's live presence and freshness immediately before delete.
-
-    ``dotmac_files.observe_object`` does not fit this recheck: its a4
-    signature is ``observe_object(provider, *, target: StoredObjectRef) ->
-    bool`` — it requires an EXISTING metadata row and returns presence only,
-    never a modification time. An orphan candidate has no such row by
-    definition (that is what makes it an orphan), so that primitive cannot
-    be given a target here. This instead calls the provider's own ``list``
-    (the exact public primitive ``dotmac_files.list_objects`` itself calls),
-    scoped to the single key, to recover both presence and ``last_modified``
-    in one provider round trip without holding a database transaction.
-    """
-    for info in provider.list(key):
-        if info.key == key:
-            return info
-    return None
-
-
 def _recheck_and_delete(
     org_id: UUID,
     plan: OrphanCleanupPlan,
-    provider: DotmacFilesS3Provider,
     *,
     rec_db: Session,
     run_id: UUID,
@@ -126,49 +106,19 @@ def _recheck_and_delete(
 
     for key in plan.candidate_keys:
         try:
-            with session_for_org(org_id) as db:
-                referenced = is_storage_key_referenced(
-                    db, tenant_id=tenant_id, storage_key=key
-                )
-            if referenced:
-                outcomes["rechecked_referenced"].append(key)
-                record_cleanup_key_outcome(
-                    rec_db,
-                    tenant_id=tenant_id,
-                    run_id=run_id,
-                    storage_key=key,
-                    outcome="rechecked_referenced",
-                )
-                rec_db.commit()
-                continue
 
-            info = _reobserve(provider, key)
-            if info is None:
-                outcomes["already_absent"].append(key)
-                record_cleanup_key_outcome(
-                    rec_db,
-                    tenant_id=tenant_id,
-                    run_id=run_id,
-                    storage_key=key,
-                    outcome="already_absent",
-                )
-                rec_db.commit()
-                continue
-            if not info.last_modified < plan.older_than:
-                outcomes["rechecked_too_new"].append(key)
-                record_cleanup_key_outcome(
-                    rec_db,
-                    tenant_id=tenant_id,
-                    run_id=run_id,
-                    storage_key=key,
-                    outcome="rechecked_too_new",
-                    observed_last_modified=info.last_modified,
-                )
-                rec_db.commit()
-                continue
+            def referenced(candidate_key: str) -> bool:
+                with session_for_org(org_id) as db:
+                    return is_storage_key_referenced(
+                        db, tenant_id=tenant_id, storage_key=candidate_key
+                    )
 
-            delete_reviewed_file_orphan(
-                scope=plan.scope, key=key, expected_provider_code=plan.provider_code
+            recheck_result = delete_reviewed_file_orphan(
+                scope=plan.scope,
+                key=key,
+                expected_provider_code=plan.provider_code,
+                older_than=plan.older_than,
+                is_referenced=referenced,
             )
         except Exception as exc:
             rec_db.rollback()
@@ -192,33 +142,40 @@ def _recheck_and_delete(
             rec_db.commit()
             break
         else:
-            outcomes["deleted"].append(key)
-            logger.info(
-                "Orphan deleted: key digest %s",
-                hashlib.sha256(key.encode("utf-8")).hexdigest(),
-            )
+            outcome = {
+                "referenced": "rechecked_referenced",
+                "absent": "already_absent",
+                "too_new": "rechecked_too_new",
+                "deleted": "deleted",
+            }[recheck_result.outcome]
+            outcomes[outcome].append(key)
+            if outcome == "deleted":
+                logger.info(
+                    "Orphan deleted: key digest %s",
+                    hashlib.sha256(key.encode("utf-8")).hexdigest(),
+                )
             record_cleanup_key_outcome(
                 rec_db,
                 tenant_id=tenant_id,
                 run_id=run_id,
                 storage_key=key,
-                outcome="deleted",
-                observed_last_modified=info.last_modified,
+                outcome=outcome,
+                observed_last_modified=recheck_result.observed_last_modified,
             )
             rec_db.commit()
 
-    result: dict[str, object] = {}
+    summary: dict[str, object] = {}
     for name in _RECHECK_OUTCOMES:
         keys = outcomes[name]
-        result[f"{name}_count"] = len(keys)
-        result[f"{name}_key_digests"] = [
+        summary[f"{name}_count"] = len(keys)
+        summary[f"{name}_key_digests"] = [
             hashlib.sha256(k.encode("utf-8")).hexdigest()
             for k in keys[:_MAX_OUTCOME_EVIDENCE]
         ]
-        result[f"{name}_evidence_omitted"] = max(0, len(keys) - _MAX_OUTCOME_EVIDENCE)
+        summary[f"{name}_evidence_omitted"] = max(0, len(keys) - _MAX_OUTCOME_EVIDENCE)
     if failure_reasons:
-        result["failure_exception_types"] = sorted(set(failure_reasons.values()))
-    return result
+        summary["failure_exception_types"] = sorted(set(failure_reasons.values()))
+    return summary
 
 
 @shared_task(
@@ -376,13 +333,14 @@ def clean_tenant_file_objects(
             actor=actor,
             invocation_id=invocation_id,
         )
+        reserve_cleanup_keys(rec_db, tenant_id=tenant_id, keys=plan.candidate_keys)
         record_cleanup_keys_planned(
             rec_db, tenant_id=tenant_id, run_id=run_id, keys=plan.candidate_keys
         )
         rec_db.commit()
 
         recheck_summary = _recheck_and_delete(
-            org_id, plan, provider, rec_db=rec_db, run_id=run_id, tenant_id=tenant_id
+            org_id, plan, rec_db=rec_db, run_id=run_id, tenant_id=tenant_id
         )
 
         status = "partial_failure" if recheck_summary["failed_count"] else "completed"

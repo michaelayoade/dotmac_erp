@@ -22,7 +22,6 @@ from dotmac_files import (
     StoredObjectRef,
     download_target,
     prepare_upload,
-    stage_file,
 )
 from dotmac_imports import (
     ColumnMapping,
@@ -58,6 +57,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.services.file_upload import AsyncUpload, prepare_tenant_import_csv
+from app.services.file_object_cleanup import stage_tenant_file_if_unreserved
 from app.services.finance.ar import CustomerInput, customer_service
 from app.services.finance.import_export.base import ImportConfig
 from app.services.finance.import_export.contacts import (
@@ -295,9 +295,14 @@ def record_customer_dry_run(
     prepared: PreparedCustomerImport,
 ) -> CustomerImportRunSnapshot:
     """Stage file metadata and one immutable dry-run plan."""
-    stage_file(db, prepared=prepared.source_file)
-    for item in prepared.partition_files:
-        stage_file(db, prepared=item)
+    # Acquire file-key locks in one stable order before staging any row.
+    # The caller commits after this service returns; the locks live until then.
+    all_files = (prepared.source_file, *prepared.partition_files)
+    tenant_scope = OrganizationTenantContext.for_organization(tenant_id).tenant_scope
+    if any(item.scope != tenant_scope for item in all_files):
+        raise TypeError("customer import files must match the requested tenant")
+    for item in sorted(all_files, key=lambda file: file.storage_key):
+        stage_tenant_file_if_unreserved(db, prepared=item)
     run = create_dry_run(
         db,
         tenant_id=tenant_id,
