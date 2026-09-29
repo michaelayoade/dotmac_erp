@@ -9,7 +9,12 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from dotmac_files import ObjectInfo, StorageBoundaryViolation, list_objects
+from dotmac_files import (
+    ObjectInfo,
+    OrphanRecheckResult,
+    StorageBoundaryViolation,
+    list_objects,
+)
 from dotmac_kernel.cache import PlatformScope, TenantScope
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -199,7 +204,7 @@ def test_out_of_scope_metadata_key_is_reported_as_reference_drift() -> None:
 
 @pytest.mark.parametrize("scope", [TenantScope(uuid4()), PlatformScope()])
 def test_erp_prefix_matches_the_pinned_public_files_listing(scope) -> None:
-    """Mutation of either ERP prefix must disagree with a4's listing request."""
+    """Mutation of either ERP prefix must disagree with a5's listing request."""
     provider = ListingProvider(())
     assert list_objects(provider, scope=scope) == ()
     assert provider.prefixes == [_managed_scope_prefix(scope)]
@@ -248,7 +253,7 @@ def test_clean_task_dry_run_never_calls_the_deletion_seam(monkeypatch) -> None:
     def scoped_session(_organization_id):
         yield db
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, **_kwargs):
         delete_calls.append((scope, key, expected_provider_code))
         raise AssertionError("dry-run must never delete")
 
@@ -455,6 +460,9 @@ def _run_dry_run_then_apply(
     monkeypatch.setattr(
         task_module, "record_cleanup_keys_planned", _fake_record_cleanup_keys_planned
     )
+    # These SQLite task canaries exercise orchestration. PostgreSQL-only key
+    # locking is covered by the reservation tests and fails closed on SQLite.
+    monkeypatch.setattr(task_module, "reserve_cleanup_keys", lambda *_a, **_kw: None)
     monkeypatch.setattr(
         task_module, "record_cleanup_key_outcome", _fake_record_cleanup_key_outcome
     )
@@ -526,8 +534,9 @@ def test_clean_task_apply_round_trip_succeeds_when_the_listing_is_unchanged(
 
     delete_calls: list[tuple[object, str, str]] = []
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, **_kwargs):
         delete_calls.append((scope, key, expected_provider_code))
+        return OrphanRecheckResult("deleted")
 
     monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
 
@@ -585,10 +594,15 @@ def test_clean_task_apply_succeeds_through_the_real_report_despite_a_fresh_uploa
     )
 
     delete_calls: list[str] = []
+
+    def fake_delete(**kwargs):
+        delete_calls.append(kwargs["key"])
+        return OrphanRecheckResult("deleted")
+
     monkeypatch.setattr(
         task_module,
         "delete_reviewed_file_orphan",
-        lambda **kw: delete_calls.append(kw["key"]),
+        fake_delete,
     )
 
     dry_run_summary, apply_id = _run_dry_run_then_apply(
@@ -829,7 +843,11 @@ def test_clean_task_apply_accepts_a_non_utc_offset_reviewed_older_than(
         provider, db, tenant_id=tenant_id, prefix=prefix, moment=dry_run_time
     )
 
-    monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", lambda **_kw: None)
+    monkeypatch.setattr(
+        task_module,
+        "delete_reviewed_file_orphan",
+        lambda **_kw: OrphanRecheckResult("deleted"),
+    )
 
     dry_run_summary, apply_id = _run_dry_run_then_apply(
         monkeypatch,
@@ -894,10 +912,12 @@ def test_clean_task_recheck_skips_a_key_that_gained_a_reference_mid_loop(
 
     delete_calls: list[str] = []
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, is_referenced, **_kwargs):
+        if is_referenced(key):
+            return OrphanRecheckResult("referenced")
         delete_calls.append(key)
         if key == key_a:
-            # A concurrent claim on key_b appears while key_a is deleting.
+            # Simulate a bypassing metadata claim while key_a is deleting.
             db.execute(
                 text(
                     "INSERT INTO mod_files.stored_files "
@@ -910,6 +930,7 @@ def test_clean_task_recheck_skips_a_key_that_gained_a_reference_mid_loop(
                     "created_at": "2026-09-24 00:00:00.000000",
                 },
             )
+        return OrphanRecheckResult("deleted")
 
     monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
 
@@ -965,10 +986,18 @@ def test_clean_task_recheck_reports_missing_and_too_new_without_deleting(
     )
 
     delete_calls: list[str] = []
+
+    def fake_recheck(*, key, **_kwargs):
+        info = provider.recheck_by_key[key]
+        return OrphanRecheckResult(
+            "absent" if info is None else "too_new",
+            None if info is None else info.last_modified,
+        )
+
     monkeypatch.setattr(
         task_module,
         "delete_reviewed_file_orphan",
-        lambda **kw: delete_calls.append(kw["key"]),
+        fake_recheck,
     )
 
     dry_run_summary, apply_id = _run_dry_run_then_apply(
@@ -1018,10 +1047,11 @@ def test_clean_task_recheck_stops_after_the_first_delete_failure(monkeypatch) ->
 
     delete_calls: list[str] = []
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, **_kwargs):
         delete_calls.append(key)
         if key == second_key:
             raise RuntimeError("boom")
+        return OrphanRecheckResult("deleted")
 
     monkeypatch.setattr(task_module, "delete_reviewed_file_orphan", fake_delete)
 
@@ -1081,8 +1111,11 @@ def test_clean_task_recheck_records_a_reference_check_failure_as_failed(
 
     delete_calls: list[str] = []
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, is_referenced, **_kwargs):
+        if is_referenced(key):
+            return OrphanRecheckResult("referenced")
         delete_calls.append(key)
+        return OrphanRecheckResult("deleted")
 
     def fake_is_referenced(db, *, tenant_id, storage_key):
         if storage_key == second_key:
@@ -1166,8 +1199,9 @@ def test_clean_task_apply_records_the_started_row_before_any_delete_and_outcomes
     events: list[str] = []
     run_id = uuid4()
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, **_kwargs):
         events.append(f"delete:{key}")
+        return OrphanRecheckResult("deleted")
 
     def fake_started(_db, *, tenant_id, plan, actor, invocation_id):
         events.append("started")
@@ -1259,8 +1293,9 @@ def test_clean_task_apply_commits_started_and_planned_together_before_first_dele
     events: list[str] = []
     run_id = uuid4()
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, **_kwargs):
         events.append(f"delete:{key}")
+        return OrphanRecheckResult("deleted")
 
     def fake_started(_db, *, tenant_id, plan, actor, invocation_id):
         events.append("started")
@@ -1338,10 +1373,11 @@ def test_clean_task_apply_records_partial_failure_and_stops_further_deletes(
 
     events: list[str] = []
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, **_kwargs):
         events.append(f"delete:{key}")
         if key == first_key:
             raise RuntimeError("boom")
+        return OrphanRecheckResult("deleted")
 
     def fake_outcome(
         _db,
@@ -1430,11 +1466,12 @@ def test_clean_task_apply_stops_deleting_when_recording_itself_raises(
     events: list[str] = []
     planned_keys: set[str] = set()
 
-    def fake_delete(*, scope, key, expected_provider_code):
+    def fake_delete(*, scope, key, expected_provider_code, **_kwargs):
         # The raw key must already be durable (planned) BEFORE any delete --
         # this is the exact gap the planned-row fix closes.
         assert key in planned_keys, "delete ran before its key was planned"
         events.append(f"delete:{key}")
+        return OrphanRecheckResult("deleted")
 
     def fake_planned(_db, *, tenant_id, run_id, keys):
         planned_keys.update(keys)
