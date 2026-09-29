@@ -103,3 +103,30 @@ own changes, which cite it.
   transaction ERP does not know about is a reconciliation discrepancy, and
   the same missing-record shape on a transfer or refund path would move
   money.
+
+## Implementation clarification — 2026-09-29
+
+The Paystack invoice-initialization slice commits a PENDING `PaymentIntent`
+with a unique client-supplied Paystack reference before calling Paystack, then
+commits the returned authorization URL and access code separately. Paystack
+initialize has no documented `Idempotency-Key` contract: that reference is the
+provider-facing deduplication identity for this call. The general ADR-0001
+`dotmac_kernel.idempotency` ownership statement above remains applicable to
+transactional local effects; it does not describe this Paystack API call.
+
+The original consequence above that an unfinished initialize attempt is
+automatically expired by `expires_at` is superseded for invoice payment
+creation. A PENDING or PROCESSING invoice intent blocks another initialize
+attempt even after its local deadline. A timeout, unreadable response, or
+duplicate-reference error does not prove that the provider rejected the
+original request. Its reference must be verified or an operator must resolve
+the intent before a new reference is minted. `expires_at` remains recorded
+for review; its age alone is not a safe replacement decision. A definitive
+provider refusal can be handled separately once the client supplies a typed
+failure classification.
+
+The file-grained direct-effect ratchet does not shrink for this in-place
+repair: `payment_service.py` remains the named Paystack owner and still
+constructs the provider client. Its ratchet row stays grandfathered while
+the focused intent-order test proves this call's changed behavior. A later
+removal of a direct caller must lower the ratchet in that same change.

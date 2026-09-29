@@ -224,8 +224,17 @@ class PaymentService:
         """
         inv_id = coerce_uuid(invoice_id)
 
-        # Get invoice
-        invoice = self.db.get(Invoice, inv_id)
+        # Serialize first attempts for this invoice until the pending intent
+        # commits. A concurrent request then sees that intent before it can
+        # mint another Paystack reference.
+        invoice = self.db.scalar(
+            select(Invoice)
+            .where(
+                Invoice.invoice_id == inv_id,
+                Invoice.organization_id == self.organization_id,
+            )
+            .with_for_update(of=Invoice)
+        )
         if not invoice:
             raise HTTPException(
                 status_code=404, detail=f"Invoice {invoice_id} not found"
@@ -248,40 +257,28 @@ class PaymentService:
         if invoice.balance_due <= Decimal("0"):
             raise HTTPException(status_code=400, detail="Invoice is already fully paid")
 
-        # Check for existing active payment intent to prevent duplicate payments
-        #
-        # INDETERMINATE is deliberately absent from this list rather than
-        # forgotten: it is only ever written on the OUTBOUND transfer path, and
-        # this query is scoped to `source_type == "INVOICE"` (inbound
-        # collections), so no INDETERMINATE row can reach it. If inbound
-        # collection ever gains an unobserved outcome, it needs the same
-        # unconditional refusal `create_expense_payment_intent` has below — NOT
-        # an entry here, because the branch under this query would then stamp
-        # EXPIRED over an intent whose money may have moved.
+        # An active invoice intent cannot be replaced just because its local
+        # deadline passed: the provider may have initialized it or the customer
+        # may have paid without our observing the outcome. INDETERMINATE is
+        # outbound-only today; any future inbound use must also block retries.
         active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
         existing_intent = self.db.scalar(
             select(PaymentIntent).where(
+                PaymentIntent.organization_id == self.organization_id,
                 PaymentIntent.source_type == "INVOICE",
                 PaymentIntent.source_id == inv_id,
                 PaymentIntent.status.in_(active_statuses),
             )
         )
         if existing_intent:
-            expires_at = existing_intent.expires_at
-            if expires_at and expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=UTC)
-            if expires_at and expires_at <= datetime.now(UTC):
-                existing_intent.status = PaymentIntentStatus.EXPIRED
-                self.db.flush()
-            else:
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        "A payment is already in progress for this invoice "
-                        f"(status: {existing_intent.status.value}). "
-                        "Please wait for it to complete or check the payment history."
-                    ),
-                )
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "A payment is already in progress for this invoice "
+                    f"(status: {existing_intent.status.value}). "
+                    "Reconcile or resolve the existing payment before retrying."
+                ),
+            )
 
         # Get customer and validate email
         customer = self.db.get(Customer, invoice.customer_id)
@@ -339,16 +336,23 @@ class PaymentService:
                     f"Invalid collection bank account ID: {collection_bank_account_id}"
                 )
 
+        # Capture provider inputs while the invoice is loaded and the current
+        # transaction is still open. Commit expires ORM attributes, and a
+        # later attribute read could reopen a transaction before Paystack.
+        currency_code = (
+            invoice.currency_code
+            or org_context_service.get_functional_currency(
+                self.db, self.organization_id
+            )
+        )
+
         # Create payment intent
         intent = PaymentIntent(
             intent_id=uuid4(),
             organization_id=self.organization_id,
             paystack_reference=reference,
             amount=invoice.balance_due,
-            currency_code=invoice.currency_code
-            or org_context_service.get_functional_currency(
-                self.db, self.organization_id
-            ),
+            currency_code=currency_code,
             email=email,
             direction=PaymentDirection.INBOUND,
             bank_account_id=bank_account_uuid,
@@ -359,6 +363,13 @@ class PaymentService:
             expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
 
+        # The reference is Paystack's deduplication identity. Persist it before
+        # the external call so a lost response or failed settlement still has
+        # an intent that can be reconciled by reference.
+        self.db.add(intent)
+        self.db.flush()
+        self.db.commit()
+
         # Initialize with Paystack
         with PaystackClient(paystack_config) as client:
             result = client.initialize_transaction(
@@ -367,14 +378,12 @@ class PaymentService:
                 reference=reference,
                 callback_url=callback_url,
                 metadata=intent_metadata,
-                currency=intent.currency_code,
+                currency=currency_code,
             )
 
-            intent.paystack_access_code = result.access_code
-            intent.authorization_url = result.authorization_url
-
-        self.db.add(intent)
-        self.db.flush()
+        intent.paystack_access_code = result.access_code
+        intent.authorization_url = result.authorization_url
+        self._commit_and_refresh(intent)
 
         logger.info(
             f"Created payment intent {intent.intent_id} for invoice {invoice.invoice_number}",
@@ -386,7 +395,6 @@ class PaymentService:
             },
         )
 
-        self._commit_and_refresh(intent)
         return intent
 
     def verify_payment_by_reference(
