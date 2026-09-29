@@ -29,6 +29,8 @@ import ast
 import base64
 import json
 import re
+import shlex
+import subprocess
 import sys
 import tomllib
 import urllib.parse
@@ -1291,6 +1293,25 @@ def test_the_workflow_parser_found_the_jobs() -> None:
         assert len(steps) >= 4, (name, len(steps))
     assert _needs("attest") == {"resolve", "acquire"}
     assert _needs("acquire") == set()
+
+
+def test_the_credential_step_shell_template_can_start_bash(tmp_path: Path) -> None:
+    """The credential step starts in privileged Bash without startup profiles."""
+    credential_steps = [
+        step
+        for step in _jobs()["acquire"]
+        if "name: There is a credential to resolve with" in step
+    ]
+    assert len(credential_steps) == 1
+    templates = re.findall(r"(?m)^\s*shell: ([^\n]+)$", credential_steps[0])
+    assert templates == ["/bin/bash --noprofile --norc -p -eo pipefail {0}"]
+    script = tmp_path / "credential-step.sh"
+    script.write_text("test -o privileged && test -o errexit && test -o pipefail\n")
+    argv = [str(script) if arg == "{0}" else arg for arg in shlex.split(templates[0])]
+    result = subprocess.run(  # noqa: S603 - fixed checked-in Bash template
+        argv, capture_output=True, text=True, timeout=5, check=False
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_the_job_that_runs_poetry_references_no_secret() -> None:
