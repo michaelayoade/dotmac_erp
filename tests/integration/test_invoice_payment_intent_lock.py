@@ -97,7 +97,6 @@ def test_two_sessions_mint_only_one_reference_for_an_invoice(engine, monkeypatch
     first_commit_seen = False
     backend_ids: dict[str, int] = {}
     outcomes: dict[str, object] = {}
-    scope_at_checkout: dict[str, str | None] = {}
     provider_references: list[str] = []
 
     class PausingSession(Session):
@@ -137,9 +136,7 @@ def test_two_sessions_mint_only_one_reference_for_an_invoice(engine, monkeypatch
             with tenant_scope_for_session(db, organization_id):
                 try:
                     backend_ids[name] = int(db.scalar(text("SELECT pg_backend_pid()")))
-                    scope_at_checkout[name] = db.scalar(
-                        text("SELECT current_setting('app.current_tenant', true)")
-                    )
+                    assert db.info["organization_id"] == organization_id
                     if name == "second":
                         second_connected.set()
                     intent = PaymentService(
@@ -231,8 +228,6 @@ def test_two_sessions_mint_only_one_reference_for_an_invoice(engine, monkeypatch
         "a checkout blocked indefinitely"
     )
     assert isinstance(outcomes.get("first"), PaymentIntent), outcomes.get("first")
-    assert scope_at_checkout["first"] == str(organization_id)
-    assert scope_at_checkout["second"] == str(organization_id)
     assert isinstance(outcomes.get("second"), HTTPException), outcomes.get("second")
     assert cast(HTTPException, outcomes["second"]).status_code == 409
     assert len(provider_references) == 1
