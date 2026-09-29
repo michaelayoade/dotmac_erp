@@ -32,6 +32,7 @@ from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
+from app.services.email import enqueue_email, validate_email_attachments
 from app.services.email_branding import render_branded_email
 from app.services.finance.ap.input_utils import (
     parse_date_str,
@@ -43,7 +44,6 @@ from app.services.finance.ap.input_utils import (
 from app.services.finance.ap.purchase_order_pdf import PurchaseOrderPDFService
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
-from app.tasks.email import queue_email
 
 logger = logging.getLogger(__name__)
 
@@ -186,19 +186,23 @@ class PurchaseOrderService(ListResponseMixin):
                     "application/pdf",
                 )
             ]
+            validate_email_attachments(attachments)
         except Exception as e:
+            attachments = None
             logger.exception(
                 "Failed to generate PO PDF attachment for %s: %s", po.po_id, e
             )
 
-        queue_email(
+        enqueue_email(
+            db,
+            delivery_id=f"purchase-order-approved:{po.po_id}:{supplier_email.casefold()}",
             to_email=supplier_email,
             subject=f"Purchase Order Approved: {po.po_number}",
             body_html=body_html,
             body_text=body_text,
             attachments=attachments,
-            module=EmailModule.FINANCE.value,
-            organization_id=str(po.organization_id),
+            module=EmailModule.FINANCE,
+            organization_id=po.organization_id,
         )
 
     @staticmethod
@@ -708,12 +712,7 @@ class PurchaseOrderService(ListResponseMixin):
         except Exception as e:
             logger.exception("Workflow event failed for PO %s approval: %s", po_id, e)
 
-        try:
-            PurchaseOrderService._notify_supplier_po_approved(db, po)
-        except Exception as e:
-            logger.exception(
-                "Supplier notification failed for PO %s approval: %s", po_id, e
-            )
+        PurchaseOrderService._notify_supplier_po_approved(db, po)
 
         db.flush()
 

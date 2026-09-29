@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from decimal import Decimal
+import smtplib
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -31,9 +32,85 @@ from app.tasks.outbox_relay import (
     _get_handler,
     NonRetryableEventError,
     handle_ledger_posting_completed,
+    handle_email_delivery_requested,
     handle_organization_calendar_changed,
     register_handler,
 )
+
+
+def test_email_handler_preserves_scope_attachment_and_message_identity() -> None:
+    organization_id = uuid4()
+    event_id = uuid4()
+    event = SimpleNamespace(
+        event_id=event_id,
+        headers={"organization_id": str(organization_id)},
+        payload={"delivery_id": str(uuid4())},
+    )
+    private = SimpleNamespace(
+        organization_id=organization_id,
+        to_email="supplier@example.com",
+        subject="Approved",
+        body_html="<p>Approved</p>",
+        body_text="Approved",
+        module="FINANCE",
+        attachments=[
+            {
+                "filename": "po.pdf",
+                "data_b64": "JVBERg==",
+                "mime_type": "application/pdf",
+            }
+        ],
+    )
+    db = MagicMock()
+    db.get.return_value = private
+    with patch("app.services.email.send_email") as send:
+        handle_email_delivery_requested(db, event)
+    send.assert_called_once()
+    assert send.call_args.args == (
+        db,
+        "supplier@example.com",
+        "Approved",
+        "<p>Approved</p>",
+        "Approved",
+    )
+    assert send.call_args.kwargs["attachments"] == [
+        ("po.pdf", b"%PDF", "application/pdf")
+    ]
+    assert send.call_args.kwargs["organization_id"] == organization_id
+    assert send.call_args.kwargs["message_id"] == f"<{event_id}@erp.dotmac.io>"
+    assert send.call_args.kwargs["outbox_event_id"] == event_id
+    db.commit.assert_not_called()
+
+
+def test_email_handler_dead_letters_permanent_smtp_error() -> None:
+    organization_id = uuid4()
+    event = SimpleNamespace(
+        event_id=uuid4(),
+        headers={"organization_id": str(organization_id)},
+        payload={"delivery_id": str(uuid4())},
+    )
+    private = SimpleNamespace(
+        organization_id=organization_id,
+        to_email="person@example.com",
+        subject="Subject",
+        body_html="<p>Message</p>",
+        body_text=None,
+        module="ADMIN",
+        attachments=[],
+    )
+    db = MagicMock()
+    db.get.return_value = private
+    with (
+        patch(
+            "app.services.email.send_email",
+            side_effect=smtplib.SMTPRecipientsRefused(
+                {"person@example.com": (550, "unknown")}
+            ),
+        ),
+        pytest.raises(NonRetryableEventError, match="Permanent SMTP failure"),
+    ):
+        handle_email_delivery_requested(db, event)
+
 
 # ---------------------------------------------------------------------------
 # Handler registry tests
@@ -609,6 +686,46 @@ def test_cleanup_deletes_old_published(mock_session_local: MagicMock) -> None:
 
     assert result == {"deleted": 42}
     db.commit.assert_called_once()
+    statement = db.execute.call_args.args[0]
+    assert "email.delivery.requested" in statement.compile().params.values()
+
+
+@pytest.mark.parametrize("dead", [False, True])
+def test_email_cleanup_purges_content_and_preserves_dead_letter(dead: bool) -> None:
+    from app.models.finance.platform.event_outbox import EventStatus
+    from app.tasks.outbox_relay import cleanup_terminal_email_deliveries
+
+    organization_id = uuid4()
+    event_id = uuid4()
+    discovery = MagicMock()
+    discovery.execute.return_value.all.return_value = [
+        (event_id, {"organization_id": str(organization_id)})
+    ]
+    tenant_db = MagicMock()
+    event = SimpleNamespace(
+        status=EventStatus.DEAD if dead else EventStatus.PUBLISHED,
+        email_payload_purged_at=None,
+    )
+    tenant_db.scalar.return_value = event
+    with (
+        patch("app.tasks.outbox_relay.cross_org_session") as cross_org,
+        patch("app.tasks.outbox_relay.session_for_org") as for_org,
+        patch("app.services.email.purge_mature_email_delivery") as purge,
+    ):
+        cross_org.return_value.__enter__.return_value = discovery
+        for_org.return_value.__enter__.return_value = tenant_db
+        result = cleanup_terminal_email_deliveries(batch_size=10)
+
+    purge.assert_called_once()
+    assert event.email_payload_purged_at is not None
+    tenant_db.commit.assert_called_once()
+    if dead:
+        tenant_db.delete.assert_not_called()
+        assert result["published_deleted"] == 0
+    else:
+        tenant_db.delete.assert_called_once_with(event)
+        assert result["published_deleted"] == 1
+    assert result["purged"] == 1
 
 
 # ---------------------------------------------------------------------------

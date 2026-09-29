@@ -1,11 +1,18 @@
 """Tests for email service - failure handling and configuration."""
 
+import hashlib
+import json
 import smtplib
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from app.models.people.hr.employee import EmployeeStatus
+from app.models.finance.platform.event_outbox import EventStatus
 from app.models.person import PersonStatus
 from app.services.email import (
     _env_bool,
@@ -13,11 +20,212 @@ from app.services.email import (
     _env_value,
     _get_smtp_config,
     employee_can_receive_email,
+    enqueue_email,
     person_can_receive_email,
+    purge_mature_email_delivery,
     send_email,
     send_password_reset_email,
+    validate_email_attachments,
     validate_smtp_config,
 )
+
+
+def test_enqueue_email_records_attachment_in_caller_transaction() -> None:
+    db = MagicMock()
+    db.scalar.return_value = None
+    organization_id = uuid4()
+    with patch(
+        "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
+    ) as publish:
+        enqueue_email(
+            db,
+            delivery_id="purchase-order-approved:123:supplier@example.com",
+            organization_id=organization_id,
+            to_email="supplier@example.com",
+            subject="Approved",
+            body_html="<p>Approved</p>",
+            attachments=[("po.pdf", b"%PDF", "application/pdf")],
+        )
+
+    private = db.add.call_args.args[0]
+    assert private.attachments == [
+        {"filename": "po.pdf", "data_b64": "JVBERg==", "mime_type": "application/pdf"}
+    ]
+    assert private.organization_id == organization_id
+    assert publish.call_args.kwargs["payload"] == {
+        "delivery_id": str(private.delivery_id)
+    }
+    assert publish.call_args.kwargs["headers"]["organization_id"] == str(
+        organization_id
+    )
+    assert publish.call_args.kwargs["idempotency_key"].startswith("email:")
+    db.commit.assert_not_called()
+
+
+def test_enqueue_email_rejects_identity_reuse_with_changed_content() -> None:
+    db = MagicMock()
+    db.scalar.return_value = SimpleNamespace(
+        event_name="email.delivery.requested",
+        headers={"organization_id": str(uuid4())},
+        payload={"delivery_id": str(uuid4())},
+    )
+    with pytest.raises(ValueError, match="reused with different content"):
+        enqueue_email(
+            db,
+            delivery_id="same-business-event",
+            organization_id=uuid4(),
+            to_email="person@example.com",
+            subject="Subject",
+            body_html="<p>Message</p>",
+        )
+    db.commit.assert_not_called()
+
+
+def test_enqueue_email_replay_returns_existing_delivery() -> None:
+    db = MagicMock()
+    organization_id = uuid4()
+    private_id = uuid4()
+    existing = SimpleNamespace(
+        event_name="email.delivery.requested",
+        headers={"organization_id": str(organization_id)},
+        payload={"delivery_id": str(private_id)},
+    )
+    db.scalar.return_value = existing
+    content = {
+        "to_email": "person@example.com",
+        "subject": "Subject",
+        "body_html": "<p>Message</p>",
+        "body_text": None,
+        "module": "ADMIN",
+        "attachments": [],
+    }
+    digest = hashlib.sha256(
+        json.dumps(content, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    private = SimpleNamespace(organization_id=organization_id, content_digest=digest)
+    db.get.return_value = private
+    with patch(
+        "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
+    ) as publish:
+        result = enqueue_email(
+            db,
+            delivery_id="same-business-event",
+            organization_id=organization_id,
+            to_email="person@example.com",
+            subject="Subject",
+            body_html="<p>Message</p>",
+        )
+    assert result is existing
+    db.get.assert_called_once()
+    publish.assert_not_called()
+
+
+def test_enqueue_email_concurrent_unique_conflict_reloads_matching_delivery() -> None:
+    db = MagicMock()
+    organization_id = uuid4()
+    private_id = uuid4()
+    existing = SimpleNamespace(
+        event_name="email.delivery.requested",
+        headers={"organization_id": str(organization_id)},
+        payload={"delivery_id": str(private_id)},
+    )
+    db.scalar.side_effect = [None, existing]
+    content = {
+        "to_email": "person@example.com",
+        "subject": "Subject",
+        "body_html": "<p>Message</p>",
+        "body_text": None,
+        "module": "ADMIN",
+        "attachments": [],
+    }
+    digest = hashlib.sha256(
+        json.dumps(content, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    db.get.return_value = SimpleNamespace(
+        organization_id=organization_id, content_digest=digest
+    )
+    with patch(
+        "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event",
+        side_effect=IntegrityError("insert", {}, Exception("unique conflict")),
+    ):
+        result = enqueue_email(
+            db,
+            delivery_id="same-business-event",
+            organization_id=organization_id,
+            to_email="person@example.com",
+            subject="Subject",
+            body_html="<p>Message</p>",
+        )
+    assert result is existing
+    assert db.scalar.call_count == 2
+    db.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "attachments",
+    [
+        [("../escape.pdf", b"%PDF", "application/pdf")],
+        [("po.pdf", b"%PDF", "application/octet-stream")],
+        [("po.pdf", b"a" * (5 * 1024 * 1024 + 1), "application/pdf")],
+        [(f"po-{index}.pdf", b"%PDF", "application/pdf") for index in range(6)],
+    ],
+)
+def test_email_attachment_boundary_rejects_unsafe_content(attachments) -> None:
+    with pytest.raises(ValueError):
+        validate_email_attachments(attachments)
+
+
+@pytest.mark.parametrize("status", [EventStatus.PUBLISHED, EventStatus.DEAD])
+def test_mature_terminal_email_content_can_be_purged(status) -> None:
+    organization_id = uuid4()
+    private_id = uuid4()
+    event = SimpleNamespace(
+        event_name="email.delivery.requested",
+        status=status,
+        terminal_at=datetime.now(UTC) - timedelta(days=31),
+        headers={"organization_id": str(organization_id)},
+        payload={"delivery_id": str(private_id)},
+    )
+    stored = SimpleNamespace(organization_id=organization_id)
+    db = MagicMock()
+    db.get.return_value = stored
+
+    purge_mature_email_delivery(
+        db,
+        event,
+        organization_id=organization_id,
+        cutoff=datetime.now(UTC) - timedelta(days=30),
+    )
+
+    db.delete.assert_called_once_with(stored)
+    db.flush.assert_called_once()
+    db.commit.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("status", "age_days"),
+    [(EventStatus.PENDING, 31), (EventStatus.FAILED, 31), (EventStatus.DEAD, 29)],
+)
+def test_nonterminal_or_young_email_content_is_not_purged(status, age_days) -> None:
+    organization_id = uuid4()
+    event = SimpleNamespace(
+        event_name="email.delivery.requested",
+        status=status,
+        terminal_at=datetime.now(UTC) - timedelta(days=age_days),
+        headers={"organization_id": str(organization_id)},
+        payload={"delivery_id": str(uuid4())},
+    )
+    db = MagicMock()
+
+    with pytest.raises(ValueError):
+        purge_mature_email_delivery(
+            db,
+            event,
+            organization_id=organization_id,
+            cutoff=datetime.now(UTC) - timedelta(days=30),
+        )
+    db.get.assert_not_called()
+    db.delete.assert_not_called()
 
 
 class TestEnvHelpers:
@@ -619,6 +827,30 @@ class TestEmailLogging:
                 )
 
         assert "Failed to send email" in caplog.text
+
+    def test_outbox_send_log_excludes_recipient_and_raw_smtp_error(self, caplog):
+        import logging
+
+        event_id = uuid4()
+        with (
+            patch(
+                "app.services.email._smtp_pool.get_connection",
+                side_effect=RuntimeError("private SMTP detail"),
+            ),
+            caplog.at_level(logging.ERROR),
+        ):
+            assert not send_email(
+                None,
+                "private@example.com",
+                "Test",
+                "<p>Test</p>",
+                outbox_event_id=event_id,
+            )
+
+        assert str(event_id) in caplog.text
+        assert "RuntimeError" in caplog.text
+        assert "private@example.com" not in caplog.text
+        assert "private SMTP detail" not in caplog.text
 
 
 class TestAdminEmailSettingsTest:

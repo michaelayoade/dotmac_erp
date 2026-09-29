@@ -17,6 +17,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
+from app.models.email_profile import EmailModule
 from app.services.finance.ap.purchase_order import (
     POLineInput,
     POStatus,
@@ -678,14 +679,14 @@ class TestSubmitForApproval:
 class TestApprovePO:
     """Tests for PO approval."""
 
-    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.enqueue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
     def test_approve_po_success(
         self,
         mock_render_branded_email,
         mock_pdf_service,
-        mock_queue_email,
+        mock_enqueue_email,
     ):
         """Test successful PO approval."""
         db = MagicMock()
@@ -722,25 +723,27 @@ class TestApprovePO:
         assert mock_po.approved_by_user_id == approver_id
         assert mock_po.approved_at is not None
         mock_render_branded_email.assert_called_once()
-        mock_queue_email.assert_called_once_with(
+        mock_enqueue_email.assert_called_once_with(
+            db,
+            delivery_id=f"purchase-order-approved:{po_id}:supplier@example.com",
             to_email="supplier@example.com",
             subject=f"Purchase Order Approved: {mock_po.po_number}",
             body_html="<p>approved</p>",
             body_text="approved",
             attachments=[(f"{mock_po.po_number}.pdf", b"%PDF-1.4", "application/pdf")],
-            module="FINANCE",
-            organization_id=str(org_id),
+            module=EmailModule.FINANCE,
+            organization_id=org_id,
         )
         db.flush.assert_called()
 
-    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.enqueue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
     def test_approve_po_skips_supplier_notification_without_email(
         self,
         mock_render_branded_email,
         mock_pdf_service,
-        mock_queue_email,
+        mock_enqueue_email,
     ):
         """Approval should still succeed when supplier has no email."""
         db = MagicMock()
@@ -773,17 +776,17 @@ class TestApprovePO:
         assert result is mock_po
         mock_render_branded_email.assert_not_called()
         mock_pdf_service.assert_not_called()
-        mock_queue_email.assert_not_called()
+        mock_enqueue_email.assert_not_called()
         db.flush.assert_called()
 
-    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.enqueue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
     def test_approve_po_queues_email_without_attachment_when_pdf_generation_fails(
         self,
         mock_render_branded_email,
         mock_pdf_service,
-        mock_queue_email,
+        mock_enqueue_email,
     ):
         """Approval should still queue email when PDF generation fails."""
         db = MagicMock()
@@ -818,27 +821,73 @@ class TestApprovePO:
         result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
 
         assert result is mock_po
-        mock_queue_email.assert_called_once_with(
+        mock_enqueue_email.assert_called_once_with(
+            db,
+            delivery_id=f"purchase-order-approved:{po_id}:supplier@example.com",
             to_email="supplier@example.com",
             subject=f"Purchase Order Approved: {mock_po.po_number}",
             body_html="<p>approved</p>",
             body_text="approved",
             attachments=None,
-            module="FINANCE",
-            organization_id=str(org_id),
+            module=EmailModule.FINANCE,
+            organization_id=org_id,
         )
         db.flush.assert_called()
 
-    @patch("app.services.finance.ap.purchase_order.queue_email")
+    @patch("app.services.finance.ap.purchase_order.enqueue_email")
     @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
     @patch("app.services.finance.ap.purchase_order.render_branded_email")
-    def test_approve_po_continues_when_supplier_notification_rendering_fails(
+    def test_approve_po_queues_email_without_oversized_pdf(
         self,
         mock_render_branded_email,
         mock_pdf_service,
-        mock_queue_email,
+        mock_enqueue_email,
     ):
-        """Approval should not fail if email rendering raises."""
+        """An optional PDF over the email limit must not block approval."""
+        db = MagicMock()
+        org_id = uuid4()
+        po_id = uuid4()
+        supplier_id = uuid4()
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            created_by_user_id=uuid4(),
+            status=POStatus.PENDING_APPROVAL,
+        )
+        mock_supplier = MockSupplier(
+            supplier_id=supplier_id,
+            organization_id=org_id,
+            primary_contact={"email": "supplier@example.com"},
+        )
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        supplier_result = MagicMock()
+        supplier_result.first.return_value = mock_supplier
+        db.scalars.side_effect = [po_result, supplier_result]
+        mock_render_branded_email.return_value = ("<p>approved</p>", "approved")
+        mock_pdf_service.return_value.generate_pdf.return_value = b"%PDF" + b"x" * (
+            5 * 1024 * 1024
+        )
+
+        result = PurchaseOrderService.approve_po(db, org_id, po_id, uuid4())
+
+        assert result is mock_po
+        mock_enqueue_email.assert_called_once()
+        assert mock_enqueue_email.call_args.kwargs["attachments"] is None
+        db.commit.assert_not_called()
+        db.flush.assert_called()
+
+    @patch("app.services.finance.ap.purchase_order.enqueue_email")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
+    @patch("app.services.finance.ap.purchase_order.render_branded_email")
+    def test_approve_po_aborts_when_supplier_notification_rendering_fails(
+        self,
+        mock_render_branded_email,
+        mock_pdf_service,
+        mock_enqueue_email,
+    ):
+        """Approval must not commit without its required email command."""
         db = MagicMock()
         org_id = uuid4()
         po_id = uuid4()
@@ -865,12 +914,50 @@ class TestApprovePO:
         db.scalars.side_effect = [po_result, supplier_result]
         mock_render_branded_email.side_effect = RuntimeError("smtp unavailable")
 
-        result = PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
+        with pytest.raises(RuntimeError, match="smtp unavailable"):
+            PurchaseOrderService.approve_po(db, org_id, po_id, approver_id)
 
-        assert result is mock_po
         mock_pdf_service.assert_not_called()
-        mock_queue_email.assert_not_called()
-        db.flush.assert_called()
+        mock_enqueue_email.assert_not_called()
+        db.commit.assert_not_called()
+
+    @patch("app.services.finance.ap.purchase_order.enqueue_email")
+    @patch("app.services.finance.ap.purchase_order.PurchaseOrderPDFService")
+    @patch("app.services.finance.ap.purchase_order.render_branded_email")
+    def test_approve_po_propagates_outbox_write_failure(
+        self,
+        mock_render_branded_email,
+        mock_pdf_service,
+        mock_enqueue_email,
+    ):
+        db = MagicMock()
+        org_id = uuid4()
+        po_id = uuid4()
+        supplier_id = uuid4()
+        mock_po = MockPurchaseOrder(
+            po_id=po_id,
+            organization_id=org_id,
+            supplier_id=supplier_id,
+            created_by_user_id=uuid4(),
+            status=POStatus.PENDING_APPROVAL,
+        )
+        mock_supplier = MockSupplier(
+            supplier_id=supplier_id,
+            organization_id=org_id,
+            primary_contact={"email": "supplier@example.com"},
+        )
+        po_result = MagicMock()
+        po_result.first.return_value = mock_po
+        supplier_result = MagicMock()
+        supplier_result.first.return_value = mock_supplier
+        db.scalars.side_effect = [po_result, supplier_result]
+        mock_render_branded_email.return_value = ("<p>approved</p>", "approved")
+        mock_pdf_service.return_value.generate_pdf.return_value = b"%PDF"
+        mock_enqueue_email.side_effect = RuntimeError("outbox unavailable")
+
+        with pytest.raises(RuntimeError, match="outbox unavailable"):
+            PurchaseOrderService.approve_po(db, org_id, po_id, uuid4())
+        db.commit.assert_not_called()
 
     def test_approve_po_not_found(self):
         """Test approval of non-existent PO."""

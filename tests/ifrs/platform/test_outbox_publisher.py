@@ -180,6 +180,7 @@ class TestOutboxPublisher:
 
         assert mock_event.status == "PUBLISHED"
         assert mock_event.published_at is not None
+        assert mock_event.terminal_at == mock_event.published_at
         assert mock_event.claim_token is None
         assert mock_event.lease_expires_at is None
         # Services flush; the calling task owns the commit.
@@ -229,6 +230,7 @@ class TestOutboxPublisher:
                     )
 
         assert mock_event.status == "PENDING"
+        assert mock_event.terminal_at is None
         mock_db_session.flush.assert_not_called()
         mock_db_session.commit.assert_not_called()
 
@@ -290,6 +292,7 @@ class TestOutboxPublisher:
             service.requeue_dead_event(mock_db_session, event_id)
 
         assert mock_event.status == "PENDING"
+        assert mock_event.terminal_at is None
         assert mock_event.retry_count == 0
         assert mock_event.next_retry_at is None
         assert mock_event.last_error is None
@@ -368,6 +371,7 @@ class TestOutboxPublisher:
 
         assert mock_event.status == "DEAD"
         assert mock_event.terminal_reason == TerminalReason.MAX_RETRIES_EXCEEDED
+        assert mock_event.terminal_at is not None
 
     def test_handle_retry_schedules_next_retry(
         self, service, mock_db_session, mock_event_status
@@ -401,6 +405,7 @@ class TestOutboxPublisher:
 
         assert mock_event.next_retry_at is not None
         assert mock_event.status == "FAILED"
+        assert getattr(mock_event, "terminal_at", None) is None
 
     def test_mark_dead_permanently_fails_event(
         self, service, mock_db_session, mock_event_status
@@ -426,6 +431,7 @@ class TestOutboxPublisher:
                     )
 
         assert mock_event.status == "DEAD"
+        assert mock_event.terminal_at is not None
         assert mock_event.last_error == "Unrecoverable error"
         assert mock_event.terminal_reason is not None
         mock_db_session.commit.assert_not_called()
@@ -491,6 +497,7 @@ class TestOutboxPublisher:
         assert mock_event.next_retry_at is None
         assert mock_event.last_error is None
         assert mock_event.terminal_reason is None
+        assert mock_event.terminal_at is None
         # Audit evidence staged in the SAME transaction (add + flush, no commit).
         mock_db_session.add.assert_called_once()
         audit = mock_db_session.add.call_args.args[0]
@@ -498,6 +505,41 @@ class TestOutboxPublisher:
         assert audit.actor_id == "ops@example.test"
         assert audit.metadata_["reason"] == "Upstream outage resolved"
         mock_db_session.commit.assert_not_called()
+
+    def test_replayed_email_gets_fresh_terminal_clock_and_purged_replay_fails(
+        self, service, mock_db_session, mock_event_status
+    ):
+        from datetime import datetime, timedelta, timezone
+
+        old_terminal = datetime.now(timezone.utc) - timedelta(days=31)
+        event = MockEventOutbox(
+            event_name="email.delivery.requested",
+            status="DEAD",
+            terminal_at=old_terminal,
+        )
+        mock_db_session.get.return_value = event
+        with (
+            patch("app.services.finance.platform.outbox_publisher.EventOutbox"),
+            patch(
+                "app.services.finance.platform.outbox_publisher.EventStatus",
+                mock_event_status,
+            ),
+        ):
+            service.requeue_dead_event(mock_db_session, event.event_id)
+            assert event.terminal_at is None
+            service.mark_dead(mock_db_session, event.event_id, "failed again")
+            assert event.terminal_at > old_terminal + timedelta(days=30)
+
+            event.email_payload_purged_at = datetime.now(timezone.utc)
+            with pytest.raises(ValueError, match="purged"):
+                service.requeue_dead_event(mock_db_session, event.event_id)
+            with pytest.raises(ValueError, match="purged"):
+                service.retry_dead_event(
+                    mock_db_session,
+                    event.event_id,
+                    actor_id="ops@example.test",
+                    reason="retry",
+                )
 
     def test_retry_dead_event_requires_actor_and_reason(
         self, service, mock_db_session, mock_event_status

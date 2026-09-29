@@ -130,3 +130,60 @@ repair: `payment_service.py` remains the named Paystack owner and still
 constructs the provider client. Its ratchet row stays grandfathered while
 the focused intent-order test proves this call's changed behavior. A later
 removal of a direct caller must lower the ratchet in that same change.
+
+## Email outbox slice — 2026-09-29
+
+Purchase-order approval and project SLA customer updates now enqueue
+`email.delivery.requested` in the owning service's database transaction. The
+email service assigns a stable outbox key from a business delivery identity,
+rejects reuse of that identity with changed content or tenant, and preserves
+module routing and attachments in `public.email_delivery`, a tenant-scoped
+table with forced row-level security. `platform.event_outbox` has no RLS and
+is readable by `app_user`, so its email command holds only an opaque delivery
+reference and organization identity. The EventOutbox relay delivers each
+committed command under its organization context and owns retry and terminal
+status; callers do not record a separate delivery state. A
+permanent SMTP refusal dead-letters, while a transient or uncertain failure
+uses the outbox retry ladder. SMTP acceptance and outbox settlement cannot be
+atomic: a crash or commit failure after acceptance can send a duplicate. The
+relay repeats the same RFC Message-ID across attempts, which may help receiving
+systems deduplicate but does not promise exactly-once delivery.
+
+Purchase-order approval now propagates a rendering or outbox-write failure,
+so the approval transaction cannot commit without its required supplier
+notification command. PDF rendering remains optional: failure there records
+an email without the attachment. A generated PDF that fails the attachment
+limit or filename check is also omitted. Email attachments are bounded and
+validated at both enqueue and relay; the relay stores only a sanitized SMTP
+error class in the platform-visible outbox status.
+
+**Retention decision (Michael, 2026-09-29).** Tenant-private email bodies,
+recipient fields and attachments are retained until 30 days after the outbox
+event reaches `PUBLISHED` or `DEAD`, then purged. `terminal_at` is written in
+the same transaction as the terminal status, with a database trigger using the
+database clock so the runtime role cannot backdate it; `published_at` alone
+could not date a dead letter. A restrictive RLS DELETE policy requires both the tenant
+scope and a mature terminal outbox row. The hourly email cleanup locks and
+rechecks each event in its tenant session, deletes private content, and records
+the purge for retained dead letters. Published email events are deleted in the
+same transaction as their private content; the generic published-outbox cleanup
+excludes email events so it cannot remove the reference first. The database
+trigger permits email event deletion only for mature PUBLISHED events after
+their private content is gone; DEAD evidence stays. Pending and
+retryable failed deliveries retain their content regardless of age. Replay
+clears the previous terminal clock, and a purged dead letter cannot be replayed.
+The outbox relay logs its event UUID and exception class for SMTP failures;
+legacy synchronous `send_email` callers still log recipients and raw exception
+text pending their separate migration. See
+`docs/runbooks/email-delivery-retention.md` for the operational check.
+
+This is a bounded first slice. Other callers still invoke the synchronous
+`send_email` API and use its boolean delivery result to advance business
+state; the mailbox activation worker and password-reset/invite paths are among
+them. Their outcome contracts must be migrated deliberately. The legacy
+`send_email_async` Celery task remains callable for compatibility. The
+file-grained external-effect ratchet therefore retains the `smtplib` rows for
+both `app/services/email.py` and `app/tasks/email.py`; those hits have not
+retired and the baseline is unchanged. The relay's SMTP call currently reaches
+the existing email transport service. An isolated transport owner and the
+remaining caller migrations are still required for the full email cutover.
