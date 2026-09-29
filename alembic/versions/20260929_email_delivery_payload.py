@@ -44,6 +44,13 @@ def upgrade() -> None:
         "platform.event_outbox ((payload ->> 'delivery_id')) "
         "WHERE event_name = 'email.delivery.requested'"
     )
+    # Match the checked-in ERP identity-cutover contract for this existing
+    # platform relation. Fresh databases have not run that cutover grant file.
+    op.execute("GRANT USAGE ON SCHEMA platform TO app_user")
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE, DELETE "
+        "ON TABLE platform.event_outbox TO app_user"
+    )
     op.create_table(
         "email_delivery",
         sa.Column(

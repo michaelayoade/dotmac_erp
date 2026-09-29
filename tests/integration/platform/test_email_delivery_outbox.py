@@ -26,6 +26,11 @@ _CONFLICT_DELIVERY_ID = "canary:same-business-email"
 
 def _insert_organization(connection, suffix: str) -> UUID:
     organization_id = uuid4()
+    code_prefix = f"EM-{suffix}-"
+    if len(code_prefix) >= 20:
+        raise ValueError("Canary organization code prefix is too long")
+    organization_code = code_prefix + uuid4().hex[: 20 - len(code_prefix)].upper()
+    assert len(organization_code) == 20
     connection.execute(
         text(
             """
@@ -41,7 +46,7 @@ def _insert_organization(connection, suffix: str) -> UUID:
         ),
         {
             "organization_id": organization_id,
-            "organization_code": f"EM-{suffix}-{uuid4().hex[:8].upper()}",
+            "organization_code": organization_code,
             "legal_name": f"Email outbox canary {suffix}",
         },
     )
@@ -361,6 +366,86 @@ def test_email_delivery_table_has_forced_rls_and_minimal_app_grants(engine) -> N
             )
         ).one()
         assert grants == (True, True, False, True)
+        legacy_outbox_grants = connection.execute(
+            text(
+                """
+                SELECT
+                    has_schema_privilege('app_user', 'platform', 'USAGE'),
+                    has_schema_privilege('app_user', 'platform', 'CREATE'),
+                    has_table_privilege('app_user', 'platform.event_outbox', 'SELECT'),
+                    has_table_privilege('app_user', 'platform.event_outbox', 'INSERT'),
+                    has_table_privilege('app_user', 'platform.event_outbox', 'UPDATE'),
+                    has_table_privilege('app_user', 'platform.event_outbox', 'DELETE'),
+                    has_table_privilege('app_user', 'platform.event_outbox', 'TRUNCATE'),
+                    has_table_privilege('app_user', 'platform.event_outbox', 'REFERENCES'),
+                    has_table_privilege('app_user', 'platform.event_outbox', 'TRIGGER')
+                """
+            )
+        ).one()
+        assert legacy_outbox_grants == (
+            True,
+            False,
+            True,
+            True,
+            True,
+            True,
+            False,
+            False,
+            False,
+        )
+        # Effective access may come from PUBLIC, ownership or membership. The
+        # cutover contract requires these grants to name app_user directly.
+        app_user_oid = connection.scalar(text("SELECT 'app_user'::regrole::oid"))
+        acl_rows = connection.execute(
+            text(
+                """
+                SELECT 'schema' AS object_type, acl.grantee,
+                       acl.privilege_type::text
+                FROM pg_catalog.pg_namespace AS namespace
+                CROSS JOIN LATERAL pg_catalog.aclexplode(
+                    COALESCE(
+                        namespace.nspacl,
+                        pg_catalog.acldefault('n', namespace.nspowner)
+                    )
+                ) AS acl
+                WHERE namespace.nspname = 'platform'
+                UNION ALL
+                SELECT 'table' AS object_type, acl.grantee,
+                       acl.privilege_type::text
+                FROM pg_catalog.pg_class AS relation
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = relation.relnamespace
+                CROSS JOIN LATERAL pg_catalog.aclexplode(
+                    COALESCE(
+                        relation.relacl,
+                        pg_catalog.acldefault('r', relation.relowner)
+                    )
+                ) AS acl
+                WHERE namespace.nspname = 'platform'
+                  AND relation.relname = 'event_outbox'
+                  AND relation.relkind = 'r'
+                """
+            )
+        ).all()
+        required_direct = {
+            ("schema", "USAGE"),
+            ("table", "SELECT"),
+            ("table", "INSERT"),
+            ("table", "UPDATE"),
+            ("table", "DELETE"),
+        }
+        direct = {
+            (object_type, privilege)
+            for object_type, grantee, privilege in acl_rows
+            if grantee == app_user_oid
+        }
+        via_public = {
+            (object_type, privilege)
+            for object_type, grantee, privilege in acl_rows
+            if grantee == 0
+        }
+        assert direct == required_direct
+        assert not required_direct & via_public
 
 
 def test_app_user_can_delete_email_content_only_after_terminal_retention(
@@ -368,6 +453,7 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
 ) -> None:
     with engine.begin() as setup:
         organization_id = _insert_organization(setup, "RETENTION")
+        other_organization_id = _insert_organization(setup, "OTHER")
     event_id = None
     private_id = None
     try:
@@ -445,6 +531,24 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
 
         with engine.begin() as settle:
             _age_terminal_event_as_test_admin(settle, event_id)
+
+        with engine.connect() as other_tenant:
+            transaction = other_tenant.begin()
+            try:
+                _scope_app_user(other_tenant, other_organization_id)
+                assert (
+                    other_tenant.execute(
+                        text(
+                            "DELETE FROM public.email_delivery WHERE delivery_id = :id"
+                        ),
+                        {"id": private_id},
+                    ).rowcount
+                    == 0
+                )
+                transaction.commit()
+            finally:
+                if transaction.is_active:
+                    transaction.rollback()
 
         with engine.connect() as connection:
             transaction = connection.begin()
@@ -529,6 +633,17 @@ def test_app_user_can_delete_email_content_only_after_terminal_retention(
                     "WHERE organization_id = :organization_id"
                 ),
                 {"organization_id": organization_id},
+            )
+            cleanup.execute(
+                text("SELECT set_config('app.current_organization_id', :org, true)"),
+                {"org": str(other_organization_id)},
+            )
+            cleanup.execute(
+                text(
+                    "DELETE FROM core_org.organization "
+                    "WHERE organization_id = :organization_id"
+                ),
+                {"organization_id": other_organization_id},
             )
 
 
