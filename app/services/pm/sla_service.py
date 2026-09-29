@@ -27,7 +27,7 @@ from app.models.notification import EntityType, NotificationType
 from app.models.person import Person
 from app.models.pm.task import Task, TaskStatus
 from app.models.rbac import PersonRole, Role
-from app.services.email import queue_email
+from app.services.email import enqueue_email
 from app.services.notification import notification_service
 from app.services.settings_spec import coerce_value, get_spec
 
@@ -521,7 +521,9 @@ class ProjectSLAService:
             f"<p>Task completed: <strong>{stage_rule.name}</strong></p>"
             f"<p>Project: {project.project_name} ({project.project_code or '-'})</p>"
         )
-        queue_email(
+        enqueue_email(
+            self.db,
+            delivery_id=f"project-stage-completed:{task.task_id}:{email.casefold()}",
             to_email=email,
             subject=subject,
             body_html=body_html,
@@ -543,7 +545,9 @@ class ProjectSLAService:
             "<p>Your project has been completed.</p>"
             "<p>Please reply with your feedback or satisfaction confirmation.</p>"
         )
-        queue_email(
+        enqueue_email(
+            self.db,
+            delivery_id=f"project-completed:{project.project_id}:{email.casefold()}",
             to_email=email,
             subject=subject,
             body_html=body_html,

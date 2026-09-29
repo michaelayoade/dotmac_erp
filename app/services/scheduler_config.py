@@ -403,6 +403,11 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "schedule": crontab(hour=2, minute=30),  # 2:30 AM daily
             "kwargs": {"retention_days": 30, "batch_size": 5000},
         },
+        "email-delivery-content-cleanup": {
+            "task": "app.tasks.outbox_relay.cleanup_terminal_email_deliveries",
+            "schedule": crontab(minute=20),  # Hourly, including before outbox cleanup
+            "kwargs": {"batch_size": 5000},
+        },
         "outbox-balance-reconciliation": {
             "task": "app.tasks.outbox_relay.reconcile_outbox_balance_projection",
             "schedule": crontab(minute=40),  # Hourly at :40

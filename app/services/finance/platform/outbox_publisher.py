@@ -66,6 +66,15 @@ class OutboxPublisher(ListResponseMixin):
     MAX_ERROR_LENGTH: int = 2000
 
     @staticmethod
+    def _require_replayable_payload(event: EventOutbox) -> None:
+        """A purged email cannot become a pending command without content."""
+        if (
+            event.event_name == "email.delivery.requested"
+            and event.email_payload_purged_at is not None
+        ):
+            raise ValueError("Email delivery content was purged and cannot be replayed")
+
+    @staticmethod
     def publish_event(
         db: Session,
         event_name: str,
@@ -322,6 +331,7 @@ class OutboxPublisher(ListResponseMixin):
 
         event.status = EventStatus.PUBLISHED
         event.published_at = datetime.now(UTC)
+        event.terminal_at = event.published_at
         event.last_error = None
         event.error_class = None
         event.terminal_reason = terminal_reason
@@ -364,6 +374,7 @@ class OutboxPublisher(ListResponseMixin):
         if event.retry_count >= OutboxPublisher.MAX_RETRY_COUNT:
             # Max retries exceeded - mark as dead
             event.status = EventStatus.DEAD
+            event.terminal_at = datetime.now(UTC)
             event.terminal_reason = TerminalReason.MAX_RETRIES_EXCEEDED
         else:
             # Schedule next retry
@@ -409,6 +420,8 @@ class OutboxPublisher(ListResponseMixin):
                 raise ValueError(f"Event not found: {event_id}")
             event = found
 
+        if event.status != EventStatus.DEAD or event.terminal_at is None:
+            event.terminal_at = datetime.now(UTC)
         event.status = EventStatus.DEAD
         event.last_error = OutboxPublisher._trim_error(error_message)
         event.error_class = error_class
@@ -447,8 +460,10 @@ class OutboxPublisher(ListResponseMixin):
             raise ValueError(f"Event not found: {event_id}")
         if event.status not in {EventStatus.FAILED, EventStatus.DEAD}:
             raise ValueError(f"Event {event_id} is not failed or dead")
+        OutboxPublisher._require_replayable_payload(event)
 
         event.status = EventStatus.PENDING
+        event.terminal_at = None
         event.retry_count = 0
         event.next_retry_at = None
         event.last_error = None
@@ -513,7 +528,7 @@ class OutboxPublisher(ListResponseMixin):
         if not reason or not reason.strip():
             raise ValueError("Replay requires a reason")
 
-        event = db.get(EventOutbox, coerce_uuid(event_id))
+        event = db.get(EventOutbox, coerce_uuid(event_id), with_for_update=True)
         if not event:
             raise ValueError(f"Event not found: {event_id}")
         if event.status != EventStatus.DEAD:
@@ -521,6 +536,7 @@ class OutboxPublisher(ListResponseMixin):
                 f"Only DEAD events can be replayed (event {event_id} is "
                 f"{getattr(event.status, 'value', event.status)})"
             )
+        OutboxPublisher._require_replayable_payload(event)
 
         org_header = (event.headers or {}).get("organization_id")
 
@@ -544,6 +560,7 @@ class OutboxPublisher(ListResponseMixin):
         db.add(audit)
 
         event.status = EventStatus.PENDING
+        event.terminal_at = None
         event.retry_count = 0
         event.next_retry_at = None
         event.last_error = None
