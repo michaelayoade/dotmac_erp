@@ -113,7 +113,7 @@ def _recheck_and_delete(
                         db, tenant_id=tenant_id, storage_key=candidate_key
                     )
 
-            result = delete_reviewed_file_orphan(
+            recheck_result = delete_reviewed_file_orphan(
                 scope=plan.scope,
                 key=key,
                 expected_provider_code=plan.provider_code,
@@ -147,7 +147,7 @@ def _recheck_and_delete(
                 "absent": "already_absent",
                 "too_new": "rechecked_too_new",
                 "deleted": "deleted",
-            }[result.outcome]
+            }[recheck_result.outcome]
             outcomes[outcome].append(key)
             if outcome == "deleted":
                 logger.info(
@@ -160,22 +160,22 @@ def _recheck_and_delete(
                 run_id=run_id,
                 storage_key=key,
                 outcome=outcome,
-                observed_last_modified=result.observed_last_modified,
+                observed_last_modified=recheck_result.observed_last_modified,
             )
             rec_db.commit()
 
-    result: dict[str, object] = {}
+    summary: dict[str, object] = {}
     for name in _RECHECK_OUTCOMES:
         keys = outcomes[name]
-        result[f"{name}_count"] = len(keys)
-        result[f"{name}_key_digests"] = [
+        summary[f"{name}_count"] = len(keys)
+        summary[f"{name}_key_digests"] = [
             hashlib.sha256(k.encode("utf-8")).hexdigest()
             for k in keys[:_MAX_OUTCOME_EVIDENCE]
         ]
-        result[f"{name}_evidence_omitted"] = max(0, len(keys) - _MAX_OUTCOME_EVIDENCE)
+        summary[f"{name}_evidence_omitted"] = max(0, len(keys) - _MAX_OUTCOME_EVIDENCE)
     if failure_reasons:
-        result["failure_exception_types"] = sorted(set(failure_reasons.values()))
-    return result
+        summary["failure_exception_types"] = sorted(set(failure_reasons.values()))
+    return summary
 
 
 @shared_task(
