@@ -238,9 +238,7 @@ migration_url = _migration_url()
 sqlalchemy_migration_url = migration_url.replace(
     "postgresql://", "postgresql+psycopg://", 1
 )
-config.set_main_option(
-    "sqlalchemy.url", sqlalchemy_migration_url.replace("%", "%%")
-)
+config.set_main_option("sqlalchemy.url", sqlalchemy_migration_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
