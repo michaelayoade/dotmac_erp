@@ -51,7 +51,7 @@ switches to `app_user`, and verifies that RLS exposes only the selected tenant
 to both raw SQL and this report. Its CI result and deployment privilege
 verification remain rollout evidence before operational use.
 
-**Review gate status — how each item is now met (updated 2026-09-28):**
+**Review gate status — how each item is now met (updated 2026-09-30):**
 
 - **Per-object recheck of age and authoritative references immediately
   before each delete.** Met. See "Cleanup" below: `clean_tenant_file_objects`
@@ -82,9 +82,11 @@ written in a follow-up slice, not this one.
 **Rollout gates before the first real apply (none of these are code
 changes; each is an operational confirmation):**
 
-1. Bucket versioning on the production object store — confirm it is
-   enabled. Deletion is irreversible unless the bucket keeps object
-   versions; this was unverified as of this change.
+1. Bucket versioning on the production object store — met on 2026-09-30.
+   Michael authorized enabling versioning for `dotmac-erp-158` at
+   `194.163.130.216:9000`. The configured ERP MinIO client observed status
+   `None` before and `Enabled` after the change. Keep versioning enabled
+   before any cleanup apply.
 2. A green PostgreSQL RLS canary run of BOTH
    `tests/integration/test_file_object_reconciliation_rls.py` (the managed
    listing/report boundary) AND
@@ -93,6 +95,15 @@ changes; each is an operational confirmation):**
    run does not stand in for the other; they prove different tables.
 3. Verified runtime-role `mod_files` privileges for the deployment's tenant
    database role, consistent with the report task's own rollout note above.
+   Recheck the live a4 role baseline after a5; the previous observation is
+   not evidence for the post-a5 state.
+4. Live listing completeness for the managed prefixes in
+   `dotmac-erp-158`. The SDK-based argument below remains unconfirmed
+   against the actual bucket and object count.
+
+The two target-role PostgreSQL RLS canaries, runtime-role privilege recheck,
+and live listing completeness remain open. No cleanup apply or a5 deployment
+is recorded here.
 
 **Operational notes:**
 

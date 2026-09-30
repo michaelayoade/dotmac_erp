@@ -160,7 +160,7 @@ def test_public_source_revision_is_projected_into_telemetry() -> None:
 
 def test_descriptor_matches_committed_publication_evidence() -> None:
     """Preserve the published digest/source/assembly binding when selecting a release."""
-    evidence_path = REPO_ROOT / "deploy/releases/2026-09-28-c098be5e.image-release.json"
+    evidence_path = REPO_ROOT / "deploy/releases/2026-09-30-18b15588.image-release.json"
     raw = evidence_path.read_text(encoding="utf-8")
     evidence = json.loads(raw)
     spec = _load()
@@ -175,6 +175,39 @@ def test_descriptor_matches_committed_publication_evidence() -> None:
     assert evidence["reference"] == spec.image
     assert evidence["manifest_digest"] == spec.manifest_digest
     assert raw == json.dumps(evidence, separators=(",", ":"), sort_keys=True) + "\n"
+
+
+@pytest.mark.parametrize(
+    ("filename", "source_revision", "digest", "manifest_digest"),
+    [
+        (
+            "2026-09-28-c098be5e.image-release.json",
+            "c098be5e56aae3d51658ec41f7104520e24271fd",
+            "sha256:782a6ab29e2828f9f1eba4a391171e9f65bb9ec49cb6210f45f53eb315312cf6",
+            "sha256:90e3eb7b8a7d7bf89e50de0ed7723597a072ec39e5a40fbda411c30b76cb795c",
+        ),
+        (
+            "2026-09-29-3884ad6c.image-release.json",
+            "3884ad6cfafc942c26b33ee676d8c08e9efe831b",
+            "sha256:8bbd22649da2cc56c615383fbe8a3fa0a22280cfc8296d1cc385980fb07536c6",
+            "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6",
+        ),
+    ],
+)
+def test_previous_publication_evidence_remains_immutable(
+    filename: str, source_revision: str, digest: str, manifest_digest: str
+) -> None:
+    prior_path = REPO_ROOT / "deploy" / "releases" / filename
+    prior_raw = prior_path.read_text(encoding="utf-8")
+    prior = json.loads(prior_raw)
+    assert prior == {
+        "schema": "dotmac.image-release.v2",
+        "digest": digest,
+        "git_sha": source_revision,
+        "manifest_digest": manifest_digest,
+        "reference": f"{IMAGE_REPOSITORY}@{digest}",
+    }
+    assert prior_raw == json.dumps(prior, separators=(",", ":"), sort_keys=True) + "\n"
 
 
 def test_no_role_holds_the_migration_owner_material() -> None:
