@@ -1,8 +1,9 @@
 import json
+import sys
 from decimal import Decimal
 from io import BytesIO
-from types import SimpleNamespace
-from unittest.mock import patch
+from types import ModuleType, SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -14,6 +15,10 @@ from starlette.requests import Request
 
 from app.schemas.finance.banking import BankStatementImport
 from app.services.finance.banking.web import BankingWebService
+from app.services.finance.banking.web_parts.accounts import (
+    can_auto_match_ap_invoices,
+    can_auto_match_paystack_customers,
+)
 from app.web.deps import WebAuthContext
 
 
@@ -65,6 +70,250 @@ def test_mono_account_health_detail_preserves_tenant_isolation(mock_db):
     assert context["account"] is None
     assert context["transactions"] == []
     mock_db.execute.assert_not_called()
+
+
+def test_ap_invoice_auto_match_access_requires_full_payment_lifecycle():
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid4(),
+        organization_id=uuid4(),
+        scopes=[
+            "finance:access",
+            "banking:reconciliation:update",
+            "ap:payments:create",
+            "ap:payments:approve:tier2",
+            "ap:payments:post",
+        ],
+    )
+
+    assert can_auto_match_ap_invoices(auth) is True
+
+
+@pytest.mark.parametrize(
+    "missing_permission",
+    [
+        "banking:reconciliation:update",
+        "ap:payments:create",
+        "ap:payments:approve:tier2",
+        "ap:payments:post",
+    ],
+)
+def test_ap_invoice_auto_match_access_rejects_missing_permission(
+    missing_permission,
+):
+    permissions = {
+        "finance:access",
+        "banking:reconciliation:update",
+        "ap:payments:create",
+        "ap:payments:approve:tier2",
+        "ap:payments:post",
+    }
+    permissions.remove(missing_permission)
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid4(),
+        organization_id=uuid4(),
+        scopes=sorted(permissions),
+    )
+
+    assert can_auto_match_ap_invoices(auth) is False
+
+
+def test_paystack_customer_auto_match_access_requires_all_mutations():
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid4(),
+        organization_id=uuid4(),
+        scopes=[
+            "finance:access",
+            "banking:reconciliation:update",
+            "ar:receipts:post",
+            "gl:journals:create",
+            "gl:journals:post",
+        ],
+    )
+
+    assert can_auto_match_paystack_customers(auth) is True
+
+
+@pytest.mark.parametrize(
+    "missing_permission",
+    [
+        "banking:reconciliation:update",
+        "ar:receipts:post",
+        "gl:journals:create",
+        "gl:journals:post",
+    ],
+)
+def test_paystack_customer_auto_match_access_rejects_missing_permission(
+    missing_permission,
+):
+    permissions = {
+        "finance:access",
+        "banking:reconciliation:update",
+        "ar:receipts:post",
+        "gl:journals:create",
+        "gl:journals:post",
+    }
+    permissions.remove(missing_permission)
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=uuid4(),
+        organization_id=uuid4(),
+        scopes=sorted(permissions),
+    )
+
+    assert can_auto_match_paystack_customers(auth) is False
+
+
+@pytest.mark.asyncio
+async def test_queue_paystack_expense_auto_match_validates_then_queues(mock_db):
+    service = BankingWebService()
+    org_id = uuid4()
+    user_id = uuid4()
+    account_id = uuid4()
+    rule_id = uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=user_id,
+        organization_id=org_id,
+    )
+    request = MagicMock()
+    request.form = AsyncMock(return_value={"rule_id": str(rule_id)})
+    queue_task = MagicMock()
+    task_module = ModuleType("app.tasks.banking")
+    task_module.auto_match_paystack_expenses = SimpleNamespace(delay=queue_task)
+    tasks_package = ModuleType("app.tasks")
+    tasks_package.__path__ = []
+
+    with (
+        patch.dict(
+            sys.modules,
+            {
+                "app.tasks": tasks_package,
+                "app.tasks.banking": task_module,
+            },
+        ),
+        patch(
+            "app.services.finance.banking.paystack_expense_auto_match."
+            "paystack_expense_auto_match_service.validate_configuration"
+        ) as validate_configuration,
+    ):
+        response = await service.queue_paystack_expense_auto_match_response(
+            request,
+            auth,
+            mock_db,
+            str(account_id),
+        )
+
+    assert response.status_code == 303
+    assert (
+        "success=Paystack+expense+auto-match+has+started"
+        in response.headers["location"]
+    )
+    validate_configuration.assert_called_once_with(mock_db, org_id, account_id, rule_id)
+    queue_task.assert_called_once_with(
+        str(org_id), str(account_id), str(rule_id), str(user_id)
+    )
+
+
+@pytest.mark.asyncio
+async def test_queue_ap_invoice_auto_match_validates_then_queues(mock_db):
+    service = BankingWebService()
+    org_id = uuid4()
+    user_id = uuid4()
+    account_id = uuid4()
+    rule_id = uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=user_id,
+        organization_id=org_id,
+    )
+    request = MagicMock()
+    request.form = AsyncMock(return_value={"rule_id": str(rule_id)})
+    queue_task = MagicMock()
+    task_module = ModuleType("app.tasks.banking")
+    task_module.auto_match_ap_invoices = SimpleNamespace(delay=queue_task)
+    tasks_package = ModuleType("app.tasks")
+    tasks_package.__path__ = []
+
+    with (
+        patch.dict(
+            sys.modules,
+            {
+                "app.tasks": tasks_package,
+                "app.tasks.banking": task_module,
+            },
+        ),
+        patch(
+            "app.services.finance.banking.ap_invoice_auto_match."
+            "ap_invoice_auto_match_service.validate_configuration"
+        ) as validate_configuration,
+    ):
+        response = await service.queue_ap_invoice_auto_match_response(
+            request,
+            auth,
+            mock_db,
+            str(account_id),
+        )
+
+    assert response.status_code == 303
+    assert "success=AP+invoice+auto-match+has+started" in response.headers["location"]
+    validate_configuration.assert_called_once_with(mock_db, org_id, account_id, rule_id)
+    queue_task.assert_called_once_with(
+        str(org_id), str(account_id), str(rule_id), str(user_id)
+    )
+
+
+@pytest.mark.asyncio
+async def test_queue_paystack_customer_auto_match_validates_then_queues(mock_db):
+    service = BankingWebService()
+    org_id = uuid4()
+    user_id = uuid4()
+    account_id = uuid4()
+    rule_id = uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=user_id,
+        organization_id=org_id,
+    )
+    request = MagicMock()
+    request.form = AsyncMock(return_value={"rule_id": str(rule_id)})
+    queue_task = MagicMock()
+    task_module = ModuleType("app.tasks.banking")
+    task_module.auto_match_paystack_customers = SimpleNamespace(delay=queue_task)
+    tasks_package = ModuleType("app.tasks")
+    tasks_package.__path__ = []
+
+    with (
+        patch.dict(
+            sys.modules,
+            {
+                "app.tasks": tasks_package,
+                "app.tasks.banking": task_module,
+            },
+        ),
+        patch(
+            "app.services.finance.banking.paystack_customer_auto_match."
+            "paystack_customer_auto_match_service.validate_configuration"
+        ) as validate_configuration,
+    ):
+        response = await service.queue_paystack_customer_auto_match_response(
+            request,
+            auth,
+            mock_db,
+            str(account_id),
+        )
+
+    assert response.status_code == 303
+    assert (
+        "success=Paystack+customer+auto-match+has+started"
+        in response.headers["location"]
+    )
+    validate_configuration.assert_called_once_with(mock_db, org_id, account_id, rule_id)
+    queue_task.assert_called_once_with(
+        str(org_id), str(account_id), str(rule_id), str(user_id)
+    )
 
 
 def test_duplicate_rule_response_redirects_with_copy_count(mock_db):

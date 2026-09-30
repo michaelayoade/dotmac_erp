@@ -145,14 +145,16 @@ def test_reminder_edit_does_not_repeat_fired_or_expired_periods() -> None:
     assert event.reminders[0].dispatched_at is None
 
 
-def test_talk_reminder_migration_is_the_erp_head() -> None:
+def test_talk_reminder_migration_is_linked_into_the_erp_lineage() -> None:
     migration = (
         ROOT / "alembic" / "versions" / "20260920_calendar_talk_notifications.py"
     ).read_text(encoding="utf-8")
-    descriptor = (ROOT / "deploy" / "product.toml").read_text(encoding="utf-8")
+    successor = (
+        ROOT / "alembic" / "versions" / "20260920_configurable_departmental_kpis.py"
+    ).read_text(encoding="utf-8")
     assert 'down_revision = "20260919_self_calendar"' in migration
     assert 'revision = "20260920_calendar_talk"' in migration
-    assert '"20260920_calendar_talk"' in descriptor
+    assert 'down_revision = "20260920_calendar_talk"' in successor
     assert "scheduled_for" in migration
     assert "dispatched_at" in migration
 

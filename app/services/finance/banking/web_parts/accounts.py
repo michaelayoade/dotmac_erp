@@ -42,6 +42,35 @@ from app.services.finance.banking.web_parts.base import (
 )
 from app.services.common import PaginationParams, paginate
 
+AP_INVOICE_AUTO_MATCH_APPROVAL_PERMISSIONS = [
+    "ap:payments:approve:tier1",
+    "ap:payments:approve:tier2",
+    "ap:payments:approve:tier3",
+]
+
+
+def can_auto_match_ap_invoices(auth: WebAuthContext) -> bool:
+    """Return whether an actor may run every automated AP payment step."""
+    return auth.has_all_permissions(
+        [
+            "banking:reconciliation:update",
+            "ap:payments:create",
+            "ap:payments:post",
+        ]
+    ) and auth.has_any_permission(AP_INVOICE_AUTO_MATCH_APPROVAL_PERMISSIONS)
+
+
+def can_auto_match_paystack_customers(auth: WebAuthContext) -> bool:
+    """Return whether an actor may post and reconcile Paystack receipts."""
+    return auth.has_all_permissions(
+        [
+            "banking:reconciliation:update",
+            "ar:receipts:post",
+            "gl:journals:create",
+            "gl:journals:post",
+        ]
+    )
+
 
 class BankingAccountWebService:
     """Banking web service methods for accounts."""
@@ -398,10 +427,66 @@ class BankingAccountWebService:
             )
         )
 
-        # Mono Connect integration context
+        # Configurable payment automation rules for this account.
+        from app.models.finance.banking.reconciliation_match_rule import (
+            ReconciliationMatchRule,
+            SourceDocType,
+        )
         from app.models.domain_settings import SettingDomain
         from app.services.settings_spec import resolve_value
 
+        org_id = coerce_uuid(auth.organization_id)
+        requested_account_id = coerce_uuid(account_id)
+        context["expense_auto_match_rules"] = []
+        context["ap_invoice_auto_match_rules"] = []
+        context["paystack_customer_auto_match_rules"] = []
+        context["can_auto_match_ap_invoices"] = can_auto_match_ap_invoices(auth)
+        context["can_auto_match_paystack_customers"] = (
+            can_auto_match_paystack_customers(auth)
+        )
+        if context.get("account") is not None:
+            automation_rules = list(
+                db.scalars(
+                    select(ReconciliationMatchRule)
+                    .where(
+                        ReconciliationMatchRule.organization_id == org_id,
+                        ReconciliationMatchRule.bank_account_id == requested_account_id,
+                        ReconciliationMatchRule.is_active.is_(True),
+                        ReconciliationMatchRule.source_doc_type.in_(
+                            [
+                                SourceDocType.EXPENSE.value,
+                                SourceDocType.SUPPLIER_PAYMENT.value,
+                                SourceDocType.PAYMENT_INTENT.value,
+                            ]
+                        ),
+                        ReconciliationMatchRule.action_type == "MATCH",
+                    )
+                    .order_by(
+                        ReconciliationMatchRule.priority,
+                        ReconciliationMatchRule.name,
+                    )
+                ).all()
+            )
+            context["expense_auto_match_rules"] = [
+                rule
+                for rule in automation_rules
+                if rule.source_doc_type == SourceDocType.EXPENSE.value
+                and rule.match_debit
+            ]
+            context["ap_invoice_auto_match_rules"] = [
+                rule
+                for rule in automation_rules
+                if rule.source_doc_type == SourceDocType.SUPPLIER_PAYMENT.value
+                and rule.match_debit
+            ]
+            context["paystack_customer_auto_match_rules"] = [
+                rule
+                for rule in automation_rules
+                if rule.source_doc_type == SourceDocType.PAYMENT_INTENT.value
+                and rule.match_credit
+            ]
+
+        # Mono Connect integration context
         mono_enabled = resolve_value(
             db,
             SettingDomain.banking,
@@ -432,6 +517,186 @@ class BankingAccountWebService:
         return templates.TemplateResponse(
             request, "finance/banking/account_detail.html", context
         )
+
+    async def queue_paystack_customer_auto_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> Response:
+        """Validate and queue exact Paystack customer receipt matching."""
+        from urllib.parse import quote_plus
+
+        from app.services.finance.banking.paystack_customer_auto_match import (
+            PaystackCustomerAutoMatchError,
+            paystack_customer_auto_match_service,
+        )
+        from app.tasks.banking import auto_match_paystack_customers
+
+        form = await request.form()
+        if auth.organization_id is None or auth.user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        org_id = coerce_uuid(auth.organization_id)
+        bank_account_id = coerce_uuid(account_id)
+        try:
+            selected_rule_id = form.get("rule_id")
+            if not selected_rule_id:
+                raise PaystackCustomerAutoMatchError(
+                    "Select an active Paystack customer automation rule"
+                )
+            rule_id = coerce_uuid(selected_rule_id)
+            paystack_customer_auto_match_service.validate_configuration(
+                db,
+                org_id,
+                bank_account_id,
+                rule_id,
+            )
+            auto_match_paystack_customers.delay(
+                str(org_id),
+                str(bank_account_id),
+                str(rule_id),
+                str(auth.user_id),
+            )
+            message = quote_plus("Paystack customer auto-match has started")
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/{bank_account_id}?success={message}",
+                status_code=303,
+            )
+        except PaystackCustomerAutoMatchError as exc:
+            logger.warning(
+                "Paystack customer auto-match rejected for account %s: %s",
+                bank_account_id,
+                exc,
+            )
+            return RedirectResponse(
+                url=(
+                    f"/finance/banking/accounts/{bank_account_id}"
+                    f"?error={quote_plus(str(exc))}"
+                ),
+                status_code=303,
+            )
+
+    async def queue_ap_invoice_auto_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> Response:
+        """Validate and queue exact AP invoice supplier-payment matching."""
+        from urllib.parse import quote_plus
+
+        from app.services.finance.banking.ap_invoice_auto_match import (
+            APInvoiceAutoMatchError,
+            ap_invoice_auto_match_service,
+        )
+        from app.tasks.banking import auto_match_ap_invoices
+
+        form = await request.form()
+        if auth.organization_id is None or auth.user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        org_id = coerce_uuid(auth.organization_id)
+        bank_account_id = coerce_uuid(account_id)
+        try:
+            selected_rule_id = form.get("rule_id")
+            if not selected_rule_id:
+                raise APInvoiceAutoMatchError(
+                    "Select an active AP invoice automation rule"
+                )
+            rule_id = coerce_uuid(selected_rule_id)
+            ap_invoice_auto_match_service.validate_configuration(
+                db,
+                org_id,
+                bank_account_id,
+                rule_id,
+            )
+            auto_match_ap_invoices.delay(
+                str(org_id),
+                str(bank_account_id),
+                str(rule_id),
+                str(auth.user_id),
+            )
+            message = quote_plus("AP invoice auto-match has started")
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/{bank_account_id}?success={message}",
+                status_code=303,
+            )
+        except APInvoiceAutoMatchError as exc:
+            logger.warning(
+                "AP invoice auto-match request rejected for account %s: %s",
+                bank_account_id,
+                exc,
+            )
+            return RedirectResponse(
+                url=(
+                    f"/finance/banking/accounts/{bank_account_id}"
+                    f"?error={quote_plus(str(exc))}"
+                ),
+                status_code=303,
+            )
+
+    async def queue_paystack_expense_auto_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> Response:
+        """Validate and queue the focused Paystack expense matcher."""
+        from urllib.parse import quote_plus
+
+        from app.services.finance.banking.paystack_expense_auto_match import (
+            PaystackExpenseAutoMatchError,
+            paystack_expense_auto_match_service,
+        )
+        from app.tasks.banking import auto_match_paystack_expenses
+
+        form = await request.form()
+        if auth.organization_id is None or auth.user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        org_id = coerce_uuid(auth.organization_id)
+        bank_account_id = coerce_uuid(account_id)
+        try:
+            selected_rule_id = form.get("rule_id")
+            if not selected_rule_id:
+                raise PaystackExpenseAutoMatchError(
+                    "Select an active expense automation rule"
+                )
+            rule_id = coerce_uuid(selected_rule_id)
+            paystack_expense_auto_match_service.validate_configuration(
+                db,
+                org_id,
+                bank_account_id,
+                rule_id,
+            )
+            auto_match_paystack_expenses.delay(
+                str(org_id),
+                str(bank_account_id),
+                str(rule_id),
+                str(auth.user_id),
+            )
+            message = quote_plus("Paystack expense auto-match has started")
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/{bank_account_id}?success={message}",
+                status_code=303,
+            )
+        except PaystackExpenseAutoMatchError as exc:
+            logger.warning(
+                "Paystack expense auto-match request rejected for account %s: %s",
+                bank_account_id,
+                exc,
+            )
+            return RedirectResponse(
+                url=(
+                    f"/finance/banking/accounts/{bank_account_id}"
+                    f"?error={quote_plus(str(exc))}"
+                ),
+                status_code=303,
+            )
 
     def transaction_detail_response(
         self,

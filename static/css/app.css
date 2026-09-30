@@ -5161,6 +5161,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
     min-width: 11rem;
 }
 
+.min-w-48 {
+    min-width: 12rem;
+}
+
 .min-w-56 {
     min-width: 14rem;
 }

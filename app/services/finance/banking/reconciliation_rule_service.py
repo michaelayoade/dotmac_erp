@@ -22,6 +22,7 @@ except ImportError:  # pragma: no cover
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.banking.bank_statement import (
     BankStatementLine,
     StatementLineType,
@@ -30,6 +31,7 @@ from app.models.finance.banking.reconciliation_match_rule import (
     ReconciliationMatchLog,
     ReconciliationMatchRule,
 )
+from app.models.finance.gl.account import Account, AccountType
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +132,12 @@ class ReconciliationRuleService:
 
     def create(self, org_id: UUID, data: dict[str, Any]) -> ReconciliationMatchRule:
         """Create a new match rule."""
+        bank_account_id = data.get("bank_account_id")
+        self._validate_bank_account(org_id, bank_account_id)
+        self._validate_writeoff_account(org_id, data.get("writeoff_account_id"))
         rule = ReconciliationMatchRule(
             organization_id=org_id,
+            bank_account_id=bank_account_id,
             name=data["name"],
             description=data.get("description"),
             source_doc_type=data["source_doc_type"],
@@ -165,7 +171,16 @@ class ReconciliationRuleService:
         if not rule:
             raise ValueError(f"Rule {rule_id} not found")
 
+        if "bank_account_id" in data:
+            self._validate_bank_account(rule.organization_id, data["bank_account_id"])
+        if "writeoff_account_id" in data:
+            self._validate_writeoff_account(
+                rule.organization_id,
+                data["writeoff_account_id"],
+            )
+
         for field in (
+            "bank_account_id",
             "name",
             "description",
             "source_doc_type",
@@ -187,6 +202,34 @@ class ReconciliationRuleService:
         self.db.flush()
         logger.info("Updated match rule: %s", rule.name)
         return rule
+
+    def _validate_bank_account(
+        self, org_id: UUID, bank_account_id: UUID | None
+    ) -> None:
+        """Reject a forged cross-tenant bank account selection."""
+        if bank_account_id is None:
+            return
+        account = self.db.get(BankAccount, bank_account_id)
+        if not account or account.organization_id != org_id:
+            raise ValueError("Bank account not found")
+
+    def _validate_writeoff_account(
+        self,
+        org_id: UUID,
+        account_id: UUID | None,
+    ) -> None:
+        """Reject cross-tenant or non-postable fee/write-off accounts."""
+        if account_id is None:
+            return
+        account = self.db.get(Account, account_id)
+        if (
+            not account
+            or account.organization_id != org_id
+            or account.account_type != AccountType.POSTING
+            or not account.is_active
+            or not account.is_posting_allowed
+        ):
+            raise ValueError("Write-off account not found or is not postable")
 
     def delete(self, rule_id: UUID) -> None:
         """Delete a rule. Raises ValueError for system rules."""

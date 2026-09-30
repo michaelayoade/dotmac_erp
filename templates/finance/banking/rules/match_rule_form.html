@@ -32,6 +32,7 @@
   {% endif %}
 
   {% set fd = form_data if form_data else {} %}
+  {% set selected_bank_account_id = fd.bank_account_id if fd.bank_account_id is defined else (rule.bank_account_id|string if rule and rule.bank_account_id else '') %}
   {% set action_url = "/finance/banking/match-rules/" + rule.rule_id|string + "/edit" if editing and rule else "/finance/banking/match-rules/new" %}
 
   <form method="POST" action="{{ action_url }}" class="space-y-6">
@@ -54,6 +55,19 @@
                  value="{{ fd.description if fd.description is defined else (rule.description if rule and rule.description else '') }}"
                  placeholder="Describe what this rule matches..."
                  class="form-input mt-1">
+        </div>
+        <div class="sm:col-span-2">
+          <label for="bank_account_id" class="form-label">Bank Account</label>
+          <select id="bank_account_id" name="bank_account_id" class="form-select mt-1">
+            <option value="">All accounts / not account-specific</option>
+            {% for bank_account in bank_accounts %}
+            <option value="{{ bank_account.bank_account_id }}"
+              {{ 'selected' if selected_bank_account_id|string == bank_account.bank_account_id|string else '' }}>
+              {{ bank_account.account_name }} — {{ bank_account.bank_name }} ({{ bank_account.account_number }})
+            </option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">Expense automation requires a specific active bank account.</span>
         </div>
         <div>
           <label for="source_doc_type" class="form-label">Source Document Type <span class="text-rose-500">*</span></label>
@@ -177,7 +191,7 @@
     </div>
 
     {# ── Advanced Settings ─────────────────────────────── #}
-    <div class="card p-6" x-data='{ showAdvanced: {{ "true" if (fd.amount_tolerance_cents is defined and fd.amount_tolerance_cents) or (fd.date_window_days is defined and fd.date_window_days) or (rule and (rule.amount_tolerance_cents is not none or rule.date_window_days is not none or rule.journal_label_template)) else "false" }} }'>
+    <div class="card p-6" x-data='{ showAdvanced: {{ "true" if (fd.amount_tolerance_cents is defined and fd.amount_tolerance_cents) or (fd.date_window_days is defined and fd.date_window_days) or (fd.writeoff_account_id is defined and fd.writeoff_account_id) or (rule and (rule.amount_tolerance_cents is not none or rule.date_window_days is not none or rule.writeoff_account_id or rule.journal_label_template)) else "false" }} }'>
       <button type="button" @click="showAdvanced = !showAdvanced"
               class="flex w-full items-center justify-between text-lg font-medium text-slate-900 dark:text-white">
         Advanced Settings
@@ -226,6 +240,21 @@
                    class="form-input mt-1">
             <span class="form-hint">Override the global date buffer for matching.</span>
           </div>
+        </div>
+
+        <div>
+          <label for="writeoff_account_id" class="form-label">Fee / Write-off Account</label>
+          <select id="writeoff_account_id" name="writeoff_account_id" class="form-select mt-1">
+            <option value="">Not required</option>
+            {% set selected_writeoff_account_id = fd.writeoff_account_id if fd.writeoff_account_id is defined else (rule.writeoff_account_id|string if rule and rule.writeoff_account_id else '') %}
+            {% for account in writeoff_accounts %}
+            <option value="{{ account.account_id }}"
+              {{ 'selected' if selected_writeoff_account_id|string == account.account_id|string else '' }}>
+              {{ account.account_code }} — {{ account.account_name }}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">Required for net Paystack customer receipts so the gateway fee is posted and the match ties exactly.</span>
         </div>
 
         <div>

@@ -15,7 +15,67 @@
 
 {% block header_actions %}
 {% if account %}
-<div class="flex items-center gap-2">
+<div class="flex flex-wrap items-center gap-2">
+    {% if can_auto_match_paystack_customers and paystack_customer_auto_match_rules %}
+    <form method="POST"
+          action="/finance/banking/accounts/{{ account.bank_account_id }}/auto-match-paystack-customers"
+          class="flex items-center gap-2"
+          onsubmit="return confirm('Match only exact Paystack customer references, transaction amounts, fees, and currency? Ambiguous transactions will be skipped.');">
+        {{ request.state.csrf_form | safe }}
+        <label for="paystack-customer-auto-match-rule" class="sr-only">Paystack customer automation rule</label>
+        <select id="paystack-customer-auto-match-rule" name="rule_id" required class="form-select min-w-48">
+            {% for rule in paystack_customer_auto_match_rules %}
+            <option value="{{ rule.rule_id }}">{{ rule.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("lightning-bolt", "h-4 w-4") }}
+            Auto-Match Customer Receipts
+        </button>
+    </form>
+    {% endif %}
+    {% if can_auto_match_ap_invoices and ap_invoice_auto_match_rules %}
+    <form method="POST"
+          action="/finance/banking/accounts/{{ account.bank_account_id }}/auto-match-ap-invoices"
+          class="flex items-center gap-2"
+          onsubmit="return confirm('Create or reuse supplier payments and match only exact AP invoice reference, outstanding amount, and currency? Ambiguous transactions will be skipped.');">
+        {{ request.state.csrf_form | safe }}
+        <label for="ap-invoice-auto-match-rule" class="sr-only">AP invoice automation rule</label>
+        <select id="ap-invoice-auto-match-rule" name="rule_id" required class="form-select min-w-48">
+            {% for rule in ap_invoice_auto_match_rules %}
+            <option value="{{ rule.rule_id }}">{{ rule.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("lightning-bolt", "h-4 w-4") }}
+            Auto-Match AP Invoices
+        </button>
+    </form>
+    {% endif %}
+    {% if expense_auto_match_rules %}
+    <form method="POST"
+          action="/finance/banking/accounts/{{ account.bank_account_id }}/auto-match-paystack-expenses"
+          class="flex items-center gap-2"
+          onsubmit="return confirm('Run the selected rule and auto-match only exact payment reference, amount, and paid date? Ambiguous transactions will be skipped.');">
+        {{ request.state.csrf_form | safe }}
+        <label for="expense-auto-match-rule" class="sr-only">Expense automation rule</label>
+        <select id="expense-auto-match-rule" name="rule_id" required class="form-select min-w-48">
+            {% for rule in expense_auto_match_rules %}
+            <option value="{{ rule.rule_id }}">{{ rule.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary">
+            {{ icon_svg("lightning-bolt", "h-4 w-4") }}
+            Auto-Match Expenses
+        </button>
+    </form>
+    {% endif %}
+    {% if not expense_auto_match_rules and not ap_invoice_auto_match_rules and not paystack_customer_auto_match_rules %}
+    <a href="/finance/banking/match-rules/new" class="btn btn-secondary">
+        {{ icon_svg("plus", "h-4 w-4") }}
+        Configure Automation
+    </a>
+    {% endif %}
     <a href="/finance/banking/statements/import?account_id={{ account.bank_account_id }}"
        class="btn btn-secondary">
         {{ icon_svg("upload", "h-4 w-4") }}
@@ -32,6 +92,20 @@
 
 {% block content %}
 {% if account %}
+{% set success_msg = request.query_params.get('success') %}
+{% set error_msg = request.query_params.get('error') %}
+{% if success_msg %}
+<div class="mb-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
+    {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0") }}
+    <span class="text-sm text-emerald-700 dark:text-emerald-300">{{ success_msg | replace('+', ' ') }}</span>
+</div>
+{% endif %}
+{% if error_msg %}
+<div class="mb-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4 flex items-center gap-3">
+    {{ icon_svg("exclamation-circle", "h-5 w-5 text-rose-600 dark:text-rose-400 flex-shrink-0") }}
+    <span class="text-sm text-rose-700 dark:text-rose-300">{{ error_msg | replace('+', ' ') }}</span>
+</div>
+{% endif %}
 <div class="space-y-6">
     <!-- Account Header -->
     <div class="card p-6">

@@ -65,6 +65,12 @@
         </div>
         {% endif %}
         <div class="flex justify-between">
+          <dt class="text-sm text-slate-500 dark:text-slate-400">Bank Account</dt>
+          <dd class="text-sm font-medium text-slate-900 dark:text-white">
+            {{ bank_account.account_name if bank_account else 'All accounts' }}
+          </dd>
+        </div>
+        <div class="flex justify-between">
           <dt class="text-sm text-slate-500 dark:text-slate-400">Source Type</dt>
           <dd class="text-sm font-medium text-slate-900 dark:text-white">
             {{ source_doc_types.get(rule.source_doc_type, rule.source_doc_type) }}
@@ -118,6 +124,12 @@
         <div class="flex justify-between">
           <dt class="text-sm text-slate-500 dark:text-slate-400">Date Window</dt>
           <dd class="text-sm text-slate-900 dark:text-white">{{ rule.date_window_days }} days</dd>
+        </div>
+        {% endif %}
+        {% if writeoff_account %}
+        <div class="flex justify-between gap-4">
+          <dt class="text-sm text-slate-500 dark:text-slate-400">Fee / Write-off Account</dt>
+          <dd class="text-sm text-right text-slate-900 dark:text-white">{{ writeoff_account.account_code }} — {{ writeoff_account.account_name }}</dd>
         </div>
         {% endif %}
         {% if rule.journal_label_template %}
