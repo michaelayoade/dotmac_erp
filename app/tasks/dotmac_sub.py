@@ -79,6 +79,22 @@ _INCREMENTAL_ENTITY_TYPES = [
 ]
 
 
+class DotmacSubBusinessFailure(Exception):
+    """A committed sync completed with business-level errors.
+
+    These failures must be visible to Celery monitoring without being retried:
+    row-level configuration and data errors are durable outcomes, not transient
+    task failures.
+    """
+
+    def __init__(self, summary: dict[str, Any]) -> None:
+        self.summary = summary
+        super().__init__(
+            f"dotmac_sub {summary.get('phase', 'sync')} completed with "
+            f"{summary.get('error_count', 0)} business error(s)"
+        )
+
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def report_dotmac_sub_invoice_mismatches(
     self: Any,
@@ -489,6 +505,13 @@ def _finalize_sync(
     db.commit()
     for result in sync_results:
         _log_committed_sync_confirmations(result)
+    return summary
+
+
+def _raise_if_business_failure(summary: dict[str, Any]) -> dict[str, Any]:
+    """Surface committed business errors without turning them into retries."""
+    if not summary.get("success", False) and summary.get("error_count", 0) > 0:
+        raise DotmacSubBusinessFailure(summary)
     return summary
 
 
@@ -906,12 +929,15 @@ def run_dotmac_sub_incremental_sync_phase(
                 )
                 result = _posting_result("payment_posting", stats)
 
-            return _record_incremental_phase_result(
+            summary = _record_incremental_phase_result(
                 db,
                 history_uuid,
                 result,
                 complete=phase == _INCREMENTAL_SYNC_PHASES[-1],
             )
+            if phase == _INCREMENTAL_SYNC_PHASES[-1]:
+                return _raise_if_business_failure(summary)
+            return summary
         except SoftTimeLimitExceeded as exc:
             _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
@@ -929,6 +955,8 @@ def run_dotmac_sub_incremental_sync_phase(
             )
             auth_failure["phase"] = phase
             return auth_failure
+        except DotmacSubBusinessFailure:
+            raise
         except Exception as exc:
             _rollback_interrupted_session(db)
             _handle_sync_failure(history_uuid, org_id, exc, "Incremental phase")
@@ -994,10 +1022,14 @@ def run_dotmac_sub_daily_reconciliation(
             post = service.post_unposted_payments(created_by_user_id=SYSTEM_USER_ID)
             if post["errors"]:
                 payments.errors.extend(post["errors"][:100])
-            return _finalize_sync(db, history_id, results, org_id=org_id)
+            return _raise_if_business_failure(
+                _finalize_sync(db, history_id, results, org_id=org_id)
+            )
         except DotmacSubAuthenticationError as exc:
             db.rollback()
             return _handle_auth_failure(history_id, org_id, exc, "Daily reconciliation")
+        except DotmacSubBusinessFailure:
+            raise
         except Exception as exc:
             db.rollback()
             _handle_sync_failure(history_id, org_id, exc, "Daily reconciliation")
@@ -1032,21 +1064,25 @@ def run_dotmac_sub_full_reconciliation(
             full = service.sync_all(
                 created_by_user_id=SYSTEM_USER_ID, batch_size=batch_size
             )
-            return _finalize_sync(
-                db,
-                history_id,
-                [
-                    full.resellers,
-                    full.subscribers,
-                    full.invoices,
-                    full.payments,
-                    full.credit_notes,
-                ],
-                org_id=org_id,
+            return _raise_if_business_failure(
+                _finalize_sync(
+                    db,
+                    history_id,
+                    [
+                        full.resellers,
+                        full.subscribers,
+                        full.invoices,
+                        full.payments,
+                        full.credit_notes,
+                    ],
+                    org_id=org_id,
+                )
             )
         except DotmacSubAuthenticationError as exc:
             db.rollback()
             return _handle_auth_failure(history_id, org_id, exc, "Full reconciliation")
+        except DotmacSubBusinessFailure:
+            raise
         except Exception as exc:
             db.rollback()
             _handle_sync_failure(history_id, org_id, exc, "Full reconciliation")

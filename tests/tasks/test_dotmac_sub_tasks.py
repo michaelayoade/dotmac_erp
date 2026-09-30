@@ -158,6 +158,66 @@ def test_incremental_posting_phase_uses_bounded_batch(monkeypatch) -> None:
     history.touch.assert_called_once()
 
 
+def test_terminal_incremental_phase_surfaces_committed_business_errors(
+    monkeypatch,
+) -> None:
+    organization_id = uuid4()
+    history_id = uuid4()
+    db = MagicMock()
+
+    class _History:
+        status = dotmac_sub.SyncJobStatus.RUNNING
+        total_records = 0
+        synced_count = 0
+        skipped_count = 0
+        error_count = 0
+
+        def add_error(self, *_args) -> None:
+            self.error_count += 1
+
+        complete = MagicMock()
+        touch = MagicMock()
+
+    history = _History()
+    service = MagicMock()
+    service.post_unposted_payments.return_value = {
+        "posted": 0,
+        "errors": ["Payment bank mapping is missing"],
+    }
+    db.get.return_value = history
+
+    monkeypatch.setattr(
+        dotmac_sub,
+        "session_for_org",
+        lambda _organization_id: nullcontext(db),
+    )
+    monkeypatch.setattr(
+        dotmac_sub,
+        "_try_acquire_incremental_sync_lock",
+        lambda _db, _organization_id: True,
+    )
+    monkeypatch.setattr(dotmac_sub, "_release_incremental_sync_lock", lambda *_: True)
+    monkeypatch.setattr(
+        dotmac_sub,
+        "_build_sync_service_context",
+        lambda *_: (service, organization_id),
+    )
+
+    try:
+        dotmac_sub.run_dotmac_sub_incremental_sync_phase.run(
+            str(organization_id), str(history_id), "post_payments", batch_size=123
+        )
+    except dotmac_sub.DotmacSubBusinessFailure as exc:
+        assert exc.summary["success"] is False
+        assert exc.summary["error_count"] == 1
+    else:  # pragma: no cover - assertion makes the failure explicit
+        raise AssertionError("terminal business failures must fail the Celery task")
+
+    db.commit.assert_called_once()
+    history.complete.assert_called_once()
+    service.close.assert_called_once_with()
+
+
 def test_incremental_phase_authorization_denial_fails_once_without_retry(
     monkeypatch,
 ) -> None:
