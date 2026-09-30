@@ -133,6 +133,22 @@ def view_bank_account(
     return banking_web_service.account_detail_response(request, auth, db, account_id)
 
 
+@router.post("/accounts/{account_id}/auto-match-paystack-expenses")
+async def auto_match_paystack_expenses(
+    request: Request,
+    account_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Queue deterministic expense posting and matching for a Paystack account."""
+    return await banking_web_service.queue_paystack_expense_auto_match_response(
+        request,
+        auth,
+        db,
+        account_id,
+    )
+
+
 @router.post("/accounts/{account_id}/unlink-mono", response_class=HTMLResponse)
 def unlink_mono_web(
     request: Request,

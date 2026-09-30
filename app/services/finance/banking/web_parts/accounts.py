@@ -400,7 +400,20 @@ class BankingAccountWebService:
 
         # Mono Connect integration context
         from app.models.domain_settings import SettingDomain
+        from app.services.finance.banking.paystack_expense_auto_match import (
+            paystack_expense_auto_match_service,
+        )
         from app.services.settings_spec import resolve_value
+
+        org_id = coerce_uuid(auth.organization_id)
+        requested_account_id = coerce_uuid(account_id)
+        context["is_paystack_expense_account"] = context.get(
+            "account"
+        ) is not None and paystack_expense_auto_match_service.is_configured_account(
+            db,
+            org_id,
+            requested_account_id,
+        )
 
         mono_enabled = resolve_value(
             db,
@@ -432,6 +445,58 @@ class BankingAccountWebService:
         return templates.TemplateResponse(
             request, "finance/banking/account_detail.html", context
         )
+
+    async def queue_paystack_expense_auto_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> Response:
+        """Validate and queue the focused Paystack expense matcher."""
+        from urllib.parse import quote_plus
+
+        from app.services.finance.banking.paystack_expense_auto_match import (
+            PaystackExpenseAutoMatchError,
+            paystack_expense_auto_match_service,
+        )
+        from app.tasks.banking import auto_match_paystack_expenses
+
+        await request.form()  # Consume the CSRF-protected form payload.
+        if auth.organization_id is None or auth.user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        org_id = coerce_uuid(auth.organization_id)
+        bank_account_id = coerce_uuid(account_id)
+        try:
+            paystack_expense_auto_match_service.validate_account(
+                db,
+                org_id,
+                bank_account_id,
+            )
+            auto_match_paystack_expenses.delay(
+                str(org_id),
+                str(bank_account_id),
+                str(auth.user_id),
+            )
+            message = quote_plus("Paystack expense auto-match has started")
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/{bank_account_id}?success={message}",
+                status_code=303,
+            )
+        except PaystackExpenseAutoMatchError as exc:
+            logger.warning(
+                "Paystack expense auto-match request rejected for account %s: %s",
+                bank_account_id,
+                exc,
+            )
+            return RedirectResponse(
+                url=(
+                    f"/finance/banking/accounts/{bank_account_id}"
+                    f"?error={quote_plus(str(exc))}"
+                ),
+                status_code=303,
+            )
 
     def transaction_detail_response(
         self,

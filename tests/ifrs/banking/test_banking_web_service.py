@@ -1,8 +1,9 @@
 import json
+import sys
 from decimal import Decimal
 from io import BytesIO
-from types import SimpleNamespace
-from unittest.mock import patch
+from types import ModuleType, SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -65,6 +66,54 @@ def test_mono_account_health_detail_preserves_tenant_isolation(mock_db):
     assert context["account"] is None
     assert context["transactions"] == []
     mock_db.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_queue_paystack_expense_auto_match_validates_then_queues(mock_db):
+    service = BankingWebService()
+    org_id = uuid4()
+    user_id = uuid4()
+    account_id = uuid4()
+    auth = WebAuthContext(
+        is_authenticated=True,
+        person_id=user_id,
+        organization_id=org_id,
+    )
+    request = MagicMock()
+    request.form = AsyncMock(return_value={})
+    queue_task = MagicMock()
+    task_module = ModuleType("app.tasks.banking")
+    task_module.auto_match_paystack_expenses = SimpleNamespace(delay=queue_task)
+    tasks_package = ModuleType("app.tasks")
+    tasks_package.__path__ = []
+
+    with (
+        patch.dict(
+            sys.modules,
+            {
+                "app.tasks": tasks_package,
+                "app.tasks.banking": task_module,
+            },
+        ),
+        patch(
+            "app.services.finance.banking.paystack_expense_auto_match."
+            "paystack_expense_auto_match_service.validate_account"
+        ) as validate_account,
+    ):
+        response = await service.queue_paystack_expense_auto_match_response(
+            request,
+            auth,
+            mock_db,
+            str(account_id),
+        )
+
+    assert response.status_code == 303
+    assert (
+        "success=Paystack+expense+auto-match+has+started"
+        in response.headers["location"]
+    )
+    validate_account.assert_called_once_with(mock_db, org_id, account_id)
+    queue_task.assert_called_once_with(str(org_id), str(account_id), str(user_id))
 
 
 def test_duplicate_rule_response_redirects_with_copy_count(mock_db):

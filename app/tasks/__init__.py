@@ -23,7 +23,10 @@ from app.tasks.automation import (
     process_recurring_templates,
     process_scheduled_workflow_rules,
 )
-from app.tasks.banking import auto_match_unreconciled_statements
+from app.tasks.banking import (
+    auto_match_paystack_expenses,
+    auto_match_unreconciled_statements,
+)
 from app.tasks.coach import (
     generate_daily_ap_due_insights,
     generate_daily_ar_overdue_insights,
@@ -244,6 +247,7 @@ __all__ = [
     "release_expired_stock_reservations",
     "process_monthly_depreciation_runs",
     # Banking tasks
+    "auto_match_paystack_expenses",
     "auto_match_unreconciled_statements",
     # Inventory tasks
     "auto_issue_pending_stock_material_requests",

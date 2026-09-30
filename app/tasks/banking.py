@@ -17,6 +17,44 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
+def auto_match_paystack_expenses(
+    organization_id: str,
+    bank_account_id: str,
+    actor_user_id: str,
+) -> dict[str, int]:
+    """Post and match exact Paystack-paid expenses for one tenant account."""
+    from app.db.session_context import session_for_org
+    from app.services.finance.banking.paystack_expense_auto_match import (
+        paystack_expense_auto_match_service,
+    )
+
+    org_id = UUID(organization_id)
+    account_id = UUID(bank_account_id)
+    user_id = UUID(actor_user_id)
+
+    logger.info(
+        "Starting Paystack expense auto-match for account %s (org %s)",
+        account_id,
+        org_id,
+    )
+    with session_for_org(org_id) as db:
+        result = paystack_expense_auto_match_service.run(
+            db,
+            org_id,
+            account_id,
+            user_id,
+        )
+        db.commit()
+
+    logger.info(
+        "Paystack expense auto-match complete for account %s: %d matched",
+        account_id,
+        result.matched,
+    )
+    return result.to_dict()
+
+
+@shared_task
 def auto_match_unreconciled_statements() -> dict[str, Any]:
     """Periodically auto-match unreconciled statement lines.
 
