@@ -50,7 +50,26 @@ python scripts/deploy_production.py --host erp.dotmac.io sha256:<64-hex-digest>
 python scripts/deploy_production.py \
   --host erp.dotmac.io \
   --people-employment-type-activation
+python scripts/deploy_production.py \
+  --host erp.dotmac.io \
+  --forward-fix-after-migration \
+  --expected-checkout-sha=<full-40-hex-release-commit>
 ```
+
+Use the last form only for a reviewed release whose migration cannot safely
+be followed by the previous image. The full expected SHA must name the
+approved checkout after `git pull`; a mismatch refuses before runtime drain
+or migration. The mode stops app, worker, and beat and verifies no old Compose
+runtime remains before invoking Alembic. From the migration attempt onward,
+including an ambiguous failure, it leaves old code and image stopped for a
+reviewed forward fix. It does not automatically restore the previous release.
+Employment Type activation retains its separate authority probe and cannot be
+combined with this mode.
+
+Before the first use, the remote checkout must already contain this option:
+the controller invokes the checkout's `deploy.sh` before that script performs
+its internal pull. Updating that checkout is a separate reviewed step; the
+full-SHA check still runs after the deploy script's pull and before the drain.
 
 `scripts/deploy.sh` continues to accept an operator-supplied
 `MIGRATION_DATABASE_URL` as a break-glass path. The normal production entrypoint

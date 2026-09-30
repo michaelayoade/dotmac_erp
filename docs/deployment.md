@@ -66,9 +66,13 @@ This script will:
   compatible deployments auto-roll back on failure — code resets to the
   previous commit and `APP_IMAGE` returns to the previously-running image's
   digest (read from its RepoDigests, never from the reference that started it).
-  The explicit Employment Type authority activation is the exception: after
+  The explicit Employment Type authority activation is an exception: after
   its migration commits, every later failure is forward-fix-only because the
-  previous image contains retired legacy writers. See `deploy/README.md`.
+  previous image contains retired legacy writers. A separately reviewed
+  irreversible migration uses `--forward-fix-after-migration` with an exact
+  expected checkout SHA; it drains old runtimes before migration and never
+  restores the old image after a migration attempt. See
+  `docs/runbooks/production-deployment-credential.md`.
 - Sync static files to nginx
 
 The pinned image is controlled by `APP_IMAGE` (see `.env.example`); the deploy
