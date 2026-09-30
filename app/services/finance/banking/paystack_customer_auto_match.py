@@ -225,10 +225,10 @@ class PaystackCustomerAutoMatchService:
             ).all()
         )
         intents_by_reference: dict[str, list[PaymentIntent]] = {}
-        for intent in intents:
-            key = _normalize_reference(intent.paystack_reference)
+        for available_intent in intents:
+            key = _normalize_reference(available_intent.paystack_reference)
             if len(key) >= 4:
-                intents_by_reference.setdefault(key, []).append(intent)
+                intents_by_reference.setdefault(key, []).append(available_intent)
 
         candidates: dict[UUID, PaymentIntent] = {}
         for line in eligible_lines:
@@ -238,8 +238,8 @@ class PaystackCustomerAutoMatchService:
                 reference_intents = intents_by_reference.get(key, [])
                 if len({intent.intent_id for intent in reference_intents}) > 1:
                     ambiguous = True
-                for intent in reference_intents:
-                    matched_intents[intent.intent_id] = intent
+                for reference_intent in reference_intents:
+                    matched_intents[reference_intent.intent_id] = reference_intent
             if ambiguous or len(matched_intents) > 1:
                 result.skipped_ambiguous_reference += 1
             elif len(matched_intents) == 1:
@@ -527,7 +527,7 @@ class PaystackCustomerAutoMatchService:
                     ),
                 ],
             )
-            journal, posting_result = (
+            created_journal, posting_result = (
                 BasePostingAdapter.create_approve_and_post_journal(
                     db,
                     organization_id,
@@ -542,8 +542,9 @@ class PaystackCustomerAutoMatchService:
                     ledger_error_prefix="Paystack fee journal posting failed",
                 )
             )
-            if not posting_result.success or journal is None:
+            if not posting_result.success or created_journal is None:
                 raise _SkipCandidate("journal")
+            journal = created_journal
             created = True
 
         journal_lines = list(
