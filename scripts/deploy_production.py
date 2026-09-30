@@ -160,15 +160,46 @@ def fetch_migration_database_url(
 def _deploy_arguments(values: list[str]) -> list[str]:
     accepted: list[str] = []
     for value in values:
-        if value in {"--quick", "--people-employment-type-activation"}:
+        if value in {
+            "--quick",
+            "--people-employment-type-activation",
+            "--forward-fix-after-migration",
+        }:
             accepted.append(value)
             continue
+        if value.startswith("--expected-checkout-sha="):
+            expected_sha = value.partition("=")[2]
+            if re.fullmatch(r"[0-9a-f]{40}", expected_sha):
+                accepted.append(value)
+                continue
         if value.startswith("sha256:") and len(value) == 71:
             digest = value.removeprefix("sha256:")
             if all(character in "0123456789abcdef" for character in digest):
                 accepted.append(value)
                 continue
         raise DeploymentCredentialError(f"unsupported deploy argument: {value}")
+    forward_fix = "--forward-fix-after-migration" in accepted
+    expected_shas = [
+        value for value in accepted if value.startswith("--expected-checkout-sha=")
+    ]
+    if forward_fix:
+        if len(expected_shas) != 1:
+            raise DeploymentCredentialError(
+                "forward-fix mode requires one exact expected checkout SHA"
+            )
+        if any(
+            value == "--quick"
+            or value == "--people-employment-type-activation"
+            or value.startswith("sha256:")
+            for value in accepted
+        ):
+            raise DeploymentCredentialError(
+                "forward-fix mode requires a full descriptor-bound deploy"
+            )
+    elif expected_shas:
+        raise DeploymentCredentialError(
+            "expected checkout SHA requires forward-fix mode"
+        )
     return accepted
 
 
@@ -179,6 +210,16 @@ def run_deployment(args: argparse.Namespace) -> int:
             *(
                 ["--people-employment-type-activation"]
                 if args.people_employment_type_activation
+                else []
+            ),
+            *(
+                ["--forward-fix-after-migration"]
+                if args.forward_fix_after_migration
+                else []
+            ),
+            *(
+                [f"--expected-checkout-sha={args.expected_checkout_sha}"]
+                if args.expected_checkout_sha is not None
                 else []
             ),
             *([args.image_digest] if args.image_digest else []),
@@ -255,6 +296,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--openbao-timeout", type=float, default=10.0)
     parser.add_argument("--quick", action="store_true")
     parser.add_argument("--people-employment-type-activation", action="store_true")
+    parser.add_argument("--forward-fix-after-migration", action="store_true")
+    parser.add_argument("--expected-checkout-sha")
     parser.add_argument("image_digest", nargs="?")
     return parser
 

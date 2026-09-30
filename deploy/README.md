@@ -111,6 +111,14 @@ the read-only AppRole described in
 The direct environment-variable form below remains the break-glass entrypoint;
 it is not the normal custody path.
 
+For a reviewed migration that cannot be followed by the old image, invoke the
+controller with `--forward-fix-after-migration` and
+`--expected-checkout-sha=<full-40-hex-release-commit>`. The old app, worker,
+and beat stop before migration; any failure after migration starts requires a
+reviewed forward fix. The production checkout must already contain that option
+before the controller invokes the script. The credential runbook documents the
+full invocation and gate.
+
 The Employment Type authority revision is declared
 `maintenance_required`, not online-compatible. An existing database may cross
 that boundary only through:

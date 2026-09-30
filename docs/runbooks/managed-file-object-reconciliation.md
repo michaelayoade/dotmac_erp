@@ -65,10 +65,9 @@ verification remain rollout evidence before operational use.
   `app.services.file_object_cleanup.authorize_apply`.
 - **An explicit operator invocation.** Met, unchanged: dry-run then reviewed
   apply, no beat schedule, no automatic trigger.
-- **A verified complete listing.** Partially met — see "Listing completeness"
-  below: provable for ERP's own provider from the underlying SDK's documented
-  behavior, but this is an open ROLLOUT GATE, not a `dotmac_files` guarantee,
-  until it is confirmed against the live bucket (see rollout gates below).
+- **A verified complete listing.** Met for the live bucket on 2026-09-30 —
+  see "Listing completeness" below. Recheck immediately before a first apply
+  if managed objects have since appeared.
 - **A named owner and privilege boundary for the platform plane.** NOT met —
   still an open gap. `clean_tenant_file_objects` remains tenant-only by
   construction (it recheck-queries `TenantStoredFile`); the platform plane
@@ -98,12 +97,15 @@ changes; each is an operational confirmation):**
    Recheck the live a4 role baseline after a5; the previous observation is
    not evidence for the post-a5 state.
 4. Live listing completeness for the managed prefixes in
-   `dotmac-erp-158`. The SDK-based argument below remains unconfirmed
-   against the actual bucket and object count.
+   `dotmac-erp-158` — met on 2026-09-30. Two full SDK scans were stable at
+   3,878 current objects, and ERP's provider returned the same full listing.
+   The `tenants/<UUID>/files/` and `platform/files/` prefix scans matched the
+   corresponding full-scan subsets; both held zero objects. These reads did
+   not print keys or object contents. Repeat before first apply if managed
+   objects have appeared since this observation.
 
-The two target-role PostgreSQL RLS canaries, runtime-role privilege recheck,
-and live listing completeness remain open. No cleanup apply or a5 deployment
-is recorded here.
+The two target-role PostgreSQL RLS canaries and runtime-role privilege recheck
+remain open. No cleanup apply or a5 deployment is recorded here.
 
 **Operational notes:**
 
@@ -134,9 +136,10 @@ lazily) — draining that generator to completion, as ERP's provider does,
 therefore returns the complete listing. This is a real guarantee, but it is
 a guarantee of the `minio` SDK version pinned in `pyproject.toml`, not a
 `dotmac_files` contract — a future SDK change or a different provider
-implementation could silently break it, which is why this is also listed as
-an open rollout gate above pending a live confirmation against the
-production bucket and its actual object count. A unit test
+implementation could silently break it. The 2026-09-30 live check above
+confirmed this provider drained a 3,878-object bucket, beyond a single S3
+listing page. Both managed prefixes were empty at that time, so a later first
+apply involving managed objects needs a fresh live comparison. A unit test
 (`tests/services/test_file_object_cleanup.py
 ::test_list_objects_consumes_a_multi_page_generator_completely`) proves the
 CONSUMING side: a fake provider yielding a large multi-batch generator is
