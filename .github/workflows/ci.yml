@@ -281,6 +281,9 @@ jobs:
     name: Docker Build & Health Check
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
 
@@ -447,6 +450,75 @@ jobs:
             -e REDIS_URL=redis://ci-redis:6379/0 \
             dotmac-erp:ci \
             alembic upgrade heads
+
+      # Partial rollback compatibility probe: the previous web image must
+      # become ready against the candidate's migrated synthetic database.
+      # This does not reproduce prior schema/data, the production runtime
+      # role, or the old worker and beat, so it cannot alone authorize rollback.
+      - name: Log in to GHCR for the previous deployed image
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Previous deployed web image must be ready on upgraded schema
+        env:
+          PREVIOUS_IMAGE: ghcr.io/michaelayoade/dotmac_erp@sha256:782a6ab29e2828f9f1eba4a391171e9f65bb9ec49cb6210f45f53eb315312cf6
+          PREVIOUS_REVISION: c098be5e56aae3d51658ec41f7104520e24271fd # pragma: allowlist secret
+          PREVIOUS_MANIFEST_DIGEST: sha256:90e3eb7b8a7d7bf89e50de0ed7723597a072ec39e5a40fbda411c30b76cb795c
+        run: |  # pragma: allowlist secret
+          set -euo pipefail
+          docker pull "${PREVIOUS_IMAGE}"
+          actual_revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "${PREVIOUS_IMAGE}")"
+          if [[ "${actual_revision}" != "${PREVIOUS_REVISION}" ]]; then
+            echo "Previous deployed image revision mismatch: ${actual_revision}" >&2
+            exit 1
+          fi
+          actual_manifest_digest="$(docker image inspect --format '{{index .Config.Labels "io.dotmac.product-manifest.digest"}}' "${PREVIOUS_IMAGE}")"
+          if [[ "${actual_manifest_digest}" != "${PREVIOUS_MANIFEST_DIGEST}" ]]; then
+            echo "Previous deployed image manifest mismatch: ${actual_manifest_digest}" >&2
+            exit 1
+          fi
+
+          cleanup_previous_app() {
+            docker rm -f ci-previous-app > /dev/null 2>&1 || true
+          }
+          trap cleanup_previous_app EXIT
+          docker run -d --name ci-previous-app --network ci-net \
+            --read-only \
+            --user 10001:10001 \
+            --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            -e DATABASE_URL=postgresql+psycopg://postgres:postgres@ci-db:5432/dotmac_erp_ci \
+            -e SECRET_KEY=ci-test-secret-key-not-for-production \
+            -e JWT_SECRET=ci-test-jwt-secret-key-minimum-32-bytes-long \
+            -e TOTP_ENCRYPTION_KEY=QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g= \
+            -e REDIS_URL=redis://ci-redis:6379/0 \
+            -e CELERY_BROKER_URL=redis://ci-redis:6379/0 \
+            -e DOTMAC_DEV_MODE=true \
+            -e GUNICORN_WORKERS=1 \
+            -e PROMETHEUS_MULTIPROC_DIR=/tmp/dotmac-erp-prometheus \
+            "${PREVIOUS_IMAGE}"
+
+          for i in $(seq 1 60); do
+            status="$(docker inspect --format='{{.State.Status}}' ci-previous-app 2>/dev/null || echo missing)"
+            if [[ "${status}" != running ]]; then
+              echo "Previous deployed app stopped before readiness: ${status}" >&2
+              docker logs --tail 100 ci-previous-app
+              exit 1
+            fi
+            if docker exec ci-previous-app python -c "import json,urllib.request; payload=json.load(urllib.request.urlopen('http://127.0.0.1:8002/health/ready', timeout=3)); assert str(payload['status']).startswith('ready')" 2>/dev/null; then
+              echo "Previous deployed app is ready on the upgraded schema"
+              exit 0
+            fi
+            echo "Waiting for previous deployed app... ($i/60)"
+            sleep 3
+          done
+          echo "Previous deployed app readiness timed out after 180 seconds" >&2
+          docker logs --tail 100 ci-previous-app
+          exit 1
 
       # =====================================================================
       # Backup and restore rehearsal.
@@ -802,7 +874,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f ci-app ci-worker ci-beat ci-db ci-redis 2>/dev/null || true
+          docker rm -f ci-previous-app ci-app ci-worker ci-beat ci-db ci-redis 2>/dev/null || true
           docker network rm ci-net 2>/dev/null || true
 
       # GitHub job filesystems are isolated. Only a protected-main push needs

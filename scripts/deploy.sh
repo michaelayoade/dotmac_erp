@@ -7,6 +7,8 @@
 #   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh --quick
 #   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh \
 #       --people-employment-type-activation
+#   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh \
+#       --forward-fix-after-migration --expected-checkout-sha=<40-hex-SHA>
 #   MIGRATION_DATABASE_URL=<app_admin DSN> ./scripts/deploy.sh sha256:<64 hex>
 #   SKIP_BACKUP=1 ./scripts/deploy.sh   # skip the pre-migration DB backup (NOT recommended)
 #
@@ -50,11 +52,17 @@
 # Once that migration commits the previous image is no longer a valid rollback
 # target, so failures stop for an operator-led forward fix instead of restoring
 # split ownership.
+# The separate forward-fix mode protects a reviewed release whose migration
+# cannot be followed by an old-image restart. It drains the old runtimes and
+# refuses code/image rollback from the moment Alembic is attempted.
 
 set -euo pipefail
 
 quick_deploy=0
 people_employment_type_activation=0
+forward_fix_after_migration=0
+expected_checkout_sha=""
+expected_checkout_sha_supplied=0
 requested_image_selector=""
 for argument in "$@"; do
     case "$argument" in
@@ -63,6 +71,17 @@ for argument in "$@"; do
             ;;
         --people-employment-type-activation)
             people_employment_type_activation=1
+            ;;
+        --forward-fix-after-migration)
+            forward_fix_after_migration=1
+            ;;
+        --expected-checkout-sha=*)
+            if [[ "$expected_checkout_sha_supplied" == "1" ]]; then
+                echo "ERROR: --expected-checkout-sha may be supplied only once." >&2
+                exit 2
+            fi
+            expected_checkout_sha_supplied=1
+            expected_checkout_sha="${argument#*=}"
             ;;
         sha256:*)
             # An exact digest, for redeploying a known earlier release without
@@ -81,6 +100,20 @@ for argument in "$@"; do
 done
 if [[ "$quick_deploy" == "1" && "$people_employment_type_activation" == "1" ]]; then
     echo "ERROR: Employment Type activation cannot use --quick; the new image is required." >&2
+    exit 2
+fi
+if [[ "$forward_fix_after_migration" == "1" ]]; then
+    if [[ "$quick_deploy" == "1" || "$people_employment_type_activation" == "1" || \
+          -n "$requested_image_selector" ]]; then
+        echo "ERROR: forward-fix mode requires a full descriptor-bound deploy and cannot combine with --quick, Employment Type activation, or an image override." >&2
+        exit 2
+    fi
+    if [[ ! "$expected_checkout_sha" =~ ^[0-9a-f]{40}$ ]]; then
+        echo "ERROR: forward-fix mode requires --expected-checkout-sha=<full 40-hex-SHA>." >&2
+        exit 2
+    fi
+elif [[ "$expected_checkout_sha_supplied" == "1" ]]; then
+    echo "ERROR: --expected-checkout-sha requires --forward-fix-after-migration." >&2
     exit 2
 fi
 
@@ -233,15 +266,20 @@ echo "Running image: ${PREV_IMAGE:-<none pinned>}"
 echo ""
 
 # `app-dev` is excluded from the production topology only by a Compose profile.
-# Turn that stated premise into a live check before backup, pull, or any runtime
-# drain: its bind-mounted old application can write the same database.
-if [[ "$people_employment_type_activation" == "1" ]]; then
+# Both cutover modes must refuse it before backup, pull, or any runtime drain:
+# its bind-mounted old application can write the same database.
+if [[ "$people_employment_type_activation" == "1" || \
+      "$forward_fix_after_migration" == "1" ]]; then
     if ! running_app_dev="$(running_compose_service_containers app-dev)"; then
         echo "ERROR: could not verify the app-dev cutover exclusion." >&2
         exit 2
     fi
     if [[ -n "$running_app_dev" ]]; then
-        echo "ERROR: Employment Type activation refuses while app-dev is running:" >&2
+        if [[ "$forward_fix_after_migration" == "1" ]]; then
+            echo "ERROR: forward-fix deployment refuses while app-dev is running:" >&2
+        else
+            echo "ERROR: Employment Type activation refuses while app-dev is running:" >&2
+        fi
         echo "$running_app_dev" >&2
         exit 2
     fi
@@ -280,9 +318,15 @@ rollback() {
 forward_fix_only=0
 handle_deploy_failure() {
     if [[ "$forward_fix_only" == "1" ]]; then
-        echo "!! FORWARD-FIX-ONLY: Employment Type activation committed or its outcome is ambiguous." >&2
-        echo "!! The previous image remains stopped because it contains legacy writers." >&2
-        echo "!! Repair the new release and resume it; do not restore the old image." >&2
+        if [[ "$forward_fix_after_migration" == "1" ]]; then
+            echo "!! FORWARD-FIX-ONLY: migration was attempted; its outcome may be ambiguous." >&2
+            echo "!! Old app, worker and beat remain stopped. Repair and resume the new release." >&2
+            echo "!! Do not restore old code or image after this migration attempt." >&2
+        else
+            echo "!! FORWARD-FIX-ONLY: Employment Type activation committed or its outcome is ambiguous." >&2
+            echo "!! The previous image remains stopped because it contains legacy writers." >&2
+            echo "!! Repair the new release and resume it; do not restore the old image." >&2
+        fi
         return
     fi
     rollback
@@ -431,6 +475,15 @@ fi
 if [[ "$quick_deploy" != "1" ]]; then
     echo "→ Pulling latest code + image..."
     git pull --rebase
+    if [[ "$forward_fix_after_migration" == "1" ]]; then
+        pulled_sha="$(git rev-parse HEAD)"
+        if [[ "$pulled_sha" != "$expected_checkout_sha" ]]; then
+            echo "ERROR: forward-fix checkout is ${pulled_sha}, expected ${expected_checkout_sha}." >&2
+            echo "       Refusing before changing the running services or attempting migration." >&2
+            exit 2
+        fi
+        echo "  Expected checkout verified: ${pulled_sha}"
+    fi
 
     # WHICH image this deploy runs is decided here, and it is the only place.
     #
@@ -542,8 +595,13 @@ echo ""
 # Step 3b: apply migrations on the freshly-pulled image (multi-head safe — erp has
 # hit multi-head states, so `heads` (plural), never `head`).
 activation_env=()
-if [[ "$people_employment_type_activation" == "1" ]]; then
-    echo "→ Draining old Employment Type writers before authority activation..."
+if [[ "$people_employment_type_activation" == "1" || \
+      "$forward_fix_after_migration" == "1" ]]; then
+    if [[ "$people_employment_type_activation" == "1" ]]; then
+        echo "→ Draining old Employment Type writers before authority activation..."
+    else
+        echo "→ Draining old app, worker and beat before forward-fix migration..."
+    fi
     docker compose stop app worker beat
     remaining_legacy_runtimes=""
     for service in app app-dev worker beat; do
@@ -560,11 +618,19 @@ if [[ "$people_employment_type_activation" == "1" ]]; then
         echo "$remaining_legacy_runtimes" >&2
         false
     fi
-    activation_env+=(-e PEOPLE_EMPLOYMENT_TYPE_ACTIVATION=1)
+    if [[ "$people_employment_type_activation" == "1" ]]; then
+        activation_env+=(-e PEOPLE_EMPLOYMENT_TYPE_ACTIVATION=1)
+    fi
     echo "  old app, worker and beat stopped"
     echo ""
 fi
 echo "→ Applying migrations (alembic upgrade heads)..."
+# The forward-fix release cannot restart old code after the migration command
+# is invoked: a transport failure can occur after PostgreSQL commits. Arm this
+# before the command, including its ambiguous-failure path.
+if [[ "$forward_fix_after_migration" == "1" ]]; then
+    forward_fix_only=1
+fi
 # `alembic upgrade heads` stays on its own line: the credential-asymmetry
 # detector in tests/architecture/test_database_role_contract.py anchors on
 # the executed command and walks BACK to its `docker compose run`, so an
@@ -615,17 +681,10 @@ echo ""
 # no module active it asserts nothing and says so loudly rather than passing in
 # silence — see app/runtime_admission.py.
 #
-# NOTE FOR THE OPERATOR — what a failure here does and does not undo. The `if
-# !` guard is the same shape step 3a uses, and a command in an `if` condition
-# does NOT fire the ERR trap set above, so this step exits WITHOUT the
-# automatic rollback. Nothing is reverted: the migrations applied by step 3b
-# stay applied (that trap's rollback would not have reverted them either — see
-# the rollback function's closing message), the working tree stays at the
-# freshly pulled commit with the new .env pins, and the PREVIOUS app container
-# keeps serving on the previous image because step 4 never ran. Repair the
-# runtime credential or unset the module flag and re-run deploy; if the new
-# revisions are not backward-compatible with the running release, restore the
-# step-1 backup.
+# NOTE FOR THE OPERATOR — a command in an `if !` condition does not fire the
+# ERR trap. The migration stays applied and the candidate checkout stays in
+# place. In ordinary mode the previous app keeps serving; in forward-fix mode
+# the previous runtimes stay stopped and require operator-led repair.
 echo "→ Admission: runtime database identity (runtime credential, read-only)..."
 if ! docker compose run --rm app \
     python scripts/verify_runtime_admission.py
@@ -644,6 +703,9 @@ then
     echo "Migrations from step 3b have ALREADY been applied and are NOT rolled" >&2
     echo "back. Repair the runtime credential, or unset the module's" >&2
     echo "activation flag, then re-run deploy." >&2
+    if [[ "$forward_fix_only" == "1" ]]; then
+        handle_deploy_failure
+    fi
     exit 1
 fi
 echo ""
