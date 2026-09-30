@@ -60,8 +60,8 @@ FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 # below. A tag is deliberately absent: the descriptor refuses mutable
 # references, and a `sha-<short>` tag is one.
 IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
-IMAGE_SOURCE_REVISION = "c098be5e56aae3d51658ec41f7104520e24271fd"
-IMAGE_DIGEST = "sha256:782a6ab29e2828f9f1eba4a391171e9f65bb9ec49cb6210f45f53eb315312cf6"
+IMAGE_SOURCE_REVISION = "3884ad6cfafc942c26b33ee676d8c08e9efe831b"
+IMAGE_DIGEST = "sha256:8bbd22649da2cc56c615383fbe8a3fa0a22280cfc8296d1cc385980fb07536c6"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
