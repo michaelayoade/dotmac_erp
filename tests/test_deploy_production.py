@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+import scripts.deploy_production as deploy_production
 from scripts.deploy_production import (
     CANONICAL_SECRET_ENDPOINT,
     DeploymentCredentialError,
@@ -19,6 +20,7 @@ from scripts.deploy_production import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_CHECKOUT_SHA = "abcdef0123456789abcdef0123456789abcdef01"
 
 
 class _OpenBaoHandler(BaseHTTPRequestHandler):
@@ -236,3 +238,77 @@ def test_cli_requires_an_explicit_production_host() -> None:
 
     assert result.returncode == 2
     assert "--host" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--forward-fix-after-migration"],
+        ["--expected-checkout-sha=" + EXPECTED_CHECKOUT_SHA],
+        ["--forward-fix-after-migration", "--expected-checkout-sha=short"],
+        [
+            "--forward-fix-after-migration",
+            "--expected-checkout-sha=" + EXPECTED_CHECKOUT_SHA,
+            "--quick",
+        ],
+        [
+            "--forward-fix-after-migration",
+            "--expected-checkout-sha=" + EXPECTED_CHECKOUT_SHA,
+            "--people-employment-type-activation",
+        ],
+        [
+            "--forward-fix-after-migration",
+            "--expected-checkout-sha=" + EXPECTED_CHECKOUT_SHA,
+            "sha256:" + "ab" * 32,
+        ],
+    ],
+)
+def test_forward_fix_wrapper_refuses_unreviewed_selectors(
+    arguments: list[str],
+) -> None:
+    with pytest.raises(DeploymentCredentialError):
+        deploy_production._deploy_arguments(arguments)
+
+
+def test_forward_fix_wrapper_passes_exact_sha_without_credential_in_argv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dsn = "postgresql+psycopg://app_admin@db.test/ci"
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        deploy_production,
+        "fetch_migration_database_url",
+        lambda **_kwargs: dsn,
+    )
+
+    def fake_ssh(
+        command: list[str], *, input: bytes, env: dict[str, str], check: bool
+    ) -> subprocess.CompletedProcess[bytes]:
+        captured.update(command=command, input=input, env=env, check=check)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(deploy_production.subprocess, "run", fake_ssh)
+    args = deploy_production._parser().parse_args(
+        [
+            "--host",
+            "erp.dotmac.io",
+            "--forward-fix-after-migration",
+            "--expected-checkout-sha",
+            EXPECTED_CHECKOUT_SHA,
+        ]
+    )
+
+    assert deploy_production.run_deployment(args) == 0
+    command = captured["command"]
+    assert isinstance(command, list)
+    remote_command = command[-1]
+    assert "--forward-fix-after-migration" in remote_command
+    assert f"--expected-checkout-sha={EXPECTED_CHECKOUT_SHA}" in remote_command
+    assert dsn not in str(command)
+    assert captured["input"] == f"{dsn}\n".encode()
+    environment = captured["env"]
+    assert isinstance(environment, dict)
+    assert "MIGRATION_DATABASE_URL" not in environment
+    assert "OPENBAO_TOKEN" not in environment
+    assert "BAO_TOKEN" not in environment

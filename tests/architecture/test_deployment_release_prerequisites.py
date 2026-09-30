@@ -172,7 +172,15 @@ def test_publish_consumes_the_tested_image_and_cannot_rebuild_it() -> None:
     assert docker_job.count(main_push) == 2
     assert workflow.count("docker/build-push-action") == 1
     assert "${{ steps.tested-meta.outputs.labels }}" in docker_job
-    assert docker_job.count("io.dotmac.product-manifest.digest") == 2
+    # The tested image is labelled and checked; the previous deployed image
+    # gets its own manifest check before the compatibility probe.
+    assert docker_job.count("io.dotmac.product-manifest.digest") == 3
+    previous_image_probe = docker_job.split(
+        "- name: Previous deployed web image must be ready on upgraded schema", 1
+    )[1].split("\n      - name:", 1)[0]
+    assert '"${actual_manifest_digest}" != "${PREVIOUS_MANIFEST_DIGEST}"' in (
+        previous_image_probe
+    )
     assert "steps.product-manifest.outputs.digest" in docker_job
     assert "docker image save dotmac-erp:ci" in docker_job
     assert "name: tested-image-${{ github.sha }}" in docker_job
