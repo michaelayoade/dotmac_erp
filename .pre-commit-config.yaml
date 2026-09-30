@@ -151,4 +151,9 @@ repos:
         # It is verified by the deployment descriptor tests and carries no
         # credential, so entropy scanning it would create a new suppression on
         # every release.
-        exclude: (\.env\.example|tests/|alembic/|scripts/|deploy/releases/.*\.image-release\.json$|docs/kernel-runtime-composition\.json|\.py$)
+        # The generated OTel collector embeds the public source SHA and image
+        # digest from scanned deploy/product.toml. The pinned deployment
+        # conformance workflow runs render --check over every generated asset,
+        # and test_deployment_descriptor.py checks this public source identity.
+        # Exclude only this exact rendered file from the entropy heuristic.
+        exclude: (\.env\.example|tests/|alembic/|scripts/|deploy/releases/.*\.image-release\.json$|docs/kernel-runtime-composition\.json|\.py$|^deploy/rendered/otel-collector\.yaml$)
