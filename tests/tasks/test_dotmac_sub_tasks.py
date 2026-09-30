@@ -213,7 +213,7 @@ def test_terminal_incremental_phase_surfaces_committed_business_errors(
     else:  # pragma: no cover - assertion makes the failure explicit
         raise AssertionError("terminal business failures must fail the Celery task")
 
-    db.commit.assert_called_once()
+    assert db.commit.call_count == 2
     history.complete.assert_called_once()
     service.close.assert_called_once_with()
 
