@@ -62,6 +62,7 @@ class ReconciliationMatchRule(Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "name", name="uq_recon_match_rule_name"),
         Index("ix_recon_match_rule_org", "organization_id"),
+        Index("ix_recon_match_rule_bank_account", "bank_account_id"),
         {"schema": "banking"},
     )
 
@@ -75,6 +76,11 @@ class ReconciliationMatchRule(Base):
         SAUUID(as_uuid=True),
         ForeignKey("core_org.organization.organization_id"),
         nullable=False,
+    )
+    bank_account_id: Mapped[UUID | None] = mapped_column(
+        SAUUID(as_uuid=True),
+        ForeignKey("banking.bank_accounts.bank_account_id", ondelete="SET NULL"),
+        nullable=True,
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

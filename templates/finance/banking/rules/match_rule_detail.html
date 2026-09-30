@@ -65,6 +65,12 @@
         </div>
         {% endif %}
         <div class="flex justify-between">
+          <dt class="text-sm text-slate-500 dark:text-slate-400">Bank Account</dt>
+          <dd class="text-sm font-medium text-slate-900 dark:text-white">
+            {{ bank_account.account_name if bank_account else 'All accounts' }}
+          </dd>
+        </div>
+        <div class="flex justify-between">
           <dt class="text-sm text-slate-500 dark:text-slate-400">Source Type</dt>
           <dd class="text-sm font-medium text-slate-900 dark:text-white">
             {{ source_doc_types.get(rule.source_doc_type, rule.source_doc_type) }}

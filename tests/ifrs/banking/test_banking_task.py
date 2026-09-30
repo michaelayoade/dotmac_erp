@@ -76,6 +76,7 @@ def test_paystack_expense_task_uses_one_tenant_session_and_commit() -> None:
 
     org_id = uuid.uuid4()
     account_id = uuid.uuid4()
+    rule_id = uuid.uuid4()
     actor_id = uuid.uuid4()
     db = MagicMock()
 
@@ -99,11 +100,12 @@ def test_paystack_expense_task_uses_one_tenant_session_and_commit() -> None:
         result = auto_match_paystack_expenses(
             str(org_id),
             str(account_id),
+            str(rule_id),
             str(actor_id),
         )
 
     assert result == {"scanned": 5, "matched": 3}
-    run_matcher.assert_called_once_with(db, org_id, account_id, actor_id)
+    run_matcher.assert_called_once_with(db, org_id, account_id, rule_id, actor_id)
     db.commit.assert_called_once_with()
 
 

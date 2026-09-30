@@ -12,7 +12,6 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.domain_settings import SettingDomain
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.finance.banking.bank_statement import (
@@ -21,13 +20,19 @@ from app.models.finance.banking.bank_statement import (
     BankStatementLineMatch,
     StatementLineType,
 )
+from app.models.finance.banking.reconciliation_match_rule import (
+    ReconciliationMatchRule,
+    SourceDocType,
+)
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
 from app.services.finance.banking.bank_reconciliation import (
     bank_reconciliation_service,
 )
-from app.services.settings_spec import resolve_value
+from app.services.finance.banking.reconciliation_rule_service import (
+    ReconciliationRuleService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +60,7 @@ class PaystackExpenseAutoMatchResult:
     matched: int = 0
     journals_created: int = 0
     skipped_no_reference: int = 0
+    skipped_rule_condition: int = 0
     skipped_ambiguous_reference: int = 0
     skipped_duplicate_claim: int = 0
     skipped_amount: int = 0
@@ -95,65 +101,58 @@ class PaystackExpenseAutoMatchService:
     """Safely post and match exact paid-expense statement transactions."""
 
     @staticmethod
-    def configured_account_id(db: Session, organization_id: UUID) -> UUID | None:
-        value = resolve_value(
-            db,
-            SettingDomain.payments,
-            "paystack_transfer_bank_account_id",
-            organization_id=organization_id,
-        )
-        if not value:
-            return None
-        try:
-            return UUID(str(value))
-        except (TypeError, ValueError):
-            logger.warning(
-                "Invalid Paystack transfer bank account setting for org %s",
-                organization_id,
-            )
-            return None
-
-    @classmethod
-    def is_configured_account(
-        cls,
+    def validate_configuration(
         db: Session,
         organization_id: UUID,
         bank_account_id: UUID,
-    ) -> bool:
-        return cls.configured_account_id(db, organization_id) == bank_account_id
-
-    @classmethod
-    def validate_account(
-        cls,
-        db: Session,
-        organization_id: UUID,
-        bank_account_id: UUID,
-    ) -> BankAccount:
+        rule_id: UUID,
+    ) -> tuple[BankAccount, ReconciliationMatchRule]:
         account = db.get(BankAccount, bank_account_id)
         if not account or account.organization_id != organization_id:
             raise PaystackExpenseAutoMatchError("Bank account not found")
-        if not cls.is_configured_account(db, organization_id, bank_account_id):
-            raise PaystackExpenseAutoMatchError(
-                "This is not the configured Paystack transfer bank account"
-            )
         if account.status != BankAccountStatus.active:
             raise PaystackExpenseAutoMatchError(
-                "The configured Paystack transfer bank account is not active"
+                "The selected bank account is not active"
             )
         if not account.gl_account_id:
             raise PaystackExpenseAutoMatchError(
-                "The configured Paystack transfer bank account has no GL account"
+                "The selected bank account has no GL account"
             )
-        return account
+
+        rule = db.get(ReconciliationMatchRule, rule_id)
+        if not rule or rule.organization_id != organization_id:
+            raise PaystackExpenseAutoMatchError("Automation rule not found")
+        if rule.bank_account_id != bank_account_id:
+            raise PaystackExpenseAutoMatchError(
+                "The automation rule is not assigned to this bank account"
+            )
+        if not rule.is_active:
+            raise PaystackExpenseAutoMatchError("The automation rule is disabled")
+        if rule.source_doc_type != SourceDocType.EXPENSE.value:
+            raise PaystackExpenseAutoMatchError(
+                "The selected rule does not match expenses"
+            )
+        if rule.action_type != "MATCH" or not rule.match_debit:
+            raise PaystackExpenseAutoMatchError(
+                "Expense automation requires a debit MATCH rule"
+            )
+        return account, rule
 
     def run(
         self,
         db: Session,
         organization_id: UUID,
         bank_account_id: UUID,
+        rule_id: UUID,
         actor_user_id: UUID,
     ) -> PaystackExpenseAutoMatchResult:
-        account = self.validate_account(db, organization_id, bank_account_id)
+        account, rule = self.validate_configuration(
+            db,
+            organization_id,
+            bank_account_id,
+            rule_id,
+        )
+        rule_service = ReconciliationRuleService(db)
         result = PaystackExpenseAutoMatchResult()
 
         statement_lines = list(
@@ -180,6 +179,13 @@ class PaystackExpenseAutoMatchService:
         if not statement_lines:
             return result
 
+        eligible_lines = []
+        for line in statement_lines:
+            if rule_service.evaluate_conditions(rule, line):
+                eligible_lines.append(line)
+            else:
+                result.skipped_rule_condition += 1
+
         claims = list(
             db.scalars(
                 select(ExpenseClaim).where(
@@ -197,7 +203,7 @@ class PaystackExpenseAutoMatchService:
                 claims_by_reference.setdefault(key, []).append(claim)
 
         candidates: dict[UUID, ExpenseClaim] = {}
-        for line in statement_lines:
+        for line in eligible_lines:
             matched_claims: dict[UUID, ExpenseClaim] = {}
             ambiguous = False
             for key in _statement_reference_keys(line):
@@ -216,7 +222,7 @@ class PaystackExpenseAutoMatchService:
 
         claim_occurrences = Counter(claim.claim_id for claim in candidates.values())
 
-        for line in statement_lines:
+        for line in eligible_lines:
             candidate_claim = candidates.get(line.line_id)
             if candidate_claim is None:
                 continue
@@ -306,6 +312,19 @@ class PaystackExpenseAutoMatchService:
                         source_type="EXPENSE_REIMBURSEMENT",
                         source_id=candidate_claim.claim_id,
                         match_state="confirmed",
+                    )
+                    rule_service.log_match(
+                        organization_id,
+                        rule_id=rule.rule_id,
+                        line_id=line.line_id,
+                        source_doc_type=SourceDocType.EXPENSE.value,
+                        source_doc_id=candidate_claim.claim_id,
+                        journal_line_id=bank_line.line_id,
+                        confidence=100,
+                        explanation=(
+                            "Exact expense payment reference, amount, and paid date"
+                        ),
+                        action="MATCH",
                     )
                     result.matched += 1
                     if created_journal:

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 def auto_match_paystack_expenses(
     organization_id: str,
     bank_account_id: str,
+    rule_id: str,
     actor_user_id: str,
 ) -> dict[str, int]:
     """Post and match exact Paystack-paid expenses for one tenant account."""
@@ -30,6 +31,7 @@ def auto_match_paystack_expenses(
 
     org_id = UUID(organization_id)
     account_id = UUID(bank_account_id)
+    match_rule_id = UUID(rule_id)
     user_id = UUID(actor_user_id)
 
     logger.info(
@@ -42,6 +44,7 @@ def auto_match_paystack_expenses(
             db,
             org_id,
             account_id,
+            match_rule_id,
             user_id,
         )
         db.commit()

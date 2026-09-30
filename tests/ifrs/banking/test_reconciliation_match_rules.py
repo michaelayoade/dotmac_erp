@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,6 +29,7 @@ class MockMatchRule:
         self,
         rule_id: uuid.UUID | None = None,
         organization_id: uuid.UUID | None = None,
+        bank_account_id: uuid.UUID | None = None,
         name: str = "Test Rule",
         source_doc_type: str = "CUSTOMER_PAYMENT",
         priority: int = 100,
@@ -47,6 +49,7 @@ class MockMatchRule:
     ):
         self.rule_id = rule_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
+        self.bank_account_id = bank_account_id
         self.name = name
         self.source_doc_type = source_doc_type
         self.priority = priority
@@ -341,8 +344,11 @@ class TestRuleCRUD:
 
     def test_create_rule(self) -> None:
         org_id = uuid.uuid4()
+        bank_account_id = uuid.uuid4()
+        self.db.get.return_value = SimpleNamespace(organization_id=org_id)
         data = {
             "name": "Custom Paystack Rule",
+            "bank_account_id": bank_account_id,
             "source_doc_type": "PAYMENT_INTENT",
             "priority": 100,
             "conditions": [
@@ -353,6 +359,7 @@ class TestRuleCRUD:
         }
         rule = self.service.create(org_id, data)
         assert rule.name == "Custom Paystack Rule"
+        assert rule.bank_account_id == bank_account_id
         assert rule.source_doc_type == "PAYMENT_INTENT"
         assert rule.priority == 100
         assert rule.is_system is False

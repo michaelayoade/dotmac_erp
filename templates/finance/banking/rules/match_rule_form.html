@@ -32,6 +32,7 @@
   {% endif %}
 
   {% set fd = form_data if form_data else {} %}
+  {% set selected_bank_account_id = fd.bank_account_id if fd.bank_account_id is defined else (rule.bank_account_id|string if rule and rule.bank_account_id else '') %}
   {% set action_url = "/finance/banking/match-rules/" + rule.rule_id|string + "/edit" if editing and rule else "/finance/banking/match-rules/new" %}
 
   <form method="POST" action="{{ action_url }}" class="space-y-6">
@@ -54,6 +55,19 @@
                  value="{{ fd.description if fd.description is defined else (rule.description if rule and rule.description else '') }}"
                  placeholder="Describe what this rule matches..."
                  class="form-input mt-1">
+        </div>
+        <div class="sm:col-span-2">
+          <label for="bank_account_id" class="form-label">Bank Account</label>
+          <select id="bank_account_id" name="bank_account_id" class="form-select mt-1">
+            <option value="">All accounts / not account-specific</option>
+            {% for bank_account in bank_accounts %}
+            <option value="{{ bank_account.bank_account_id }}"
+              {{ 'selected' if selected_bank_account_id|string == bank_account.bank_account_id|string else '' }}>
+              {{ bank_account.account_name }} — {{ bank_account.bank_name }} ({{ bank_account.account_number }})
+            </option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">Expense automation requires a specific active bank account.</span>
         </div>
         <div>
           <label for="source_doc_type" class="form-label">Source Document Type <span class="text-rose-500">*</span></label>

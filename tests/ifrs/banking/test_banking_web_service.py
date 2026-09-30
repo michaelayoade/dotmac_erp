@@ -74,13 +74,14 @@ async def test_queue_paystack_expense_auto_match_validates_then_queues(mock_db):
     org_id = uuid4()
     user_id = uuid4()
     account_id = uuid4()
+    rule_id = uuid4()
     auth = WebAuthContext(
         is_authenticated=True,
         person_id=user_id,
         organization_id=org_id,
     )
     request = MagicMock()
-    request.form = AsyncMock(return_value={})
+    request.form = AsyncMock(return_value={"rule_id": str(rule_id)})
     queue_task = MagicMock()
     task_module = ModuleType("app.tasks.banking")
     task_module.auto_match_paystack_expenses = SimpleNamespace(delay=queue_task)
@@ -97,8 +98,8 @@ async def test_queue_paystack_expense_auto_match_validates_then_queues(mock_db):
         ),
         patch(
             "app.services.finance.banking.paystack_expense_auto_match."
-            "paystack_expense_auto_match_service.validate_account"
-        ) as validate_account,
+            "paystack_expense_auto_match_service.validate_configuration"
+        ) as validate_configuration,
     ):
         response = await service.queue_paystack_expense_auto_match_response(
             request,
@@ -112,8 +113,10 @@ async def test_queue_paystack_expense_auto_match_validates_then_queues(mock_db):
         "success=Paystack+expense+auto-match+has+started"
         in response.headers["location"]
     )
-    validate_account.assert_called_once_with(mock_db, org_id, account_id)
-    queue_task.assert_called_once_with(str(org_id), str(account_id), str(user_id))
+    validate_configuration.assert_called_once_with(mock_db, org_id, account_id, rule_id)
+    queue_task.assert_called_once_with(
+        str(org_id), str(account_id), str(rule_id), str(user_id)
+    )
 
 
 def test_duplicate_rule_response_redirects_with_copy_count(mock_db):

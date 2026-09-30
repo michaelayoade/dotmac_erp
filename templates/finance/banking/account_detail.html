@@ -16,16 +16,28 @@
 {% block header_actions %}
 {% if account %}
 <div class="flex items-center gap-2">
-    {% if is_paystack_expense_account %}
+    {% if expense_auto_match_rules %}
     <form method="POST"
           action="/finance/banking/accounts/{{ account.bank_account_id }}/auto-match-paystack-expenses"
-          onsubmit="return confirm('Auto-match paid expenses using exact Paystack reference, amount, and paid date? Ambiguous transactions will be skipped.');">
+          class="flex items-center gap-2"
+          onsubmit="return confirm('Run the selected rule and auto-match only exact payment reference, amount, and paid date? Ambiguous transactions will be skipped.');">
         {{ request.state.csrf_form | safe }}
+        <label for="expense-auto-match-rule" class="sr-only">Expense automation rule</label>
+        <select id="expense-auto-match-rule" name="rule_id" required class="form-select min-w-48">
+            {% for rule in expense_auto_match_rules %}
+            <option value="{{ rule.rule_id }}">{{ rule.name }}</option>
+            {% endfor %}
+        </select>
         <button type="submit" class="btn btn-secondary">
             {{ icon_svg("lightning-bolt", "h-4 w-4") }}
             Auto-Match Expenses
         </button>
     </form>
+    {% else %}
+    <a href="/finance/banking/match-rules/new" class="btn btn-secondary">
+        {{ icon_svg("plus", "h-4 w-4") }}
+        Configure Expense Automation
+    </a>
     {% endif %}
     <a href="/finance/banking/statements/import?account_id={{ account.bank_account_id }}"
        class="btn btn-secondary">

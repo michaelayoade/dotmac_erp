@@ -398,23 +398,38 @@ class BankingAccountWebService:
             )
         )
 
-        # Mono Connect integration context
-        from app.models.domain_settings import SettingDomain
-        from app.services.finance.banking.paystack_expense_auto_match import (
-            paystack_expense_auto_match_service,
+        # Configurable expense automation rules for this account.
+        from app.models.finance.banking.reconciliation_match_rule import (
+            ReconciliationMatchRule,
+            SourceDocType,
         )
+        from app.models.domain_settings import SettingDomain
         from app.services.settings_spec import resolve_value
 
         org_id = coerce_uuid(auth.organization_id)
         requested_account_id = coerce_uuid(account_id)
-        context["is_paystack_expense_account"] = context.get(
-            "account"
-        ) is not None and paystack_expense_auto_match_service.is_configured_account(
-            db,
-            org_id,
-            requested_account_id,
-        )
+        context["expense_auto_match_rules"] = []
+        if context.get("account") is not None:
+            context["expense_auto_match_rules"] = list(
+                db.scalars(
+                    select(ReconciliationMatchRule)
+                    .where(
+                        ReconciliationMatchRule.organization_id == org_id,
+                        ReconciliationMatchRule.bank_account_id == requested_account_id,
+                        ReconciliationMatchRule.is_active.is_(True),
+                        ReconciliationMatchRule.source_doc_type
+                        == SourceDocType.EXPENSE.value,
+                        ReconciliationMatchRule.action_type == "MATCH",
+                        ReconciliationMatchRule.match_debit.is_(True),
+                    )
+                    .order_by(
+                        ReconciliationMatchRule.priority,
+                        ReconciliationMatchRule.name,
+                    )
+                ).all()
+            )
 
+        # Mono Connect integration context
         mono_enabled = resolve_value(
             db,
             SettingDomain.banking,
@@ -462,21 +477,29 @@ class BankingAccountWebService:
         )
         from app.tasks.banking import auto_match_paystack_expenses
 
-        await request.form()  # Consume the CSRF-protected form payload.
+        form = await request.form()
         if auth.organization_id is None or auth.user_id is None:
             raise HTTPException(status_code=401, detail="Authentication required")
 
         org_id = coerce_uuid(auth.organization_id)
         bank_account_id = coerce_uuid(account_id)
         try:
-            paystack_expense_auto_match_service.validate_account(
+            selected_rule_id = form.get("rule_id")
+            if not selected_rule_id:
+                raise PaystackExpenseAutoMatchError(
+                    "Select an active expense automation rule"
+                )
+            rule_id = coerce_uuid(selected_rule_id)
+            paystack_expense_auto_match_service.validate_configuration(
                 db,
                 org_id,
                 bank_account_id,
+                rule_id,
             )
             auto_match_paystack_expenses.delay(
                 str(org_id),
                 str(bank_account_id),
+                str(rule_id),
                 str(auth.user_id),
             )
             message = quote_plus("Paystack expense auto-match has started")

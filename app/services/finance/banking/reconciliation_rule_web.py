@@ -12,10 +12,12 @@ from typing import Any
 from uuid import UUID
 
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.services.common import NotFoundError
 from app.services.finance.banking.reconciliation_rule_service import (
     ReconciliationRuleService,
@@ -107,10 +109,19 @@ class ReconciliationRuleWebService:
         total = len(rules)
         start = (page - 1) * limit
         paginated = rules[start : start + limit]
+        bank_accounts = list(
+            db.scalars(
+                select(BankAccount).where(BankAccount.organization_id == org_id)
+            ).all()
+        )
 
         context.update(
             {
                 "rules": paginated,
+                "bank_account_names": {
+                    account.bank_account_id: account.account_name
+                    for account in bank_accounts
+                },
                 "total": total,
                 "page": page,
                 "limit": limit,
@@ -134,6 +145,13 @@ class ReconciliationRuleWebService:
         context = base_context(request, auth, "Match Rule", "banking", db=db)
         service = ReconciliationRuleService(db)
         rule = _get_rule_for_org(service, rule_id, org_id)
+        bank_account = (
+            db.get(BankAccount, rule.bank_account_id)
+            if rule.bank_account_id is not None
+            else None
+        )
+        if bank_account and bank_account.organization_id != org_id:
+            bank_account = None
 
         # Get recent match log for this rule
         match_log = service.get_match_log(org_id, rule_id=rule.rule_id, limit=20)
@@ -141,6 +159,7 @@ class ReconciliationRuleWebService:
         context.update(
             {
                 "rule": rule,
+                "bank_account": bank_account,
                 "match_log": match_log,
                 "source_doc_types": dict(SOURCE_DOC_TYPE_CHOICES),
                 "condition_fields": dict(CONDITION_FIELD_CHOICES),
@@ -159,8 +178,9 @@ class ReconciliationRuleWebService:
         db: Session,
     ) -> HTMLResponse:
         """New match rule form page."""
+        org_id = _org_id(auth)
         context = base_context(request, auth, "New Match Rule", "banking", db=db)
-        context.update(self._form_context())
+        context.update(self._form_context(db, org_id))
         return templates.TemplateResponse(
             request, "finance/banking/rules/match_rule_form.html", context
         )
@@ -177,7 +197,7 @@ class ReconciliationRuleWebService:
         context = base_context(request, auth, "Edit Match Rule", "banking", db=db)
         service = ReconciliationRuleService(db)
         rule = _get_rule_for_org(service, rule_id, org_id)
-        context.update(self._form_context())
+        context.update(self._form_context(db, org_id))
         context["rule"] = rule
         context["editing"] = True
         return templates.TemplateResponse(
@@ -205,7 +225,7 @@ class ReconciliationRuleWebService:
         except (ValueError, KeyError) as e:
             logger.warning("Failed to create match rule: %s", e)
             context = base_context(request, auth, "New Match Rule", "banking", db=db)
-            context.update(self._form_context())
+            context.update(self._form_context(db, org_id))
             context["error"] = str(e)
             context["form_data"] = form_data
             return templates.TemplateResponse(
@@ -235,7 +255,7 @@ class ReconciliationRuleWebService:
         except (ValueError, KeyError) as e:
             logger.warning("Failed to update match rule %s: %s", rule_id, e)
             context = base_context(request, auth, "Edit Match Rule", "banking", db=db)
-            context.update(self._form_context())
+            context.update(self._form_context(db, org_id))
             context["error"] = str(e)
             context["form_data"] = form_data
             context["editing"] = True
@@ -322,9 +342,20 @@ class ReconciliationRuleWebService:
     # ── Private helpers ──────────────────────────────────────────────
 
     @staticmethod
-    def _form_context() -> dict[str, Any]:
+    def _form_context(db: Session, org_id: UUID) -> dict[str, Any]:
         """Return shared form context (dropdowns, defaults)."""
+        bank_accounts = list(
+            db.scalars(
+                select(BankAccount)
+                .where(
+                    BankAccount.organization_id == org_id,
+                    BankAccount.status == BankAccountStatus.active,
+                )
+                .order_by(BankAccount.account_name, BankAccount.account_number)
+            ).all()
+        )
         return {
+            "bank_accounts": bank_accounts,
             "source_doc_type_choices": SOURCE_DOC_TYPE_CHOICES,
             "condition_field_choices": CONDITION_FIELD_CHOICES,
             "condition_operator_choices": CONDITION_OPERATOR_CHOICES,
@@ -348,6 +379,11 @@ class ReconciliationRuleWebService:
             i += 1
 
         return {
+            "bank_account_id": (
+                UUID(str(form_data["bank_account_id"]))
+                if form_data.get("bank_account_id")
+                else None
+            ),
             "name": str(form_data.get("name", "")).strip(),
             "description": str(form_data.get("description", "")).strip() or None,
             "source_doc_type": str(form_data.get("source_doc_type", "")),

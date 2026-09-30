@@ -28,6 +28,7 @@
           <tr>
             <th scope="col">Priority</th>
             <th scope="col">Name</th>
+            <th scope="col" class="hidden lg:table-cell">Bank Account</th>
             <th scope="col">Source Type</th>
             <th scope="col" class="text-center">Direction</th>
             <th scope="col" class="text-center">Status</th>
@@ -50,6 +51,9 @@
                   System
                 </span>
               {% endif %}
+            </td>
+            <td class="hidden lg:table-cell text-sm text-slate-600 dark:text-slate-300">
+              {{ bank_account_names.get(rule.bank_account_id, 'All accounts') if rule.bank_account_id else 'All accounts' }}
             </td>
             <td class="text-sm text-slate-600 dark:text-slate-300">
               {{ source_doc_types.get(rule.source_doc_type, rule.source_doc_type) if rule.source_doc_type else '' }}
@@ -96,7 +100,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="8">
+            <td colspan="9">
               {{ empty_state(
                 title="No match rules yet",
                 description="Create rules to automatically match bank statement lines to source documents.",
