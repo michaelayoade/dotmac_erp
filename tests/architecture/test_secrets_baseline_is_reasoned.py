@@ -187,7 +187,7 @@ def test_the_suppression_count_only_shrinks() -> None:
     """
     total = sum(len(v) for v in _baseline()["results"].values())
     assert total == 29, (
-        f"{total} suppressed findings, expected exactly 29. A rise means fix "
+        f"{total} suppressed findings, expected exactly 30. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
         "change -- never leave a stale number unexamined either direction."
