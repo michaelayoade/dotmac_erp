@@ -31,6 +31,7 @@ from app.models.finance.banking.reconciliation_match_rule import (
     ReconciliationMatchLog,
     ReconciliationMatchRule,
 )
+from app.models.finance.gl.account import Account, AccountType
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,7 @@ class ReconciliationRuleService:
         """Create a new match rule."""
         bank_account_id = data.get("bank_account_id")
         self._validate_bank_account(org_id, bank_account_id)
+        self._validate_writeoff_account(org_id, data.get("writeoff_account_id"))
         rule = ReconciliationMatchRule(
             organization_id=org_id,
             bank_account_id=bank_account_id,
@@ -171,6 +173,11 @@ class ReconciliationRuleService:
 
         if "bank_account_id" in data:
             self._validate_bank_account(rule.organization_id, data["bank_account_id"])
+        if "writeoff_account_id" in data:
+            self._validate_writeoff_account(
+                rule.organization_id,
+                data["writeoff_account_id"],
+            )
 
         for field in (
             "bank_account_id",
@@ -205,6 +212,24 @@ class ReconciliationRuleService:
         account = self.db.get(BankAccount, bank_account_id)
         if not account or account.organization_id != org_id:
             raise ValueError("Bank account not found")
+
+    def _validate_writeoff_account(
+        self,
+        org_id: UUID,
+        account_id: UUID | None,
+    ) -> None:
+        """Reject cross-tenant or non-postable fee/write-off accounts."""
+        if account_id is None:
+            return
+        account = self.db.get(Account, account_id)
+        if (
+            not account
+            or account.organization_id != org_id
+            or account.account_type != AccountType.POSTING
+            or not account.is_active
+            or not account.is_posting_allowed
+        ):
+            raise ValueError("Write-off account not found or is not postable")
 
     def delete(self, rule_id: UUID) -> None:
         """Delete a rule. Raises ValueError for system rules."""

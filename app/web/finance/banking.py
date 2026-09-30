@@ -12,6 +12,7 @@ from starlette.responses import Response
 from app.services.finance.banking.web import banking_web_service
 from app.services.finance.banking.web_parts.accounts import (
     can_auto_match_ap_invoices,
+    can_auto_match_paystack_customers,
 )
 from app.templates import templates
 from app.web.deps import (
@@ -32,6 +33,18 @@ def require_ap_invoice_auto_match_access(
         raise HTTPException(
             status_code=403,
             detail="AP payment and bank reconciliation permissions required",
+        )
+    return auth
+
+
+def require_paystack_customer_auto_match_access(
+    auth: WebAuthContext = Depends(require_finance_access),
+) -> WebAuthContext:
+    """Require receipt, fee-journal, and reconciliation permissions."""
+    if not can_auto_match_paystack_customers(auth):
+        raise HTTPException(
+            status_code=403,
+            detail="AR receipt, journal, and bank reconciliation permissions required",
         )
     return auth
 
@@ -157,6 +170,22 @@ async def auto_match_paystack_expenses(
 ) -> Response:
     """Queue deterministic expense posting and matching for a Paystack account."""
     return await banking_web_service.queue_paystack_expense_auto_match_response(
+        request,
+        auth,
+        db,
+        account_id,
+    )
+
+
+@router.post("/accounts/{account_id}/auto-match-paystack-customers")
+async def auto_match_paystack_customers(
+    request: Request,
+    account_id: str,
+    auth: WebAuthContext = Depends(require_paystack_customer_auto_match_access),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Queue exact Paystack customer receipt and fee reconciliation."""
+    return await banking_web_service.queue_paystack_customer_auto_match_response(
         request,
         auth,
         db,

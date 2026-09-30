@@ -191,7 +191,7 @@
     </div>
 
     {# ── Advanced Settings ─────────────────────────────── #}
-    <div class="card p-6" x-data='{ showAdvanced: {{ "true" if (fd.amount_tolerance_cents is defined and fd.amount_tolerance_cents) or (fd.date_window_days is defined and fd.date_window_days) or (rule and (rule.amount_tolerance_cents is not none or rule.date_window_days is not none or rule.journal_label_template)) else "false" }} }'>
+    <div class="card p-6" x-data='{ showAdvanced: {{ "true" if (fd.amount_tolerance_cents is defined and fd.amount_tolerance_cents) or (fd.date_window_days is defined and fd.date_window_days) or (fd.writeoff_account_id is defined and fd.writeoff_account_id) or (rule and (rule.amount_tolerance_cents is not none or rule.date_window_days is not none or rule.writeoff_account_id or rule.journal_label_template)) else "false" }} }'>
       <button type="button" @click="showAdvanced = !showAdvanced"
               class="flex w-full items-center justify-between text-lg font-medium text-slate-900 dark:text-white">
         Advanced Settings
@@ -240,6 +240,21 @@
                    class="form-input mt-1">
             <span class="form-hint">Override the global date buffer for matching.</span>
           </div>
+        </div>
+
+        <div>
+          <label for="writeoff_account_id" class="form-label">Fee / Write-off Account</label>
+          <select id="writeoff_account_id" name="writeoff_account_id" class="form-select mt-1">
+            <option value="">Not required</option>
+            {% set selected_writeoff_account_id = fd.writeoff_account_id if fd.writeoff_account_id is defined else (rule.writeoff_account_id|string if rule and rule.writeoff_account_id else '') %}
+            {% for account in writeoff_accounts %}
+            <option value="{{ account.account_id }}"
+              {{ 'selected' if selected_writeoff_account_id|string == account.account_id|string else '' }}>
+              {{ account.account_code }} — {{ account.account_name }}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="form-hint">Required for net Paystack customer receipts so the gateway fee is posted and the match ties exactly.</span>
         </div>
 
         <div>

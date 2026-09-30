@@ -147,6 +147,44 @@ def test_ap_invoice_task_uses_one_tenant_session_and_commit() -> None:
     db.commit.assert_called_once_with()
 
 
+def test_paystack_customer_task_uses_one_tenant_session_and_commit() -> None:
+    from app.tasks.banking import auto_match_paystack_customers
+
+    org_id = uuid.uuid4()
+    account_id = uuid.uuid4()
+    rule_id = uuid.uuid4()
+    actor_id = uuid.uuid4()
+    db = MagicMock()
+
+    @contextmanager
+    def session_factory(requested_org_id):
+        assert requested_org_id == org_id
+        yield db
+
+    service_result = SimpleNamespace(
+        matched=4,
+        to_dict=lambda: {"scanned": 5, "matched": 4},
+    )
+    with (
+        patch("app.db.session_context.session_for_org", session_factory),
+        patch(
+            "app.services.finance.banking.paystack_customer_auto_match."
+            "paystack_customer_auto_match_service.run",
+            return_value=service_result,
+        ) as run_matcher,
+    ):
+        result = auto_match_paystack_customers(
+            str(org_id),
+            str(account_id),
+            str(rule_id),
+            str(actor_id),
+        )
+
+    assert result == {"scanned": 5, "matched": 4}
+    run_matcher.assert_called_once_with(db, org_id, account_id, rule_id, actor_id)
+    db.commit.assert_called_once_with()
+
+
 # ── Tests ────────────────────────────────────────────────────────────
 
 

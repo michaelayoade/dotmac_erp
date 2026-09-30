@@ -25,6 +25,7 @@ from app.tasks.automation import (
 )
 from app.tasks.banking import (
     auto_match_ap_invoices,
+    auto_match_paystack_customers,
     auto_match_paystack_expenses,
     auto_match_unreconciled_statements,
 )
@@ -249,6 +250,7 @@ __all__ = [
     "process_monthly_depreciation_runs",
     # Banking tasks
     "auto_match_ap_invoices",
+    "auto_match_paystack_customers",
     "auto_match_paystack_expenses",
     "auto_match_unreconciled_statements",
     # Inventory tasks

@@ -367,6 +367,23 @@ class TestRuleCRUD:
         self.db.add.assert_called_once()
         assert self.db.flush.call_count >= 1
 
+    def test_create_rule_rejects_cross_tenant_writeoff_account(self) -> None:
+        org_id = uuid.uuid4()
+        data = {
+            "name": "Paystack Customer Rule",
+            "source_doc_type": "PAYMENT_INTENT",
+            "writeoff_account_id": uuid.uuid4(),
+        }
+        self.db.get.return_value = SimpleNamespace(
+            organization_id=uuid.uuid4(),
+            account_type="POSTING",
+            is_active=True,
+            is_posting_allowed=True,
+        )
+
+        with pytest.raises(ValueError, match="Write-off account"):
+            self.service.create(org_id, data)
+
     def test_delete_system_rule_raises(self) -> None:
         """System rules cannot be deleted."""
         rule = MagicMock()

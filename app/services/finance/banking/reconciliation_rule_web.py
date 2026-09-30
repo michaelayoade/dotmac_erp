@@ -18,6 +18,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
+from app.models.finance.gl.account import Account, AccountType
 from app.services.common import NotFoundError
 from app.services.finance.banking.reconciliation_rule_service import (
     ReconciliationRuleService,
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 SOURCE_DOC_TYPE_CHOICES = [
     ("CUSTOMER_PAYMENT", "Customer Payment"),
     ("SUPPLIER_PAYMENT", "Supplier Payment (AP Invoice)"),
-    ("PAYMENT_INTENT", "Payment Intent (Gateway)"),
+    ("PAYMENT_INTENT", "Payment Intent (Paystack Customer)"),
     ("BANK_FEE", "Bank Fee"),
     ("INTER_BANK", "Inter-Bank Transfer"),
     ("INVOICE", "Invoice (Direct Match)"),
@@ -152,6 +153,13 @@ class ReconciliationRuleWebService:
         )
         if bank_account and bank_account.organization_id != org_id:
             bank_account = None
+        writeoff_account = (
+            db.get(Account, rule.writeoff_account_id)
+            if rule.writeoff_account_id is not None
+            else None
+        )
+        if writeoff_account and writeoff_account.organization_id != org_id:
+            writeoff_account = None
 
         # Get recent match log for this rule
         match_log = service.get_match_log(org_id, rule_id=rule.rule_id, limit=20)
@@ -160,6 +168,7 @@ class ReconciliationRuleWebService:
             {
                 "rule": rule,
                 "bank_account": bank_account,
+                "writeoff_account": writeoff_account,
                 "match_log": match_log,
                 "source_doc_types": dict(SOURCE_DOC_TYPE_CHOICES),
                 "condition_fields": dict(CONDITION_FIELD_CHOICES),
@@ -354,8 +363,21 @@ class ReconciliationRuleWebService:
                 .order_by(BankAccount.account_name, BankAccount.account_number)
             ).all()
         )
+        writeoff_accounts = list(
+            db.scalars(
+                select(Account)
+                .where(
+                    Account.organization_id == org_id,
+                    Account.account_type == AccountType.POSTING,
+                    Account.is_active.is_(True),
+                    Account.is_posting_allowed.is_(True),
+                )
+                .order_by(Account.account_code, Account.account_name)
+            ).all()
+        )
         return {
             "bank_accounts": bank_accounts,
+            "writeoff_accounts": writeoff_accounts,
             "source_doc_type_choices": SOURCE_DOC_TYPE_CHOICES,
             "condition_field_choices": CONDITION_FIELD_CHOICES,
             "condition_operator_choices": CONDITION_OPERATOR_CHOICES,
@@ -404,6 +426,11 @@ class ReconciliationRuleWebService:
             ),
             "action_type": str(form_data.get("action_type", "MATCH")),
             "min_confidence": int(form_data.get("min_confidence", 90)),
+            "writeoff_account_id": (
+                UUID(str(form_data["writeoff_account_id"]))
+                if form_data.get("writeoff_account_id")
+                else None
+            ),
             "journal_label_template": (
                 str(form_data["journal_label_template"]).strip()
                 if form_data.get("journal_label_template")
