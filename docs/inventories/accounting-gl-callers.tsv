@@ -45,6 +45,7 @@ app/services/finance/banking/auto_reconciliation_parts/special.py	AutoReconcilia
 app/services/finance/banking/bank_fee_posting.py	_post_existing	gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/bank_fee_posting.py	fee_idempotency_key	gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/bank_fee_posting.py	post_bank_fee	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
+app/services/finance/banking/paystack_customer_auto_match.py	PaystackCustomerAutoMatchService._resolve_fee_bank_line	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/programmatic_parts/special_strategies.py	InterbankCounterpartStrategy.run	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/reconciliation_engine_parts/handlers.py	ReconciliationEngineHandlers._handle_inter_bank	gl.journal|gl.posting_adapter	repoint_to_module	caller_repointed
 app/services/finance/banking/reconciliation_parts/matching.py	ReconciliationMatchingService.create_journal_and_match	gl.journal	repoint_to_module	caller_repointed
