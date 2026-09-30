@@ -44,7 +44,7 @@ processors:
         value: dotmac-erp
         action: upsert
       - key: dotmac.release
-        value: b71f7436cacd
+        value: b71f7436cacd  # pragma: allowlist secret
         action: upsert
       - key: service.name
         value: dotmac-erp
