@@ -19,6 +19,9 @@ app/tasks/audit_integrity.py::verify_audit_hash_chain	adapter-owned: entry point
 app/tasks/automation.py::execute_workflow_action	adapter-owned: entry point (Celery task decorator)
 app/tasks/automation.py::process_recurring_templates	adapter-owned: entry point (Celery task decorator)
 app/tasks/automation.py::process_scheduled_workflow_rules	adapter-owned: entry point (Celery task decorator)
+app/tasks/banking.py::auto_match_ap_invoices	adapter-owned: entry point (Celery task decorator)
+app/tasks/banking.py::auto_match_paystack_customers	adapter-owned: entry point (Celery task decorator)
+app/tasks/banking.py::auto_match_paystack_expenses	adapter-owned: entry point (Celery task decorator)
 app/tasks/banking.py::auto_match_unreconciled_statements	adapter-owned: entry point (Celery task decorator)
 app/tasks/coach.py::_run_org_analyzer	grandfathered: unreviewed
 app/tasks/coach.py::generate_daily_ap_due_insights	adapter-owned: entry point (Celery task decorator)
