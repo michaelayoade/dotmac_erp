@@ -4,12 +4,15 @@ Banking Web Routes.
 HTML template routes for Bank Accounts, Statements, and Reconciliations.
 """
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
 from app.services.finance.banking.web import banking_web_service
+from app.services.finance.banking.web_parts.accounts import (
+    can_auto_match_ap_invoices,
+)
 from app.templates import templates
 from app.web.deps import (
     get_db_for_org,
@@ -19,6 +22,18 @@ from app.web.deps import (
 )
 
 router = APIRouter(prefix="/banking", tags=["banking-web"])
+
+
+def require_ap_invoice_auto_match_access(
+    auth: WebAuthContext = Depends(require_finance_access),
+) -> WebAuthContext:
+    """Require every permission exercised by AP invoice auto-matching."""
+    if not can_auto_match_ap_invoices(auth):
+        raise HTTPException(
+            status_code=403,
+            detail="AP payment and bank reconciliation permissions required",
+        )
+    return auth
 
 
 @router.get("", response_class=HTMLResponse)
@@ -142,6 +157,22 @@ async def auto_match_paystack_expenses(
 ) -> Response:
     """Queue deterministic expense posting and matching for a Paystack account."""
     return await banking_web_service.queue_paystack_expense_auto_match_response(
+        request,
+        auth,
+        db,
+        account_id,
+    )
+
+
+@router.post("/accounts/{account_id}/auto-match-ap-invoices")
+async def auto_match_ap_invoices(
+    request: Request,
+    account_id: str,
+    auth: WebAuthContext = Depends(require_ap_invoice_auto_match_access),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Queue exact AP invoice payment creation and bank matching."""
+    return await banking_web_service.queue_ap_invoice_auto_match_response(
         request,
         auth,
         db,

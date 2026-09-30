@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Source doc type choices for the form dropdown
 SOURCE_DOC_TYPE_CHOICES = [
     ("CUSTOMER_PAYMENT", "Customer Payment"),
-    ("SUPPLIER_PAYMENT", "Supplier Payment"),
+    ("SUPPLIER_PAYMENT", "Supplier Payment (AP Invoice)"),
     ("PAYMENT_INTENT", "Payment Intent (Gateway)"),
     ("BANK_FEE", "Bank Fee"),
     ("INTER_BANK", "Inter-Bank Transfer"),
