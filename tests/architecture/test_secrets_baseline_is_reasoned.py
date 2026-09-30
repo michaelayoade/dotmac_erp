@@ -3,7 +3,7 @@
 The baseline held **121 findings across 77 files, none carrying a reason**.
 That is not a list of accepted risks; it is a record that somebody pressed
 "ignore" 121 times. It had already swallowed three of the four credentials
-scrubbed on 2026-08-11 — each was correctly flagged `Secret Keyword`, and each
+scrubbed on 2026-08-11 â€” each was correctly flagged `Secret Keyword`, and each
 was written into the baseline instead of fixed.
 
 ## What the retirement found
@@ -11,17 +11,17 @@ was written into the baseline instead of fixed.
 The 121 were not 121 judgements:
 
 * **82 were for files the hook already excluded** (`tests/`, `alembic/`,
-  `scripts/`, `.env.example`). Never scanned, suppressing nothing — pure
+  `scripts/`, `.env.example`). Never scanned, suppressing nothing â€” pure
   residue from a baseline generated before the exclude list existed.
 * **20 more were Python**, now covered by
   `test_no_committed_credentials.py`, which walks the AST of every tracked
-  `.py` file INCLUDING `scripts/` — the directory this hook skips and where all
+  `.py` file INCLUDING `scripts/` â€” the directory this hook skips and where all
   four real credentials actually lived.
 * **19 remain**, and they are enumerated below with reasons.
 
 The Python entries are worth naming, because they are what an entropy
 heuristic produces: 22 were `Artifactory Credentials` matching `AP`-prefixed
-identifiers (`APAgingService`, `APBatchStatus`, `APAgingBucketRead` — accounts
+identifiers (`APAgingService`, `APBatchStatus`, `APAgingBucketRead` â€” accounts
 payable), and 32 were `Hex High Entropy String` matching Alembic revision IDs
 (`revision = "9b2a7c1d4c9a"`), which are REQUIRED to be random hex and gain one
 more with every migration. A detector whose false-positive rate grows with the
@@ -30,13 +30,13 @@ codebase produces a suppression list that grows with it too.
 ## What is covered, and what is deliberately not
 
 After this change, tracked Python is checked by the AST guard over `app/`,
-`scripts/` and `alembic/` — 2,018 files — and every other file type by this
+`scripts/` and `alembic/` â€” 2,018 files â€” and every other file type by this
 hook. Between them that is everything EXCEPT `tests/` (674 Python files),
 which neither covers.
 
 That gap is stated rather than closed, and the measurement is why: extending
 the AST guard to `tests/` fires on **71 sites**, almost all of them fake
-`token=` fixtures in API tests. Covering it would mean a 71-entry allowlist —
+`token=` fixtures in API tests. Covering it would mean a 71-entry allowlist â€”
 recreating, in a new file, exactly the unexplained suppression list this change
 exists to delete.
 
@@ -50,7 +50,7 @@ credential, which is a different piece of work.
 A baseline entry is an exemption, and ADR-0018 says an exemption states an
 enforceable premise. `REASONS` below is that statement. The list may shrink
 freely; growing it means adding the reason at the same time, which is the whole
-point — the cost of suppressing a finding should be having to say why.
+point â€” the cost of suppressing a finding should be having to say why.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ REASONS = {
         "exists only for the length of the job."
     ),
     ".github/workflows/release-hardened.yml": (
-        "`secrets: |` — the same YAML key. The values it forwards live in "
+        "`secrets: |` â€” the same YAML key. The values it forwards live in "
         "GitHub's secret store and never appear here."
     ),
     "README.md": (
@@ -96,7 +96,7 @@ REASONS = {
     ),
     "docs/paystack_chargebacks_investigation.md": (
         "Paystack transaction references from a written-up investigation. "
-        "They identify transactions, not an actor — a reference authorises "
+        "They identify transactions, not an actor â€” a reference authorises "
         "nothing on its own, and the doc is the record of what was examined."
     ),
     "locales/en.json": (
@@ -106,7 +106,7 @@ REASONS = {
     ),
     "templates/people/hr/geofence_editor.html": (
         "Subresource Integrity hashes for the Leaflet CDN assets. An SRI "
-        "attribute IS a base64 hash — flagging it as a secret inverts its "
+        "attribute IS a base64 hash â€” flagging it as a secret inverts its "
         "purpose, which is to make the asset tamper-evident in public."
     ),
 }
@@ -125,7 +125,7 @@ def test_every_suppressed_file_states_a_reason() -> None:
     assert unexplained == [], (
         "These files have suppressed findings and no stated reason. A baseline "
         "entry without one is indistinguishable from a real secret nobody "
-        "looked at — which is how three of the four scrubbed credentials got "
+        "looked at â€” which is how three of the four scrubbed credentials got "
         "here (ADR-0018):\n  " + "\n  ".join(unexplained)
     )
 
@@ -135,7 +135,7 @@ def test_no_reason_outlives_its_finding() -> None:
     and stale documentation is how a list stops being read."""
     stale = sorted(set(REASONS) - _files())
     assert stale == [], (
-        "These no longer have suppressed findings — delete their entries:\n  "
+        "These no longer have suppressed findings â€” delete their entries:\n  "
         + "\n  ".join(stale)
     )
 
@@ -143,11 +143,11 @@ def test_no_reason_outlives_its_finding() -> None:
 def test_python_is_not_suppressed_here() -> None:
     """Python belongs to `test_no_committed_credentials.py`, which has no
     baseline. An entry reappearing here means the AST guard was routed around
-    rather than satisfied — and it covers `scripts/`, which this hook does not.
+    rather than satisfied â€” and it covers `scripts/`, which this hook does not.
     """
     python = sorted(f for f in _files() if f.endswith(".py"))
     assert python == [], (
-        "Python findings must be fixed, not suppressed — "
+        "Python findings must be fixed, not suppressed â€” "
         "tests/architecture/test_no_committed_credentials.py owns them:\n  "
         + "\n  ".join(python)
     )
@@ -167,7 +167,7 @@ def test_the_suppression_count_only_shrinks() -> None:
     fingerprint. The dependency-bundle policy still adds one public immutable
     Git commit ID. The email-outbox slice adds one schema-9 conservation
     fingerprint for its permanent SMTP refusal test, bringing the reviewed
-    suppression total to 29.
+    suppression total to 30.
 
     The v3 composition record no longer consumes a baseline slot: it is a
     closed digest-only envelope whose SHA-pinned verifier independently
@@ -175,18 +175,18 @@ def test_the_suppression_count_only_shrinks() -> None:
     expected digests with an entropy heuristic would add eleven findings
     without increasing secret coverage.
 
-    Every entry above the reviewed 29 would be unexplained, and the reason
-    check above only fires per FILE — a new finding in an already-listed
+    Every entry above the reviewed 30 would be unexplained, and the reason
+    check above only fires per FILE â€” a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
-    two-directional, and an UNEXPLAINED drop below 29 (a finding quietly
+    two-directional, and an UNEXPLAINED drop below 30 (a finding quietly
     disappearing without its `REASONS` entry being removed by
     `test_no_reason_outlives_its_finding`, or a finding merging into another
     file's count) is exactly as worth surfacing as a rise -- either way,
     someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total == 29, (
+    assert total == 30, (
         f"{total} suppressed findings, expected exactly 30. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
