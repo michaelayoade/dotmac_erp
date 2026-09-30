@@ -11,7 +11,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "20260930_recon_rule_bank_account"
-down_revision = "20260929_email_delivery_payload"
+down_revision = "20260930_orphan_evidence_guard"
 branch_labels = None
 depends_on = None
 
