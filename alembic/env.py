@@ -42,7 +42,7 @@ from app.migration_planes import ASSEMBLY_MODULE_PLANES
 # resolve both its `depends_on` effects and its selected storage plane at
 # script-load time. ERP hosts `public.tenants` itself and can never run kernel
 # `0001`, which is exactly why a module must declare the EFFECT it needs rather
-# than a foreign revision — see `app/migration_bindings.py`. Plane selection is
+# than a foreign revision â€” see `app/migration_bindings.py`. Plane selection is
 # the independent assembly decision recorded in `app/migration_planes.py`.
 #
 # This is independent of the executor contract below: bindings decide WHICH
@@ -127,7 +127,7 @@ def verify_migration_connection(connection: Connection) -> None:
     ## Why the database check is HERE and not only in the deploy preflight
 
     `scripts/bootstrap_database_roles.py --verify-only` makes this same
-    assertion, but it is `scripts/deploy.sh` step 3a — one caller. `make
+    assertion, but it is `scripts/deploy.sh` step 3a â€” one caller. `make
     migrate`, `make docker-migrate` and CI's own `alembic upgrade heads` reach
     the database WITHOUT it. A capability proven only on a path a caller may
     skip is not proven where it runs.
@@ -137,18 +137,18 @@ def verify_migration_connection(connection: Connection) -> None:
     call site, and the call site is the whole argument: `run_migrations_online`
     invokes this inside a read-only `connection.begin()` block that closes
     BEFORE `context.configure`, before `context.begin_transaction()` and before
-    `context.run_migrations()`. Nothing has been applied when this raises —
+    `context.run_migrations()`. Nothing has been applied when this raises â€”
     which is already true of the executor and ownership checks below, and has
     been since they were added. There is no chain here to be mid-way through.
 
     ## What each check answers
 
-    * `migration_executor_violations` — WHO the connection is.
-    * `migration_ownership_violations` — WHAT it owns.
-    * `database_identity_violations` — WHERE it landed. Everything above is
+    * `migration_executor_violations` â€” WHO the connection is.
+    * `migration_ownership_violations` â€” WHAT it owns.
+    * `database_identity_violations` â€” WHERE it landed. Everything above is
       satisfiable by a different, correctly shaped cluster: a staging database
       with its own well-formed `app_admin` owning its own objects passes both.
-    * `role_authority_violations` — WHETHER this deployment's identities hold
+    * `role_authority_violations` â€” WHETHER this deployment's identities hold
       and can reach only what their authority class permits. Two policies,
       one shared catalogue observation:
 
@@ -156,7 +156,7 @@ def verify_migration_connection(connection: Connection) -> None:
         two relay dispatchers. Removing `MIGRATION_DATABASE_URL` from a runtime
         service is undone by a role graph that lets the runtime role BECOME the
         migration role, and equally by a runtime role that simply holds
-        CREATEROLE on itself — which `ROLE_CONTRACT` cannot see, because it
+        CREATEROLE on itself â€” which `ROLE_CONTRACT` cannot see, because it
         reads `(rolbypassrls, rolsuper)` and nothing else.
       - `MigrationExecutorAuthorityPolicyV1` over `app_admin`. It asks a
         DIFFERENT question and therefore is a different policy: `app_admin`
@@ -166,7 +166,7 @@ def verify_migration_connection(connection: Connection) -> None:
         subject set would have made one policy answer two questions.
 
       It also proves the connection AUTHENTICATED as `app_admin` rather than
-      arriving as a privileged session that ran `SET ROLE app_admin` —
+      arriving as a privileged session that ran `SET ROLE app_admin` â€”
       `session_user` and `current_user` are read together, and
       `MIGRATION_EXPECTED_AUTHENTICATION` optionally binds `system_user` to an
       approved method and identity.
@@ -232,7 +232,13 @@ def verify_migration_connection(connection: Connection) -> None:
 
 
 migration_url = _migration_url()
-config.set_main_option("sqlalchemy.url", migration_url.replace("%", "%%"))
+# Operators and direct psycopg checks use the generic PostgreSQL DSN.  Alembic
+# runs through SQLAlchemy, so select the psycopg 3 dialect explicitly instead
+# of relying on the removed psycopg2 driver.
+sqlalchemy_migration_url = migration_url.replace(
+    "postgresql://", "postgresql+psycopg://", 1
+)
+config.set_main_option("sqlalchemy.url", sqlalchemy_migration_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
