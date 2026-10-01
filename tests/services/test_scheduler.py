@@ -399,7 +399,6 @@ class TestScheduledTasksUpdate:
         assert mock_scheduled_task.name == "original_name"
         assert mock_scheduled_task.interval_seconds == 300
 
-
     def test_update_cannot_enable_code_owned_task(self, mock_db, mock_scheduled_task):
         mock_scheduled_task.task_name = "app.tasks.analytics.refresh_cash_flow_metrics"
         mock_scheduled_task.enabled = False

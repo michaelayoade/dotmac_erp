@@ -87,9 +87,7 @@ class TestScheduledTasksAPI:
             "interval_seconds": 300,
             "enabled": True,
         }
-        response = client.post(
-            "/scheduler/tasks", json=payload, headers=auth_headers
-        )
+        response = client.post("/scheduler/tasks", json=payload, headers=auth_headers)
         assert response.status_code == 201
         data = response.json()
         assert data["name"] == payload["name"]
