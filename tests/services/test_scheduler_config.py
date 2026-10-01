@@ -467,6 +467,65 @@ class TestBuildBeatSchedule:
         assert f"scheduled_task_{task_id}" in schedule
 
     @patch("app.services.scheduler_config.SessionLocal")
+    def test_finance_reminder_master_has_one_database_owned_schedule(
+        self, mock_session_local
+    ):
+        mock_session = MagicMock()
+        mock_session_local.return_value = mock_session
+
+        task_id = uuid.uuid4()
+        task = MagicMock()
+        task.id = task_id
+        task.enabled = True
+        task.schedule_type = ScheduleType.crontab
+        task.cron_minute = "0"
+        task.cron_hour = "8"
+        task.cron_day_of_week = "*"
+        task.cron_day_of_month = "*"
+        task.cron_month_of_year = "*"
+        task.task_name = "app.tasks.finance.process_all_finance_reminders"
+        task.args_json = []
+        task.kwargs_json = {}
+        mock_session.scalars.return_value.all.return_value = [task]
+
+        schedule = build_beat_schedule()
+
+        matches = [
+            (name, entry)
+            for name, entry in schedule.items()
+            if entry["task"] == task.task_name
+        ]
+        assert len(matches) == 1
+        assert matches[0][0] == f"scheduled_task_{task_id}"
+        assert "finance-reminders" not in schedule
+
+    @patch("app.services.scheduler_config.SessionLocal")
+    def test_build_beat_schedule_skips_database_rows_for_builtin_tasks(
+        self, mock_session_local, caplog
+    ):
+        mock_session = MagicMock()
+        mock_session_local.return_value = mock_session
+
+        task = MagicMock()
+        task.id = uuid.uuid4()
+        task.enabled = True
+        task.schedule_type = ScheduleType.interval
+        task.interval_seconds = 60
+        task.task_name = "app.tasks.analytics.refresh_cash_flow_metrics"
+        task.args_json = []
+        task.kwargs_json = {}
+        mock_session.scalars.return_value.all.return_value = [task]
+
+        schedule = build_beat_schedule()
+
+        matching = [
+            entry for entry in schedule.values() if entry["task"] == task.task_name
+        ]
+        assert len(matching) == 1
+        assert "scheduled_task_" + str(task.id) not in schedule
+        assert "Ignoring enabled database schedule for code-owned task" in caplog.text
+
+    @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_enabled_only(self, mock_session_local):
         """Should only include enabled tasks."""
         mock_session = MagicMock()
