@@ -18,7 +18,8 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -1251,62 +1252,142 @@ def process_subledger_reconciliation() -> dict[str, Any]:
     return results
 
 
+_FINANCE_REMINDERS_LOCK_IDENTITY = "dotmac_erp:finance:all_reminders"
+
+
+class FinanceReminderTaskFailure(RuntimeError):
+    """A finance reminder component failed after remaining work completed."""
+
+
+def _try_acquire_finance_reminders_lock() -> Connection | None:
+    """Acquire a session advisory lock on a dedicated PostgreSQL connection."""
+    from app.db import get_engine
+
+    connection = get_engine().connect()
+    acquired = False
+    try:
+        connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+        acquired = bool(
+            connection.scalar(
+                text(
+                    "SELECT pg_try_advisory_lock(hashtextextended(:lock_identity, 0))"
+                ),
+                {"lock_identity": _FINANCE_REMINDERS_LOCK_IDENTITY},
+            )
+        )
+        return connection if acquired else None
+    except BaseException:
+        # If acquisition may have succeeded despite a connection error, do not
+        # return an uncertain lock owner to the pool.
+        connection.invalidate()
+        raise
+    finally:
+        if not acquired:
+            connection.close()
+
+
+def _release_finance_reminders_lock(connection: Connection) -> None:
+    """Release the lock on the connection that acquired it."""
+    try:
+        released = bool(
+            connection.scalar(
+                text(
+                    "SELECT pg_advisory_unlock(hashtextextended(:lock_identity, 0))"
+                ),
+                {"lock_identity": _FINANCE_REMINDERS_LOCK_IDENTITY},
+            )
+        )
+        if not released:
+            raise RuntimeError("Finance reminder advisory unlock was not acknowledged")
+    except BaseException:
+        connection.invalidate()
+        raise
+    finally:
+        connection.close()
+
+
 @shared_task
 def process_all_finance_reminders() -> dict[str, Any]:
     """
-    Master task that runs all finance reminder tasks.
+    Run the database-owned finance reminder master schedule at most once.
 
-    This can be scheduled as a single daily task, or individual tasks
-    can be scheduled separately with different frequencies.
-
-    Each subtask is run independently - failures in one don't stop others.
-
-    Returns:
-        Dict with combined results from all tasks
+    Each subtask is run independently so a failure in one does not prevent the
+    remaining reminder categories from completing. Component failures are
+    surfaced as a failed Celery task after their results are logged.
     """
-    logger.info("Processing all finance reminders")
+    lock_connection = _try_acquire_finance_reminders_lock()
+    if lock_connection is None:
+        logger.warning(
+            "Skipping overlapping finance reminder run outcome=skipped_overlap"
+        )
+        return {
+            "outcome": "skipped_overlap",
+            "blocked": 1,
+            "total_notifications": 0,
+            "fiscal_periods": {},
+            "tax_periods": {},
+            "bank_reconciliation": {},
+            "ar_collection": {},
+            "subledger_reconciliation": {},
+            "task_errors": [],
+        }
 
-    results: dict[str, Any] = {
-        "fiscal_periods": {},
-        "tax_periods": {},
-        "bank_reconciliation": {},
-        "ar_collection": {},
-        "subledger_reconciliation": {},
-        "task_errors": [],
-    }
+    try:
+        logger.info("Processing all finance reminders")
+        results: dict[str, Any] = {
+            "outcome": "completed",
+            "blocked": 0,
+            "total_notifications": 0,
+            "fiscal_periods": {},
+            "tax_periods": {},
+            "bank_reconciliation": {},
+            "ar_collection": {},
+            "subledger_reconciliation": {},
+            "task_errors": [],
+        }
 
-    # Run each subtask directly (not via .delay()) so we can aggregate
-    # results into a single return dict for monitoring. Each call is wrapped
-    # in its own try/except so one failure does not prevent the others.
-    task_runners = [
-        ("fiscal_periods", process_fiscal_period_reminders),
-        ("tax_periods", process_tax_period_reminders),
-        ("bank_reconciliation", process_bank_reconciliation_reminders),
-        ("ar_collection", process_ar_collection_reminders),
-        ("subledger_reconciliation", process_subledger_reconciliation),
-    ]
+        # Run each subtask directly (not via .delay()) so component counters
+        # can be aggregated. A failure in one does not stop the others.
+        task_runners = [
+            ("fiscal_periods", process_fiscal_period_reminders),
+            ("tax_periods", process_tax_period_reminders),
+            ("bank_reconciliation", process_bank_reconciliation_reminders),
+            ("ar_collection", process_ar_collection_reminders),
+            ("subledger_reconciliation", process_subledger_reconciliation),
+        ]
 
-    for task_name, task_func in task_runners:
-        try:
-            results[task_name] = task_func()
-        except Exception as e:
-            logger.exception("Finance reminder subtask '%s' failed", task_name)
-            results[task_name] = {"error": str(e)}
-            results["task_errors"].append(f"{task_name}: {str(e)}")
+        for task_name, task_func in task_runners:
+            try:
+                results[task_name] = task_func()
+            except Exception as exc:
+                logger.exception("Finance reminder subtask '%s' failed", task_name)
+                results[task_name] = {"error": str(exc)}
+                results["task_errors"].append(f"{task_name}: {str(exc)}")
 
-    total_notifications = sum(
-        r.get("notifications_sent", 0)
-        for r in results.values()
-        if isinstance(r, dict) and "notifications_sent" in r
-    )
+        results["total_notifications"] = sum(
+            component.get("notifications_sent", 0)
+            for component in results.values()
+            if isinstance(component, dict) and "notifications_sent" in component
+        )
+        if results["task_errors"]:
+            results["outcome"] = "completed_with_errors"
 
-    logger.info(
-        "All finance reminders complete: %d total notifications sent, %d task errors",
-        total_notifications,
-        len(results["task_errors"]),
-    )
+        logger.info(
+            "All finance reminders complete: outcome=%s total_notifications=%d "
+            "task_errors=%d",
+            results["outcome"],
+            results["total_notifications"],
+            len(results["task_errors"]),
+        )
 
-    return results
+        if results["task_errors"]:
+            raise FinanceReminderTaskFailure(
+                f"Finance reminders completed with {len(results['task_errors'])} "
+                "component error(s)"
+            )
+        return results
+    finally:
+        _release_finance_reminders_lock(lock_connection)
 
 
 @shared_task
