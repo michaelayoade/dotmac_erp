@@ -202,3 +202,23 @@ beat_schedule = {
     },
 }
 ```
+
+
+## Schedule ownership and overlap
+
+Each scheduled task must have one scheduling authority. Tasks listed in
+`_builtin_beat_schedule()` are code-owned and must not also be enabled in
+`scheduled_tasks`; database-owned tasks must be registered only in the
+database. Scheduler construction skips and logs a database row that conflicts
+with a code-owned task, and scheduler create/update rejects enabling one.
+
+Long-running or high-fan-out scheduled tasks must define how overlapping
+invocations behave. Use a database advisory lock on a dedicated physical
+connection when the lock must span multiple tenant-scoped sessions or commits.
+Return an explicit blocked/skipped outcome when a second invocation cannot
+acquire the lock.
+
+A task that commits useful per-component work and then encounters another
+component failure must record the counters, finish independent work, and leave
+Celery visibly failed after completing the batch. Do not return framework-level
+success when the reported business outcome contains errors.
