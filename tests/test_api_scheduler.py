@@ -95,6 +95,39 @@ class TestScheduledTasksAPI:
         assert data["interval_seconds"] == payload["interval_seconds"]
         assert "id" in data
 
+    def test_create_rejects_enabled_builtin_task(self, client, auth_headers):
+        payload = {
+            "name": f"duplicate_builtin_{uuid.uuid4().hex[:8]}",
+            "task_name": "app.tasks.analytics.refresh_cash_flow_metrics",
+            "interval_seconds": 300,
+            "enabled": True,
+        }
+
+        response = client.post("/scheduler/tasks", json=payload, headers=auth_headers)
+
+        assert response.status_code == 409
+
+    def test_update_cannot_enable_builtin_task(
+        self, client, auth_headers, db_session
+    ):
+        task = ScheduledTask(
+            name=f"legacy_builtin_{uuid.uuid4().hex[:8]}",
+            task_name="app.tasks.analytics.refresh_cash_flow_metrics",
+            schedule_type=ScheduleType.interval,
+            interval_seconds=300,
+            enabled=False,
+        )
+        db_session.add(task)
+        db_session.commit()
+
+        response = client.patch(
+            f"/scheduler/tasks/{task.id}",
+            json={"enabled": True},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 409
+
     def test_create_scheduled_task_with_args(self, client, auth_headers):
         """Test creating a scheduled task with arguments."""
         payload = {
