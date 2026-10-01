@@ -126,7 +126,6 @@ class TestScheduledTasksCreate:
 
             mock_db.refresh.assert_called_once_with(mock_task)
 
-
     def test_create_rejects_enabled_code_owned_task(self, mock_db):
         payload = MagicMock()
         payload.interval_seconds = 300
@@ -152,6 +151,7 @@ class TestScheduledTasksCreate:
             ScheduledTasks.create(mock_db, payload)
 
         mock_db.add.assert_called_once_with(mock_task)
+
 
 # ============ TestScheduledTasksGet ============
 
@@ -412,6 +412,7 @@ class TestScheduledTasksUpdate:
 
         assert exc_info.value.status_code == 409
         mock_db.flush.assert_not_called()
+
 
 # ============ TestScheduledTasksDelete ============
 
