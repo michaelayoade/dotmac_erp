@@ -127,6 +127,32 @@ class TestScheduledTasksCreate:
             mock_db.refresh.assert_called_once_with(mock_task)
 
 
+    def test_create_rejects_enabled_code_owned_task(self, mock_db):
+        payload = MagicMock()
+        payload.interval_seconds = 300
+        payload.task_name = "app.tasks.analytics.refresh_cash_flow_metrics"
+        payload.enabled = True
+
+        with pytest.raises(HTTPException) as exc_info:
+            ScheduledTasks.create(mock_db, payload)
+
+        assert exc_info.value.status_code == 409
+        mock_db.add.assert_not_called()
+
+    def test_create_allows_disabled_code_owned_task_for_repair(self, mock_db):
+        payload = MagicMock()
+        payload.interval_seconds = 300
+        payload.task_name = "app.tasks.analytics.refresh_cash_flow_metrics"
+        payload.enabled = False
+        payload.model_dump.return_value = {"task_name": payload.task_name}
+
+        with patch("app.services.scheduler.ScheduledTask") as MockTask:
+            mock_task = MagicMock()
+            MockTask.return_value = mock_task
+            ScheduledTasks.create(mock_db, payload)
+
+        mock_db.add.assert_called_once_with(mock_task)
+
 # ============ TestScheduledTasksGet ============
 
 
@@ -373,6 +399,19 @@ class TestScheduledTasksUpdate:
         assert mock_scheduled_task.name == "original_name"
         assert mock_scheduled_task.interval_seconds == 300
 
+
+    def test_update_cannot_enable_code_owned_task(self, mock_db, mock_scheduled_task):
+        mock_scheduled_task.task_name = "app.tasks.analytics.refresh_cash_flow_metrics"
+        mock_scheduled_task.enabled = False
+        mock_db.get.return_value = mock_scheduled_task
+        payload = MagicMock()
+        payload.model_dump.return_value = {"enabled": True}
+
+        with pytest.raises(HTTPException) as exc_info:
+            ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
+
+        assert exc_info.value.status_code == 409
+        mock_db.flush.assert_not_called()
 
 # ============ TestScheduledTasksDelete ============
 
