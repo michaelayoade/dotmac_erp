@@ -1291,9 +1291,7 @@ def _release_finance_reminders_lock(connection: Connection) -> None:
     try:
         released = bool(
             connection.scalar(
-                text(
-                    "SELECT pg_advisory_unlock(hashtextextended(:lock_identity, 0))"
-                ),
+                text("SELECT pg_advisory_unlock(hashtextextended(:lock_identity, 0))"),
                 {"lock_identity": _FINANCE_REMINDERS_LOCK_IDENTITY},
             )
         )
