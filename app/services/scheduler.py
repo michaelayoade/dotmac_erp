@@ -16,6 +16,21 @@ from app.services.response import (
 logger = logging.getLogger(__name__)
 
 
+def _validate_task_ownership(task_name: str, *, enabled: bool) -> None:
+    """Prevent database schedules from duplicating code-owned Beat entries."""
+    if not enabled:
+        return
+
+    from app.services.scheduler_config import builtin_beat_task_names
+
+    if task_name in builtin_beat_task_names():
+        raise HTTPException(
+            status_code=409,
+            detail="This task is scheduled by the application and cannot be "
+            "registered in the database scheduler.",
+        )
+
+
 def _validate_schedule_type(value: str | None) -> ScheduleType | None:
     if value is None:
         return None
@@ -32,6 +47,7 @@ class ScheduledTasks(ListResponseMixin):
     def create(db: Session, payload: ScheduledTaskCreate) -> ScheduledTask:
         if payload.interval_seconds < 1:
             raise HTTPException(status_code=400, detail="interval_seconds must be >= 1")
+        _validate_task_ownership(payload.task_name, enabled=payload.enabled)
         task = ScheduledTask(**payload.model_dump())
         db.add(task)
         db.flush()  # caller owns the commit (auto-committing request dep)
@@ -85,6 +101,9 @@ class ScheduledTasks(ListResponseMixin):
                 raise HTTPException(
                     status_code=400, detail="interval_seconds must be >= 1"
                 )
+        task_name = data.get("task_name", task.task_name)
+        enabled = data.get("enabled", task.enabled)
+        _validate_task_ownership(task_name, enabled=enabled)
         for key, value in data.items():
             setattr(task, key, value)
         db.flush()  # caller owns the commit (auto-committing request dep)
