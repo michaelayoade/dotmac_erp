@@ -478,9 +478,7 @@ def _builtin_beat_schedule() -> dict[str, dict]:
 
 def builtin_beat_task_names() -> frozenset[str]:
     """Return tasks whose schedules are owned by application code."""
-    return frozenset(
-        entry["task"] for entry in _builtin_beat_schedule().values()
-    )
+    return frozenset(entry["task"] for entry in _builtin_beat_schedule().values())
 
 
 def build_beat_schedule() -> dict:
