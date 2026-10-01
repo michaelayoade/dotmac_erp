@@ -269,10 +269,6 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.coach.generate_weekly_hr_report",
             "schedule": crontab(hour=7, minute=40, day_of_week=1),  # Monday 7:40 AM
         },
-        "finance-reminders": {
-            "task": "app.tasks.finance.process_all_finance_reminders",
-            "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
-        },
         "expense-approval-reminders": {
             "task": "app.tasks.expense.process_expense_approval_reminders",
             "schedule": crontab(hour=8, minute=15),  # Daily at 8:15 AM
@@ -480,8 +476,16 @@ def _builtin_beat_schedule() -> dict[str, dict]:
     return schedule
 
 
+def builtin_beat_task_names() -> frozenset[str]:
+    """Return tasks whose schedules are owned by application code."""
+    return frozenset(
+        entry["task"] for entry in _builtin_beat_schedule().values()
+    )
+
+
 def build_beat_schedule() -> dict:
     schedule: dict[str, dict] = _builtin_beat_schedule()
+    builtin_tasks = builtin_beat_task_names()
     session = SessionLocal()
     try:
         tasks = list(
@@ -505,6 +509,15 @@ def build_beat_schedule() -> dict:
                 )
 
             if task_schedule is None:
+                continue
+
+            if task.task_name in builtin_tasks:
+                logger.error(
+                    "Ignoring enabled database schedule for code-owned task "
+                    "task_name=%s task_id=%s",
+                    task.task_name,
+                    task.id,
+                )
                 continue
 
             schedule[f"scheduled_task_{task.id}"] = {
