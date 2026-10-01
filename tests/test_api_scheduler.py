@@ -109,9 +109,7 @@ class TestScheduledTasksAPI:
 
         assert response.status_code == 409
 
-    def test_update_cannot_enable_builtin_task(
-        self, client, auth_headers, db_session
-    ):
+    def test_update_cannot_enable_builtin_task(self, client, auth_headers, db_session):
         task = ScheduledTask(
             name=f"legacy_builtin_{uuid.uuid4().hex[:8]}",
             task_name="app.tasks.analytics.refresh_cash_flow_metrics",
