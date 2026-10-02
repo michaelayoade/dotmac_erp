@@ -240,6 +240,9 @@ def test_unchanged_source_payment_repairs_missing_accounting_projection():
     harness._compute_hash = lambda _data: "same"  # type: ignore[method-assign]
     harness._has_changed = lambda *_args: False  # type: ignore[method-assign]
     harness._find_local_payment = lambda _external_id: payment  # type: ignore[method-assign]
+    harness._get_bank_account_for_channel = (  # type: ignore[method-assign]
+        lambda *_args, **_kwargs: payment.bank_account_id
+    )
     harness._ensure_synced_payment_posted = (  # type: ignore[method-assign]
         lambda local, _user: repaired.append(("receipt", local))
     )

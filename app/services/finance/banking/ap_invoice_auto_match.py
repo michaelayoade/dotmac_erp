@@ -73,6 +73,8 @@ class APInvoiceAutoMatchResult:
     scanned: int = 0
     matched: int = 0
     payments_created: int = 0
+    payments_reused: int = 0
+    bank_accounts_corrected: int = 0
     skipped_rule_condition: int = 0
     skipped_no_invoice_reference: int = 0
     skipped_ambiguous_reference: int = 0
@@ -205,9 +207,13 @@ class APInvoiceAutoMatchService:
                         [
                             SupplierInvoiceStatus.POSTED,
                             SupplierInvoiceStatus.PARTIALLY_PAID,
+                            SupplierInvoiceStatus.PAID,
                         ]
                     ),
-                    SupplierInvoice.balance_due > Decimal("0"),
+                    or_(
+                        SupplierInvoice.balance_due > Decimal("0"),
+                        SupplierInvoice.status == SupplierInvoiceStatus.PAID,
+                    ),
                     SupplierInvoice.journal_entry_id.is_not(None),
                 )
             ).all()
@@ -244,15 +250,30 @@ class APInvoiceAutoMatchService:
         invoice_occurrences = Counter(
             invoice.invoice_id for invoice in candidates.values()
         )
+        payment_occurrences = Counter(
+            (candidates[line.line_id].invoice_id, line.transaction_date, line.amount)
+            for line in eligible_lines
+            if line.line_id in candidates
+        )
 
         for line in eligible_lines:
             candidate_invoice = candidates.get(line.line_id)
             if candidate_invoice is None:
                 continue
-            if invoice_occurrences[candidate_invoice.invoice_id] > 1:
+            paid = candidate_invoice.status == SupplierInvoiceStatus.PAID
+            duplicate = (
+                payment_occurrences[
+                    (candidate_invoice.invoice_id, line.transaction_date, line.amount)
+                ]
+                if paid
+                else invoice_occurrences[candidate_invoice.invoice_id]
+            )
+            if duplicate > 1:
                 result.skipped_duplicate_invoice += 1
                 continue
-            if Decimal(line.amount) != Decimal(candidate_invoice.balance_due):
+            if not paid and Decimal(line.amount) != Decimal(
+                candidate_invoice.balance_due
+            ):
                 result.skipped_amount += 1
                 continue
             if (candidate_invoice.currency_code or "").upper() != (
@@ -260,7 +281,9 @@ class APInvoiceAutoMatchService:
             ).upper():
                 result.skipped_currency += 1
                 continue
-            if Decimal(candidate_invoice.withholding_tax_amount or 0) != Decimal("0"):
+            if not paid and Decimal(
+                candidate_invoice.withholding_tax_amount or 0
+            ) != Decimal("0"):
                 result.skipped_withholding_tax += 1
                 continue
 
@@ -297,7 +320,7 @@ class APInvoiceAutoMatchService:
                     if consumed_match is not None:
                         raise _SkipCandidate("consumed_journal_line")
 
-                    bank_reconciliation_service.match_statement_line(
+                    matched_line = bank_reconciliation_service.match_statement_line(
                         db,
                         organization_id,
                         line.line_id,
@@ -308,6 +331,13 @@ class APInvoiceAutoMatchService:
                         source_id=payment.payment_id,
                         match_state="confirmed",
                     )
+                    if not matched_line.is_matched:
+                        raise _SkipCandidate("journal")
+                    corrected_bank = payment.bank_account_id != account.bank_account_id
+                    if corrected_bank:
+                        # Repair a uniquely resolved legacy GL reference atomically
+                        # with the match; never rewrite posted payment journals.
+                        payment.bank_account_id = account.bank_account_id
                     if payment.status == APPaymentStatus.SENT:
                         SupplierPaymentService.mark_cleared(
                             db,
@@ -326,18 +356,34 @@ class APInvoiceAutoMatchService:
                         explanation=(
                             "Exact AP invoice reference "
                             f"{candidate_invoice.invoice_number}, "
-                            "outstanding amount, and currency"
+                            "posted payment amount, bank, date, and currency"
+                            + (
+                                "; legacy bank GL reference corrected from "
+                                f"{account.gl_account_id} to {account.bank_account_id}"
+                                if corrected_bank
+                                else ""
+                            )
                         ),
                         action="MATCH",
                     )
                     result.matched += 1
                     if created_payment:
                         result.payments_created += 1
+                    else:
+                        result.payments_reused += 1
+                    if corrected_bank:
+                        result.bank_accounts_corrected += 1
             except _SkipCandidate as exc:
                 if exc.reason == "consumed_journal_line":
                     result.skipped_consumed_journal_line += 1
                 elif exc.reason == "journal":
                     result.skipped_journal += 1
+                elif exc.reason == "amount":
+                    result.skipped_amount += 1
+                elif exc.reason == "currency":
+                    result.skipped_currency += 1
+                elif exc.reason == "withholding_tax":
+                    result.skipped_withholding_tax += 1
                 else:
                     result.skipped_payment += 1
             except Exception:
@@ -358,6 +404,21 @@ class APInvoiceAutoMatchService:
         invoice: SupplierInvoice,
         actor_user_id: UUID,
     ) -> tuple[SupplierPayment, bool]:
+        # Serialize against AP writers and re-read status/balance under the lock.
+        # A concurrently settled invoice must never create another payment.
+        db.refresh(invoice, with_for_update=True)
+        if invoice.organization_id != organization_id or invoice.status not in {
+            SupplierInvoiceStatus.POSTED,
+            SupplierInvoiceStatus.PARTIALLY_PAID,
+            SupplierInvoiceStatus.PAID,
+        }:
+            raise _SkipCandidate("payment")
+        if (invoice.currency_code or "").upper() != (
+            account.currency_code or ""
+        ).upper():
+            raise _SkipCandidate("currency")
+        if invoice.journal_entry_id is None:
+            raise _SkipCandidate("journal")
         correlation_id = f"bank-ap:{invoice.invoice_id}:{line.line_id}"
         active_payments = list(
             db.scalars(
@@ -373,13 +434,33 @@ class APInvoiceAutoMatchService:
                         [APPaymentStatus.VOID, APPaymentStatus.REJECTED]
                     ),
                 )
+                .with_for_update(of=SupplierPayment)
             ).all()
         )
+
+        legacy_bank_allowed = False
+        if any(
+            payment.bank_account_id == account.gl_account_id
+            and payment.bank_account_id != account.bank_account_id
+            for payment in active_payments
+        ):
+            legacy_bank_allowed = (
+                APInvoiceAutoMatchService._legacy_bank_reference_allowed(
+                    db, organization_id, account
+                )
+            )
 
         exact_posted = [
             payment
             for payment in active_payments
-            if payment.bank_account_id == account.bank_account_id
+            if payment.organization_id == organization_id
+            and (
+                payment.bank_account_id == account.bank_account_id
+                or (
+                    legacy_bank_allowed
+                    and payment.bank_account_id == account.gl_account_id
+                )
+            )
             and payment.payment_date == line.transaction_date
             and Decimal(payment.amount) == Decimal(line.amount)
             and payment.currency_code.upper() == invoice.currency_code.upper()
@@ -390,6 +471,13 @@ class APInvoiceAutoMatchService:
             raise _SkipCandidate("payment")
         if len(exact_posted) == 1:
             return exact_posted[0], False
+
+        if invoice.status == SupplierInvoiceStatus.PAID:
+            raise _SkipCandidate("payment")
+        if Decimal(invoice.balance_due) != Decimal(line.amount):
+            raise _SkipCandidate("amount")
+        if Decimal(invoice.withholding_tax_amount or 0) != Decimal("0"):
+            raise _SkipCandidate("withholding_tax")
 
         automation_payments = [
             payment
@@ -470,6 +558,31 @@ class APInvoiceAutoMatchService:
         return payment, created_payment
 
     @staticmethod
+    def _legacy_bank_reference_allowed(
+        db: Session,
+        organization_id: UUID,
+        account: BankAccount,
+    ) -> bool:
+        """Accept a legacy GL UUID only when it identifies exactly one bank.
+
+        Never reinterpret another physical bank's UUID, or choose arbitrarily
+        between active/closed bank accounts sharing the same GL account.
+        """
+        if account.organization_id != organization_id:
+            return False
+        if db.get(BankAccount, account.gl_account_id) is not None:
+            return False
+        bank_ids = list(
+            db.scalars(
+                select(BankAccount.bank_account_id).where(
+                    BankAccount.organization_id == organization_id,
+                    BankAccount.gl_account_id == account.gl_account_id,
+                )
+            ).all()
+        )
+        return bank_ids == [account.bank_account_id]
+
+    @staticmethod
     def _bank_journal_line(
         db: Session,
         organization_id: UUID,
@@ -484,17 +597,21 @@ class APInvoiceAutoMatchService:
             or journal.status != JournalStatus.POSTED
             or journal.source_document_type != "SUPPLIER_PAYMENT"
             or journal.source_document_id != payment.payment_id
+            or (journal.currency_code or "").upper()
+            != (account.currency_code or "").upper()
         ):
             raise _SkipCandidate("journal")
 
         bank_lines = list(
             db.scalars(
-                select(JournalEntryLine).where(
+                select(JournalEntryLine)
+                .where(
                     JournalEntryLine.journal_entry_id == payment.journal_entry_id,
                     JournalEntryLine.account_id == account.gl_account_id,
                     JournalEntryLine.credit_amount == line.amount,
                     JournalEntryLine.debit_amount == Decimal("0"),
                 )
+                .with_for_update(of=JournalEntryLine)
             ).all()
         )
         if len(bank_lines) != 1:

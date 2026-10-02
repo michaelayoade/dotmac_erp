@@ -119,13 +119,13 @@
         "path": "tests/services/test_dotmac_sub_sync.py",
         "symbol": "test_verify_webhook_signature",
         "category": "webhook_surface",
-        "fingerprint": "18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d"
+        "fingerprint": "e16d6b004f355a8128d08a6c297327a58d02154315ba627d5b564f9f757cf598"
       },
       {
         "path": "tests/services/test_dotmac_sub_sync.py",
         "symbol": "test_verify_webhook_signature_unconfigured",
         "category": "webhook_surface",
-        "fingerprint": "18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d"
+        "fingerprint": "e16d6b004f355a8128d08a6c297327a58d02154315ba627d5b564f9f757cf598"
       },
       {
         "path": "tests/services/test_hook_registry.py",

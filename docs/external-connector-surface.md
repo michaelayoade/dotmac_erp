@@ -30,6 +30,15 @@ relay makes `app/tasks/email.py` a connector task because it hands off to the
 Selfcare synchronization task only after Mailcow and Nextcloud succeed. The
 connector-task baseline and exact inventory increase by that one reviewed file.
 
+The finance consolidation in PR #687 moves payment-channel loading from
+`BankMappingMixin` into the existing provider-calling `PaymentSyncMixin`.
+Its bounded channel-feed regression harness in
+`tests/services/test_dotmac_sub_sync.py` follows that ownership change.
+Both webhook-signature tests in the same file are unchanged. The pinned
+Governance engine fingerprints the containing source file, so their two
+conserved fingerprints are re-declared to match its measured result. All
+six category baselines and all twelve conserved findings remain unchanged.
+
 | Category | Baseline |
 | --- | ---: |
 | `outbound_transport` | 20 |
@@ -112,8 +121,8 @@ revision, so its two entries also preserve that stronger dead-code signal.
 | `app/services/coach/insight_engine.py` | `InsightEngine` | `delivery_retry` | `f7f150d9fa6c5e2d3675f1d041c8b2bcc65068b1924504f577f6205207108ed0` |
 | `app/services/coach/insight_engine.py` | `InsightEngine` | `outbound_transport` | `f7f150d9fa6c5e2d3675f1d041c8b2bcc65068b1924504f577f6205207108ed0` |
 | `tests/services/test_dotmac_sub_incremental_sync.py` | `test_customer_feeds_forward_their_watermarks` | `sync_checkpoint` | `ced5e1214b2e8731e79f877ec620f2d3333f80244fc07284dabdf7aa91b99ef3` |
-| `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature` | `webhook_surface` | `18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d` |
-| `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature_unconfigured` | `webhook_surface` | `18b2cccff0f9d19c688adbfe3714dfbcfb494ccf55fb00fea58047b2c0babd3d` |
+| `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature` | `webhook_surface` | `e16d6b004f355a8128d08a6c297327a58d02154315ba627d5b564f9f757cf598` |
+| `tests/services/test_dotmac_sub_sync.py` | `test_verify_webhook_signature_unconfigured` | `webhook_surface` | `e16d6b004f355a8128d08a6c297327a58d02154315ba627d5b564f9f757cf598` |
 | `tests/services/test_hook_registry.py` | `TestHookRegistry` | `webhook_surface` | `30d9cf711d1444dd4d20b815ca18b894ef283058e856b1311b252bef5282bac0` |
 | `tests/services/test_mono_sync.py` | `test_verify_webhook_rejects_empty_secrets` | `webhook_surface` | `4f907fc550796c1b212c1cc8481d78488f55f6345669a1ecd7fe45a7b9c92349` |
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_circuit_opens_after_transport_failure` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
