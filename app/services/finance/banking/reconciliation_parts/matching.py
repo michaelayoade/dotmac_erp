@@ -1947,7 +1947,15 @@ class ReconciliationMatchingService:
 
         # Idempotency: this exact pair already exists.
         # Keep statement flags in sync in case of legacy/stale states.
-        if isinstance(existing_match, BankStatementLineMatch):
+        promote_suggestion = (
+            isinstance(existing_match, BankStatementLineMatch)
+            and existing_match.match_state == "suggested"
+            and match_state != "suggested"
+        )
+        if (
+            isinstance(existing_match, BankStatementLineMatch)
+            and not promote_suggestion
+        ):
             # Heal stale is_matched for any existing match that isn't an explicit
             # suggestion (None/legacy rows are treated as confirmed).
             if not stmt_line.is_matched and (
