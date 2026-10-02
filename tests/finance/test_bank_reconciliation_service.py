@@ -2224,3 +2224,83 @@ def test_match_statement_line_heals_stale_state_from_existing_pair() -> None:
     assert stmt_line.statement.unmatched_lines == 3
     db.add.assert_not_called()
     db.flush.assert_called_once()
+
+
+@pytest.mark.parametrize("exact", [True, False])
+def test_existing_suggestion_must_pass_amount_validation_before_confirmation(
+    exact,
+) -> None:
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id, actor_id = uuid4(), uuid4()
+    statement = SimpleNamespace(
+        organization_id=org_id, matched_lines=0, unmatched_lines=1
+    )
+    line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100"),
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+        statement=statement,
+    )
+    gl = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("100" if exact else "10"),
+        credit_amount=Decimal("0"),
+        journal_entry=SimpleNamespace(organization_id=org_id),
+    )
+    suggestion = BankStatementLineMatch(
+        statement_line_id=line.line_id,
+        journal_line_id=gl.line_id,
+        match_state="suggested",
+    )
+    db.get.side_effect = [line, gl]
+    db.execute.return_value.scalar_one_or_none.return_value = suggestion
+    if not exact:
+        with pytest.raises(HTTPException, match="Amount mismatch requires review"):
+            svc.match_statement_line(
+                db, org_id, line.line_id, gl.line_id, matched_by=actor_id
+            )
+        assert not line.is_matched
+        assert statement.matched_lines == 0
+        db.add.assert_not_called()
+        assert db.execute.call_count == 1
+    else:
+        result = svc.match_statement_line(
+            db, org_id, line.line_id, gl.line_id, matched_by=actor_id
+        )
+        assert result.is_matched
+        assert result.matched_by == actor_id
+        confirmed = db.add.call_args.args[0]
+        assert confirmed.match_state == "confirmed"
+        assert confirmed.confirmed_by == actor_id
+        assert confirmed.confirmed_at is not None
+        assert statement.matched_lines == 1
+        assert statement.unmatched_lines == 0
+
+
+def test_repeated_suggestion_remains_suggested_and_does_not_confirm() -> None:
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=False,
+        statement=SimpleNamespace(
+            organization_id=org_id, matched_lines=0, unmatched_lines=1
+        ),
+    )
+    gl_id = uuid4()
+    suggestion = BankStatementLineMatch(
+        statement_line_id=line.line_id,
+        journal_line_id=gl_id,
+        match_state="suggested",
+    )
+    db.get.return_value = line
+    db.execute.return_value.scalar_one_or_none.return_value = suggestion
+    svc.match_statement_line(db, org_id, line.line_id, gl_id, match_state="suggested")
+    assert not line.is_matched
+    assert line.statement.matched_lines == 0
+    db.add.assert_not_called()
+    db.flush.assert_not_called()

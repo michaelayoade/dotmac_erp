@@ -30,7 +30,10 @@ from app.services.finance.money_boundary import (
 )
 
 from ._constants import DOTMAC_SUB_SYNC_MIN_DATE, SYSTEM_USER_ID, _PRE_CUTOFF_SENTINEL
-from ._bank_mapping import MissingPaymentBankMappingError
+from ._bank_mapping import (
+    MissingPaymentBankMappingError,
+    PostedPaymentBankCorrectionRequiredError,
+)
 from ._progress import WatermarkProgress
 from ._types import SyncResult
 
@@ -203,16 +206,14 @@ class PaymentSyncMixin:
         ):
             payment = self._find_local_payment(external_id)
             if payment is not None:
-                # An unchanged source row can still repair a missing ERP
-                # projection. Reconciliation is driven from canonical Sub
-                # facts, not from the import hash alone.
-                if (
-                    payment.journal_entry_id is None
-                    and payment.gross_amount != Decimal("0")
-                    and payment.bank_account_id is None
+                # Revalidate routing before posting even if the source hash
+                # has not changed: the old fallback may have assigned the
+                # wrong bank. Already-posted receipts remain untouched.
+                if payment.journal_entry_id is None and payment.gross_amount != Decimal(
+                    "0"
                 ):
                     bank_account_id = self._get_bank_account_for_channel(
-                        pay.payment_channel_id, payment.currency_code
+                        pay.payment_channel_id, payment.currency_code, payment=pay
                     )
                     if bank_account_id is None:
                         raise MissingPaymentBankMappingError(
@@ -299,7 +300,7 @@ class PaymentSyncMixin:
             net_amount, currency_code, payment_date
         )
         bank_account_id = self._get_bank_account_for_channel(
-            pay.payment_channel_id, currency_code
+            pay.payment_channel_id, currency_code, payment=pay
         )
         if gross_amount != Decimal("0") and bank_account_id is None:
             # Fail before creating a receipt, applying allocations, or reversing
@@ -311,6 +312,15 @@ class PaymentSyncMixin:
         channel_name = self._channel_name(pay.payment_channel_id) or "dotmac_sub"
 
         payment: CustomerPayment | None = self._find_local_payment(external_id)
+
+        if (
+            payment is not None
+            and payment.journal_entry_id is not None
+            and payment.bank_account_id != bank_account_id
+        ):
+            # This task fixes routing for new/unposted receipts only. Rewriting
+            # a posted receipt's bank without its GL correction causes drift.
+            raise PostedPaymentBankCorrectionRequiredError(pay.id)
 
         if payment is None:
             payment = CustomerPayment(
