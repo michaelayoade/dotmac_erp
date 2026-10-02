@@ -27,7 +27,7 @@ from app.services.dotmac_sub.client import (
     DotmacSubConfig,
     _dec,
 )
-from app.services.dotmac_sub.sync._bank_mapping import BankMappingMixin
+from app.services.dotmac_sub.sync._payments import PaymentSyncMixin
 
 
 # ---------------------------------------------------------------------------
@@ -127,13 +127,13 @@ def test_sync_paginate_paces_full_pages(monkeypatch: pytest.MonkeyPatch) -> None
     assert sleeps == [client._SYNC_PAGE_DELAY_SECONDS]
 
 
-class _BankMappingHarness(BankMappingMixin):
+class _PaymentSyncHarness(PaymentSyncMixin):
     pass
 
 
 def test_payment_channel_mapping_uses_bounded_sync_feed() -> None:
     client = _client_with_responses([{"items": []}])
-    harness = _BankMappingHarness()
+    harness = _PaymentSyncHarness()
     harness.client = client
     harness._payment_channel_names = {}
 

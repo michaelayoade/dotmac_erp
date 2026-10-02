@@ -50,13 +50,13 @@ class PaymentSyncMixin:
     client: Any
     organization_id: UUID
     _account_cache: dict[str, UUID]
+    _payment_channel_names: dict[str, str]
 
     _compute_hash: Any
     _has_changed: Any
     _record_sync: Any
     _get_synced_entity: Any
     _get_customer_for_account: Any
-    _load_payment_channels: Any
     _get_bank_account_for_channel: Any
     _channel_name: Any
     _get_sync_watermark: Any
@@ -65,6 +65,18 @@ class PaymentSyncMixin:
     _reprime_tenant_context: Any
     _functional_amount: Any
     _resolve_source_wht_code: Any
+
+    def _load_payment_channels(self) -> None:
+        if self._payment_channel_names:
+            return
+        try:
+            for ch in self.client.get_payment_channels():
+                cid = str(ch.get("id", ""))
+                name = ch.get("name") or ch.get("code") or ""
+                if cid:
+                    self._payment_channel_names[cid] = name
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not load dotmac_sub payment channels", exc_info=True)
 
     def sync_payments(
         self,

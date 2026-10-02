@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -18,8 +17,6 @@ from app.models.finance.banking.bank_statement import (
 from app.models.finance.gl.account import Account
 from app.services.dotmac_sub.client import PaymentRecord
 from app.services.settings_spec import resolve_value
-
-logger = logging.getLogger(__name__)
 
 
 def _norm(value: str | None) -> str:
@@ -62,24 +59,11 @@ class BankMappingMixin:
     """Map dotmac_sub payment channels → ERP bank accounts."""
 
     db: Any
-    client: Any
     organization_id: UUID
     _bank_name_mapping: dict[str, str | None]
     _payment_channel_names: dict[str, str]
     _bank_account_mapping: dict[str, UUID]
     _default_bank_account_cache: dict[str, UUID]
-
-    def _load_payment_channels(self) -> None:
-        if self._payment_channel_names:
-            return
-        try:
-            for ch in self.client.get_payment_channels():
-                cid = str(ch.get("id", ""))
-                name = ch.get("name") or ch.get("code") or ""
-                if cid:
-                    self._payment_channel_names[cid] = name
-        except Exception:  # noqa: BLE001
-            logger.warning("Could not load dotmac_sub payment channels", exc_info=True)
 
     def _channel_name(self, channel_id: str | None) -> str:
         if not channel_id:
