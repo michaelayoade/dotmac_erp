@@ -1838,42 +1838,11 @@ if (typeof window.searchAutosuggest === 'undefined') {
   'xl': 'xl:flex'
 } %}
 {% set search_visibility_class = search_breakpoint_classes.get(search_breakpoint, search_breakpoint_classes.sm) %}
-{% set has_breadcrumbs = (breadcrumbs_html | trim) != '' %}
+{% set has_page_actions = (header_actions_html | trim) != '' %}
 <header class="sticky top-0 z-20 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-  <div class="app-header flex min-h-16 flex-wrap items-center justify-between gap-2 py-2 sm:h-16 sm:flex-nowrap sm:py-0"
-       x-data="{
-         showSearchControl: {{ 'true' if show_search else 'false' }},
-         showBreadcrumbsControl: {{ 'true' if has_breadcrumbs else 'false' }},
-         recalcHeaderFit() {
-           const header = this.$refs.topbarHeader;
-           const left = this.$refs.topbarLeft;
-           const actions = this.$refs.topbarActions;
-           if (!header || !left || !actions) return;
-
-           this.showSearchControl = {{ 'true' if show_search else 'false' }};
-           this.showBreadcrumbsControl = {{ 'true' if has_breadcrumbs else 'false' }};
-
-           this.$nextTick(() => {
-             const wraps = () => actions.offsetTop > left.offsetTop + 4;
-
-             if (wraps() && {{ 'true' if show_search else 'false' }}) {
-               this.showSearchControl = false;
-             }
-
-             this.$nextTick(() => {
-               if (wraps() && {{ 'true' if has_breadcrumbs else 'false' }}) {
-                 this.showBreadcrumbsControl = false;
-               }
-             });
-           });
-         }
-       }"
-       x-init="
-         recalcHeaderFit();
-         window.addEventListener('resize', () => recalcHeaderFit());
-       "
-       x-ref="topbarHeader">
-    <div class="topbar-left flex min-w-0 flex-1 items-center gap-3 sm:gap-4" x-ref="topbarLeft">
+  <div class="app-header flex min-h-16 flex-wrap items-center justify-between gap-2 py-2"
+       x-data="{}">
+    <div class="topbar-left flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
       <button @click="toggleSidebar()"
               x-show="!isDesktop || sidebarCollapsed"
               x-cloak
@@ -1904,21 +1873,22 @@ if (typeof window.searchAutosuggest === 'undefined') {
         <span class="hidden sm:inline">Back</span>
       </button>
       {% endif %}
-      <div class="min-w-0 flex-1">
+      <div class="topbar-title-block flex-1">
         <h1 class="topbar-title-responsive truncate text-xl font-semibold text-slate-900 dark:text-white font-display" data-testid="page-title">
           {{ page_title_html | safe }}
         </h1>
-        <div class="topbar-breadcrumbs-responsive" x-show="showBreadcrumbsControl" x-cloak>
+        <div class="topbar-breadcrumbs-responsive" title="{{ breadcrumbs_html | striptags | trim }}">
           {{ breadcrumbs_html | safe }}
         </div>
       </div>
       {{ left_actions_html | safe }}
     </div>
-    <div class="topbar-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3" x-ref="topbarActions">
+    <div class="topbar-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3{% if has_page_actions %} topbar-actions--has-page-row{% endif %}">
+      {% if has_page_actions %}
+      <div class="topbar-page-row flex min-w-0 items-center gap-2 sm:gap-3">
+      {% endif %}
       {% if show_search %}
       <button @click="window.dispatchEvent(new CustomEvent('open-command-palette'))"
-              x-show="showSearchControl && viewportWidth >= 640"
-              x-cloak
               data-ui-tooltip="Find a page"
               class="hidden items-center gap-3 rounded-lg border border-slate-200 bg-white/60 px-3 py-2 text-sm text-slate-500 transition-all {{ search_visibility_class }} {{ a.hover }} hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400 {{ a.hover_dark }} dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1930,9 +1900,12 @@ if (typeof window.searchAutosuggest === 'undefined') {
         </kbd>
       </button>
       {% endif %}
+      {% if has_page_actions %}
       <div class="topbar-page-actions flex min-w-0 items-center gap-2 sm:gap-3">
         {{ header_actions_html | safe }}
       </div>
+      </div>
+      {% endif %}
       <div class="topbar-global-actions flex flex-shrink-0 items-center gap-1 sm:gap-2">
       <button @click="darkMode = !darkMode"
               class="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/60"
@@ -1957,6 +1930,8 @@ if (typeof window.searchAutosuggest === 'undefined') {
               knownNotificationIds: new Set(),
               notificationPollTimer: null,
               notificationVisibilityHandler: null,
+              notificationResizeHandler: null,
+              notificationTop: "",
               syncUnreadCount() {
                 this.unreadCount = (this.notifications || []).filter(n => !n.read).length;
               },
@@ -2042,9 +2017,38 @@ if (typeof window.searchAutosuggest === 'undefined') {
                 this.open = false;
                 window.location.href = notification.url || "#";
               },
+              updateNotificationPosition() {
+                const actions = this.$root.closest(".topbar-actions");
+                if (!actions || !actions.querySelector(".topbar-page-row") || window.innerWidth >= 1280) {
+                  this.notificationTop = "";
+                  return;
+                }
+                const header = actions.closest("header");
+                const appHeader = header ? header.querySelector(".app-header") : null;
+                this.notificationTop = appHeader
+                  ? `${appHeader.getBoundingClientRect().bottom - this.$root.getBoundingClientRect().top + 8}px`
+                  : "";
+              },
+              startNotificationTracking() {
+                this.stopNotificationTracking();
+                this.updateNotificationPosition();
+                this.notificationResizeHandler = () => this.updateNotificationPosition();
+                window.addEventListener("resize", this.notificationResizeHandler);
+              },
+              stopNotificationTracking() {
+                if (this.notificationResizeHandler) {
+                  window.removeEventListener("resize", this.notificationResizeHandler);
+                  this.notificationResizeHandler = null;
+                }
+                this.notificationTop = "";
+              },
               async init() {
                 this.rememberNotifications(this.notifications || []);
                 this.syncUnreadCount();
+                this.$watch("open", (isOpen) => {
+                  if (isOpen) this.startNotificationTracking();
+                  else this.stopNotificationTracking();
+                });
                 await this.refreshNotifications(false);
                 this.notificationPollTimer = window.setInterval(() => {
                   if (!document.hidden) this.refreshNotifications(true);
@@ -2059,6 +2063,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
                 if (this.notificationVisibilityHandler) {
                   document.removeEventListener("visibilitychange", this.notificationVisibilityHandler);
                 }
+                this.stopNotificationTracking();
               }
             }' class="relative">
         <button @click="open = !open"
@@ -2078,7 +2083,8 @@ if (typeof window.searchAutosuggest === 'undefined') {
              x-transition:leave="transition ease-in duration-75"
              x-transition:leave-start="opacity-100 scale-100"
              x-transition:leave-end="opacity-0 scale-95"
-             class="absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800 overflow-hidden"
+             class="topbar-notification-panel absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800 overflow-hidden"
+             :style="{ top: notificationTop, marginTop: notificationTop ? '0px' : '' }"
              x-cloak>
           <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Notifications</h3>

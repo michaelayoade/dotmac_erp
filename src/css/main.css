@@ -32,3 +32,124 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Shared topbar layout overrides. Keep these after Tailwind utilities so the
+ * responsive shell rules win over utility classes on the macro's root node. */
+.topbar-title-block {
+    min-width: 12rem;
+}
+
+.topbar-breadcrumbs-responsive {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topbar-breadcrumbs-responsive > * {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (min-width: 1280px) {
+    .app-header {
+        height: 4rem;
+        flex-wrap: nowrap;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .topbar-title-block {
+        min-width: 0;
+    }
+}
+
+@media (min-width: 640px) and (max-width: 1279px) {
+    .app-header {
+        height: auto;
+        min-height: 4rem;
+    }
+
+    .topbar-actions {
+        display: contents;
+    }
+
+    .topbar-page-row {
+        flex: 0 0 100%;
+        width: 100%;
+        order: 2;
+        justify-content: flex-start;
+        padding-top: var(--spacing-sm);
+        border-top: 1px solid var(--card-border);
+    }
+
+    .topbar-global-actions {
+        order: 1;
+    }
+}
+
+@media (max-width: 639px) {
+    .app-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--spacing-sm);
+        height: auto;
+        min-height: 4rem;
+    }
+
+    .topbar-left {
+        width: auto;
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .topbar-breadcrumbs-responsive {
+        /* Keep the phone header to one compact title row. */
+        display: none;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .topbar-actions {
+        display: contents;
+    }
+
+    .topbar-title-block {
+        min-width: 8rem;
+    }
+
+    .topbar-page-row {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        width: 100%;
+        justify-content: flex-start;
+        padding-top: var(--spacing-sm);
+        border-top: 1px solid var(--card-border);
+    }
+
+    .topbar-page-actions {
+        margin-right: auto;
+    }
+
+    .topbar-global-actions {
+        grid-column: 2;
+        grid-row: 1;
+        gap: var(--spacing-xs);
+    }
+}
+
+@media (max-width: 1279px) {
+    .topbar-page-row,
+    .topbar-page-actions {
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
+        max-width: 100%;
+    }
+}

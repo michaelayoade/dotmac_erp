@@ -8,6 +8,8 @@ These tests validate both:
 
 from __future__ import annotations
 
+import re
+
 from app.templates import templates
 
 
@@ -232,6 +234,36 @@ def test_topbar_separates_page_and_global_actions_for_mobile_layout():
     assert 'class="topbar-page-actions ' in html
     assert "Create employee" in html
     assert 'class="topbar-global-actions ' in html
+
+
+def test_topbar_without_page_actions_does_not_render_a_second_row():
+    html = _render(
+        """
+{% from "components/macros.html" import topbar %}
+{{ topbar("Title") }}
+"""
+    )
+
+    assert 'class="topbar-page-row' not in html
+    assert not re.search(
+        r'<div class="topbar-actions\b[^\"]*topbar-actions--has-page-row[^\"]*"',
+        html,
+    )
+
+
+def test_topbar_with_page_actions_renders_a_second_row_modifier():
+    html = _render(
+        """
+{% from "components/macros.html" import topbar %}
+{{ topbar("Title", header_actions_html="<a class='btn'>Action</a>") }}
+"""
+    )
+
+    assert 'class="topbar-page-row' in html
+    assert re.search(
+        r'<div class="topbar-actions\b[^\"]*topbar-actions--has-page-row[^\"]*"',
+        html,
+    )
 
 
 def test_topbar_polls_for_new_mentions_and_shows_deduplicated_toasts():
