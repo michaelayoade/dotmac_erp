@@ -60,8 +60,8 @@ FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 # below. A tag is deliberately absent: the descriptor refuses mutable
 # references, and a `sha-<short>` tag is one.
 IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
-IMAGE_SOURCE_REVISION = "a8c44422ff7d0d24d0322044e717e2b72e35a1ba"
-IMAGE_DIGEST = "sha256:2120cd75189d98fb36fc13af0fc9a092a21323d20a056027866aeb2599c56be8"
+IMAGE_SOURCE_REVISION = "345340bf63eb18e46cc9610f6f8f0e4e494f7307"
+IMAGE_DIGEST = "sha256:89444a8c72ec795303ce2196f2d586179bbae74cebf09188ea1f8280a5df58d9"
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
@@ -160,7 +160,7 @@ def test_public_source_revision_is_projected_into_telemetry() -> None:
 
 def test_descriptor_matches_committed_publication_evidence() -> None:
     """Preserve the published digest/source/assembly binding when selecting a release."""
-    evidence_path = REPO_ROOT / "deploy/releases/2026-10-01-a8c44422.image-release.json"
+    evidence_path = REPO_ROOT / "deploy/releases/2026-10-04-345340bf.image-release.json"
     raw = evidence_path.read_text(encoding="utf-8")
     evidence = json.loads(raw)
     spec = _load()
@@ -196,6 +196,12 @@ def test_descriptor_matches_committed_publication_evidence() -> None:
             "2026-09-30-18b15588.image-release.json",
             "18b15588f452d77864218e95762b4271bc280825",
             "sha256:b71f7436cacd8c148cb2f3c28f7216dbde56e6a627bddf2840e27197e405b347",
+            "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6",
+        ),
+        (
+            "2026-10-01-a8c44422.image-release.json",
+            "a8c44422ff7d0d24d0322044e717e2b72e35a1ba",
+            "sha256:2120cd75189d98fb36fc13af0fc9a092a21323d20a056027866aeb2599c56be8",
             "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6",
         ),
     ],
