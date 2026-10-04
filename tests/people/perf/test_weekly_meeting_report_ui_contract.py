@@ -10,13 +10,13 @@ def _read(relative_path: str) -> str:
     return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def test_performance_page_and_sidebar_expose_weekly_report() -> None:
+def test_performance_page_keeps_weekly_report_card_and_active_parent() -> None:
     perf_index = _read("templates/people/perf/index.html")
     people_nav = _read("templates/people/base_people.html")
 
     assert 'href="/people/perf/weekly-meeting-reports"' in perf_index
     assert "Weekly Meeting Report" in perf_index
-    assert 'href="/people/perf/weekly-meeting-reports"' in people_nav
+    assert 'href="/people/perf/weekly-meeting-reports"' not in people_nav
     assert "perf-weekly-reports" in people_nav
 
 
