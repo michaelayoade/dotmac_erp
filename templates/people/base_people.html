@@ -211,16 +211,6 @@
             </a>
             {% endif %}
 
-            {% if performance_private_enabled or performance_government_enabled %}
-            <a href="/people/perf/weekly-meeting-reports"
-               :aria-current="activeModule === 'perf-weekly-reports' ? 'page' : false"
-               :class="activeModule === 'perf-weekly-reports' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-500 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
-               class="ml-7 flex items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium transition-all">
-                {{ icon_svg("document", "h-4 w-4 flex-shrink-0") }}
-                <span x-show="!sidebarCollapsed" class="truncate" x-cloak>Weekly Meeting Report</span>
-            </a>
-            {% endif %}
-
             <a href="/people/hr/discipline"
                :aria-current="activeModule === 'discipline' || activeModule === 'hr-discipline' ? 'page' : false"
                :class="activeModule === 'discipline' || activeModule === 'hr-discipline' ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800' : 'text-slate-600 hover:bg-slate-50 border-transparent dark:text-slate-400 dark:hover:bg-slate-800/50'"
