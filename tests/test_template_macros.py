@@ -234,6 +234,30 @@ def test_topbar_separates_page_and_global_actions_for_mobile_layout():
     assert 'class="topbar-global-actions ' in html
 
 
+def test_topbar_without_page_actions_does_not_render_a_second_row():
+    html = _render(
+        """
+{% from "components/macros.html" import topbar %}
+{{ topbar("Title") }}
+"""
+    )
+
+    assert "topbar-actions--has-page-row" not in html
+    assert "topbar-page-row" not in html
+
+
+def test_topbar_with_page_actions_renders_a_second_row_modifier():
+    html = _render(
+        """
+{% from "components/macros.html" import topbar %}
+{{ topbar("Title", header_actions_html="<a class='btn'>Action</a>") }}
+"""
+    )
+
+    assert "topbar-actions--has-page-row" in html
+    assert "topbar-page-row" in html
+
+
 def test_topbar_polls_for_new_mentions_and_shows_deduplicated_toasts():
     html = _render(
         """

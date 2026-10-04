@@ -64,7 +64,41 @@
 {% endif %}
 
 {% if current_path != "/" %}
-<div x-data="{ open: false }" class="relative">
+<div x-data='{
+       open: false,
+       launcherTop: "80px",
+       resizeHandler: null,
+       updateLauncherPosition() {
+         const header = this.$root.closest("header");
+         const appHeader = header ? header.querySelector(".app-header") : null;
+         if (!appHeader) {
+           this.launcherTop = "80px";
+           return;
+         }
+         this.launcherTop = `${Math.max(0, appHeader.getBoundingClientRect().bottom + 16)}px`;
+       },
+       startLauncherTracking() {
+         this.stopLauncherTracking();
+         this.updateLauncherPosition();
+         this.resizeHandler = () => this.updateLauncherPosition();
+         window.addEventListener("resize", this.resizeHandler);
+       },
+       stopLauncherTracking() {
+         if (this.resizeHandler) {
+           window.removeEventListener("resize", this.resizeHandler);
+           this.resizeHandler = null;
+         }
+       },
+       init() {
+         this.$watch("open", (isOpen) => {
+           if (isOpen) this.startLauncherTracking();
+           else this.stopLauncherTracking();
+         });
+       },
+       destroy() {
+         this.stopLauncherTracking();
+       }
+     }' class="relative">
   <button
     type="button"
     @click="open = !open"
@@ -96,7 +130,8 @@
     x-transition:leave="transition ease-in duration-75"
     x-transition:leave-start="opacity-100 scale-100"
     x-transition:leave-end="opacity-0 scale-95"
-    class="fixed right-4 top-20 z-50 w-[min(36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] origin-top-right overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-800"
+    class="topbar-module-launcher fixed right-4 top-20 z-50 w-[min(36rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] origin-top-right overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-800"
+    :style="{ top: launcherTop }"
     x-cloak>
     {% if launcher_modules %}
     <div class="max-h-[32rem] overflow-y-auto px-4 py-6">
