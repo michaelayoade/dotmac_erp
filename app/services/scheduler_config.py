@@ -510,7 +510,11 @@ def build_beat_schedule() -> dict:
                 continue
 
             if task.task_name in builtin_tasks:
-                logger.error(
+                # This is an expected fail-closed safeguard: the database row
+                # is ignored because application code owns the schedule. It
+                # is actionable configuration drift, not an application
+                # failure, so keep it visible without reporting it as ERROR.
+                logger.warning(
                     "Ignoring enabled database schedule for code-owned task "
                     "task_name=%s task_id=%s",
                     task.task_name,
