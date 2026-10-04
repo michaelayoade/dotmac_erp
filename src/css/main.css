@@ -144,3 +144,12 @@
         gap: var(--spacing-xs);
     }
 }
+
+@media (max-width: 1279px) {
+    .topbar-page-row,
+    .topbar-page-actions {
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
+        max-width: 100%;
+    }
+}
