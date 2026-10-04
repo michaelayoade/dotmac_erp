@@ -8,6 +8,8 @@ These tests validate both:
 
 from __future__ import annotations
 
+import re
+
 from app.templates import templates
 
 
@@ -242,8 +244,11 @@ def test_topbar_without_page_actions_does_not_render_a_second_row():
 """
     )
 
-    assert "topbar-actions--has-page-row" not in html
-    assert "topbar-page-row" not in html
+    assert 'class="topbar-page-row' not in html
+    assert not re.search(
+        r'<div class="topbar-actions\b[^\"]*topbar-actions--has-page-row[^\"]*"',
+        html,
+    )
 
 
 def test_topbar_with_page_actions_renders_a_second_row_modifier():
@@ -254,8 +259,11 @@ def test_topbar_with_page_actions_renders_a_second_row_modifier():
 """
     )
 
-    assert "topbar-actions--has-page-row" in html
-    assert "topbar-page-row" in html
+    assert 'class="topbar-page-row' in html
+    assert re.search(
+        r'<div class="topbar-actions\b[^\"]*topbar-actions--has-page-row[^\"]*"',
+        html,
+    )
 
 
 def test_topbar_polls_for_new_mentions_and_shows_deduplicated_toasts():
