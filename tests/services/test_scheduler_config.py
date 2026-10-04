@@ -9,6 +9,7 @@ Tests for Celery configuration functions:
 - Beat schedule building
 """
 
+import logging
 import uuid
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
@@ -524,6 +525,14 @@ class TestBuildBeatSchedule:
         assert len(matching) == 1
         assert "scheduled_task_" + str(task.id) not in schedule
         assert "Ignoring enabled database schedule for code-owned task" in caplog.text
+        matching_records = [
+            record
+            for record in caplog.records
+            if "Ignoring enabled database schedule for code-owned task"
+            in record.getMessage()
+        ]
+        assert len(matching_records) == 1
+        assert matching_records[0].levelno == logging.WARNING
 
     @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_enabled_only(self, mock_session_local):
