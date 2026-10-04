@@ -72,11 +72,14 @@ class PaystackCustomerAutoMatchResult:
 
     scanned: int = 0
     matched: int = 0
+    matched_imported_receipts: int = 0
     fees_posted: int = 0
     skipped_rule_condition: int = 0
     skipped_no_intent_reference: int = 0
     skipped_ambiguous_reference: int = 0
     skipped_duplicate_intent: int = 0
+    skipped_duplicate_receipt: int = 0
+    skipped_imported_fee: int = 0
     skipped_transaction_id: int = 0
     skipped_amount: int = 0
     skipped_currency: int = 0
@@ -231,6 +234,7 @@ class PaystackCustomerAutoMatchService:
                 intents_by_reference.setdefault(key, []).append(available_intent)
 
         candidates: dict[UUID, PaymentIntent] = {}
+        imported_receipt_lines: list[BankStatementLine] = []
         for line in eligible_lines:
             matched_intents: dict[UUID, PaymentIntent] = {}
             ambiguous = False
@@ -245,7 +249,7 @@ class PaystackCustomerAutoMatchService:
             elif len(matched_intents) == 1:
                 candidates[line.line_id] = next(iter(matched_intents.values()))
             else:
-                result.skipped_no_intent_reference += 1
+                imported_receipt_lines.append(line)
 
         intent_occurrences = Counter(intent.intent_id for intent in candidates.values())
 
@@ -378,7 +382,175 @@ class PaystackCustomerAutoMatchService:
                     line.line_id,
                 )
 
+        if imported_receipt_lines:
+            self._match_imported_receipts(
+                db,
+                organization_id,
+                account,
+                rule,
+                imported_receipt_lines,
+                actor_user_id,
+                result,
+            )
         return result
+
+    def _match_imported_receipts(
+        self,
+        db: Session,
+        organization_id: UUID,
+        account: BankAccount,
+        rule: ReconciliationMatchRule,
+        statement_lines: list[BankStatementLine],
+        actor_user_id: UUID,
+        result: PaystackCustomerAutoMatchResult,
+    ) -> None:
+        """Reconcile existing imported cash without fabricating gateway records.
+
+        Receipt references are literal provider identifiers, not normalized
+        tokens or amount-based guesses. Fee differences require review: the
+        source receipt alone does not establish who bore a gateway fee.
+        """
+        references = {line.reference for line in statement_lines if line.reference}
+        if not references:
+            result.skipped_no_intent_reference += len(statement_lines)
+            return
+        payments = list(
+            db.scalars(
+                select(CustomerPayment)
+                .where(
+                    CustomerPayment.organization_id == organization_id,
+                    CustomerPayment.reference.in_(references),
+                )
+                .order_by(CustomerPayment.payment_id)
+                .with_for_update(of=CustomerPayment)
+            ).all()
+        )
+        payments_by_reference: dict[str, list[CustomerPayment]] = {}
+        for payment in payments:
+            if payment.reference:
+                payments_by_reference.setdefault(payment.reference, []).append(payment)
+        candidates: dict[UUID, CustomerPayment] = {}
+        for line in statement_lines:
+            matches = payments_by_reference.get(line.reference or "", [])
+            if len(matches) > 1:
+                result.skipped_ambiguous_reference += 1
+            elif matches:
+                candidates[line.line_id] = matches[0]
+            else:
+                # Retain the legacy counter for lines with neither a gateway
+                # intent nor an imported receipt carrying their reference.
+                result.skipped_no_intent_reference += 1
+        if not candidates:
+            return
+        provider_statement_ids = set(
+            db.scalars(
+                select(BankStatement.statement_id).where(
+                    BankStatement.organization_id == organization_id,
+                    BankStatement.bank_account_id == account.bank_account_id,
+                    BankStatement.currency_code == account.currency_code,
+                    BankStatement.import_source == "paystack_collections",
+                )
+            ).all()
+        )
+        occurrences = Counter(payment.payment_id for payment in candidates.values())
+        rule_service = ReconciliationRuleService(db)
+        for line in statement_lines:
+            candidate_payment = candidates.get(line.line_id)
+            if candidate_payment is None:
+                continue
+            payment = candidate_payment
+            if occurrences[payment.payment_id] != 1:
+                result.skipped_duplicate_receipt += 1
+                continue
+            try:
+                if (
+                    payment.organization_id != organization_id
+                    or payment.bank_account_id != account.bank_account_id
+                    or payment.status != PaymentStatus.CLEARED
+                    or payment.journal_entry_id is None
+                    or not (
+                        payment.dotmac_sub_id or payment.splynx_id or payment.erpnext_id
+                    )
+                    or line.statement_id not in provider_statement_ids
+                ):
+                    raise _SkipCandidate("payment")
+                if (payment.currency_code or "").upper() != (
+                    account.currency_code or ""
+                ).upper():
+                    raise _SkipCandidate("currency")
+                raw = line.raw_data if isinstance(line.raw_data, dict) else {}
+                if (
+                    not raw.get("paystack_id")
+                    or str(raw["paystack_id"]) != line.transaction_id
+                ):
+                    raise _SkipCandidate("transaction_id")
+                net, gross, fee = (
+                    _money(line.amount),
+                    _money(raw.get("gross_amount")),
+                    _money(raw.get("fees")),
+                )
+                cash = _money(payment.amount)
+                if (
+                    net <= 0
+                    or net + fee != gross
+                    or cash + _money(payment.wht_amount) != _money(payment.gross_amount)
+                ):
+                    raise _SkipCandidate("amount")
+                if cash == gross and fee > 0:
+                    raise _SkipCandidate("imported_fee")
+                if cash != net:
+                    raise _SkipCandidate("amount")
+                if (
+                    rule.date_window_days is not None
+                    and abs((payment.payment_date - line.transaction_date).days)
+                    > rule.date_window_days
+                ):
+                    raise _SkipCandidate("payment")
+                with db.begin_nested():
+                    bank_line = self._receipt_bank_line(
+                        db, organization_id, account, payment, cash
+                    )
+                    self._require_unconsumed_journal_lines(db, [bank_line.line_id])
+                    bank_reconciliation_service.match_statement_line(
+                        db,
+                        organization_id,
+                        line.line_id,
+                        bank_line.line_id,
+                        matched_by=actor_user_id,
+                        force_match=False,
+                        source_type=SourceDocType.CUSTOMER_PAYMENT.value,
+                        source_id=payment.payment_id,
+                        match_state="confirmed",
+                    )
+                    rule_service.log_match(
+                        organization_id,
+                        rule_id=rule.rule_id,
+                        line_id=line.line_id,
+                        source_doc_type=SourceDocType.CUSTOMER_PAYMENT.value,
+                        source_doc_id=payment.payment_id,
+                        journal_line_id=bank_line.line_id,
+                        confidence=100,
+                        explanation="Exact imported receipt reference and existing posted Paystack cash entry",
+                        action="MATCH",
+                    )
+                result.matched += 1
+                result.matched_imported_receipts += 1
+            except _SkipCandidate as exc:
+                counter = {
+                    "currency": "skipped_currency",
+                    "transaction_id": "skipped_transaction_id",
+                    "amount": "skipped_amount",
+                    "imported_fee": "skipped_imported_fee",
+                    "journal": "skipped_journal",
+                    "consumed_journal_line": "skipped_consumed_journal_line",
+                }.get(exc.reason, "skipped_payment")
+                setattr(result, counter, getattr(result, counter) + 1)
+            except Exception:
+                result.failed += 1
+                logger.exception(
+                    "Imported Paystack receipt match failed for statement line %s",
+                    line.line_id,
+                )
 
     @staticmethod
     def _resolve_payment(
@@ -439,19 +611,32 @@ class PaystackCustomerAutoMatchService:
             or journal.status != JournalStatus.POSTED
             or journal.source_document_type != "CUSTOMER_PAYMENT"
             or journal.source_document_id != payment.payment_id
+            or (journal.currency_code or "").upper()
+            != (payment.currency_code or "").upper()
         ):
             raise _SkipCandidate("journal")
         lines = list(
             db.scalars(
-                select(JournalEntryLine).where(
+                select(JournalEntryLine)
+                .join(
+                    JournalEntry,
+                    JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
+                )
+                .join(Account, Account.account_id == JournalEntryLine.account_id)
+                .where(
+                    JournalEntry.organization_id == organization_id,
+                    Account.organization_id == organization_id,
                     JournalEntryLine.journal_entry_id == payment.journal_entry_id,
                     JournalEntryLine.account_id == account.gl_account_id,
-                    JournalEntryLine.debit_amount == gross_amount,
-                    JournalEntryLine.credit_amount == Decimal("0"),
                 )
+                .with_for_update(of=JournalEntryLine)
             ).all()
         )
-        if len(lines) != 1:
+        if (
+            len(lines) != 1
+            or lines[0].debit_amount != gross_amount
+            or lines[0].credit_amount != Decimal("0")
+        ):
             raise _SkipCandidate("journal")
         return lines[0]
 
