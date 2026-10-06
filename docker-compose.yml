@@ -268,13 +268,19 @@ services:
     # -config.expand-env resolves the ${...} placeholders in the config file
     # from this container's environment, so endpoints live in .env rather than
     # being baked into a tracked file.
-    command: -config.file=/etc/promtail/config.yml -config.expand-env=true
+    command: -config.file=/etc/promtail/promtail-config.yml -config.expand-env=true
     environment:
       LOKI_PUSH_URL: ${LOKI_PUSH_URL:-http://LOKI_PUSH_URL-is-unset.invalid/loki/api/v1/push}
       DEPLOY_HOST: ${DEPLOY_HOST:-DEPLOY_HOST-is-unset}
       DEPLOY_ENV: ${DEPLOY_ENV:-production}
     volumes:
-      - ./config/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      # Mount the DIRECTORY, never the single file. A single-file bind mount
+      # pins the inode that existed when the container was created; `git pull`
+      # replaces the file with a new inode, so the container silently keeps
+      # the old config until it is recreated. See
+      # docs/runbooks/VMAGENT_ENVIRONMENT_LABELS.md and
+      # tests/architecture/test_observability_config_mounts.py.
+      - ./config/promtail:/etc/promtail:ro
       # Read-only docker socket: promtail only discovers and tails containers,
       # it never needs to control them.
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -306,7 +312,10 @@ services:
       DEPLOY_ENV: ${DEPLOY_ENV:-production}
       METRICS_TOKEN: ${METRICS_TOKEN:?METRICS_TOKEN must be set for vmagent}
     volumes:
-      - ./config/vmagent/config.yml:/etc/vmagent/config.yml:ro
+      # Directory mount, not a single file: a single-file mount kept a
+      # two-week-old config (literal `${DEPLOY_ENV}` label) running after
+      # `git pull` replaced the file's inode. See the promtail note above.
+      - ./config/vmagent:/etc/vmagent:ro
       - vmagent_data:/vmagent-data
     depends_on:
     - app

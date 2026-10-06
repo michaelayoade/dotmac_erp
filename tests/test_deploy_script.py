@@ -98,11 +98,27 @@ def _deployment_harness(
         """#!/usr/bin/env python3
 import sys
 
+import os
+from pathlib import Path
+
 args = sys.argv[1:]
+# A test may model a pull that moves HEAD and changes some tracked paths.
+pulled_marker = Path(os.environ["DEPLOY_TEST_LOG"] + ".pulled")
+new_head = os.environ.get("DEPLOY_TEST_PULLED_HEAD", "")
 if args == ["rev-parse", "HEAD"]:
-    print("abcdef0123456789abcdef0123456789abcdef01")
+    if new_head and pulled_marker.exists():
+        print(new_head)
+    else:
+        print("abcdef0123456789abcdef0123456789abcdef01")
 elif args == ["rev-parse", "--short=7", "HEAD"]:
     print("abcdef0")
+elif args and args[0] == "pull" and new_head:
+    pulled_marker.touch()
+elif args[:2] == ["diff", "--quiet"]:
+    changed = os.environ.get("DEPLOY_TEST_CHANGED_PATHS", "").split()
+    paths = args[args.index("--") + 1:] if "--" in args else []
+    if any(path in changed for path in paths):
+        raise SystemExit(1)
 """,
     )
     _write_executable(
@@ -166,6 +182,8 @@ if args and args[0] == "ps":
         print("dotmac_erp_app_dev")
     if os.environ.get("DEPLOY_TEST_RUNNING_ONE_OFF") == "1" and service == "app":
         print("dotmac-run-app-one-off")
+    if service and service in os.environ.get("DEPLOY_TEST_RUNNING_SERVICES", "").split():
+        print(f"dotmac_erp_{service}")
 
 # The deploy makes four `compose run` calls: one executor preflight before
 # backup, another on the candidate image, the migration, and runtime admission.
@@ -271,6 +289,59 @@ def test_deploy_script_exports_stable_compose_project_name(tmp_path: Path) -> No
     assert all("MIGRATION_DATABASE_URL" not in line for line in runtime)
     assert all("PEOPLE_EMPLOYMENT_TYPE_ACTIVATION" not in line for line in one_off)
     assert "compose: dotmac" in result.stdout
+
+
+def test_deploy_restarts_observability_agents_only_when_their_config_changed(
+    tmp_path: Path,
+) -> None:
+    """`compose up -d` does not recreate vmagent for a config-only change.
+
+    The config is a directory bind mount, so the pulled file is visible inside
+    the container, but the agent only reads it at start. Without the explicit
+    restart vmagent kept a two-week-old environment label in production.
+    """
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+    env["DEPLOY_TEST_PULLED_HEAD"] = "1234567890" * 4
+    env["DEPLOY_TEST_CHANGED_PATHS"] = "config/vmagent"
+    env["DEPLOY_TEST_RUNNING_SERVICES"] = "vmagent promtail"
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    restarts = [line for line in invocations if "|compose restart " in line]
+    assert restarts == ["dotmac|compose restart vmagent"], invocations
+    recreate = invocations.index("dotmac|compose up -d worker beat vmagent")
+    assert invocations.index(restarts[0]) > recreate
+    assert "config/vmagent changed" in result.stdout
+
+
+def test_deploy_does_not_restart_agents_when_their_config_is_unchanged(
+    tmp_path: Path,
+) -> None:
+    deploy_script, env, invocation_log = _deployment_harness(tmp_path)
+    env["DEPLOY_TEST_PULLED_HEAD"] = "1234567890" * 4
+    env["DEPLOY_TEST_RUNNING_SERVICES"] = "vmagent promtail"
+
+    result = subprocess.run(  # noqa: S603
+        [str(deploy_script)],
+        cwd=deploy_script.parent.parent,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8").splitlines()
+    assert not any("|compose restart " in line for line in invocations)
 
 
 def test_the_deploy_path_refuses_a_tag_in_the_rendered_project(
