@@ -57,7 +57,9 @@ def test_compose_supplies_environment_to_the_unmodified_bind_mount():
     agent = yaml.safe_load(COMPOSE.read_text())["services"]["vmagent"]
     assert "DEPLOY_ENV" in agent["environment"]
     assert agent["environment"]["DEPLOY_ENV"].startswith("${DEPLOY_ENV")
-    assert "./config/vmagent/config.yml:/etc/vmagent/config.yml:ro" in agent["volumes"]
+    # Directory mount: see test_observability_config_mounts.py for why a
+    # single-file mount is refused.
+    assert "./config/vmagent:/etc/vmagent:ro" in agent["volumes"]
     assert "-promscrape.config=/etc/vmagent/config.yml" in agent["command"]
 
 

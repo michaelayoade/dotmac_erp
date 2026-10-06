@@ -154,6 +154,40 @@ running_compose_service_containers() {
         --format '{{.Names}}'
 }
 
+# Observability agents whose configuration ships in this checkout. Their config
+# is bind-mounted as a DIRECTORY (see docker-compose.yml) so a pulled change is
+# visible inside the container, but neither agent re-reads it on its own, and
+# `docker compose up -d` does not recreate a container whose Compose definition
+# is unchanged. A config-only change therefore needs an explicit restart, or
+# the agent keeps running the previous config indefinitely: vmagent shipped a
+# literal `${DEPLOY_ENV}` label for two weeks that way, merging production and
+# staging metrics.
+OBSERVABILITY_CONFIG_AGENTS=("vmagent:config/vmagent" "promtail:config/promtail")
+
+restart_agents_whose_config_changed() {
+    local from_sha="$1" to_sha="$2" entry service config_dir
+    if [[ -z "$from_sha" || -z "$to_sha" || "$from_sha" == "$to_sha" ]]; then
+        return 0
+    fi
+    for entry in "${OBSERVABILITY_CONFIG_AGENTS[@]}"; do
+        service="${entry%%:*}"
+        config_dir="${entry#*:}"
+        if git diff --quiet "$from_sha" "$to_sha" -- "$config_dir"; then
+            continue
+        fi
+        if [[ -z "$(running_compose_service_containers "$service")" ]]; then
+            echo "  ${config_dir} changed; ${service} is not running, nothing to restart."
+            continue
+        fi
+        echo "  ${config_dir} changed (${from_sha:0:12}..${to_sha:0:12}); restarting ${service}..."
+        # An observability agent must not turn a healthy application deploy
+        # into a rollback, so a failed restart is reported, not fatal.
+        if ! docker compose restart "$service"; then
+            echo "  WARNING: restarting ${service} failed; it may still run the previous config." >&2
+        fi
+    done
+}
+
 cd "$PROJECT_DIR"
 PREV_SHA="$(git rev-parse HEAD)"
 
@@ -287,6 +321,8 @@ fi
 
 rollback() {
     echo "!! Rolling back code to ${PREV_SHA:0:12} and image to ${PREV_IMAGE:-<unavailable>}..."
+    local failed_sha
+    failed_sha="$(git rev-parse HEAD 2>/dev/null || true)"
     git reset --hard "$PREV_SHA" || true
     # Undo the .env pins written for the failed deploy, then point APP_IMAGE at
     # the image actually being restored. Restoring the backup alone would
@@ -311,6 +347,7 @@ rollback() {
         fi
     fi
     docker compose up -d app worker beat vmagent || { docker stop dotmac_erp_app || true; docker start dotmac_erp_app || true; }
+    restart_agents_whose_config_changed "$failed_sha" "$PREV_SHA" || true
     echo "!! Rolled back. NOTE: DB migrations were NOT reverted — restore from the"
     echo "!! pre-migration backup if the new revisions are not backward-compatible."
 }
@@ -738,6 +775,8 @@ fi
 # Recreate (not just restart) so worker/beat pick up the newly-pinned image.
 echo "→ Recreating worker, beat and the metrics scraper..."
 docker compose up -d worker beat vmagent
+# `up -d` leaves vmagent/promtail alone when only their tracked config changed.
+restart_agents_whose_config_changed "$PREV_SHA" "$(git rev-parse HEAD)"
 echo "→ Admitting worker and Beat..."
 wait_for_worker_admission
 wait_for_beat_admission
