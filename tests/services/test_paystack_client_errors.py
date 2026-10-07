@@ -50,11 +50,7 @@ def test_list_settlements_does_not_log_or_raise_raw_provider_body(caplog):
         text=secret_body,
         request=httpx.Request("GET", "https://api.paystack.co/settlement"),
     )
-    http_client = httpx.Client()
-    http_client.close()
-
     client = PaystackClient(PaystackConfig("secret", "public", "webhook"))
-    client._client = http_client
 
     with (
         caplog.at_level(
