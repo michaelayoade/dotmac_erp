@@ -72,6 +72,27 @@ def _from_http_status(message: str, error: httpx.HTTPStatusError) -> PaystackErr
     return factory(message, status_code=status_code)
 
 
+def _safe_error_detail(response: httpx.Response) -> str:
+    """Return bounded provider diagnostics without exposing the response body."""
+    status = f"HTTP {response.status_code}"
+    try:
+        payload = response.json()
+    except ValueError:
+        return status
+
+    if not isinstance(payload, dict):
+        return status
+
+    parts: list[str] = []
+    message = payload.get("message")
+    if isinstance(message, str) and message:
+        parts.append(message[:256].replace("\r", " ").replace("\n", " "))
+    code = payload.get("code")
+    if isinstance(code, (str, int)) and not isinstance(code, bool) and str(code):
+        parts.append(f"code={str(code)[:64]}")
+    return f"{status}: {'; '.join(parts)}" if parts else status
+
+
 @dataclass
 class PaystackConfig:
     """Configuration for Paystack API."""
@@ -360,9 +381,11 @@ class PaystackClient:
                 json=payload,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack initialize failed: {e.response.text}")
+            logger.error(
+                f"Paystack initialize failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to initialize transaction: {e.response.text}",
+                f"Failed to initialize transaction: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -398,9 +421,9 @@ class PaystackClient:
                 operation="verify_transaction",
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack verify failed: {e.response.text}")
+            logger.error(f"Paystack verify failed: {_safe_error_detail(e.response)}")
             raise _from_http_status(
-                f"Failed to verify transaction: {e.response.text}",
+                f"Failed to verify transaction: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -493,9 +516,11 @@ class PaystackClient:
                 params={"country": country, "currency": currency},
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack list banks failed: {e.response.text}")
+            logger.error(
+                f"Paystack list banks failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to list banks: {e.response.text}",
+                f"Failed to list banks: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -541,9 +566,11 @@ class PaystackClient:
                 },
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack resolve account failed: {e.response.text}")
+            logger.error(
+                f"Paystack resolve account failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to resolve account: {e.response.text}",
+                f"Failed to resolve account: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -604,9 +631,11 @@ class PaystackClient:
                 json=payload,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack create recipient failed: {e.response.text}")
+            logger.error(
+                f"Paystack create recipient failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to create recipient: {e.response.text}",
+                f"Failed to create recipient: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -663,9 +692,11 @@ class PaystackClient:
                 json=payload,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack initiate transfer failed: {e.response.text}")
+            logger.error(
+                f"Paystack initiate transfer failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to initiate transfer: {e.response.text}",
+                f"Failed to initiate transfer: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -700,9 +731,11 @@ class PaystackClient:
                 operation="verify_transfer",
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack verify transfer failed: {e.response.text}")
+            logger.error(
+                f"Paystack verify transfer failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to verify transfer: {e.response.text}",
+                f"Failed to verify transfer: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -761,9 +794,11 @@ class PaystackClient:
                 params=params,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack list transactions failed: {e.response.text}")
+            logger.error(
+                f"Paystack list transactions failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to list transactions: {e.response.text}",
+                f"Failed to list transactions: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -828,9 +863,11 @@ class PaystackClient:
                 params=params,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack list transfers failed: {e.response.text}")
+            logger.error(
+                f"Paystack list transfers failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to list transfers: {e.response.text}",
+                f"Failed to list transfers: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -876,9 +913,11 @@ class PaystackClient:
                 operation="get_balance",
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack get balance failed: {e.response.text}")
+            logger.error(
+                f"Paystack get balance failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to get balance: {e.response.text}",
+                f"Failed to get balance: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -929,9 +968,11 @@ class PaystackClient:
                 params=params,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack list settlements failed: {e.response.text}")
+            logger.error(
+                f"Paystack list settlements failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to list settlements: {e.response.text}",
+                f"Failed to list settlements: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -986,10 +1027,10 @@ class PaystackClient:
             )
         except httpx.HTTPStatusError as e:
             logger.error(
-                f"Paystack get settlement transactions failed: {e.response.text}"
+                f"Paystack get settlement transactions failed: {_safe_error_detail(e.response)}"
             )
             raise _from_http_status(
-                f"Failed to get settlement transactions: {e.response.text}",
+                f"Failed to get settlement transactions: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -1066,9 +1107,11 @@ class PaystackClient:
                 json=payload,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack create customer failed: {e.response.text}")
+            logger.error(
+                f"Paystack create customer failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to create customer: {e.response.text}",
+                f"Failed to create customer: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -1128,9 +1171,11 @@ class PaystackClient:
                 json=payload,
             )
         except httpx.HTTPStatusError as e:
-            logger.error(f"Paystack update customer failed: {e.response.text}")
+            logger.error(
+                f"Paystack update customer failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to update customer: {e.response.text}",
+                f"Failed to update customer: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
@@ -1170,9 +1215,11 @@ class PaystackClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return None
-            logger.error(f"Paystack get customer failed: {e.response.text}")
+            logger.error(
+                f"Paystack get customer failed: {_safe_error_detail(e.response)}"
+            )
             raise _from_http_status(
-                f"Failed to get customer: {e.response.text}",
+                f"Failed to get customer: {_safe_error_detail(e.response)}",
                 e,
             )
         except httpx.RequestError as e:
