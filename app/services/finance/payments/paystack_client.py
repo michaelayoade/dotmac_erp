@@ -421,9 +421,7 @@ class PaystackClient:
                 operation="verify_transaction",
             )
         except httpx.HTTPStatusError as e:
-            logger.error(
-                f"Paystack verify failed: {_safe_error_detail(e.response)}"
-            )
+            logger.error(f"Paystack verify failed: {_safe_error_detail(e.response)}")
             raise _from_http_status(
                 f"Failed to verify transaction: {_safe_error_detail(e.response)}",
                 e,
