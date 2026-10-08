@@ -9,13 +9,66 @@ These tests validate both:
 from __future__ import annotations
 
 import re
+from urllib.parse import parse_qs, urlsplit
 
+import html5lib
+import pytest
+
+from app.static_assets import typeahead_script_url
 from app.templates import templates
 
 
 def _render(snippet: str, **context) -> str:
     wrapped = "{% autoescape true %}" + snippet + "{% endautoescape %}"
     return templates.env.from_string(wrapped).render(**context)
+
+
+def test_base_shell_loads_content_versioned_typeahead():
+    html = templates.env.from_string(
+        '{% extends "base.html" %}{% block body %}Test page{% endblock %}'
+    ).render(csrf_token="test-token")
+    document = html5lib.parse(html, namespaceHTMLElements=False)
+    scripts = [
+        element.attrib["src"]
+        for element in document.iter("script")
+        if element.attrib.get("src", "").startswith("/static/js/typeahead.js")
+    ]
+
+    assert scripts == [typeahead_script_url()]
+    assert parse_qs(urlsplit(scripts[0]).query)["v"]
+
+
+@pytest.mark.parametrize("auto_submit", [False, True])
+def test_compact_filters_keep_results_outside_filter_card(auto_submit):
+    html = _render(
+        """
+{% from "components/macros.html" import compact_filters, filter_select_field %}
+{% call(filter_attrs) compact_filters(
+    base_url="/finance/ap/invoices",
+    show_search=true,
+    search="INV",
+    date_range=true,
+    auto_submit=auto_submit,
+    show_apply_button=not auto_submit
+) %}
+{{ filter_select_field("status", "Status", "", ["DRAFT"], filter_attrs) }}
+{% endcall %}
+<div id="results-container"><table><tbody><tr><td>Invoice</td></tr></tbody></table></div>
+""",
+        auto_submit=auto_submit,
+    )
+    document = html5lib.parseFragment(html, namespaceHTMLElements=False)
+    filter_card = document.find("./div[@data-compact-filters]")
+    results = document.find("./div[@id='results-container']")
+
+    assert filter_card is not None
+    assert results is not None
+    assert filter_card.find(".//*[@id='results-container']") is None
+    search = filter_card.find(".//input[@name='search']")
+    assert search is not None
+    assert search.attrib.get("hx-get") == (
+        "/finance/ap/invoices" if auto_submit else None
+    )
 
 
 def test_compact_filters_renders_expected_filter_inputs_and_hx_attrs():

@@ -19,6 +19,7 @@ from markupsafe import Markup
 from app.config import settings
 from app.i18n import t
 from app.services import formatters as _fmt
+from app.static_assets import typeahead_script_url
 from app.ui import UI_TEMPLATE_DIRECTORY, ui_template_globals
 
 # Single shared templates instance
@@ -34,6 +35,7 @@ templates.env.globals["now"] = datetime.now
 templates.env.globals["t"] = t  # Translation function
 templates.env.globals["_"] = t  # Alias for convenience
 templates.env.globals["app_version"] = settings.app_version
+templates.env.globals["typeahead_script_url"] = typeahead_script_url()
 templates.env.globals.update(ui_template_globals())
 
 
