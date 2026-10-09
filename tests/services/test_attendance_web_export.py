@@ -16,6 +16,7 @@ from app.services.people.attendance.web import AttendanceWebService
 
 ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
 EMPLOYEE_ID = UUID("00000000-0000-0000-0000-000000000002")
+DEPARTMENT_ID = UUID("00000000-0000-0000-0000-000000000003")
 
 
 def test_export_attendance_csv_uses_filters_and_exports_all_rows(monkeypatch) -> None:
@@ -41,6 +42,7 @@ def test_export_attendance_csv_uses_filters_and_exports_all_rows(monkeypatch) ->
             assert org_id == ORG_ID
             assert kwargs == {
                 "employee_id": EMPLOYEE_ID,
+                "department_id": DEPARTMENT_ID,
                 "from_date": date(2026, 8, 1),
                 "to_date": date(2026, 8, 3),
                 "status": AttendanceStatus.PRESENT,
@@ -65,6 +67,7 @@ def test_export_attendance_csv_uses_filters_and_exports_all_rows(monkeypatch) ->
         start_date="2026-08-01",
         end_date="2026-08-03",
         employee_id=str(EMPLOYEE_ID),
+        department_id=str(DEPARTMENT_ID),
     )
 
     rows = list(csv.reader(io.StringIO(response.body.decode())))
