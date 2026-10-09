@@ -252,16 +252,10 @@ class AttendanceService:
         return self._now_in_org_tz(org_id).date()
 
     def _normalize_in_org_tz(self, org_id: UUID, value: datetime) -> datetime:
+        org_tzinfo = self._org_tzinfo(org_id)
         if value.tzinfo is None:
-            return value.replace(tzinfo=self._org_tzinfo(org_id))
-        return value
-
-    @staticmethod
-    def _now_like(reference: datetime | None = None) -> datetime:
-        """Return timezone-aware now, using reference tz when available."""
-        if reference and reference.tzinfo is not None:
-            return datetime.now(tz=reference.tzinfo)
-        return datetime.now(tz=UTC)
+            return value.replace(tzinfo=org_tzinfo)
+        return value.astimezone(org_tzinfo)
 
     @staticmethod
     def _combine_date_time(
@@ -288,6 +282,23 @@ class AttendanceService:
         if check_in <= grace_end:
             return False, 0
         return True, math.ceil((check_in - grace_end).total_seconds() / 60)
+
+    @classmethod
+    def _calculate_early_exit(
+        cls,
+        check_out: datetime,
+        attendance_date: date,
+        shift: ShiftType,
+    ) -> tuple[bool, int]:
+        shift_end = cls._combine_date_time(
+            attendance_date, shift.end_time, check_out.tzinfo
+        )
+        if shift.end_time <= shift.start_time:
+            shift_end += timedelta(days=1)
+        grace_start = shift_end - timedelta(minutes=shift.early_exit_grace_period)
+        if check_out >= grace_start:
+            return False, 0
+        return True, math.ceil((grace_start - check_out).total_seconds() / 60)
 
     @staticmethod
     def _attendance_percentage(
@@ -814,10 +825,12 @@ class AttendanceService:
         late_entry: bool = False,
         late_entry_minutes: int = 0,
         early_exit: bool = False,
+        early_exit_minutes: int = 0,
         remarks: str | None = None,
         marked_by: str = "MANUAL",
         leave_application_id: UUID | None = None,
         _duplicate_checked: bool = False,
+        _classification_resolved: bool = False,
     ) -> Attendance:
         """Create an attendance record."""
         # Check for duplicate
@@ -833,6 +846,23 @@ class AttendanceService:
             check_in = self._normalize_in_org_tz(org_id, check_in)
         if check_out:
             check_out = self._normalize_in_org_tz(org_id, check_out)
+
+        if (check_in or check_out) and not _classification_resolved:
+            shift = (
+                self.get_shift_type(org_id, shift_type_id)
+                if shift_type_id
+                else self.get_employee_shift(org_id, employee_id, attendance_date)
+            )
+            if shift:
+                shift_type_id = shift.shift_type_id
+                if check_in:
+                    late_entry, late_entry_minutes = self._calculate_late_entry(
+                        check_in, attendance_date, shift
+                    )
+                if check_out:
+                    early_exit, early_exit_minutes = self._calculate_early_exit(
+                        check_out, attendance_date, shift
+                    )
 
         # Calculate working hours if check-in and check-out provided
         if working_hours is None and check_in and check_out:
@@ -853,6 +883,7 @@ class AttendanceService:
             late_entry=late_entry,
             late_entry_minutes=late_entry_minutes,
             early_exit=early_exit,
+            early_exit_minutes=early_exit_minutes,
             remarks=remarks,
             marked_by=marked_by,
             leave_application_id=leave_application_id,
@@ -973,6 +1004,7 @@ class AttendanceService:
             remarks=notes,
             marked_by=marked_by,
             _duplicate_checked=True,
+            _classification_resolved=True,
         )
 
     def check_out(
@@ -1018,17 +1050,16 @@ class AttendanceService:
 
         # Determine if early exit
         early_exit = False
+        early_exit_minutes = 0
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            tzinfo = now.tzinfo
-            shift_end = self._combine_date_time(today, shift.end_time, tzinfo)
-            if shift.end_time <= shift.start_time:
-                shift_end += timedelta(days=1)
-            grace_start = shift_end - timedelta(minutes=shift.early_exit_grace_period)
-            early_exit = now < grace_start
+            early_exit, early_exit_minutes = self._calculate_early_exit(
+                now, attendance.attendance_date, shift
+            )
 
         attendance.check_out = now
         attendance.early_exit = early_exit
+        attendance.early_exit_minutes = early_exit_minutes
         if notes:
             attendance.remarks = notes
 
@@ -1059,14 +1090,9 @@ class AttendanceService:
             )
 
         if check_in_time:
-            tzinfo = attendance.check_in.tzinfo if attendance.check_in else None
-            if check_in_time.tzinfo is None:
-                check_in_time = check_in_time.replace(
-                    tzinfo=tzinfo or self._org_tzinfo(org_id)
-                )
-            now = check_in_time
+            now = self._normalize_in_org_tz(org_id, check_in_time)
         else:
-            now = self._now_like(attendance.check_in)
+            now = self._now_in_org_tz(org_id)
         shift = (
             self.get_shift_type(org_id, attendance.shift_type_id)
             if attendance.shift_type_id
@@ -1110,28 +1136,20 @@ class AttendanceService:
             )
 
         if check_out_time:
-            tzinfo = attendance.check_in.tzinfo if attendance.check_in else None
-            if check_out_time.tzinfo is None:
-                check_out_time = check_out_time.replace(
-                    tzinfo=tzinfo or self._org_tzinfo(org_id)
-                )
-            now = check_out_time
+            now = self._normalize_in_org_tz(org_id, check_out_time)
         else:
-            now = self._now_like(attendance.check_in)
+            now = self._now_in_org_tz(org_id)
         early_exit = False
+        early_exit_minutes = 0
         if attendance.shift_type_id:
             shift = self.get_shift_type(org_id, attendance.shift_type_id)
-            tzinfo = now.tzinfo
-            shift_end = self._combine_date_time(
-                attendance.attendance_date, shift.end_time, tzinfo
+            early_exit, early_exit_minutes = self._calculate_early_exit(
+                now, attendance.attendance_date, shift
             )
-            if shift.end_time <= shift.start_time:
-                shift_end += timedelta(days=1)
-            grace_start = shift_end - timedelta(minutes=shift.early_exit_grace_period)
-            early_exit = now < grace_start
 
         attendance.check_out = now
         attendance.early_exit = early_exit
+        attendance.early_exit_minutes = early_exit_minutes
         if notes:
             attendance.remarks = notes
 
@@ -1228,9 +1246,49 @@ class AttendanceService:
         """Update an attendance record."""
         attendance = self.get_attendance(org_id, attendance_id)
 
+        changed_fields = {key for key, value in kwargs.items() if value is not None}
+        for field_name in ("check_in", "check_out"):
+            value = kwargs.get(field_name)
+            if value is not None:
+                kwargs[field_name] = self._normalize_in_org_tz(org_id, value)
+
         for key, value in kwargs.items():
             if value is not None and hasattr(attendance, key):
                 setattr(attendance, key, value)
+
+        if changed_fields & {"check_in", "check_out", "shift_type_id"}:
+            shift = (
+                self.get_shift_type(org_id, attendance.shift_type_id)
+                if attendance.shift_type_id
+                else self.get_employee_shift(
+                    org_id, attendance.employee_id, attendance.attendance_date
+                )
+            )
+            if attendance.check_in and shift:
+                (
+                    attendance.late_entry,
+                    attendance.late_entry_minutes,
+                ) = self._calculate_late_entry(
+                    attendance.check_in,
+                    attendance.attendance_date,
+                    shift,
+                )
+            elif "check_in" in changed_fields or "shift_type_id" in changed_fields:
+                attendance.late_entry = False
+                attendance.late_entry_minutes = 0
+
+            if attendance.check_out and shift:
+                (
+                    attendance.early_exit,
+                    attendance.early_exit_minutes,
+                ) = self._calculate_early_exit(
+                    attendance.check_out,
+                    attendance.attendance_date,
+                    shift,
+                )
+            elif "check_out" in changed_fields or "shift_type_id" in changed_fields:
+                attendance.early_exit = False
+                attendance.early_exit_minutes = 0
 
         # Recalculate working hours if times changed
         if attendance.check_in and attendance.check_out:
@@ -1919,12 +1977,12 @@ class AttendanceService:
         start_date: date | None = None,
         end_date: date | None = None,
         department_id: UUID | None = None,
+        view: str | None = None,
+        page: int = 1,
+        preview_limit: int = 5,
+        page_size: int = 25,
     ) -> dict:
-        """
-        Get detailed late arrivals and early departures report.
-
-        Returns list of late/early records with employee details.
-        """
+        """Get bounded late, early-departure, and absence report sections."""
         from app.models.people.hr import Department, Employee
         from app.models.person import Person
 
@@ -1934,8 +1992,46 @@ class AttendanceService:
         if not end_date:
             end_date = today
 
-        # Query late/early records
-        query = (
+        filters = [
+            Attendance.organization_id == org_id,
+            Attendance.attendance_date >= start_date,
+            Attendance.attendance_date <= end_date,
+        ]
+        if department_id:
+            filters.append(Employee.department_id == department_id)
+
+        conditions = {
+            "late": Attendance.late_entry.is_(True),
+            "early": Attendance.early_exit.is_(True),
+            "absent": Attendance.status == AttendanceStatus.ABSENT,
+        }
+        selected_view = view if view in conditions else None
+
+        count_row = self.db.execute(
+            select(
+                func.count(case((conditions["late"], 1))).label("late"),
+                func.count(case((conditions["early"], 1))).label("early"),
+                func.count(case((conditions["absent"], 1))).label("absent"),
+            )
+            .select_from(Attendance)
+            .join(Employee, Employee.employee_id == Attendance.employee_id)
+            .where(*filters)
+        ).one()
+        totals = {
+            "late": count_row.late or 0,
+            "early": count_row.early or 0,
+            "absent": count_row.absent or 0,
+        }
+
+        selected_total = totals[selected_view] if selected_view else 0
+        total_pages = (
+            max(1, (selected_total + page_size - 1) // page_size)
+            if selected_view
+            else 1
+        )
+        selected_page = min(max(1, page), total_pages)
+
+        base_query = (
             select(
                 Attendance,
                 Person.name_expr().label("employee_name"),
@@ -1944,50 +2040,56 @@ class AttendanceService:
             .join(Employee, Employee.employee_id == Attendance.employee_id)
             .join(Person, Employee.person_id == Person.id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
-            .where(
-                Attendance.organization_id == org_id,
-                Attendance.attendance_date >= start_date,
-                Attendance.attendance_date <= end_date,
-                or_(Attendance.late_entry == True, Attendance.early_exit == True),
-            )
+            .where(*filters)
         )
 
-        if department_id:
-            query = query.where(Employee.department_id == department_id)
-
-        results = self.db.execute(
-            query.order_by(Attendance.attendance_date.desc())
-        ).all()
-
-        late_entries = []
-        early_exits = []
-
-        for attendance, employee_name, dept_name in results:
-            record = {
-                "attendance_id": str(attendance.attendance_id),
-                "employee_name": employee_name,
-                "department_name": dept_name or "No Department",
-                "date": attendance.attendance_date.isoformat(),
-                "check_in": attendance.check_in.strftime("%H:%M")
-                if attendance.check_in
-                else None,
-                "check_out": attendance.check_out.strftime("%H:%M")
-                if attendance.check_out
-                else None,
-            }
-
-            if attendance.late_entry:
-                late_entries.append(record)
-            if attendance.early_exit:
-                early_exits.append(record)
+        def load_section(section: str) -> list[dict[str, Any]]:
+            is_selected = selected_view == section
+            limit = page_size if is_selected else preview_limit
+            offset = (selected_page - 1) * page_size if is_selected else 0
+            time_column = {
+                "late": Attendance.check_in,
+                "early": Attendance.check_out,
+                "absent": Attendance.created_at,
+            }[section]
+            rows = self.db.execute(
+                base_query.where(conditions[section])
+                .order_by(
+                    Attendance.attendance_date.desc(),
+                    time_column.desc(),
+                    Attendance.attendance_id.desc(),
+                )
+                .offset(offset)
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "attendance_id": str(attendance.attendance_id),
+                    "employee_name": employee_name,
+                    "department_name": dept_name or "No Department",
+                    "date": attendance.attendance_date,
+                    "check_in": attendance.check_in,
+                    "check_out": attendance.check_out,
+                    "status": attendance.status.value,
+                    "late_entry_minutes": attendance.late_entry_minutes,
+                    "early_exit_minutes": attendance.early_exit_minutes,
+                }
+                for attendance, employee_name, dept_name in rows
+            ]
 
         return {
             "start_date": start_date,
             "end_date": end_date,
-            "late_entries": late_entries,
-            "early_exits": early_exits,
-            "total_late": len(late_entries),
-            "total_early": len(early_exits),
+            "late_entries": load_section("late"),
+            "early_exits": load_section("early"),
+            "absent_entries": load_section("absent"),
+            "total_late": totals["late"],
+            "total_early": totals["early"],
+            "total_absent": totals["absent"],
+            "view": selected_view,
+            "page": selected_page,
+            "total_pages": total_pages,
+            "page_size": page_size,
         }
 
     def get_attendance_trends_report(

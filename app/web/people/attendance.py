@@ -264,10 +264,12 @@ def attendance_late_early_report(
     start_date: str | None = None,
     end_date: str | None = None,
     department_id: str | None = None,
+    view: str | None = Query(default=None, pattern="^(late|early|absent)$"),
+    page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Late arrivals and early departures report page."""
+    """Late arrivals, early departures, and absences report page."""
     return attendance_web_service.attendance_late_early_report_response(
         request=request,
         auth=auth,
@@ -275,6 +277,8 @@ def attendance_late_early_report(
         start_date=start_date,
         end_date=end_date,
         department_id=department_id,
+        view=view,
+        page=page,
     )
 
 

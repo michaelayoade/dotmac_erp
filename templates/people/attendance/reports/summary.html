@@ -64,6 +64,7 @@
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Attendance Rate</p>
                     <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.attendance_percentage }}%</p>
+                    <p class="mt-1 text-xs font-medium text-teal-600 dark:text-teal-400">View details &rarr;</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">{{ report.attendance_credit_days }}/{{ report.eligible_days }} eligible days • leave excluded</p>
                 </div>
             </div>
@@ -78,11 +79,12 @@
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Present Days</p>
                     <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.present }}</p>
+                    <p class="mt-1 text-xs font-medium text-green-600 dark:text-green-400">View records &rarr;</p>
                 </div>
             </div>
         </a>
 
-        <a href="{{ punctuality_url }}" class="card block p-5 transition-colors hover:border-amber-300 hover:bg-amber-50/40 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:hover:border-amber-700 dark:hover:bg-amber-900/10 dark:focus:ring-offset-slate-900" aria-label="View late entry details">
+        <a href="{{ punctuality_url }}#late-arrivals" class="card block p-5 transition-colors hover:border-amber-300 hover:bg-amber-50/40 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:hover:border-amber-700 dark:hover:bg-amber-900/10 dark:focus:ring-offset-slate-900" aria-label="View late entry details">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
                     {{ icon_svg("clock", "h-6 w-6 text-amber-600 dark:text-amber-400") }}
@@ -90,6 +92,7 @@
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Late Entries</p>
                     <p class="text-2xl font-semibold text-slate-900 dark:text-white">{{ report.late_entries }}</p>
+                    <p class="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">View records &rarr;</p>
                 </div>
             </div>
         </a>
@@ -102,6 +105,7 @@
                 <div>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Working Hours</p>
                     <p class="text-2xl font-semibold text-slate-900 dark:text-white font-mono">{{ "{:.1f}".format(report.total_working_hours) }}</p>
+                    <p class="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">View details &rarr;</p>
                 </div>
             </div>
         </a>
@@ -192,6 +196,7 @@
                         <span class="font-medium text-slate-900 dark:text-white">Punctuality Rate</span>
                         <span class="font-semibold text-teal-600 dark:text-teal-400">{{ "{:.1f}".format(punctuality_rate) }}%</span>
                     </div>
+                    <p class="mt-2 text-right text-xs font-medium text-violet-600 dark:text-violet-400">View late and early records &rarr;</p>
                 </div>
             </div>
         </a>
@@ -213,6 +218,7 @@
                         <span class="font-medium text-slate-900 dark:text-white">Avg Hours/Day</span>
                         <span class="font-semibold font-mono text-blue-600 dark:text-blue-400">{{ "{:.1f}".format(avg_hours) }}</span>
                     </div>
+                    <p class="mt-2 text-right text-xs font-medium text-violet-600 dark:text-violet-400">View employee breakdown &rarr;</p>
                 </div>
             </div>
         </a>

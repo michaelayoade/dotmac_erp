@@ -11873,6 +11873,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
     background-color: rgb(148 163 184 / 0.1);
 }
 
+.dark\:bg-slate-500:is(.dark *) {
+    --tw-bg-opacity: 1;
+    background-color: rgb(100 116 139 / var(--tw-bg-opacity, 1));
+}
+
 .dark\:bg-slate-600:is(.dark *) {
     --tw-bg-opacity: 1;
     background-color: rgb(71 85 105 / var(--tw-bg-opacity, 1));

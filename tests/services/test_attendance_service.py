@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -297,6 +298,156 @@ def test_trends_report_excludes_leave_days_from_monthly_and_average_percentages(
     assert report["months"][0]["on_leave"] == 1
     assert report["months"][0]["attendance_percentage"] == Decimal("77.8")
     assert report["average_attendance_percentage"] == Decimal("77.8")
+
+
+def test_normalize_in_org_timezone_converts_aware_timestamp() -> None:
+    service, db = _make_service()
+    db.get.return_value = SimpleNamespace(timezone="Africa/Lagos")
+
+    normalized = service._normalize_in_org_tz(
+        ORG_ID, datetime(2026, 8, 3, 7, 30, tzinfo=UTC)
+    )
+
+    assert normalized == datetime(2026, 8, 3, 8, 30, tzinfo=ZoneInfo("Africa/Lagos"))
+
+
+def test_update_attendance_recalculates_stale_late_flag() -> None:
+    service, db = _make_service()
+    db.get.return_value = SimpleNamespace(timezone="Africa/Lagos")
+    attendance_id = uuid.UUID("00000000-0000-0000-0000-000000000004")
+    shift_id = uuid.UUID("00000000-0000-0000-0000-000000000005")
+    attendance = SimpleNamespace(
+        attendance_id=attendance_id,
+        employee_id=EMPLOYEE_ID,
+        attendance_date=date(2026, 8, 3),
+        shift_type_id=shift_id,
+        check_in=datetime(2026, 8, 3, 8, 30, tzinfo=ZoneInfo("Africa/Lagos")),
+        check_out=None,
+        working_hours=Decimal("0"),
+        late_entry=True,
+        late_entry_minutes=15,
+        early_exit=False,
+        early_exit_minutes=0,
+    )
+    shift = SimpleNamespace(
+        shift_type_id=shift_id,
+        start_time=time(8, 0),
+        end_time=time(17, 0),
+        late_entry_grace_period=15,
+        early_exit_grace_period=0,
+    )
+    service.get_attendance = MagicMock(return_value=attendance)  # type: ignore[method-assign]
+    service.get_shift_type = MagicMock(return_value=shift)  # type: ignore[method-assign]
+
+    result = service.update_attendance(
+        ORG_ID,
+        attendance_id,
+        check_in=datetime(2026, 8, 3, 7, 0, tzinfo=UTC),
+    )
+
+    assert result.check_in == datetime(
+        2026, 8, 3, 8, 0, tzinfo=ZoneInfo("Africa/Lagos")
+    )
+    assert result.late_entry is False
+    assert result.late_entry_minutes == 0
+    db.flush.assert_called_once()
+
+
+def test_update_attendance_recalculates_stale_early_exit_flag() -> None:
+    service, db = _make_service()
+    db.get.return_value = SimpleNamespace(timezone="Africa/Lagos")
+    attendance_id = uuid.UUID("00000000-0000-0000-0000-000000000004")
+    shift_id = uuid.UUID("00000000-0000-0000-0000-000000000005")
+    attendance = SimpleNamespace(
+        attendance_id=attendance_id,
+        employee_id=EMPLOYEE_ID,
+        attendance_date=date(2026, 8, 3),
+        shift_type_id=shift_id,
+        check_in=datetime(2026, 8, 3, 8, 0, tzinfo=ZoneInfo("Africa/Lagos")),
+        check_out=datetime(2026, 8, 3, 16, 0, tzinfo=ZoneInfo("Africa/Lagos")),
+        working_hours=Decimal("8"),
+        late_entry=False,
+        late_entry_minutes=0,
+        early_exit=True,
+        early_exit_minutes=60,
+    )
+    shift = SimpleNamespace(
+        shift_type_id=shift_id,
+        start_time=time(8, 0),
+        end_time=time(17, 0),
+        late_entry_grace_period=15,
+        early_exit_grace_period=0,
+    )
+    service.get_attendance = MagicMock(return_value=attendance)  # type: ignore[method-assign]
+    service.get_shift_type = MagicMock(return_value=shift)  # type: ignore[method-assign]
+
+    result = service.update_attendance(
+        ORG_ID,
+        attendance_id,
+        check_out=datetime(2026, 8, 3, 16, 0, tzinfo=UTC),
+    )
+
+    assert result.check_out == datetime(
+        2026, 8, 3, 17, 0, tzinfo=ZoneInfo("Africa/Lagos")
+    )
+    assert result.early_exit is False
+    assert result.early_exit_minutes == 0
+    assert result.working_hours == Decimal("9")
+    db.flush.assert_called_once()
+
+
+def test_late_early_report_includes_bounded_absence_section() -> None:
+    service, db = _make_service()
+    service.get_org_today = lambda _org_id: date(2026, 8, 31)  # type: ignore[method-assign]
+    count_result = MagicMock()
+    count_result.one.return_value = SimpleNamespace(late=8, early=4, absent=6)
+
+    def row(*, status: AttendanceStatus, late: bool = False, early: bool = False):
+        attendance = SimpleNamespace(
+            attendance_id=uuid.uuid4(),
+            attendance_date=date(2026, 8, 3),
+            check_in=datetime(2026, 8, 3, 7, 30, tzinfo=UTC),
+            check_out=datetime(2026, 8, 3, 16, 0, tzinfo=UTC),
+            status=status,
+            late_entry_minutes=5 if late else 0,
+            early_exit_minutes=60 if early else 0,
+        )
+        return (attendance, "Ada Lovelace", "Engineering")
+
+    late_result = MagicMock()
+    late_result.all.return_value = [row(status=AttendanceStatus.PRESENT, late=True)]
+    early_result = MagicMock()
+    early_result.all.return_value = [row(status=AttendanceStatus.PRESENT, early=True)]
+    absent_result = MagicMock()
+    absent_result.all.return_value = [row(status=AttendanceStatus.ABSENT)]
+    db.execute.side_effect = [
+        count_result,
+        late_result,
+        early_result,
+        absent_result,
+    ]
+
+    report = service.get_late_early_report(
+        ORG_ID,
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 31),
+        department_id=DEPARTMENT_ID,
+        view="absent",
+        page=1,
+    )
+
+    assert report["total_late"] == 8
+    assert report["total_early"] == 4
+    assert report["total_absent"] == 6
+    assert report["absent_entries"][0]["department_name"] == "Engineering"
+    assert report["absent_entries"][0]["status"] == "ABSENT"
+    assert report["view"] == "absent"
+    assert report["page_size"] == 25
+    statements = [call.args[0] for call in db.execute.call_args_list]
+    for statement in statements:
+        sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+        assert str(ORG_ID) in sql
+        assert str(DEPARTMENT_ID) in sql
 
 
 def test_check_in_resolves_employee_shift_and_marks_late_arrival(monkeypatch) -> None:

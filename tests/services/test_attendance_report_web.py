@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.services.people.attendance import web as attendance_web
 from app.services.people.attendance.web import AttendanceWebService
@@ -12,33 +13,6 @@ from app.services.people.attendance.web import AttendanceWebService
 
 ORG_ID = UUID("00000000-0000-0000-0000-000000000001")
 DEPARTMENT_ID = UUID("00000000-0000-0000-0000-000000000003")
-
-
-class FakeOrganizationService:
-    def __init__(self, db, org_id) -> None:
-        assert org_id == ORG_ID
-
-    def list_departments(self, *_args, **_kwargs):
-        department = SimpleNamespace(
-            department_id=DEPARTMENT_ID,
-            department_name="Engineering",
-        )
-        return SimpleNamespace(items=[department])
-
-
-def _capture_template_context(monkeypatch) -> dict:
-    captured: dict = {}
-
-    def render(_request, _template_name, context):
-        captured["context"] = context
-        return SimpleNamespace()
-
-    monkeypatch.setattr(
-        "app.services.people.hr.OrganizationService", FakeOrganizationService
-    )
-    monkeypatch.setattr(attendance_web, "base_context", lambda *_args, **_kwargs: {})
-    monkeypatch.setattr(attendance_web.templates, "TemplateResponse", render)
-    return captured
 
 
 def test_summary_report_builds_filter_preserving_drilldown_urls(monkeypatch) -> None:
@@ -68,8 +42,30 @@ def test_summary_report_builds_filter_preserving_drilldown_urls(monkeypatch) -> 
             assert kwargs["department_id"] == DEPARTMENT_ID
             return report
 
-    captured = _capture_template_context(monkeypatch)
+    class FakeOrganizationService:
+        def __init__(self, db, org_id) -> None:
+            assert org_id == ORG_ID
+
+        def list_departments(self, *_args, **_kwargs):
+            department = SimpleNamespace(
+                department_id=DEPARTMENT_ID,
+                department_name="Engineering",
+            )
+            return SimpleNamespace(items=[department])
+
+    captured: dict = {}
+
+    def render(_request, template_name, context):
+        captured["template_name"] = template_name
+        captured["context"] = context
+        return SimpleNamespace()
+
     monkeypatch.setattr(attendance_web, "AttendanceService", FakeAttendanceService)
+    monkeypatch.setattr(
+        "app.services.people.hr.OrganizationService", FakeOrganizationService
+    )
+    monkeypatch.setattr(attendance_web, "base_context", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(attendance_web.templates, "TemplateResponse", render)
 
     AttendanceWebService.attendance_summary_report_response(
         request=SimpleNamespace(),
@@ -89,12 +85,14 @@ def test_summary_report_builds_filter_preserving_drilldown_urls(monkeypatch) -> 
         "department_id": [str(DEPARTMENT_ID)],
         "status": ["PRESENT"],
     }
-    assert urlparse(context["working_hours_url"]).path == (
-        "/people/attendance/reports/by-employee"
-    )
-    assert urlparse(context["punctuality_url"]).path == (
-        "/people/attendance/reports/late-early"
-    )
+
+    hours_url = urlparse(context["working_hours_url"])
+    assert hours_url.path == "/people/attendance/reports/by-employee"
+    assert parse_qs(hours_url.query)["department_id"] == [str(DEPARTMENT_ID)]
+
+    punctuality_url = urlparse(context["punctuality_url"])
+    assert punctuality_url.path == "/people/attendance/reports/late-early"
+    assert parse_qs(punctuality_url.query)["department_id"] == [str(DEPARTMENT_ID)]
 
 
 def test_by_employee_report_builds_search_and_employee_detail_url(monkeypatch) -> None:
@@ -120,8 +118,29 @@ def test_by_employee_report_builds_search_and_employee_detail_url(monkeypatch) -
             assert kwargs["employee_search"] == "Ada"
             return report
 
-    captured = _capture_template_context(monkeypatch)
+    class FakeOrganizationService:
+        def __init__(self, db, org_id) -> None:
+            assert org_id == ORG_ID
+
+        def list_departments(self, *_args, **_kwargs):
+            department = SimpleNamespace(
+                department_id=DEPARTMENT_ID,
+                department_name="Engineering",
+            )
+            return SimpleNamespace(items=[department])
+
+    captured: dict = {}
+
+    def render(_request, _template_name, context):
+        captured["context"] = context
+        return SimpleNamespace()
+
     monkeypatch.setattr(attendance_web, "AttendanceService", FakeAttendanceService)
+    monkeypatch.setattr(
+        "app.services.people.hr.OrganizationService", FakeOrganizationService
+    )
+    monkeypatch.setattr(attendance_web, "base_context", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(attendance_web.templates, "TemplateResponse", render)
 
     AttendanceWebService.attendance_by_employee_report_response(
         request=SimpleNamespace(),
@@ -142,4 +161,100 @@ def test_by_employee_report_builds_search_and_employee_detail_url(monkeypatch) -
         "end_date": ["2026-08-31"],
         "department_id": [str(DEPARTMENT_ID)],
         "employee_id": [str(employee_id)],
+    }
+
+
+def test_exceptions_report_formats_times_and_builds_section_urls(monkeypatch) -> None:
+    attendance_record = {
+        "attendance_id": "attendance-1",
+        "employee_name": "Ada Lovelace",
+        "department_name": "Engineering",
+        "date": date(2026, 8, 3),
+        "check_in": datetime(2026, 8, 3, 7, 30, tzinfo=UTC),
+        "check_out": datetime(2026, 8, 3, 16, 0, tzinfo=UTC),
+        "status": "PRESENT",
+        "late_entry_minutes": 5,
+        "early_exit_minutes": 0,
+    }
+    absent_record = {**attendance_record, "status": "ABSENT"}
+    report = {
+        "start_date": date(2026, 8, 1),
+        "end_date": date(2026, 8, 31),
+        "late_entries": [attendance_record.copy()],
+        "early_exits": [attendance_record.copy()],
+        "absent_entries": [absent_record],
+        "total_late": 8,
+        "total_early": 4,
+        "total_absent": 6,
+        "view": "absent",
+        "page": 1,
+        "total_pages": 1,
+        "page_size": 25,
+    }
+
+    class FakeAttendanceService:
+        def __init__(self, db) -> None:
+            self.db = db
+
+        def get_late_early_report(self, org_id, **kwargs):
+            assert org_id == ORG_ID
+            assert kwargs["department_id"] == DEPARTMENT_ID
+            assert kwargs["view"] == "absent"
+            assert kwargs["page"] == 1
+            return report
+
+        def get_org_tzinfo(self, org_id):
+            assert org_id == ORG_ID
+            return ZoneInfo("Africa/Lagos")
+
+    class FakeOrganizationService:
+        def __init__(self, db, org_id) -> None:
+            assert org_id == ORG_ID
+
+        def list_departments(self, *_args, **_kwargs):
+            return SimpleNamespace(
+                items=[
+                    SimpleNamespace(
+                        department_id=DEPARTMENT_ID,
+                        department_name="Engineering",
+                    )
+                ]
+            )
+
+    captured: dict = {}
+
+    def render(_request, template_name, context):
+        captured["template_name"] = template_name
+        captured["context"] = context
+        return SimpleNamespace()
+
+    monkeypatch.setattr(attendance_web, "AttendanceService", FakeAttendanceService)
+    monkeypatch.setattr(
+        "app.services.people.hr.OrganizationService", FakeOrganizationService
+    )
+    monkeypatch.setattr(attendance_web, "base_context", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(attendance_web.templates, "TemplateResponse", render)
+
+    AttendanceWebService.attendance_late_early_report_response(
+        request=SimpleNamespace(),
+        auth=SimpleNamespace(organization_id=ORG_ID),
+        db=SimpleNamespace(),
+        start_date="2026-08-01",
+        end_date="2026-08-31",
+        department_id=str(DEPARTMENT_ID),
+        view="absent",
+        page=1,
+    )
+
+    context = captured["context"]
+    assert context["report"]["late_entries"][0]["check_in_display"] == "08:30"
+    assert context["report"]["absent_entries"][0]["date_display"] == "03 Aug 2026"
+    absent_url = urlparse(context["section_urls"]["absent"])
+    assert absent_url.path == "/people/attendance/reports/late-early"
+    assert absent_url.fragment == "absent-employees"
+    assert parse_qs(absent_url.query) == {
+        "start_date": ["2026-08-01"],
+        "end_date": ["2026-08-31"],
+        "department_id": [str(DEPARTMENT_ID)],
+        "view": ["absent"],
     }

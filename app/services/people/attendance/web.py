@@ -59,7 +59,12 @@ class AttendanceWebService:
             return None
 
     @staticmethod
-    def _url_with_query(path: str, params: dict[str, Any]) -> str:
+    def _url_with_query(
+        path: str,
+        params: dict[str, Any],
+        *,
+        fragment: str | None = None,
+    ) -> str:
         """Build a URL while omitting empty query parameters."""
         query = urlencode(
             {
@@ -68,7 +73,8 @@ class AttendanceWebService:
                 if value is not None and value != ""
             }
         )
-        return f"{path}?{query}" if query else path
+        url = f"{path}?{query}" if query else path
+        return f"{url}#{fragment}" if fragment else url
 
     @staticmethod
     def _parse_decimal(value: str | None) -> Decimal | None:
@@ -1153,8 +1159,10 @@ class AttendanceWebService:
         start_date: str | None,
         end_date: str | None,
         department_id: str | None,
+        view: str | None,
+        page: int,
     ) -> HTMLResponse:
-        """Late arrivals and early departures report page."""
+        """Late arrivals, early departures, and absences report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
 
         org_id = coerce_uuid(auth.organization_id)
@@ -1167,7 +1175,24 @@ class AttendanceWebService:
             start_date=AttendanceWebService._parse_date(start_date),
             end_date=AttendanceWebService._parse_date(end_date),
             department_id=parsed_department_id,
+            view=view,
+            page=page,
         )
+
+        org_tzinfo = svc.get_org_tzinfo(org_id)
+        for section in ("late_entries", "early_exits", "absent_entries"):
+            for record in report[section]:
+                record["date_display"] = record["date"].strftime("%d %b %Y")
+                record["check_in_display"] = (
+                    AttendanceWebService._format_attendance_time(
+                        record["check_in"], org_tzinfo
+                    )
+                )
+                record["check_out_display"] = (
+                    AttendanceWebService._format_attendance_time(
+                        record["check_out"], org_tzinfo
+                    )
+                )
 
         departments = org_svc.list_departments(
             DepartmentFilters(is_active=True),
@@ -1191,8 +1216,20 @@ class AttendanceWebService:
             "end_date": report["end_date"].isoformat(),
             "department_id": parsed_department_id,
         }
+        section_urls = {
+            section: AttendanceWebService._url_with_query(
+                "/people/attendance/reports/late-early",
+                {**report_filters, "view": section},
+                fragment=f"{section}-arrivals"
+                if section == "late"
+                else ("early-departures" if section == "early" else "absent-employees"),
+            )
+            for section in ("late", "early", "absent")
+        }
 
-        context = base_context(request, auth, "Late/Early Report", "attendance", db=db)
+        context = base_context(
+            request, auth, "Attendance Exceptions", "attendance", db=db
+        )
         context.update(
             {
                 "report": report,
@@ -1201,6 +1238,11 @@ class AttendanceWebService:
                 "end_date": end_date or report["end_date"].isoformat(),
                 "department_id": department_id,
                 "active_filters": active_filters,
+                "section_urls": section_urls,
+                "pagination_filters": {
+                    **report_filters,
+                    "view": report["view"],
+                },
                 "summary_url": AttendanceWebService._url_with_query(
                     "/people/attendance/reports/summary", report_filters
                 ),
