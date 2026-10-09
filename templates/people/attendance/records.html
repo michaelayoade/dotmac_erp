@@ -175,6 +175,17 @@
                 </select>
             </div>
             <div>
+                <label class="form-label text-xs">Department</label>
+                <select aria-label="Department" name="department_id" class="form-select w-full" {{ filter_attrs }}>
+                    <option value="">All Departments</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>
+                        {{ dept.department_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
                 <label class="form-label text-xs">Status</label>
                 <select aria-label="Status" name="status" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Statuses</option>
@@ -301,7 +312,7 @@
         total_count=total | default(0),
         limit=20,
         show_size_selector=false,
-        filters={"employee_id": employee_id, "end_date": end_date, "start_date": start_date, "status": status}
+        filters={"department_id": department_id, "employee_id": employee_id, "end_date": end_date, "start_date": start_date, "status": status}
     ) }}
     </div>{# /results-container #}
 
