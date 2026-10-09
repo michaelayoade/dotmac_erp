@@ -16,6 +16,7 @@ from app.services.people.attendance.attendance_service import AttendanceServiceE
 
 ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 EMPLOYEE_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
+DEPARTMENT_ID = uuid.UUID("00000000-0000-0000-0000-000000000003")
 
 
 def _make_service() -> tuple[AttendanceService, MagicMock]:
@@ -175,6 +176,25 @@ def test_monthly_summary_excludes_leave_days_from_percentage() -> None:
     assert summary["attendance_percentage"] == Decimal("8.62")
 
 
+def test_list_attendance_applies_department_and_organization_scope() -> None:
+    service, db = _make_service()
+    db.scalar.return_value = 0
+    db.scalars.return_value.unique.return_value.all.return_value = []
+
+    result = service.list_attendance(
+        ORG_ID,
+        department_id=DEPARTMENT_ID,
+    )
+
+    statement = db.scalars.call_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    assert "attendance.attendance.organization_id" in sql
+    assert "hr.employee.department_id" in sql
+    assert str(ORG_ID) in sql
+    assert str(DEPARTMENT_ID) in sql
+    assert result.total == 0
+
+
 def test_summary_report_excludes_leave_days_from_percentage() -> None:
     service, db = _make_service()
     db.get.return_value = SimpleNamespace(timezone="UTC")
@@ -227,7 +247,30 @@ def test_by_employee_report_excludes_leave_days_from_percentage() -> None:
     )
 
     assert report["employees"][0]["on_leave"] == 1
+    assert report["employees"][0]["total_hours"] == Decimal("64")
+    assert report["employees"][0]["overtime_hours"] == Decimal("0")
+    assert report["employees"][0]["average_hours_per_present_day"] == Decimal("10.7")
     assert report["employees"][0]["attendance_percentage"] == Decimal("77.8")
+
+
+def test_by_employee_report_filters_by_employee_search() -> None:
+    service, db = _make_service()
+    db.execute.return_value.all.return_value = []
+
+    service.get_attendance_by_employee_report(
+        ORG_ID,
+        start_date=date(2026, 4, 1),
+        end_date=date(2026, 4, 30),
+        employee_search="Ada EMP-001",
+    )
+
+    statement = db.execute.call_args.args[0]
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
+    assert "employee_code" in sql
+    assert "first_name" in sql
+    assert "last_name" in sql
+    assert "email" in sql
+    assert "ada emp-001" in sql
 
 
 def test_trends_report_excludes_leave_days_from_monthly_and_average_percentages() -> (

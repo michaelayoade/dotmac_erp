@@ -80,7 +80,7 @@
     </div>
 
     <!-- Late Arrivals Table -->
-    <div class="card">
+    <div id="late-arrivals" class="card scroll-mt-24">
         <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
             <div class="flex items-center gap-2">
                 <div class="h-3 w-3 rounded-full bg-amber-500" aria-hidden="true"></div>
@@ -142,7 +142,7 @@
     </div>
 
     <!-- Early Departures Table -->
-    <div class="card">
+    <div id="early-departures" class="card scroll-mt-24">
         <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
             <div class="flex items-center gap-2">
                 <div class="h-3 w-3 rounded-full bg-rose-500" aria-hidden="true"></div>
@@ -202,13 +202,13 @@
         </div>
         {% endif %}
     </div>
-    </div>
 
     <!-- Quick Links -->
     <div class="flex gap-4">
-        <a href="/people/attendance/reports/summary" class="btn btn-secondary">View Summary</a>
-        <a href="/people/attendance/reports/by-employee" class="btn btn-secondary">By Employee</a>
+        <a href="{{ summary_url }}" class="btn btn-secondary">View Summary</a>
+        <a href="{{ by_employee_url }}" class="btn btn-secondary">By Employee</a>
         <a href="/people/attendance/reports/trends" class="btn btn-secondary">View Trends</a>
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

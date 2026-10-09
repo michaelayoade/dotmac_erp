@@ -59,6 +59,18 @@ class AttendanceWebService:
             return None
 
     @staticmethod
+    def _url_with_query(path: str, params: dict[str, Any]) -> str:
+        """Build a URL while omitting empty query parameters."""
+        query = urlencode(
+            {
+                key: str(value)
+                for key, value in params.items()
+                if value is not None and value != ""
+            }
+        )
+        return f"{path}?{query}" if query else path
+
+    @staticmethod
     def _parse_decimal(value: str | None) -> Decimal | None:
         if value is None or value == "":
             return None
@@ -159,11 +171,16 @@ class AttendanceWebService:
         page: int,
         success: str | None,
         error: str | None,
+        department_id: str | None = None,
     ) -> HTMLResponse:
         """Attendance records list page."""
+        from app.services.people.hr import DepartmentFilters, OrganizationService
+
         org_id = coerce_uuid(auth.organization_id)
         pagination = PaginationParams.from_page(page, per_page=20)
         svc = AttendanceService(db)
+        org_svc = OrganizationService(db, org_id)
+        parsed_department_id = AttendanceWebService._parse_uuid(department_id)
 
         status_enum = None
         if status:
@@ -175,6 +192,7 @@ class AttendanceWebService:
         result = svc.list_attendance(
             org_id,
             employee_id=AttendanceWebService._parse_uuid(employee_id),
+            department_id=parsed_department_id,
             from_date=AttendanceWebService._parse_date(start_date),
             to_date=AttendanceWebService._parse_date(end_date),
             status=status_enum,
@@ -211,24 +229,37 @@ class AttendanceWebService:
             )
 
         employees = AttendanceWebService._get_employees(db, org_id)
+        departments = org_svc.list_departments(
+            DepartmentFilters(is_active=True),
+            PaginationParams(limit=200),
+        ).items
         shifts = svc.list_shift_types(org_id, is_active=True).items
 
         employee_options = {str(emp.employee_id): emp.full_name for emp in employees}
+        department_options = {
+            str(department.department_id): department.department_name
+            for department in departments
+        }
         active_filters = build_active_filters(
             params={
                 "status": status,
                 "employee_id": employee_id,
+                "department_id": department_id,
                 "start_date": start_date,
                 "end_date": end_date,
             },
             labels={"start_date": "From", "end_date": "To"},
-            options={"employee_id": employee_options},
+            options={
+                "employee_id": employee_options,
+                "department_id": department_options,
+            },
         )
         export_params = {
             key: value
             for key, value in {
                 "status": status,
                 "employee_id": employee_id,
+                "department_id": department_id,
                 "start_date": start_date,
                 "end_date": end_date,
             }.items()
@@ -245,6 +276,7 @@ class AttendanceWebService:
             {
                 "records": records,
                 "employees": employees,
+                "departments": departments,
                 "shifts": shifts,
                 "today": date.today().isoformat(),
                 "statuses": [s.value for s in AttendanceStatus],
@@ -252,6 +284,7 @@ class AttendanceWebService:
                 "start_date": start_date,
                 "end_date": end_date,
                 "employee_id": employee_id,
+                "department_id": department_id,
                 "active_filters": active_filters,
                 "attendance_export_url": attendance_export_url,
                 "page": result.page,
@@ -275,6 +308,7 @@ class AttendanceWebService:
         start_date: str | None,
         end_date: str | None,
         employee_id: str | None,
+        department_id: str | None = None,
     ) -> Response:
         """Export all attendance rows matching the current table filters."""
         org_id = coerce_uuid(auth.organization_id)
@@ -290,6 +324,7 @@ class AttendanceWebService:
         result = svc.list_attendance(
             org_id,
             employee_id=AttendanceWebService._parse_uuid(employee_id),
+            department_id=AttendanceWebService._parse_uuid(department_id),
             from_date=AttendanceWebService._parse_date(start_date),
             to_date=AttendanceWebService._parse_date(end_date),
             status=status_enum,
@@ -942,18 +977,55 @@ class AttendanceWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
         org_svc = OrganizationService(db, org_id)
+        parsed_department_id = AttendanceWebService._parse_uuid(department_id)
 
         report = svc.get_attendance_summary_report(
             org_id,
             start_date=AttendanceWebService._parse_date(start_date),
             end_date=AttendanceWebService._parse_date(end_date),
-            department_id=AttendanceWebService._parse_uuid(department_id),
+            department_id=parsed_department_id,
         )
 
         departments = org_svc.list_departments(
             DepartmentFilters(is_active=True),
             PaginationParams(limit=200),
         ).items
+        department_options = {
+            str(department.department_id): department.department_name
+            for department in departments
+        }
+        active_filters = build_active_filters(
+            params={
+                "department_id": department_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={"department_id": department_options},
+        )
+        report_filters = {
+            "start_date": report["start_date"].isoformat(),
+            "end_date": report["end_date"].isoformat(),
+            "department_id": parsed_department_id,
+        }
+        status_drilldown_urls = {
+            status.value: AttendanceWebService._url_with_query(
+                "/people/attendance/records",
+                {**report_filters, "status": status.value},
+            )
+            for status in (
+                AttendanceStatus.PRESENT,
+                AttendanceStatus.ABSENT,
+                AttendanceStatus.HALF_DAY,
+                AttendanceStatus.ON_LEAVE,
+            )
+        }
+        by_employee_url = AttendanceWebService._url_with_query(
+            "/people/attendance/reports/by-employee", report_filters
+        )
+        punctuality_url = AttendanceWebService._url_with_query(
+            "/people/attendance/reports/late-early", report_filters
+        )
 
         context = base_context(
             request, auth, "Attendance Summary Report", "attendance", db=db
@@ -965,6 +1037,11 @@ class AttendanceWebService:
                 "start_date": start_date or report["start_date"].isoformat(),
                 "end_date": end_date or report["end_date"].isoformat(),
                 "department_id": department_id,
+                "active_filters": active_filters,
+                "status_drilldown_urls": status_drilldown_urls,
+                "attendance_rate_url": by_employee_url,
+                "punctuality_url": punctuality_url,
+                "working_hours_url": by_employee_url,
             }
         )
         return templates.TemplateResponse(
@@ -980,6 +1057,7 @@ class AttendanceWebService:
         end_date: str | None,
         department_id: str | None,
         page: int = 1,
+        employee_search: str | None = None,
     ) -> HTMLResponse:
         """Attendance by employee report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
@@ -987,22 +1065,52 @@ class AttendanceWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
         org_svc = OrganizationService(db, org_id)
+        parsed_department_id = AttendanceWebService._parse_uuid(department_id)
 
         report = svc.get_attendance_by_employee_report(
             org_id,
             start_date=AttendanceWebService._parse_date(start_date),
             end_date=AttendanceWebService._parse_date(end_date),
-            department_id=AttendanceWebService._parse_uuid(department_id),
+            department_id=parsed_department_id,
+            employee_search=employee_search,
         )
 
         departments = org_svc.list_departments(
             DepartmentFilters(is_active=True),
             PaginationParams(limit=200),
         ).items
+        department_options = {
+            str(department.department_id): department.department_name
+            for department in departments
+        }
+        active_filters = build_active_filters(
+            params={
+                "department_id": department_id,
+                "employee_search": employee_search,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={
+                "employee_search": "Employee",
+                "start_date": "From",
+                "end_date": "To",
+            },
+            options={"department_id": department_options},
+        )
+        report_filters = {
+            "start_date": report["start_date"].isoformat(),
+            "end_date": report["end_date"].isoformat(),
+            "department_id": parsed_department_id,
+        }
 
         # Paginate employees list
         per_page = 50
         all_employees = report.get("employees", [])
+        for employee in all_employees:
+            employee["detail_url"] = AttendanceWebService._url_with_query(
+                "/people/attendance/records",
+                {**report_filters, "employee_id": employee["employee_id"]},
+            )
         total_count = len(all_employees)
         total_pages = max(1, (total_count + per_page - 1) // per_page)
         page = max(1, min(page, total_pages))
@@ -1019,6 +1127,14 @@ class AttendanceWebService:
                 "start_date": start_date or report["start_date"].isoformat(),
                 "end_date": end_date or report["end_date"].isoformat(),
                 "department_id": department_id,
+                "employee_search": employee_search,
+                "active_filters": active_filters,
+                "summary_url": AttendanceWebService._url_with_query(
+                    "/people/attendance/reports/summary", report_filters
+                ),
+                "punctuality_url": AttendanceWebService._url_with_query(
+                    "/people/attendance/reports/late-early", report_filters
+                ),
                 "page": page,
                 "total_pages": total_pages,
                 "total_count": total_count,
@@ -1044,12 +1160,13 @@ class AttendanceWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
         org_svc = OrganizationService(db, org_id)
+        parsed_department_id = AttendanceWebService._parse_uuid(department_id)
 
         report = svc.get_late_early_report(
             org_id,
             start_date=AttendanceWebService._parse_date(start_date),
             end_date=AttendanceWebService._parse_date(end_date),
-            department_id=AttendanceWebService._parse_uuid(department_id),
+            department_id=parsed_department_id,
         )
 
         departments = org_svc.list_departments(
@@ -1069,6 +1186,11 @@ class AttendanceWebService:
             labels={"start_date": "From", "end_date": "To"},
             options={"department_id": department_options},
         )
+        report_filters = {
+            "start_date": report["start_date"].isoformat(),
+            "end_date": report["end_date"].isoformat(),
+            "department_id": parsed_department_id,
+        }
 
         context = base_context(request, auth, "Late/Early Report", "attendance", db=db)
         context.update(
@@ -1079,6 +1201,12 @@ class AttendanceWebService:
                 "end_date": end_date or report["end_date"].isoformat(),
                 "department_id": department_id,
                 "active_filters": active_filters,
+                "summary_url": AttendanceWebService._url_with_query(
+                    "/people/attendance/reports/summary", report_filters
+                ),
+                "by_employee_url": AttendanceWebService._url_with_query(
+                    "/people/attendance/reports/by-employee", report_filters
+                ),
             }
         )
         return templates.TemplateResponse(

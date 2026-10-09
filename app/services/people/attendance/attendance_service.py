@@ -713,6 +713,7 @@ class AttendanceService:
         org_id: UUID,
         *,
         employee_id: UUID | None = None,
+        department_id: UUID | None = None,
         from_date: date | None = None,
         to_date: date | None = None,
         status: AttendanceStatus | None = None,
@@ -723,6 +724,15 @@ class AttendanceService:
 
         if employee_id:
             query = query.where(Attendance.employee_id == employee_id)
+
+        if department_id:
+            query = query.join(
+                Employee,
+                Employee.employee_id == Attendance.employee_id,
+            ).where(
+                Employee.organization_id == org_id,
+                Employee.department_id == department_id,
+            )
 
         if from_date:
             query = query.where(Attendance.attendance_date >= from_date)
@@ -1767,6 +1777,7 @@ class AttendanceService:
         start_date: date | None = None,
         end_date: date | None = None,
         department_id: UUID | None = None,
+        employee_search: str | None = None,
     ) -> dict:
         """
         Get attendance breakdown by employee.
@@ -1823,6 +1834,22 @@ class AttendanceService:
         if department_id:
             query = query.where(Employee.department_id == department_id)
 
+        search_term = (employee_search or "").strip()
+        if search_term:
+            pattern = f"%{search_term}%"
+            query = query.where(
+                or_(
+                    Employee.employee_code.ilike(pattern),
+                    Person.first_name.ilike(pattern),
+                    Person.last_name.ilike(pattern),
+                    Person.display_name.ilike(pattern),
+                    Person.email.ilike(pattern),
+                    func.concat(Person.first_name, " ", Person.last_name).ilike(
+                        pattern
+                    ),
+                )
+            )
+
         results = self.db.execute(
             query.group_by(
                 Employee.employee_id,
@@ -1839,6 +1866,7 @@ class AttendanceService:
             present = row.present or 0
             half_day = row.half_day or 0
             on_leave = row.on_leave or 0
+            total_hours = row.total_hours or Decimal("0")
             eligible_days = total_days - on_leave
             attendance_credit = Decimal(str(present)) + (
                 Decimal(str(half_day)) * Decimal("0.5")
@@ -1863,8 +1891,13 @@ class AttendanceService:
                     "attendance_credit_days": attendance_credit,
                     "late_entries": row.late_entries or 0,
                     "early_exits": row.early_exits or 0,
-                    "total_hours": row.total_hours or Decimal("0"),
+                    "total_hours": total_hours,
                     "overtime_hours": row.overtime_hours or Decimal("0"),
+                    "average_hours_per_present_day": round(
+                        total_hours / Decimal(str(present)), 1
+                    )
+                    if present
+                    else Decimal("0"),
                     "attendance_percentage": round(attendance_pct, 1),
                 }
             )
