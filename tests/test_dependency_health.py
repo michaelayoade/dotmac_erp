@@ -280,3 +280,34 @@ def test_dotmac_sub_dependency_probe_is_cached(monkeypatch) -> None:
     assert calls == ["probe"]
     assert first["cached"] is False
     assert second["cached"] is True
+
+
+def test_openbao_health_probe_is_root_namespace_and_unauthenticated(
+    monkeypatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    class _Response:
+        status_code = 200
+
+    def _get(url, **kwargs):
+        observed.update(url=url, **kwargs)
+        return _Response()
+
+    monkeypatch.setenv("OPENBAO_ADDR", "http://bao.example:8200")
+    monkeypatch.setattr(
+        dependency_health_module,
+        "_openbao_config",
+        lambda db: ("http://bao.example:8200", "scoped-token", "staging/erp", "2"),
+    )
+    monkeypatch.setattr(
+        dependency_health_module, "_openbao_allow_insecure", lambda db: True
+    )
+    monkeypatch.setattr(dependency_health_module.httpx, "get", _get)
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["healthy"] is True
+    assert observed["url"] == "http://bao.example:8200/v1/sys/health"
+    assert "X-Vault-Namespace" not in (observed.get("headers") or {})
+    assert "X-Vault-Token" not in (observed.get("headers") or {})

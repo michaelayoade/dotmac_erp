@@ -236,7 +236,7 @@ def _check_openbao(db: Session) -> dict[str, object]:
         )
 
     try:
-        addr, token, namespace, _kv_version = _openbao_config(db)
+        addr, _token, _namespace, _kv_version = _openbao_config(db)
     except Exception as exc:
         return _result(
             configured=True,
@@ -244,14 +244,13 @@ def _check_openbao(db: Session) -> dict[str, object]:
             message=str(exc)[:160],
         )
 
-    headers = {"X-Vault-Token": token}
-    if namespace:
-        headers["X-Vault-Namespace"] = namespace
-
+    # `sys/health` is unauthenticated and exists only in the root namespace: a
+    # request carrying `X-Vault-Namespace` is answered 400, which reported a
+    # healthy server as down for every deployment scoped to a namespace. Send
+    # neither the namespace nor the token; secret reads still use both.
     try:
         response = httpx.get(
             f"{addr}/v1/sys/health",
-            headers=headers,
             timeout=5.0,
             verify=not _openbao_allow_insecure(db),
         )
