@@ -19,6 +19,7 @@ from celery import shared_task
 from sqlalchemy import extract, func, select, text
 from sqlalchemy.engine import Connection
 
+from app.db import transaction
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.finance.core_org.organization import Organization
 from app.models.notification import EntityType, NotificationChannel, NotificationType
@@ -1311,16 +1312,15 @@ def generate_scheduled_absences() -> dict[str, Any]:
         for org_id in _list_organization_ids(include_inactive=False):
             with session_for_org(org_id) as db:
                 try:
-                    service = AttendanceService(db)
-                    org_now = service.get_org_now(org_id)
-                    stats = service.generate_scheduled_absences(
-                        org_id,
-                        attendance_date=org_now.date() - timedelta(days=1),
-                        as_of=org_now,
-                    )
-                    db.commit()
+                    with transaction(db):
+                        service = AttendanceService(db)
+                        org_now = service.get_org_now(org_id)
+                        stats = service.generate_scheduled_absences(
+                            org_id,
+                            attendance_date=org_now.date() - timedelta(days=1),
+                            as_of=org_now,
+                        )
                 except Exception as exc:
-                    db.rollback()
                     logger.exception(
                         "Failed to generate scheduled absences for org %s: %s",
                         org_id,
