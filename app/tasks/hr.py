@@ -19,7 +19,6 @@ from celery import shared_task
 from sqlalchemy import extract, func, select, text
 from sqlalchemy.engine import Connection
 
-from app.db import transaction
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.finance.core_org.organization import Organization
 from app.models.notification import EntityType, NotificationChannel, NotificationType
@@ -1276,6 +1275,7 @@ def generate_scheduled_absences() -> dict[str, Any]:
     shifts are handled after their scheduled end. The service is idempotent and
     never infers an absence without a published employee schedule.
     """
+    from app.db import transaction
     from app.services.people.attendance import AttendanceService
 
     lock_connection = _try_acquire_scheduled_absence_lock()
