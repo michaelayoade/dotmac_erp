@@ -16,7 +16,8 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from celery import shared_task
-from sqlalchemy import extract, func, select
+from sqlalchemy import extract, func, select, text
+from sqlalchemy.engine import Connection
 
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.finance.core_org.organization import Organization
@@ -35,8 +36,11 @@ def _resolve_manager(db, employee: Employee, organization_id) -> Employee | None
     return OrgResolver(db).get_manager(employee.employee_id, organization_id)
 
 
-def _list_organization_ids() -> list[uuid.UUID]:
-    return organization_ids(include_inactive=True)
+def _list_organization_ids(*, include_inactive: bool = True) -> list[uuid.UUID]:
+    return [
+        uuid.UUID(str(org_id))
+        for org_id in organization_ids(include_inactive=include_inactive)
+    ]
 
 
 def _get_hr_manager_recipients(db, org_id: uuid.UUID) -> list[Person]:
@@ -1211,6 +1215,152 @@ def process_onboarding_reminders() -> dict:
     )
 
     return results
+
+
+_SCHEDULED_ABSENCE_LOCK_IDENTITY = "dotmac_erp:hr:scheduled_absences"
+
+
+class ScheduledAbsenceGenerationFailure(RuntimeError):
+    """One or more organizations failed after independent work completed."""
+
+
+def _try_acquire_scheduled_absence_lock() -> Connection | None:
+    """Acquire a session advisory lock on a dedicated PostgreSQL connection."""
+    from app.db import get_engine
+
+    connection = get_engine().connect()
+    acquired = False
+    try:
+        connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+        acquired = bool(
+            connection.scalar(
+                text(
+                    "SELECT pg_try_advisory_lock(hashtextextended(:lock_identity, 0))"
+                ),
+                {"lock_identity": _SCHEDULED_ABSENCE_LOCK_IDENTITY},
+            )
+        )
+        return connection if acquired else None
+    except BaseException:
+        connection.invalidate()
+        raise
+    finally:
+        if not acquired:
+            connection.close()
+
+
+def _release_scheduled_absence_lock(connection: Connection) -> None:
+    """Release the scheduled-absence lock on the connection that owns it."""
+    try:
+        released = bool(
+            connection.scalar(
+                text("SELECT pg_advisory_unlock(hashtextextended(:lock_identity, 0))"),
+                {"lock_identity": _SCHEDULED_ABSENCE_LOCK_IDENTITY},
+            )
+        )
+        if not released:
+            raise RuntimeError("Scheduled absence advisory unlock was not acknowledged")
+    except BaseException:
+        connection.invalidate()
+        raise
+    finally:
+        connection.close()
+
+
+@shared_task
+def generate_scheduled_absences() -> dict[str, Any]:
+    """Create yesterday's missing attendance from published schedules.
+
+    The task runs hourly so organizations in different timezones and overnight
+    shifts are handled after their scheduled end. The service is idempotent and
+    never infers an absence without a published employee schedule.
+    """
+    from app.services.people.attendance import AttendanceService
+
+    lock_connection = _try_acquire_scheduled_absence_lock()
+    if lock_connection is None:
+        logger.warning("Skipping overlapping scheduled absence generation")
+        return {
+            "outcome": "skipped_overlap",
+            "blocked": 1,
+            "organizations": 0,
+            "scheduled": 0,
+            "created": 0,
+            "existing": 0,
+            "on_leave": 0,
+            "ineligible": 0,
+            "shift_not_ended": 0,
+            "errors": [],
+        }
+
+    try:
+        logger.info("Starting scheduled absence generation")
+        results: dict[str, Any] = {
+            "outcome": "completed",
+            "blocked": 0,
+            "organizations": 0,
+            "scheduled": 0,
+            "created": 0,
+            "existing": 0,
+            "on_leave": 0,
+            "ineligible": 0,
+            "shift_not_ended": 0,
+            "errors": [],
+        }
+
+        for org_id in _list_organization_ids(include_inactive=False):
+            with session_for_org(org_id) as db:
+                try:
+                    service = AttendanceService(db)
+                    org_now = service.get_org_now(org_id)
+                    stats = service.generate_scheduled_absences(
+                        org_id,
+                        attendance_date=org_now.date() - timedelta(days=1),
+                        as_of=org_now,
+                    )
+                    db.commit()
+                except Exception as exc:
+                    db.rollback()
+                    logger.exception(
+                        "Failed to generate scheduled absences for org %s: %s",
+                        org_id,
+                        exc,
+                    )
+                    results["errors"].append(
+                        {"organization_id": str(org_id), "error": str(exc)}
+                    )
+                    continue
+
+            results["organizations"] += 1
+            for key in (
+                "scheduled",
+                "created",
+                "existing",
+                "on_leave",
+                "ineligible",
+                "shift_not_ended",
+            ):
+                results[key] += stats[key]
+
+        if results["errors"]:
+            results["outcome"] = "completed_with_errors"
+
+        logger.info(
+            "Scheduled absence generation complete: outcome=%s, %d created "
+            "across %d orgs, %d errors",
+            results["outcome"],
+            results["created"],
+            results["organizations"],
+            len(results["errors"]),
+        )
+        if results["errors"]:
+            raise ScheduledAbsenceGenerationFailure(
+                "Scheduled absence generation completed with "
+                f"{len(results['errors'])} organization error(s)"
+            )
+        return results
+    finally:
+        _release_scheduled_absence_lock(lock_connection)
 
 
 @shared_task

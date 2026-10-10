@@ -400,7 +400,14 @@ def test_late_early_report_includes_bounded_absence_section() -> None:
     service, db = _make_service()
     service.get_org_today = lambda _org_id: date(2026, 8, 31)  # type: ignore[method-assign]
     count_result = MagicMock()
-    count_result.one.return_value = SimpleNamespace(late=8, early=4, absent=6)
+    count_result.one.return_value = SimpleNamespace(
+        late=8,
+        early=4,
+        absent=6,
+        absent_employees=3,
+        excluded_late=2,
+        excluded_early=1,
+    )
 
     def row(*, status: AttendanceStatus, late: bool = False, early: bool = False):
         attendance = SimpleNamespace(
@@ -411,6 +418,7 @@ def test_late_early_report_includes_bounded_absence_section() -> None:
             status=status,
             late_entry_minutes=5 if late else 0,
             early_exit_minutes=60 if early else 0,
+            marked_by="SYSTEM",
         )
         return (attendance, "Ada Lovelace", "Engineering")
 
@@ -438,7 +446,8 @@ def test_late_early_report_includes_bounded_absence_section() -> None:
 
     assert report["total_late"] == 8
     assert report["total_early"] == 4
-    assert report["total_absent"] == 6
+    assert report["total_absent"] == 3
+    assert report["total_absence_occurrences"] == 6
     assert report["absent_entries"][0]["department_name"] == "Engineering"
     assert report["absent_entries"][0]["status"] == "ABSENT"
     assert report["view"] == "absent"
@@ -641,3 +650,207 @@ def test_check_in_links_published_schedule_assignment(monkeypatch) -> None:
     assert attendance.shift_schedule_id == shift_schedule_id
     assert attendance.work_schedule_id == work_schedule_id
     db.add.assert_called_once_with(attendance)
+
+
+def test_calculate_early_exit_uses_grace_period_and_minutes() -> None:
+    shift = SimpleNamespace(
+        start_time=time(8, 0),
+        end_time=time(17, 0),
+        early_exit_grace_period=15,
+    )
+
+    is_early, minutes = AttendanceService._calculate_early_exit(
+        datetime(2026, 8, 3, 16, 30, tzinfo=UTC),
+        date(2026, 8, 3),
+        shift,
+    )
+
+    assert is_early is True
+    assert minutes == 15
+
+
+def test_calculate_early_exit_handles_overnight_shift() -> None:
+    shift = SimpleNamespace(
+        start_time=time(22, 0),
+        end_time=time(6, 0),
+        early_exit_grace_period=0,
+    )
+
+    is_early, minutes = AttendanceService._calculate_early_exit(
+        datetime(2026, 8, 4, 5, 45, tzinfo=UTC),
+        date(2026, 8, 3),
+        shift,
+    )
+
+    assert is_early is True
+    assert minutes == 15
+
+
+def test_create_attendance_rejects_flag_only_exceptions() -> None:
+    service, db = _make_service()
+    service.get_attendance_by_date = MagicMock(return_value=None)  # type: ignore[method-assign]
+
+    attendance = service.create_attendance(
+        ORG_ID,
+        employee_id=EMPLOYEE_ID,
+        attendance_date=date(2026, 8, 3),
+        status=AttendanceStatus.PRESENT,
+        late_entry=True,
+        late_entry_minutes=20,
+        early_exit=True,
+        early_exit_minutes=10,
+    )
+
+    assert attendance.late_entry is False
+    assert attendance.late_entry_minutes == 0
+    assert attendance.early_exit is False
+    assert attendance.early_exit_minutes == 0
+    db.add.assert_called_once_with(attendance)
+
+
+def test_check_out_stores_calculated_early_exit_minutes() -> None:
+    service, db = _make_service()
+    attendance = SimpleNamespace(
+        attendance_date=date(2026, 8, 3),
+        check_in=datetime(2026, 8, 3, 8, 0, tzinfo=UTC),
+        check_out=None,
+        working_hours=None,
+        shift_type_id=uuid.uuid4(),
+        early_exit=False,
+        early_exit_minutes=0,
+        remarks=None,
+    )
+    shift = SimpleNamespace(
+        start_time=time(8, 0),
+        end_time=time(17, 0),
+        early_exit_grace_period=15,
+    )
+    service.get_attendance_by_date = MagicMock(return_value=attendance)  # type: ignore[method-assign]
+    service.get_shift_type = MagicMock(return_value=shift)  # type: ignore[method-assign]
+    service._normalize_in_org_tz = lambda _org_id, value: value  # type: ignore[method-assign]
+    service._validate_geofence = MagicMock()  # type: ignore[method-assign]
+
+    result = service.check_out(
+        ORG_ID,
+        EMPLOYEE_ID,
+        check_out_time=datetime(2026, 8, 3, 16, 30, tzinfo=UTC),
+    )
+
+    assert result.early_exit is True
+    assert result.early_exit_minutes == 15
+    db.flush.assert_called_once()
+
+
+def test_generate_scheduled_absences_uses_published_schedule() -> None:
+    service, db = _make_service()
+    shift_type_id = uuid.uuid4()
+    shift_schedule_id = uuid.uuid4()
+    work_schedule_id = uuid.uuid4()
+    shift = SimpleNamespace(start_time=time(8, 0), end_time=time(17, 0))
+    assignment = SimpleNamespace(
+        employee_id=EMPLOYEE_ID,
+        shift_type_id=shift_type_id,
+        shift_schedule_id=shift_schedule_id,
+        shift_type=shift,
+    )
+    schedule = SimpleNamespace(work_schedule_id=work_schedule_id)
+    db.execute.return_value.all.return_value = [(assignment, schedule)]
+    db.scalars.side_effect = [
+        SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(all=lambda: []),
+    ]
+    service._org_tzinfo = lambda _org_id: UTC  # type: ignore[method-assign]
+
+    result = service.generate_scheduled_absences(
+        ORG_ID,
+        attendance_date=date(2026, 8, 3),
+        as_of=datetime(2026, 8, 4, 12, 0, tzinfo=UTC),
+    )
+
+    assert result == {
+        "scheduled": 1,
+        "created": 1,
+        "existing": 0,
+        "on_leave": 0,
+        "ineligible": 0,
+        "shift_not_ended": 0,
+    }
+    attendance = db.add.call_args.args[0]
+    assert attendance.employee_id == EMPLOYEE_ID
+    assert attendance.status == AttendanceStatus.ABSENT
+    assert attendance.shift_type_id == shift_type_id
+    assert attendance.shift_schedule_id == shift_schedule_id
+    assert attendance.work_schedule_id == work_schedule_id
+    assert attendance.marked_by == "SYSTEM"
+    db.flush.assert_called_once()
+
+
+def test_generate_scheduled_absences_preserves_existing_attendance() -> None:
+    service, db = _make_service()
+    shift = SimpleNamespace(start_time=time(8, 0), end_time=time(17, 0))
+    assignment = SimpleNamespace(
+        employee_id=EMPLOYEE_ID,
+        shift_type_id=uuid.uuid4(),
+        shift_schedule_id=uuid.uuid4(),
+        shift_type=shift,
+    )
+    schedule = SimpleNamespace(work_schedule_id=uuid.uuid4())
+    db.execute.return_value.all.return_value = [(assignment, schedule)]
+    db.scalars.side_effect = [
+        SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
+    ]
+    service._org_tzinfo = lambda _org_id: UTC  # type: ignore[method-assign]
+
+    result = service.generate_scheduled_absences(
+        ORG_ID,
+        attendance_date=date(2026, 8, 3),
+        as_of=datetime(2026, 8, 4, 12, 0, tzinfo=UTC),
+    )
+
+    assert result["existing"] == 1
+    assert result["created"] == 0
+    db.add.assert_not_called()
+    db.flush.assert_not_called()
+
+
+def test_late_early_report_counts_only_verified_exceptions() -> None:
+    service, db = _make_service()
+    service.get_org_today = lambda _org_id: date(2026, 8, 31)  # type: ignore[method-assign]
+    count_result = MagicMock()
+    count_result.one.return_value = SimpleNamespace(
+        late=2,
+        early=1,
+        absent=4,
+        absent_employees=3,
+        excluded_late=7,
+        excluded_early=8,
+    )
+    empty_result = MagicMock()
+    empty_result.all.return_value = []
+    db.execute.side_effect = [
+        count_result,
+        empty_result,
+        empty_result,
+        empty_result,
+    ]
+
+    report = service.get_late_early_report(
+        ORG_ID,
+        start_date=date(2026, 8, 1),
+        end_date=date(2026, 8, 31),
+    )
+
+    assert report["total_late"] == 2
+    assert report["total_early"] == 1
+    assert report["total_absence_occurrences"] == 4
+    assert report["total_absent"] == 3
+    assert report["excluded_late"] == 7
+    assert report["excluded_early"] == 8
+    count_sql = str(db.execute.call_args_list[0].args[0])
+    assert "check_in IS NOT NULL" in count_sql
+    assert "late_entry_minutes >" in count_sql
+    assert "check_out IS NOT NULL" in count_sql
+    assert "early_exit_minutes >" in count_sql

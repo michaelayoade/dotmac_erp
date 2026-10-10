@@ -106,6 +106,7 @@ from app.tasks.fleet import (
 from app.tasks.hooks import cleanup_old_hook_executions, execute_async_hook
 from app.tasks.hr import (
     calculate_hr_analytics,
+    generate_scheduled_absences,
     process_birthday_notifications,
     process_certification_expiry_notifications,
     process_contract_expiry_notifications,
@@ -115,6 +116,7 @@ from app.tasks.hr import (
     run_employee_mailcow_offboarding,
     process_work_anniversary_notifications,
     send_hr_birthday_morning_email,
+    sync_leave_attendance,
 )
 from app.tasks.inventory import (
     auto_issue_pending_stock_material_requests,
@@ -183,6 +185,8 @@ __all__ = [
     "process_performance_review_reminders",
     "process_certification_expiry_notifications",
     "calculate_hr_analytics",
+    "generate_scheduled_absences",
+    "sync_leave_attendance",
     "run_employee_mailcow_offboarding",
     "run_employee_mailcow_provisioning",
     "run_employee_nextcloud_provisioning",

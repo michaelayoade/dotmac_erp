@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 
 UTC: dt_tzinfo = _UTC
 
-from sqlalchemy import case, func, literal_column, or_, select
+from sqlalchemy import and_, case, func, literal_column, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.core_org.location import Location
@@ -231,7 +231,7 @@ class AttendanceService:
     def _org_timezone_name(self, org_id: UUID) -> str:
         org = self.db.get(Organization, org_id)
         if org and org.timezone:
-            return org.timezone
+            return str(org.timezone)
         return "UTC"
 
     def _org_tzinfo(self, org_id: UUID) -> dt_tzinfo:
@@ -250,6 +250,10 @@ class AttendanceService:
 
     def get_org_today(self, org_id: UUID) -> date:
         return self._now_in_org_tz(org_id).date()
+
+    def get_org_now(self, org_id: UUID) -> datetime:
+        """Return the current time in the organization's configured timezone."""
+        return self._now_in_org_tz(org_id)
 
     def _normalize_in_org_tz(self, org_id: UUID, value: datetime) -> datetime:
         org_tzinfo = self._org_tzinfo(org_id)
@@ -847,22 +851,29 @@ class AttendanceService:
         if check_out:
             check_out = self._normalize_in_org_tz(org_id, check_out)
 
-        if (check_in or check_out) and not _classification_resolved:
-            shift = (
-                self.get_shift_type(org_id, shift_type_id)
-                if shift_type_id
-                else self.get_employee_shift(org_id, employee_id, attendance_date)
-            )
-            if shift:
-                shift_type_id = shift.shift_type_id
-                if check_in:
-                    late_entry, late_entry_minutes = self._calculate_late_entry(
-                        check_in, attendance_date, shift
-                    )
-                if check_out:
-                    early_exit, early_exit_minutes = self._calculate_early_exit(
-                        check_out, attendance_date, shift
-                    )
+        if not _classification_resolved:
+            # Exception flags are derived facts. Ignore submitted booleans so a
+            # flag-only legacy/manual payload cannot become a reportable event.
+            late_entry = False
+            late_entry_minutes = 0
+            early_exit = False
+            early_exit_minutes = 0
+            if check_in or check_out:
+                shift = (
+                    self.get_shift_type(org_id, shift_type_id)
+                    if shift_type_id
+                    else self.get_employee_shift(org_id, employee_id, attendance_date)
+                )
+                if shift:
+                    shift_type_id = shift.shift_type_id
+                    if check_in:
+                        late_entry, late_entry_minutes = self._calculate_late_entry(
+                            check_in, attendance_date, shift
+                        )
+                    if check_out:
+                        early_exit, early_exit_minutes = self._calculate_early_exit(
+                            check_out, attendance_date, shift
+                        )
 
         # Calculate working hours if check-in and check-out provided
         if working_hours is None and check_in and check_out:
@@ -1236,6 +1247,172 @@ class AttendanceService:
             "failed_count": failed_count,
             "errors": errors,
         }
+
+    def generate_scheduled_absences(
+        self,
+        org_id: UUID,
+        *,
+        attendance_date: date | None = None,
+        as_of: datetime | None = None,
+    ) -> dict[str, int]:
+        """Create missing ABSENT records from published schedules.
+
+        A missing punch is only an absence when an active employee has an
+        explicit published schedule, the shift has ended, and no attendance or
+        approved full-day leave record already covers that employee and date.
+        """
+        from app.models.people.hr.employee import EmployeeStatus
+        from app.models.people.leave.leave_application import (
+            LeaveApplication,
+            LeaveApplicationStatus,
+        )
+        from app.models.people.scheduling import (
+            ScheduleStatus,
+            ShiftSchedule,
+            WorkSchedule,
+        )
+
+        org_now = as_of or self.get_org_now(org_id)
+        if org_now.tzinfo is None:
+            org_now = org_now.replace(tzinfo=self._org_tzinfo(org_id))
+        else:
+            org_now = org_now.astimezone(self._org_tzinfo(org_id))
+        target_date = attendance_date or (org_now.date() - timedelta(days=1))
+
+        schedule_rows = self.db.execute(
+            select(ShiftSchedule, WorkSchedule)
+            .join(
+                WorkSchedule,
+                WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
+            )
+            .options(joinedload(ShiftSchedule.shift_type))
+            .where(
+                ShiftSchedule.organization_id == org_id,
+                ShiftSchedule.shift_date == target_date,
+                ShiftSchedule.status.in_(
+                    [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                ),
+                WorkSchedule.organization_id == org_id,
+                WorkSchedule.status.in_(
+                    [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                ),
+            )
+            .order_by(
+                WorkSchedule.revision.desc(),
+                ShiftSchedule.revision.desc(),
+            )
+        ).all()
+
+        schedules_by_employee: dict[UUID, tuple[Any, Any]] = {}
+        for assignment, schedule in schedule_rows:
+            schedules_by_employee.setdefault(
+                assignment.employee_id,
+                (assignment, schedule),
+            )
+
+        employee_ids = set(schedules_by_employee)
+        if not employee_ids:
+            return {
+                "scheduled": 0,
+                "created": 0,
+                "existing": 0,
+                "on_leave": 0,
+                "ineligible": 0,
+                "shift_not_ended": 0,
+            }
+
+        eligible_employee_ids = set(
+            self.db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.employee_id.in_(employee_ids),
+                    Employee.status == EmployeeStatus.ACTIVE,
+                    Employee.date_of_joining <= target_date,
+                    or_(
+                        Employee.date_of_leaving.is_(None),
+                        Employee.date_of_leaving >= target_date,
+                    ),
+                )
+            ).all()
+        )
+        leave_employee_ids = set(
+            self.db.scalars(
+                select(LeaveApplication.employee_id).where(
+                    LeaveApplication.organization_id == org_id,
+                    LeaveApplication.employee_id.in_(employee_ids),
+                    LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                    LeaveApplication.from_date <= target_date,
+                    LeaveApplication.to_date >= target_date,
+                    LeaveApplication.half_day.is_(False),
+                )
+            ).all()
+        )
+        existing_employee_ids = set(
+            self.db.scalars(
+                select(Attendance.employee_id).where(
+                    Attendance.organization_id == org_id,
+                    Attendance.employee_id.in_(employee_ids),
+                    Attendance.attendance_date == target_date,
+                )
+            ).all()
+        )
+
+        result = {
+            "scheduled": len(employee_ids),
+            "created": 0,
+            "existing": 0,
+            "on_leave": 0,
+            "ineligible": 0,
+            "shift_not_ended": 0,
+        }
+        for employee_id, (assignment, schedule) in schedules_by_employee.items():
+            if employee_id not in eligible_employee_ids:
+                result["ineligible"] += 1
+                continue
+            if employee_id in leave_employee_ids:
+                result["on_leave"] += 1
+                continue
+            if employee_id in existing_employee_ids:
+                result["existing"] += 1
+                continue
+
+            shift = assignment.shift_type
+            scheduled_end = self._combine_date_time(
+                target_date,
+                shift.end_time,
+                org_now.tzinfo,
+            )
+            if shift.end_time <= shift.start_time:
+                scheduled_end += timedelta(days=1)
+            if org_now < scheduled_end:
+                result["shift_not_ended"] += 1
+                continue
+
+            self.db.add(
+                Attendance(
+                    organization_id=org_id,
+                    employee_id=employee_id,
+                    attendance_date=target_date,
+                    status=AttendanceStatus.ABSENT,
+                    shift_type_id=assignment.shift_type_id,
+                    shift_schedule_id=assignment.shift_schedule_id,
+                    work_schedule_id=schedule.work_schedule_id,
+                    late_entry=False,
+                    late_entry_minutes=0,
+                    early_exit=False,
+                    early_exit_minutes=0,
+                    marked_by="SYSTEM",
+                    remarks=(
+                        "Automatically marked absent after the published shift "
+                        "ended without a check-in."
+                    ),
+                )
+            )
+            result["created"] += 1
+
+        if result["created"]:
+            self.db.flush()
+        return result
 
     def update_attendance(
         self,
@@ -1982,7 +2159,12 @@ class AttendanceService:
         preview_limit: int = 5,
         page_size: int = 25,
     ) -> dict:
-        """Get bounded late, early-departure, and absence report sections."""
+        """Get verified attendance exceptions and recorded absences.
+
+        Late and early rows require the matching punch and a positive calculated
+        minute value. Legacy flag-only rows are counted separately so they are
+        visible as a data-quality issue without being shown as trusted events.
+        """
         from app.models.people.hr import Department, Employee
         from app.models.person import Person
 
@@ -2000,10 +2182,35 @@ class AttendanceService:
         if department_id:
             filters.append(Employee.department_id == department_id)
 
+        valid_late = and_(
+            Attendance.late_entry.is_(True),
+            Attendance.check_in.is_not(None),
+            Attendance.late_entry_minutes > 0,
+        )
+        valid_early = and_(
+            Attendance.early_exit.is_(True),
+            Attendance.check_out.is_not(None),
+            Attendance.early_exit_minutes > 0,
+        )
+        absent = Attendance.status == AttendanceStatus.ABSENT
+        invalid_late = and_(
+            Attendance.late_entry.is_(True),
+            or_(
+                Attendance.check_in.is_(None),
+                Attendance.late_entry_minutes <= 0,
+            ),
+        )
+        invalid_early = and_(
+            Attendance.early_exit.is_(True),
+            or_(
+                Attendance.check_out.is_(None),
+                Attendance.early_exit_minutes <= 0,
+            ),
+        )
         conditions = {
-            "late": Attendance.late_entry.is_(True),
-            "early": Attendance.early_exit.is_(True),
-            "absent": Attendance.status == AttendanceStatus.ABSENT,
+            "late": valid_late,
+            "early": valid_early,
+            "absent": absent,
         }
         selected_view = view if view in conditions else None
 
@@ -2012,6 +2219,11 @@ class AttendanceService:
                 func.count(case((conditions["late"], 1))).label("late"),
                 func.count(case((conditions["early"], 1))).label("early"),
                 func.count(case((conditions["absent"], 1))).label("absent"),
+                func.count(
+                    func.distinct(case((conditions["absent"], Attendance.employee_id)))
+                ).label("absent_employees"),
+                func.count(case((invalid_late, 1))).label("excluded_late"),
+                func.count(case((invalid_early, 1))).label("excluded_early"),
             )
             .select_from(Attendance)
             .join(Employee, Employee.employee_id == Attendance.employee_id)
@@ -2022,6 +2234,9 @@ class AttendanceService:
             "early": count_row.early or 0,
             "absent": count_row.absent or 0,
         }
+        total_absent_employees = count_row.absent_employees or 0
+        excluded_late = count_row.excluded_late or 0
+        excluded_early = count_row.excluded_early or 0
 
         selected_total = totals[selected_view] if selected_view else 0
         total_pages = (
@@ -2073,6 +2288,7 @@ class AttendanceService:
                     "status": attendance.status.value,
                     "late_entry_minutes": attendance.late_entry_minutes,
                     "early_exit_minutes": attendance.early_exit_minutes,
+                    "marked_by": attendance.marked_by,
                 }
                 for attendance, employee_name, dept_name in rows
             ]
@@ -2085,11 +2301,15 @@ class AttendanceService:
             "absent_entries": load_section("absent"),
             "total_late": totals["late"],
             "total_early": totals["early"],
-            "total_absent": totals["absent"],
+            "total_absent": total_absent_employees,
+            "total_absence_occurrences": totals["absent"],
+            "excluded_late": excluded_late,
+            "excluded_early": excluded_early,
             "view": selected_view,
             "page": selected_page,
             "total_pages": total_pages,
             "page_size": page_size,
+            "selected_total": selected_total,
         }
 
     def get_attendance_trends_report(
