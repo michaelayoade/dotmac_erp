@@ -110,6 +110,7 @@ def test_runtime_stage_contains_only_named_runtime_surfaces() -> None:
         "COPY static ./static",
         "COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py",
         "COPY scripts/verify_runtime_admission.py ./scripts/verify_runtime_admission.py",
+        "COPY scripts/verify_deployment_secrets.py ./scripts/verify_deployment_secrets.py",
         "COPY scripts/probe_people_employment_type_activation.py ./scripts/probe_people_employment_type_activation.py",
     ):
         assert required_copy in runtime

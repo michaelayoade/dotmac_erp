@@ -40,6 +40,38 @@ digest cycle:
 
 ## Ownership boundary
 
+### Candidate boot-secret probe (source prerequisite)
+
+ERP owns the required boot-material policy in
+`app/services/boot_secret_validation.py`, shared with existing startup, and its
+read-only deployment boundary in `app/services/deployment_secret_readiness.py`.
+Both runtime Dockerfiles explicitly ship `scripts/verify_deployment_secrets.py`.
+Invoke it in an isolated candidate process as
+`/opt/venv/bin/python -m scripts.verify_deployment_secrets`, with that runtime
+role's actual deployment environment and material bindings. It emits only the
+closed `CandidateMaterialProbeResult.v1` receipt (schema, derived status, and
+bounded check name/status pairs); exit zero means ready, any other result
+refuses progress. Existing validator/resolver diagnostics are discarded.
+
+This probe requires `DATABASE_URL` to be present but opens no database or
+session. It resolves and validates only the required `JWT_SECRET` and
+`TOTP_ENCRYPTION_KEY`, using ERP startup's existing format policy. OpenBao
+configuration is required only when those required values reference it; an
+optional connector reference or a configured but unused store creates no
+additional boot dependency. Secret reads use the existing resolver with no
+database. No startup, RBAC, licence enforcement, seeding, writes, renewal or
+credential rotation runs here. A ready receipt proves neither database access
+nor optional connector readiness.
+
+This is a source prerequisite for future shared Foundation candidate-material
+probe adoption. Foundation's released contract and ERP's adapter adoption,
+per-role invocation, pre-mutation ordering and staging/production acceptance
+are still pending. The legacy deploy script, workflows and descriptor remain
+unchanged; this addition does not claim the check is wired or deployed. Build
+the product image once and promote its exact digest; bind secrets separately
+for each authorized environment. Foundation owns generic invocation and
+ordering; ERP retains ownership of these secret semantics.
+
 `app/product_assembly.py` is release metadata only. It does not call
 `create_app`, mount a module, open a session, or move any domain authority;
 `app.main` remains ERP's runtime owner. The module tuple is cross-checked
