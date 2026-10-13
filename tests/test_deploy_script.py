@@ -112,8 +112,11 @@ if args == ["rev-parse", "HEAD"]:
         print("abcdef0123456789abcdef0123456789abcdef01")
 elif args == ["rev-parse", "--short=7", "HEAD"]:
     print("abcdef0")
-elif args and args[0] == "pull" and new_head:
-    pulled_marker.touch()
+elif args and args[0] == "pull":
+    with Path(os.environ["DEPLOY_TEST_LOG"]).open("a", encoding="utf-8") as log:
+        log.write("dotmac|git pull\\n")
+    if new_head:
+        pulled_marker.touch()
 elif args[:2] == ["diff", "--quiet"]:
     changed = os.environ.get("DEPLOY_TEST_CHANGED_PATHS", "").split()
     paths = args[args.index("--") + 1:] if "--" in args else []
@@ -185,9 +188,21 @@ if args and args[0] == "ps":
     if service and service in os.environ.get("DEPLOY_TEST_RUNNING_SERVICES", "").split():
         print(f"dotmac_erp_{service}")
 
-# The deploy makes four `compose run` calls: one executor preflight before
-# backup, another on the candidate image, the migration, and runtime admission.
+# Executor preflights, migration, runtime admission and role-bound candidate
+# secret checks all use the real deploy control flow with recorded commands.
 # Fail only the operation named by each test flag.
+if args[:2] == ["compose", "run"] and "scripts.verify_deployment_secrets" in args:
+    service = args[args.index("python") + 1]
+    marker = Path(str(log_path) + ".secret-" + service)
+    phase = "replacement" if marker.exists() else "migration"
+    marker.touch()
+    with log_path.open("a", encoding="utf-8") as log:
+        log.write("secret-binding|" + service + "|" + os.environ.get("APP_IMAGE", "") + "\\n")
+    if os.environ.get("DEPLOY_TEST_SECRET_FAILURE") == phase + ":" + service:
+        print("PRIVATE_PROBE_OUTPUT")
+        print("PRIVATE_PROBE_STDERR", file=sys.stderr)
+        raise SystemExit(int(os.environ.get("DEPLOY_TEST_SECRET_EXIT", "1")))
+
 if os.environ.get("DEPLOY_TEST_FAIL_MIGRATION") == "1":
     if args[:2] == ["compose", "run"] and "alembic" in args and "upgrade" in args:
         raise SystemExit(1)
@@ -231,6 +246,12 @@ if os.environ.get("DEPLOY_TEST_FAIL_HEALTH") == "1":
 raise SystemExit(0)
 """,
     )
+    _write_executable(
+        scripts_dir / "backup_erp_db.sh",
+        """#!/usr/bin/env bash
+printf 'dotmac|backup\\n' >> "$DEPLOY_TEST_LOG"
+""",
+    )
     # sync-static.sh is GONE: it copied the checkout into the nginx web root,
     # which is how a stylesheet 198 insertions behind the image reached
     # browsers. Only the image serves static now.
@@ -272,16 +293,23 @@ def test_deploy_script_exports_stable_compose_project_name(tmp_path: Path) -> No
     assert any("|compose run " in line for line in invocations)
     assert any("|compose up -d app" in line for line in invocations)
     assert any("|compose up -d worker beat" in line for line in invocations)
-    assert all(line.startswith("dotmac|") for line in invocations)
+    assert all(line.startswith(("dotmac|", "secret-binding|")) for line in invocations)
     one_off = [line for line in invocations if "|compose run " in line]
     runtime = [line for line in invocations if "|compose up " in line]
     assert one_off
-    # The runtime admission check is the ONE one-off that must NOT carry the
-    # migration credential: it verifies the connection the application serves
-    # on, and re-verifying `app_admin` there would prove nothing. Every other
-    # one-off is a migration-executor operation and still carries it.
+    # Runtime admission and boot-material probes inherit each service's runtime
+    # environment without the migration credential. Only migration-executor
+    # operations explicitly receive it.
     admission = [line for line in one_off if "verify_runtime_admission.py" in line]
-    executor = [line for line in one_off if "verify_runtime_admission.py" not in line]
+    secrets = [line for line in one_off if "scripts.verify_deployment_secrets" in line]
+    executor = [
+        line
+        for line in one_off
+        if "verify_runtime_admission.py" not in line
+        and "scripts.verify_deployment_secrets" not in line
+    ]
+    assert len(secrets) == 6
+    assert all("-e MIGRATION_DATABASE_URL" not in line for line in secrets)
     assert len(admission) == 1, admission
     assert "-e MIGRATION_DATABASE_URL" not in admission[0]
     assert executor
@@ -576,7 +604,7 @@ def test_deploy_script_rollback_keeps_stable_compose_project_name(
     invocations = invocation_log.read_text(encoding="utf-8").splitlines()
     assert any("|compose run " in line for line in invocations)
     assert any("|compose up -d app worker beat" in line for line in invocations)
-    assert all(line.startswith("dotmac|") for line in invocations)
+    assert all(line.startswith(("dotmac|", "secret-binding|")) for line in invocations)
     assert "Rolling back code" in result.stdout
 
 
