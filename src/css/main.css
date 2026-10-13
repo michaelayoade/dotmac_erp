@@ -14,6 +14,7 @@
 @import 'components/_navigation.css';
 @import 'components/_buttons.css';
 @import 'components/_forms.css';
+@import 'components/_typeahead.css';
 @import 'components/_tables.css';
 @import 'components/_empty-states.css';
 @import 'components/_badges.css';

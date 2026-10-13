@@ -1,0 +1,165 @@
+/* Searchable select and remote typeahead controls. */
+@layer components {
+    .select-typeahead {
+        position: relative;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .select-typeahead__native {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+    }
+
+    .select-typeahead__control {
+        position: relative;
+    }
+
+    .select-typeahead__input {
+        padding-right: 44px !important;
+        background-image: none !important;
+    }
+
+    .select-typeahead__toggle {
+        position: absolute;
+        top: 50%;
+        right: 4px;
+        display: inline-flex;
+        width: 36px;
+        height: 36px;
+        transform: translateY(-50%);
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-input);
+        color: var(--ink-muted);
+        transition: color 150ms ease, background-color 150ms ease;
+    }
+
+    .select-typeahead__toggle:hover {
+        color: var(--ink);
+        background: color-mix(in srgb, var(--ink) 7%, transparent);
+    }
+
+    .select-typeahead__toggle:focus-visible {
+        outline: var(--ring-width) solid var(--ring-color);
+        outline-offset: var(--ring-offset);
+    }
+
+    .select-typeahead__toggle:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .select-typeahead__toggle svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .select-typeahead__chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .select-typeahead__chips[hidden] {
+        display: none;
+    }
+
+    .select-typeahead__chip {
+        display: inline-flex;
+        min-height: 32px;
+        align-items: center;
+        gap: var(--spacing-xs);
+        border: 1px solid color-mix(in srgb, var(--teal) 35%, transparent);
+        border-radius: 999px;
+        padding: 4px 8px 4px 12px;
+        background: color-mix(in srgb, var(--teal) 10%, var(--card-bg));
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.25;
+    }
+
+    .select-typeahead__chip button {
+        display: inline-flex;
+        width: 24px;
+        height: 24px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        color: var(--ink-muted);
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .select-typeahead__chip button:hover,
+    .select-typeahead__chip button:focus-visible {
+        background: color-mix(in srgb, var(--teal) 18%, transparent);
+        color: var(--ink);
+    }
+
+    .typeahead-results {
+        position: relative;
+        z-index: 40;
+    }
+
+    .typeahead-menu,
+    .typeahead-status {
+        position: fixed;
+        z-index: 80;
+        min-width: 14rem;
+        max-height: min(20rem, 45vh);
+        overflow-y: auto;
+        border: 1px solid var(--card-border);
+        border-radius: var(--radius-input);
+        background: var(--card-bg);
+        box-shadow: var(--shadow-lg);
+    }
+
+    .typeahead-option {
+        display: flex;
+        min-height: 44px;
+        cursor: pointer;
+        align-items: center;
+        padding: 10px 12px;
+        color: var(--ink);
+        font-size: 14px;
+        line-height: 1.35;
+    }
+
+    .typeahead-option:hover,
+    .typeahead-option.is-active {
+        background: color-mix(in srgb, var(--teal) 10%, var(--card-bg));
+    }
+
+    .typeahead-option.is-selected::after {
+        content: '\2713';
+        margin-left: auto;
+        color: var(--teal);
+        font-weight: 700;
+    }
+
+    .typeahead-option[aria-disabled='true'] {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .typeahead-status {
+        padding: 12px;
+        color: var(--ink-muted);
+        font-size: 13px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .select-typeahead__toggle {
+        transition: none;
+    }
+}
