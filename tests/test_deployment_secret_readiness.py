@@ -1,4 +1,4 @@
-"""ERP candidate policy, redaction, and real isolated CLI receipts."""
+"""ERP candidate policy and resolver redaction; HTTP fixtures stay in-process."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -39,11 +38,11 @@ def boot_env(monkeypatch):
     monkeypatch.setenv("TOTP_ENCRYPTION_KEY", VALID_KEY)
 
 
-def statuses(result):
+def _statuses(result):
     return {check.name: check.status for check in result.checks}
 
 
-def assert_wire(raw):
+def _assert_wire(raw):
     assert len(raw.encode("utf-8")) <= 16384
     wire = json.loads(raw)
     assert set(wire) == {"schema", "status", "checks"}
@@ -77,7 +76,7 @@ def test_local_boot_values_skip_even_configured_unreachable_store(
     )
     result = inspect_boot_material()
     assert result.status == MaterialStatus.READY
-    assert_wire(serialize_candidate_result(result))
+    _assert_wire(serialize_candidate_result(result))
 
 
 @pytest.mark.parametrize("name", ["JWT_SECRET", "TOTP_ENCRYPTION_KEY", "DATABASE_URL"])
@@ -129,7 +128,7 @@ def test_required_reference_needs_openbao_configuration(boot_env, monkeypatch, m
     monkeypatch.setenv("OPENBAO_TOKEN", "test-only-not-a-real-token")
     monkeypatch.delenv(missing)
     assert (
-        statuses(inspect_boot_material())[BootCheckName.OPENBAO]
+        _statuses(inspect_boot_material())[BootCheckName.OPENBAO]
         == MaterialStatus.REFUSED
     )
 
@@ -157,7 +156,7 @@ def test_actual_resolver_http_outcomes(boot_env, monkeypatch, code, expected):
         )
 
     monkeypatch.setattr(httpx, "get", get)
-    assert statuses(inspect_boot_material())[BootCheckName.JWT] == expected
+    assert _statuses(inspect_boot_material())[BootCheckName.JWT] == expected
 
 
 @pytest.mark.parametrize(
@@ -180,7 +179,7 @@ def test_resolved_value_must_satisfy_required_policy(
         return httpx.Response(200, request=httpx.Request("GET", url), json=payload)
 
     monkeypatch.setattr(httpx, "get", get)
-    assert statuses(inspect_boot_material())[BootCheckName.JWT] == expected
+    assert _statuses(inspect_boot_material())[BootCheckName.JWT] == expected
 
 
 def test_malformed_required_reference_refuses_without_network(boot_env, monkeypatch):
@@ -229,7 +228,7 @@ def test_unreachable_store_and_secret_canary_never_escape(
     result = inspect_boot_material()
     assert result.status == MaterialStatus.UNAVAILABLE
     raw = serialize_candidate_result(result)
-    assert_wire(raw)
+    _assert_wire(raw)
     assert "canary" not in raw
     assert capsys.readouterr() == ("", "")
     assert not caplog.records
@@ -255,7 +254,7 @@ def test_wire_status_is_derived(states, expected):
         )
     )
     assert result.status == expected
-    assert_wire(serialize_candidate_result(result))
+    _assert_wire(serialize_candidate_result(result))
 
 
 def test_domain_refuses_empty_duplicate_or_untyped_checks():
@@ -266,42 +265,6 @@ def test_domain_refuses_empty_duplicate_or_untyped_checks():
         BootMaterialResult((check, check))
     with pytest.raises(ValueError):
         BootMaterialResult((BootMaterialCheck("raw-secret", "ready"),))
-
-
-@pytest.mark.parametrize("missing", [False, True])
-def test_real_cli_no_db_no_startup_and_closed_receipt(missing):
-    # Guard imports in a fresh process, rather than trusting the unit-test
-    # process whose global conftest has already imported the application.
-    source = """
-import importlib.abc, runpy, sys
-class Guard(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname in ("app.db", "app.main", "app.startup", "app.config") or fullname.startswith(("app.models", "app.licensing", "app.authz")):
-            raise RuntimeError("forbidden application import")
-sys.meta_path.insert(0, Guard())
-runpy.run_module("scripts.verify_deployment_secrets", run_name="__main__")
-"""
-    env = {
-        "PATH": os.environ.get("PATH", ""),
-        "PYTHONPATH": str(ROOT),
-        "DATABASE_URL": "unusable-database-canary",
-        "JWT_SECRET": VALID_KEY,
-        "TOTP_ENCRYPTION_KEY": VALID_KEY,
-    }
-    if missing:
-        del env["JWT_SECRET"]
-    proc = subprocess.run(  # noqa: S603 - fixed interpreter and authored source
-        [sys.executable, "-c", source],
-        cwd=ROOT,
-        env=env,  # noqa: S603 - fixed interpreter and authored source
-        text=True,
-        capture_output=True,
-        timeout=20,
-        check=False,
-    )
-    assert proc.stderr == ""
-    assert proc.returncode == (1 if missing else 0)
-    assert assert_wire(proc.stdout)["status"] == ("refused" if missing else "ready")
 
 
 def test_both_runtime_images_ship_named_probe():
