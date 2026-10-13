@@ -75,6 +75,30 @@ full-SHA check still runs after the deploy script's pull and before the drain.
 `MIGRATION_DATABASE_URL` as a break-glass path. The normal production entrypoint
 is the controller wrapper above.
 
+## Candidate boot-material gate
+
+The existing deploy script runs `python -m scripts.verify_deployment_secrets`
+through each mandatory production Compose service (`app`, `worker`, `beat`),
+after candidate image selection/pull and before DDL, then again after successful
+migration and runtime admission, immediately before service replacement.
+Compose supplies each role's own environment, mounts and the already selected
+`APP_IMAGE`; the check bypasses the service startup command and starts no
+Compose dependencies. Raw probe output and stderr are suppressed. A missing
+CLI, unavailable probe or any nonzero status refuses with a fixed role diagnostic.
+
+This is a bounded legacy security fix protecting DDL and service replacement.
+It does **not** protect the earlier backup: the existing migration credential
+preflight remains there, and installed images predating the CLI are not probed.
+`--quick` also requires the retained image to provide the CLI, otherwise it
+refuses before migration. No candidate image pin or promotion authority changes.
+
+A postmigration refusal leaves migrations applied and does not recreate services
+or invoke ordinary rollback. Ordinary deployments retain the serving old
+containers; activation and forward-fix modes retain their existing forward-only
+standing with old runtimes stopped. Repair material and rerun the reviewed
+release. Full Foundation v4 adoption, including its paired role/image/mount
+contract, remains pending; this gate does not claim that guarantee.
+
 ## Verification
 
 Before relying on the principal, prove all of the following without printing
