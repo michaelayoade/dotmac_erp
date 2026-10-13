@@ -311,7 +311,16 @@ def test_deploy_containers_do_not_depend_on_builder_poetry() -> None:
     makefile = MAKEFILE.read_text(encoding="utf-8")
 
     assert "poetry run" not in script
-    assert "--entrypoint" not in script
+    # The names-only, read-only secret probe must bypass application startup.
+    # Permit exactly that invocation, once. Migration/admission and every other
+    # deploy operation retain the established runtime startup behavior.
+    secret_probe = (
+        'docker compose run --rm --no-deps -T --entrypoint python "$service" '
+        "\\\n"
+        "            -m scripts.verify_deployment_secrets >/dev/null 2>&1"
+    )
+    assert script.count(secret_probe) == 1
+    assert "--entrypoint" not in script.replace(secret_probe, "")
     assert "--entrypoint" not in makefile
     assert "python scripts/bootstrap_database_roles.py --verify-only" in script
     assert "python scripts/verify_runtime_admission.py" in script
