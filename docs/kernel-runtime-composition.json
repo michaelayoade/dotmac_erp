@@ -25,7 +25,7 @@
     {
       "id": "production-install",
       "source_path": "Dockerfile",
-      "source_blob_sha256": "a11c96bffe6da36620659bd97f4b1f3ed0e4922ea126b60d2b3ac31794df12a4",
+      "source_blob_sha256": "f986e07e7384ef014981c5bec46ed3bb05a93ad829ea440eab2a76deeb5e6de4",
       "selector": "poetry-install-command.v1/dockerfile",
       "extract_sha256": "f928615a0f0112cfd11099da1c395a4ccc5e00e165d5d3e5972a234db5df3f70"
     },

@@ -102,6 +102,7 @@ COPY alembic.ini ./alembic.ini
 # entrypoints: role verification and ambiguous activation outcome resolution.
 # The rest of scripts/ is not part of the hardened runtime surface.
 COPY scripts/bootstrap_database_roles.py ./scripts/bootstrap_database_roles.py
+COPY scripts/verify_deployment_secrets.py ./scripts/verify_deployment_secrets.py
 COPY scripts/probe_people_employment_type_activation.py ./scripts/probe_people_employment_type_activation.py
 
 # Copy compiled CSS from builder stage

@@ -34,6 +34,26 @@
         "tests/services/test_material_support_service.py",
         "tests/sync/test_dotmac_sub_route_aliases.py"
       ]
+    },
+    {
+      "authority_id": "erp-candidate-boot-material-readiness",
+      "subject": "ERP required boot-material readiness before a candidate may proceed to deployment mutations.",
+      "protected_resources": [
+        "erp-candidate-boot-material-readiness"
+      ],
+      "owner_component": "erp-deployment-secret-readiness",
+      "owner_implementation": "app/services/deployment_secret_readiness.py",
+      "decision_interface": "app.services.deployment_secret_readiness.inspect_boot_material",
+      "canonical_writer_paths": [
+        "app/services/deployment_secret_readiness.py"
+      ],
+      "adapter_paths": [
+        "scripts/verify_deployment_secrets.py"
+      ],
+      "drift_test_paths": [
+        "tests/test_deployment_secret_readiness.py",
+        "tests/architecture/test_runtime_image_hardening.py"
+      ]
     }
   ],
   "typed_contract_surfaces": [
@@ -51,6 +71,15 @@
       "paths": [
         "app/services/setting_domains.py",
         "app/services/setting_domain_declaration.py"
+      ],
+      "require_public_annotations": true,
+      "forbid_any": true,
+      "require_immutable_records": true
+    },
+    {
+      "surface_id": "erp-candidate-boot-material-result",
+      "paths": [
+        "app/services/deployment_secret_readiness.py"
       ],
       "require_public_annotations": true,
       "forbid_any": true,

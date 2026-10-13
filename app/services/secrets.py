@@ -6,7 +6,6 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.domain_settings import SettingDomain
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +54,8 @@ def _openbao_allow_insecure(db: Session | None) -> bool:
     the answer when no row exists (``get_by_key`` raises 404, caught below).
     """
     if db is not None:
+        from app.models.domain_settings import SettingDomain
+
         try:
             # Imported inside the function: this module is pulled in by startup
             # and by the seed, and `settings_spec` reaches the model layer, so
@@ -148,3 +149,24 @@ def resolve_secret(value: str | None, db: Session | None = None) -> str | None:
     if is_openbao_ref(value):
         return resolve_openbao_ref(value, db)
     return value
+
+
+class BootSecretResolutionError(Exception):
+    """Transport-neutral, detail-free resolution failure for candidate probes."""
+
+    def __init__(self, *, unavailable: bool) -> None:
+        self.unavailable = unavailable
+        super().__init__("Boot secret resolution failed")
+
+
+def resolve_boot_secret(reference: str) -> str:
+    """Read through the existing resolver without a DB or exposed diagnostics."""
+    try:
+        return resolve_openbao_ref(reference, db=None)
+    except Exception as error:
+        cause = error.__cause__
+        if isinstance(cause, httpx.HTTPStatusError):
+            unavailable = cause.response.status_code not in (401, 403, 404)
+        else:
+            unavailable = not (isinstance(error, HTTPException) and cause is None)
+        raise BootSecretResolutionError(unavailable=unavailable) from None
