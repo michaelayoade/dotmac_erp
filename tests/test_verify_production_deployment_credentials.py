@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 from pathlib import Path
+import signal
 import subprocess
 import sys
 
@@ -287,6 +288,8 @@ def test_remote_never_forwards_noisy_child(monkeypatch, capsys, child):
         (0, True, "", "refused"),
         (0, False, "rollback", "refused"),
         (0, False, "close", "refused"),
+        (0, False, "hang_rollback", None),
+        (0, False, "hang_close", None),
     ],
 )
 def test_database_driver_readonly_and_rollback(verdict, fail, cleanup, expected):
@@ -304,16 +307,18 @@ class Connection:
     def rollback(self):
         calls.append("rollback")
         if CLEANUP == "rollback": raise RuntimeError("sentinel-secret")
+        if CLEANUP == "hang_rollback": __import__("signal").pause()
     def close(self):
         calls.append("close")
         if CLEANUP == "close": raise RuntimeError("sentinel-secret")
+        if CLEANUP == "hang_close": __import__("signal").pause()
 conn = Connection()
 def connect(dsn, **kwargs):
     import os
     assert not any(key.startswith("PG") for key in os.environ)
     assert set(os.environ) == {"MIGRATION_EXPECTED_DATABASE", "MIGRATION_EXPECTED_AUTHENTICATION"}
     assert dsn.startswith("postgresql://")
-    assert kwargs == {"autocommit":False,"connect_timeout":5,"options":"-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000"}
+    assert kwargs == {"autocommit":False,"connect_timeout":5,"options":"-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000 -c idle_in_transaction_session_timeout=5000"}
     calls.append("connect")
     return conn
 sys.modules["psycopg"] = types.SimpleNamespace(connect=connect)
@@ -334,6 +339,14 @@ os.environ["PGOPTIONS"] = "-c role=postgres"
 os.environ["MIGRATION_DATABASE_URL"] = "sentinel-secret"
 os.environ["CUSTOM_RUNTIME_CREDENTIAL"] = "sentinel-secret"
 sys.stdin = types.SimpleNamespace(buffer=io.BytesIO(b"postgresql+psycopg://app_admin:sentinel-secret@db/dotmac_erp"))
+if CLEANUP.startswith("hang_"):
+    import signal
+    actual_alarm = signal.alarm
+    def short_test_deadline(seconds):
+        assert seconds == 25
+        return actual_alarm(1)
+    # Shorten only duration; execute the unchanged driver's real SIG_DFL policy.
+    signal.alarm = short_test_deadline
 exec(DRIVER)
 assert calls == ["connect", "verify", "rollback", "close"]
 """
@@ -347,6 +360,11 @@ assert calls == ["connect", "verify", "rollback", "close"]
         timeout=10,
         check=False,
     )
+    if expected is None:
+        assert completed.returncode == -signal.SIGALRM
+        assert completed.stdout == b""
+        assert completed.stderr == b""
+        return
     assert completed.returncode == 0
     assert json.loads(completed.stdout) == {"stage": "database", "status": expected}
     assert completed.stderr == b""

@@ -134,8 +134,10 @@ The installed image's `verify_migration_connection` remains the authority for
 roles, ownership, database identity, direct authentication and reachable
 privileges. The proof connects directly as `app_admin`, binds both explicit
 expectations, sets transaction read-only before verifier queries, bounds
-connection/statement/lock and overall execution time, and rolls back even on
-refusal. It reports only `stage` and `status` names in JSON; exit 0 means
+connection/statement/lock and server idle-transaction time, and rolls back even
+on refusal. Kernel-enforced probe deadlines remain armed through rollback,
+close and receipt: a blocked probe is terminated without a success receipt,
+and its parent reports a closed refusal. It reports only `stage` and `status` names in JSON; exit 0 means
 `database` / `verified`, and exit 2 is a refusal. Raw SSH, Docker, database and
 verifier diagnostics are discarded, so investigate refusals through a
 separately authorized diagnostic procedure.

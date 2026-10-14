@@ -183,7 +183,8 @@ os.environ.clear()
 status = "refused"
 try:
     import signal, logging
-    signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError()))
+    signal.signal(signal.SIGALRM, signal.SIG_DFL)
+    # Keep the kernel deadline armed through imports and the final receipt.
     signal.alarm(10)
     logging.disable(logging.CRITICAL)
     installed_verifier()
@@ -209,7 +210,8 @@ status = "refused"
 conn = None
 try:
     import signal
-    signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError()))
+    signal.signal(signal.SIGALRM, signal.SIG_DFL)
+    # SIG_DFL hard-terminates even blocked native calls or cleanup; never disarm.
     signal.alarm(25)
     import pathlib
     import logging
@@ -231,7 +233,7 @@ try:
     os.environ[owner.EXPECTED_AUTHENTICATION_VAR] = authentication
     conn = psycopg.connect(connect_url,
         autocommit=False, connect_timeout=5,
-        options="-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000")
+        options="-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000 -c idle_in_transaction_session_timeout=5000")
     conn.read_only = True
     verdict = owner.verify_migration_connection(conn)
     if type(verdict) is int and verdict == 0:
