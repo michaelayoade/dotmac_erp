@@ -216,7 +216,11 @@ Create a dedicated locked-password `erp-proof` account with no Docker group
 membership, no direct Docker socket access and no other sudo grant. Its home,
 `.ssh` directory and authorized_keys must be root-owned and non-writable by
 that account; disable user RC/environment and forwarding through the supplied
-sshd Match template. Apply the authorized_keys template with the exact verified
+sshd Match template. Enrollment requires an independent check that the effective
+global `PermitUserEnvironment` is `no`; the installer refuses otherwise.
+`PermitUserEnvironment` is not permitted inside an SSH `Match` block, so this
+template relies on that global prerequisite and does not change it.
+Apply the authorized_keys template with the exact verified
 controller source IP and approved public key. `restrict` denies PTY, agent,
 port and X11 forwarding; the sshd rule also forces the launcher. The sudoers
 template permits exactly one helper with an empty argument list, forbids
