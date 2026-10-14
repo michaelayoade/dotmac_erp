@@ -197,6 +197,12 @@
         "symbol": "TestSendEmail",
         "category": "outbound_transport",
         "fingerprint": "940f495c96637f0a97e7e96ac826447d79914a2ad09998132aeb81d0142499d3"
+      },
+      {
+        "path": "tests/test_dependency_health.py",
+        "symbol": "<module>",
+        "category": "delivery_retry",
+        "fingerprint": "d6eaf86b5e22277b2e50e5ff6b216607b2118c7f52f74cd277cf58a7cdc58807"
       }
     ]
   }

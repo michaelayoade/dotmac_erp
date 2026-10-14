@@ -236,36 +236,93 @@ def _check_openbao(db: Session) -> dict[str, object]:
         )
 
     try:
-        addr, _token, _namespace, _kv_version = _openbao_config(db)
-    except Exception as exc:
+        addr, token, namespace, _kv_version = _openbao_config(db)
+        verify = not _openbao_allow_insecure(db)
+    except Exception:
         return _result(
             configured=True,
             healthy=False,
-            message=str(exc)[:160],
+            message="OpenBao configuration validation failed",
         )
 
-    # `sys/health` is unauthenticated and exists only in the root namespace: a
-    # request carrying `X-Vault-Namespace` is answered 400, which reported a
-    # healthy server as down for every deployment scoped to a namespace. Send
-    # neither the namespace nor the token; secret reads still use both.
+    # sys/health is unauthenticated and exists only in the root namespace.
     try:
         response = httpx.get(
             f"{addr}/v1/sys/health",
             timeout=5.0,
-            verify=not _openbao_allow_insecure(db),
+            verify=verify,
         )
-    except httpx.HTTPError as exc:
+    except httpx.HTTPError:
         return _result(
             configured=True,
             healthy=False,
-            message=str(exc)[:160],
+            message="OpenBao health request failed",
         )
 
-    healthy = response.status_code in {200, 429, 472, 473}
+    if response.status_code not in {200, 429, 472, 473}:
+        return _result(
+            configured=True,
+            healthy=False,
+            message=f"OpenBao health returned HTTP {response.status_code}",
+        )
+
+    # Ancestor-issued tokens authenticate in root even when secret reads target
+    # a child namespace. Retry only the declared namespace for child-issued
+    # tokens; never discover namespaces or probe secret material here.
+    headers = {"X-Vault-Token": token}
+    try:
+        response = httpx.get(
+            f"{addr}/v1/auth/token/lookup-self",
+            headers=headers,
+            timeout=5.0,
+            verify=verify,
+        )
+        if (
+            response.status_code in {400, 403, 404}
+            and namespace
+            and namespace.strip("/")
+        ):
+            response = httpx.get(
+                f"{addr}/v1/auth/token/lookup-self",
+                headers={**headers, "X-Vault-Namespace": namespace},
+                timeout=5.0,
+                verify=verify,
+            )
+    except httpx.HTTPError:
+        return _result(
+            configured=True,
+            healthy=False,
+            message="OpenBao token validation request failed",
+        )
+
+    if response.status_code != 200:
+        return _result(
+            configured=True,
+            healthy=False,
+            message=f"OpenBao token validation returned HTTP {response.status_code}",
+        )
+
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("id"), str)
+        or not data["id"]
+    ):
+        return _result(
+            configured=True,
+            healthy=False,
+            message="OpenBao token validation returned an invalid response",
+        )
+
+    # Token validity does not establish permissions on any particular secret.
     return _result(
         configured=True,
-        healthy=healthy,
-        message=f"OpenBao health returned HTTP {response.status_code}",
+        healthy=True,
+        message="OpenBao health and token authentication validated",
     )
 
 
