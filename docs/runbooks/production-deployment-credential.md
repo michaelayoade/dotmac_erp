@@ -107,8 +107,48 @@ material:
 1. AppRole login succeeds over loopback and returns a short-lived token.
 2. That token can read the canonical field.
 3. Reads of a sibling path and writes to the canonical path are denied.
-4. `scripts/deploy_production.py --host erp.dotmac.io --quick` reaches the
-   normal deployment preflight without placing the DSN in argv or `.env`.
+4. Run the standalone read-only proof below against the explicitly approved
+   running immutable image and database. `--quick` is a deployment mode and
+   must never be used as a credential probe.
+
+```bash
+python scripts/verify_production_deployment_credentials.py \
+  --host erp.dotmac.io \
+  --expected-image ghcr.io/michaelayoade/dotmac_erp@sha256:<64-hex-digest> \
+  --expected-database dotmac_erp \
+  --expected-authentication scram-sha-256:app_admin
+```
+
+Run this on the existing deployment controller, with its existing private
+AppRole files and SSH identity (defaults match `deploy_production.py`). It
+requires a known SSH host key; it never accepts a new host key automatically.
+The command validates nonsecret selectors and inspects the running app before
+fetching the DSN. It binds the proof to that immutable container ID, rechecks
+its running state, configured image, image ID and RepoDigest, and refuses
+application/interpreter mounts, Python or dynamic loader overrides, or protected
+file drift.
+It streams the DSN through SSH and `docker exec` stdin into an isolated process
+inside that exact container. It creates no container or persistent secret.
+
+The installed image's `verify_migration_connection` remains the authority for
+roles, ownership, database identity, direct authentication and reachable
+privileges. The proof connects directly as `app_admin`, binds both explicit
+expectations, sets transaction read-only before verifier queries, bounds
+connection/statement/lock and overall execution time, and rolls back even on
+refusal. It reports only `stage` and `status` names in JSON; exit 0 means
+`database` / `verified`, and exit 2 is a refusal. Raw SSH, Docker, database and
+verifier diagnostics are discarded, so investigate refusals through a
+separately authorized diagnostic procedure.
+
+This proves only the canonical credential against the selected **installed
+runtime at the time of the probe**. It does not prove candidate acceptance,
+backup, migration execution, all service boot materials, or AppRole sibling
+path/write denials (items 1–3 require their own authorized custody evidence).
+Missing verifier code or an uninspectable/overlaid runtime refuses without a
+deployment fallback. The command does not pull images, change services, run
+migrations, repair roles, write secrets, notify, or enable Talk. It is source
+for a separately authorized invocation; adding it does not record a live
+production verification.
 
 Recreate the AppRole SecretID and replace the local `0600` file if controller
 access is suspected to be compromised. Rotating the SecretID does not rotate
