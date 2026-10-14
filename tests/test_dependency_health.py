@@ -1,3 +1,6 @@
+import httpx
+import pytest
+
 import app.dependency_health as dependency_health_module
 from app.models.domain_settings import SettingDomain
 
@@ -282,32 +285,227 @@ def test_dotmac_sub_dependency_probe_is_cached(monkeypatch) -> None:
     assert second["cached"] is True
 
 
-def test_openbao_health_probe_is_root_namespace_and_unauthenticated(
-    monkeypatch,
-) -> None:
-    observed: dict[str, object] = {}
-
-    class _Response:
-        status_code = 200
-
-    def _get(url, **kwargs):
-        observed.update(url=url, **kwargs)
-        return _Response()
-
-    monkeypatch.setenv("OPENBAO_ADDR", "http://bao.example:8200")
+@pytest.fixture
+def openbao_probe(monkeypatch):
+    calls: list[tuple[str, dict[str, object]]] = []
+    outcomes: list[object] = []
+    monkeypatch.setenv("OPENBAO_ADDR", "https://bao.example")
     monkeypatch.setattr(
         dependency_health_module,
         "_openbao_config",
-        lambda db: ("http://bao.example:8200", "scoped-token", "staging/erp", "2"),
+        lambda db: ("https://bao.example", "test-token", "staging/erp", "2"),
     )
     monkeypatch.setattr(
-        dependency_health_module, "_openbao_allow_insecure", lambda db: True
+        dependency_health_module, "_openbao_allow_insecure", lambda db: False
     )
+
+    def _get(url, **kwargs):
+        calls.append((url, kwargs))
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
     monkeypatch.setattr(dependency_health_module.httpx, "get", _get)
+    return calls, outcomes
+
+
+def _token_response():
+    return httpx.Response(
+        200,
+        json={"data": {"id": "test-token", "accessor": "test-accessor", "ttl": 300}},
+    )
+
+
+@pytest.mark.parametrize("health_status", [200, 429, 472, 473])
+def test_openbao_authenticates_root_token_before_declared_namespace(
+    openbao_probe, health_status
+) -> None:
+    calls, outcomes = openbao_probe
+    outcomes.extend([httpx.Response(health_status), _token_response()])
 
     result = dependency_health_module._check_openbao(_DummySession())
 
     assert result["healthy"] is True
-    assert observed["url"] == "http://bao.example:8200/v1/sys/health"
-    assert "X-Vault-Namespace" not in (observed.get("headers") or {})
-    assert "X-Vault-Token" not in (observed.get("headers") or {})
+    assert calls == [
+        ("https://bao.example/v1/sys/health", {"timeout": 5.0, "verify": True}),
+        (
+            "https://bao.example/v1/auth/token/lookup-self",
+            {
+                "headers": {"X-Vault-Token": "test-token"},
+                "timeout": 5.0,
+                "verify": True,
+            },
+        ),
+    ]
+    assert "test-token" not in str(result)
+    assert "test-accessor" not in str(result)
+
+
+@pytest.mark.parametrize("root_status", [400, 403, 404])
+def test_openbao_child_token_retries_only_declared_namespace(
+    openbao_probe, root_status
+) -> None:
+    calls, outcomes = openbao_probe
+    outcomes.extend(
+        [httpx.Response(200), httpx.Response(root_status), _token_response()]
+    )
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["healthy"] is True
+    assert len(calls) == 3
+    assert calls[-1] == (
+        "https://bao.example/v1/auth/token/lookup-self",
+        {
+            "headers": {
+                "X-Vault-Token": "test-token",
+                "X-Vault-Namespace": "staging/erp",
+            },
+            "timeout": 5.0,
+            "verify": True,
+        },
+    )
+
+
+def test_openbao_rejected_token_fails_readiness_and_redacts_body(openbao_probe) -> None:
+    calls, outcomes = openbao_probe
+    outcomes.extend(
+        [
+            httpx.Response(200),
+            httpx.Response(403),
+            httpx.Response(403, text="test-token"),
+        ]
+    )
+
+    result = dependency_health_module._check_openbao(_DummySession())
+    result["required"] = dependency_health_module._dependency_required("openbao", True)
+
+    assert result["healthy"] is False
+    assert result["message"] == "OpenBao token validation returned HTTP 403"
+    assert dependency_health_module.readiness_failures({"openbao": result}) == {
+        "openbao": result
+    }
+    assert len(calls) == 3
+    assert "test-token" not in str(result)
+
+
+@pytest.mark.parametrize("namespace", [None, "", "/"])
+def test_openbao_root_context_without_child_has_no_retry(
+    openbao_probe, monkeypatch, namespace
+) -> None:
+    calls, outcomes = openbao_probe
+    monkeypatch.setattr(
+        dependency_health_module,
+        "_openbao_config",
+        lambda db: ("https://bao.example", "test-token", namespace, "2"),
+    )
+    outcomes.extend([httpx.Response(200), httpx.Response(403)])
+
+    assert dependency_health_module._check_openbao(_DummySession())["healthy"] is False
+    assert len(calls) == 2
+    assert "X-Vault-Namespace" not in calls[-1][1]["headers"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "not-json",
+        "null",
+        "[]",
+        "{}",
+        '{"data": {}}',
+        '{"data": []}',
+        '{"data": {"id": ""}}',
+        '{"data": {"id": 123}}',
+    ],
+)
+def test_openbao_malformed_token_response_fails_without_retry(
+    openbao_probe, body
+) -> None:
+    calls, outcomes = openbao_probe
+    outcomes.extend([httpx.Response(200), httpx.Response(200, text=body)])
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["healthy"] is False
+    assert result["message"] == "OpenBao token validation returned an invalid response"
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("failure_stage", ["health", "root", "child"])
+def test_openbao_transport_failure_is_redacted_and_not_retried(
+    openbao_probe, failure_stage
+) -> None:
+    calls, outcomes = openbao_probe
+    if failure_stage != "health":
+        outcomes.append(httpx.Response(200))
+    if failure_stage == "child":
+        outcomes.append(httpx.Response(403))
+    outcomes.append(httpx.ConnectError("test-token private-host internal-error"))
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["healthy"] is False
+    assert result["message"] in {
+        "OpenBao health request failed",
+        "OpenBao token validation request failed",
+    }
+    assert "test-token" not in str(result)
+    assert "private-host" not in str(result)
+    assert "internal-error" not in str(result)
+    assert len(calls) == {"health": 1, "root": 2, "child": 3}[failure_stage]
+
+
+@pytest.mark.parametrize("status", [301, 500, 503])
+def test_openbao_token_server_failure_has_no_namespace_retry(
+    openbao_probe, status
+) -> None:
+    calls, outcomes = openbao_probe
+    outcomes.extend([httpx.Response(200), httpx.Response(status)])
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["healthy"] is False
+    assert result["message"] == f"OpenBao token validation returned HTTP {status}"
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("status", [400, 403, 501, 503])
+def test_openbao_unhealthy_service_does_not_send_token(openbao_probe, status) -> None:
+    calls, outcomes = openbao_probe
+    outcomes.append(httpx.Response(status))
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["healthy"] is False
+    assert result["message"] == f"OpenBao health returned HTTP {status}"
+    assert len(calls) == 1
+    assert "headers" not in calls[0][1]
+
+
+def test_openbao_configuration_failure_is_redacted(openbao_probe, monkeypatch) -> None:
+    calls, outcomes = openbao_probe
+
+    def _bad_config(db):
+        raise ValueError("test-token private-host internal-error")
+
+    monkeypatch.setattr(dependency_health_module, "_openbao_config", _bad_config)
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["healthy"] is False
+    assert result["message"] == "OpenBao configuration validation failed"
+    assert calls == []
+
+
+def test_openbao_unconfigured_skips_requests(openbao_probe, monkeypatch) -> None:
+    calls, outcomes = openbao_probe
+    monkeypatch.delenv("OPENBAO_ADDR", raising=False)
+    monkeypatch.delenv("VAULT_ADDR", raising=False)
+
+    result = dependency_health_module._check_openbao(_DummySession())
+
+    assert result["configured"] is False
+    assert result["healthy"] is False
+    assert calls == []
