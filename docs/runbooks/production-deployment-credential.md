@@ -163,6 +163,9 @@ the database password or modify the canonical secret.
 
 `deploy/credential-proof/` contains review templates, not live configuration.
 The proof uses only the literal SSH command `dotmac-erp-credential-proof-v1`.
+The controller accepts only `erp-proof`, requires an explicit protected identity
+path and uses only that key with agent access and alternate authentication
+methods disabled.
 The forced launcher compares that exact string and invokes only the no-argument
 root helper. It never evaluates `SSH_ORIGINAL_COMMAND`. There is no uploaded-code
 fallback, caller-selected Python, shell, file path, or Docker command.
@@ -189,8 +192,12 @@ that account; disable user RC/environment and forwarding through the supplied
 sshd Match template. Apply the authorized_keys template with the exact verified
 controller source IP and approved public key. `restrict` denies PTY, agent,
 port and X11 forwarding; the sshd rule also forces the launcher. The sudoers
-template permits exactly one helper with an empty argument list and forbids
-SETENV. Validate the concrete sudoers and sshd changes before reload, verify
+template permits exactly one helper with an empty argument list, forbids
+SETENV and explicitly disables sudo input/output logging for this command with
+`NOLOG_INPUT: NOLOG_OUTPUT:`. Before enrollment, verify the effective matching
+sudo policy has both I/O logging directions disabled even when global defaults
+enable them; refuse enrollment if another matching rule or external I/O recorder
+can capture the credential-bearing stdin. Validate the concrete sudoers and sshd changes before reload, verify
 account group/socket permissions and review effective matching configuration.
 No wildcard shell, interpreter or Docker sudo grant is permitted.
 

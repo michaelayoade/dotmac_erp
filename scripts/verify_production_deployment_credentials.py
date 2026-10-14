@@ -73,7 +73,7 @@ class VerificationRequest:
     def validate(self) -> None:
         if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?", self.host):
             raise ValueError("host")
-        if not re.fullmatch(r"[a-z_][a-z0-9_-]*", self.ssh_user):
+        if self.ssh_user != "erp-proof":
             raise ValueError("ssh_user")
         if not re.fullmatch(
             r"ghcr\.io/michaelayoade/dotmac_erp@sha256:[0-9a-f]{64}",
@@ -105,6 +105,8 @@ class VerificationRequest:
 def _ssh(
     request: VerificationRequest, phase: str, pinned: str = "", material: bytes = b""
 ) -> dict[str, str]:
+    if request.ssh_user != "erp-proof":
+        raise ValueError("ssh_user")
     payload = {
         "version": 1,
         "operation": phase,
@@ -121,6 +123,20 @@ def _ssh(
         "-T",
         "-o",
         "ForwardAgent=no",
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "IdentityAgent=none",
+        "-o",
+        "PreferredAuthentications=publickey",
+        "-o",
+        "PasswordAuthentication=no",
+        "-o",
+        "KbdInteractiveAuthentication=no",
+        "-o",
+        "GSSAPIAuthentication=no",
+        "-o",
+        "HostbasedAuthentication=no",
         "-o",
         "ClearAllForwardings=yes",
         "-o",

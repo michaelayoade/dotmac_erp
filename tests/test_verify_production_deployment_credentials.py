@@ -40,6 +40,8 @@ REQUEST = proof.VerificationRequest(
     [
         {"host": "-oProxyCommand=bad"},
         {"ssh_user": "root;id"},
+        {"ssh_user": "root"},
+        {"ssh_user": "admin"},
         {"expected_image": "latest"},
         {"expected_image": "sha256:" + "a" * 64},
         {"expected_database": ""},
@@ -153,6 +155,17 @@ def test_ssh_argv_contains_no_material(monkeypatch):
         assert "-T" in command
         assert "ForwardAgent=no" in command
         assert "ClearAllForwardings=yes" in command
+        for option in (
+            "IdentitiesOnly=yes",
+            "IdentityAgent=none",
+            "PreferredAuthentications=publickey",
+            "PasswordAuthentication=no",
+            "KbdInteractiveAuthentication=no",
+            "GSSAPIAuthentication=no",
+            "HostbasedAuthentication=no",
+        ):
+            assert option in command
+        assert command[-2] == "erp-proof@erp.example.test"
         return 0, b'{"stage":"database","status":"verified"}'
 
     monkeypatch.setattr(proof, "_bounded_run", runner)
@@ -678,3 +691,28 @@ def test_installation_checks_all_parents(monkeypatch, fault):
     monkeypatch.setattr(Path, "lstat", metadata)
     with pytest.raises(ValueError):
         server.trusted_file(leaf)
+
+
+@pytest.mark.parametrize("user", ["root", "admin", "deploy"])
+def test_transport_refuses_other_accounts_before_subprocess(monkeypatch, user):
+    monkeypatch.setattr(
+        proof,
+        "_bounded_run",
+        lambda *args: pytest.fail("alternate SSH account executed"),
+    )
+    with pytest.raises(ValueError, match="ssh_user"):
+        proof._ssh(replace(REQUEST, ssh_user=user), "inspect")
+
+
+def test_sudoers_grants_only_noargument_helper_without_io_logging():
+    path = Path(__file__).parents[1] / "deploy/credential-proof/sudoers.template"
+    rules = [
+        line
+        for line in path.read_text().splitlines()
+        if line and not line.startswith("#")
+    ]
+    assert rules == [
+        "Defaults:erp-proof env_reset, !setenv",
+        "Defaults:erp-proof secure_path=/usr/bin:/bin",
+        'erp-proof ALL=(root) NOPASSWD: NOSETENV: NOLOG_INPUT: NOLOG_OUTPUT: /usr/local/libexec/dotmac-erp-credential-proof.py ""',
+    ]

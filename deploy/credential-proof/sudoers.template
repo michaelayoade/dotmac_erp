@@ -2,4 +2,4 @@
 # Empty argument string means NO arguments; no interpreter or Docker grant.
 Defaults:erp-proof env_reset, !setenv
 Defaults:erp-proof secure_path=/usr/bin:/bin
-erp-proof ALL=(root) NOPASSWD: NOSETENV: /usr/local/libexec/dotmac-erp-credential-proof.py ""
+erp-proof ALL=(root) NOPASSWD: NOSETENV: NOLOG_INPUT: NOLOG_OUTPUT: /usr/local/libexec/dotmac-erp-credential-proof.py ""
