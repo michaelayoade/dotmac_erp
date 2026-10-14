@@ -207,6 +207,10 @@ container, image repository, database and SCRAM app_admin authentication are
 fixed in the helper as well as the policy. The DSN must contain an explicit
 approved host and port and no query parameters; hostaddr, options, service,
 passfile, multihost and alternate destinations refuse before Docker execution.
+Policy hostnames allow ASCII letters, digits, dots, hyphens and underscores
+after an initial letter or digit, up to 253 characters. This includes Docker
+network aliases such as `dotmac_pg_local`; the DSN must still match the approved
+hostname and port exactly.
 
 Create a dedicated locked-password `erp-proof` account with no Docker group
 membership, no direct Docker socket access and no other sudo grant. Its home,
