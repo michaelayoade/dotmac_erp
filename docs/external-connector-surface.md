@@ -18,7 +18,7 @@ centrally, and reports every untracked Python source as an error.
 
 Remeasured on 2026-08-25 in the direct-CRM retirement change with the pinned
 schema-9 engine. That review left nine conserved findings at the time. The
-current profile and ledger below contain twelve after later reviewed additions.
+current profile and ledger below contain thirteen after later reviewed additions.
 
 Reviewed again on 2026-08-29 for PR #416 after connector failure coverage
 changed the source files containing three test-only conserved symbols. Their
@@ -38,6 +38,12 @@ Both webhook-signature tests in the same file are unchanged. The pinned
 Governance engine fingerprints the containing source file, so their two
 conserved fingerprints are re-declared to match its measured result. All
 six category baselines and all twelve conserved findings remain unchanged.
+
+The authenticated OpenBao readiness fix in PR #708 adds one conserved
+`delivery_retry` finding for the mocked namespace fallback tests in
+`tests/test_dependency_health.py`. The pinned engine proves this file is
+test-only and not imported by runtime source. Its whole-module fingerprint
+is recorded below; no production category baseline or scope rule changes.
 
 | Category | Baseline |
 | --- | ---: |
@@ -130,6 +136,7 @@ revision, so its two entries also preserve that stronger dead-code signal.
 | `tests/tasks/test_hooks_tasks.py` | `TestExecuteAsyncHook` | `delivery_retry` | `2b429df85fe39fe006f8bf5c79a2038cbddefd5ff91c2388910fa6f17eba1597` |
 | `tests/tasks/test_outbox_relay.py` | `test_email_handler_dead_letters_permanent_smtp_error` | `outbound_transport` | `6bc63b552c27b8334cdb4d63382292eb5ec464dc07e7fb63d800a88bd275f63d` |
 | `tests/test_email_services.py` | `TestSendEmail` | `outbound_transport` | `940f495c96637f0a97e7e96ac826447d79914a2ad09998132aeb81d0142499d3` |
+| `tests/test_dependency_health.py` | `<module>` | `delivery_retry` | `d6eaf86b5e22277b2e50e5ff6b216607b2118c7f52f74cd277cf58a7cdc58807` |
 
 ## Review rule
 
