@@ -137,13 +137,16 @@ material:
 ```bash
 python scripts/verify_production_deployment_credentials.py \
   --host erp.dotmac.io \
+  --ssh-user erp-proof \
+  --identity-file /approved/protected/controller-key \
   --expected-image ghcr.io/michaelayoade/dotmac_erp@sha256:<64-hex-digest> \
   --expected-database dotmac_erp \
   --expected-authentication scram-sha-256:app_admin
 ```
 
-Run this on the existing deployment controller, with its existing private
-AppRole files and SSH identity (defaults match `deploy_production.py`). It
+Run this on the deployment controller with its approved private AppRole files
+and a separately enrolled restricted proof identity. No Observe-to-ERP proof
+SSH identity has been approved or enrolled. The command
 requires a known SSH host key; it never accepts a new host key automatically.
 The command validates nonsecret selectors and inspects the running app before
 fetching the DSN. It binds the proof to that immutable container ID, rechecks
@@ -178,3 +181,65 @@ production verification.
 Recreate the AppRole SecretID and replace the local `0600` file if controller
 access is suspected to be compromised. Rotating the SecretID does not rotate
 the database password or modify the canonical secret.
+
+## Restricted proof enrollment kit — source only, NOT ENROLLED
+
+`deploy/credential-proof/` contains review templates, not live configuration.
+The proof uses only the literal SSH command `dotmac-erp-credential-proof-v1`.
+The controller accepts only `erp-proof`, requires an explicit protected identity
+path and uses only that key with agent access and alternate authentication
+methods disabled.
+The forced launcher compares that exact string and invokes only the no-argument
+root helper. It never evaluates `SSH_ORIGINAL_COMMAND`. There is no uploaded-code
+fallback, caller-selected Python, shell, file path, or Docker command.
+
+Install the reviewed standalone `scripts/erp_credential_proof_server.py` as
+`/usr/local/libexec/dotmac-erp-credential-proof.py` (root:root, 0755) and the
+launcher as `/usr/local/libexec/dotmac-erp-proof-launcher` (root:root, 0755).
+The helper uses the checked-in `#!/usr/bin/python3 -I` isolated interpreter
+shebang, `/usr/bin/docker` and the fixed local Docker socket.
+All helper/policy parents must be root-owned, without group/world writes or
+symlinks. Install the approved policy at `/etc/dotmac-erp/credential-proof.json`
+(root:root, 0600); its endpoint must be the independently verified application
+network database endpoint, not an inferred management IP. The placeholder
+policy deliberately refuses until that endpoint is supplied. The allowed
+container, image repository, database and SCRAM app_admin authentication are
+fixed in the helper as well as the policy. The DSN must contain an explicit
+approved host and port and no query parameters; hostaddr, options, service,
+passfile, multihost and alternate destinations refuse before Docker execution.
+
+Create a dedicated locked-password `erp-proof` account with no Docker group
+membership, no direct Docker socket access and no other sudo grant. Its home,
+`.ssh` directory and authorized_keys must be root-owned and non-writable by
+that account; disable user RC/environment and forwarding through the supplied
+sshd Match template. Apply the authorized_keys template with the exact verified
+controller source IP and approved public key. `restrict` denies PTY, agent,
+port and X11 forwarding; the sshd rule also forces the launcher. The sudoers
+template permits exactly one helper with an empty argument list, forbids
+SETENV and explicitly disables sudo input/output logging for this command with
+`NOLOG_INPUT: NOLOG_OUTPUT:`. Before enrollment, verify the effective matching
+sudo policy has both I/O logging directions disabled even when global defaults
+enable them; refuse enrollment if another matching rule or external I/O recorder
+can capture the credential-bearing stdin. Validate the concrete sudoers and sshd changes before reload, verify
+account group/socket permissions and review effective matching configuration.
+No wildcard shell, interpreter or Docker sudo grant is permitted.
+
+Each SSH invocation reads one version-1 bounded JSON object. Inspection contains
+only selectors; probe additionally contains the attested container ID and DSN.
+Duplicate/unknown keys, unsupported versions, trailing JSON and oversized input
+refuse. The helper checks its independent policy and repeats full source/image/
+mount/diff inspection before the material-bearing DB exec. Its fixed installed
+image driver reuses `bootstrap_database_roles.verify_migration_connection`,
+with read-only transactions, rollback and hard deadlines through cleanup.
+Only closed runtime/database receipts leave the helper. The controller obtains
+material only after successful inspection. This kit does not replace the
+credential resolver, Deployment Foundation, signing, Rust or Gate 0/D7 owners.
+
+A separate live approval must name: the verified controller source IP; controller
+key protected path and public-key fingerprint; `erp-proof` account; pinned ERP
+host-key fingerprint; exact helper, launcher and policy SHA-256 hashes; verified
+DB endpoint/port; and the exact SSH authorized_keys/sshd and no-argument sudoers
+changes. Review the complete concrete enrollment diff before that approval.
+Source review or passing CI does not authorize account/key creation, host
+installation, enrollment, SSH execution or a live credential proof. No such
+changes are recorded by this source kit.

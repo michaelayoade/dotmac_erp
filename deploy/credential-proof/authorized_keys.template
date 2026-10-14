@@ -1,0 +1,2 @@
+# NOT ENROLLED. Replace placeholders only with separately approved coordinates.
+restrict,from="<VERIFIED_CONTROLLER_SOURCE_IP>",command="/usr/local/libexec/dotmac-erp-proof-launcher" <APPROVED_CONTROLLER_PUBLIC_KEY>

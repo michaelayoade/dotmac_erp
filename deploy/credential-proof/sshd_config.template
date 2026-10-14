@@ -1,0 +1,10 @@
+# Dedicated locked-password account, with a normal shell solely for forced command.
+Match User erp-proof
+    AuthenticationMethods publickey
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    PermitTTY no
+    DisableForwarding yes
+    PermitUserRC no
+    PermitUserEnvironment no
+    ForceCommand /usr/local/libexec/dotmac-erp-proof-launcher

@@ -12,12 +12,23 @@ import sys
 import pytest
 
 from scripts import verify_production_deployment_credentials as proof
+from scripts import erp_credential_proof_server as server
 
 IMAGE = "ghcr.io/michaelayoade/dotmac_erp@sha256:" + "a" * 64
 CONTAINER = "b" * 64
+POLICY = {
+    "version": 1,
+    "container": "dotmac_erp_app",
+    "image_repository": "ghcr.io/michaelayoade/dotmac_erp",
+    "database": "dotmac_erp",
+    "authentication": "scram-sha-256:app_admin",
+    "database_host": "db",
+    "database_port": 5432,
+}
 DSN = "postgresql+psycopg://app_admin:sentinel-secret@db:5432/dotmac_erp"
 REQUEST = proof.VerificationRequest(
     host="erp.example.test",
+    identity_file=Path("/synthetic/protected/proof-key"),
     expected_image=IMAGE,
     expected_database="dotmac_erp",
     expected_authentication="scram-sha-256:app_admin",
@@ -29,6 +40,8 @@ REQUEST = proof.VerificationRequest(
     [
         {"host": "-oProxyCommand=bad"},
         {"ssh_user": "root;id"},
+        {"ssh_user": "root"},
+        {"ssh_user": "admin"},
         {"expected_image": "latest"},
         {"expected_image": "sha256:" + "a" * 64},
         {"expected_database": ""},
@@ -135,9 +148,24 @@ def test_ssh_timeout_is_closed(monkeypatch):
 def test_ssh_argv_contains_no_material(monkeypatch):
     def runner(command, material, timeout):
         assert DSN not in repr(command)
-        assert material == DSN.encode()
-        assert timeout == 45
+        assert json.loads(material)["dsn"] == DSN
+        assert command[-1] == server.MARKER
+        assert timeout == 120
         assert "StrictHostKeyChecking=yes" in command
+        assert "-T" in command
+        assert "ForwardAgent=no" in command
+        assert "ClearAllForwardings=yes" in command
+        for option in (
+            "IdentitiesOnly=yes",
+            "IdentityAgent=none",
+            "PreferredAuthentications=publickey",
+            "PasswordAuthentication=no",
+            "KbdInteractiveAuthentication=no",
+            "GSSAPIAuthentication=no",
+            "HostbasedAuthentication=no",
+        ):
+            assert option in command
+        assert command[-2] == "erp-proof@erp.example.test"
         return 0, b'{"stage":"database","status":"verified"}'
 
     monkeypatch.setattr(proof, "_bounded_run", runner)
@@ -171,7 +199,11 @@ def runtime_fake(
     calls = []
 
     def bounded(command, material, timeout, limit):
-        assert command[:3] == ["docker", "--host", "unix:///var/run/docker.sock"]
+        assert command[:3] == [
+            "/usr/bin/docker",
+            "--host",
+            "unix:///var/run/docker.sock",
+        ]
         command = ["docker", *command[3:]]
         calls.append((command, material))
         assert timeout == 35
@@ -190,38 +222,27 @@ def runtime_fake(
             "-i",
             "/opt/venv/bin/python",
         ]
-        if command[-1] == proof.SOURCE_DRIVER:
+        if command[-1] == server.SOURCE_DRIVER:
             assert material == b""
             return 0, json.dumps({"stage": "runtime", "status": source_status}).encode()
         assert material == DSN.encode()
         return 0, child or b'{"stage":"database","status":"verified"}'
 
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "remote",
-            phase,
-            IMAGE,
-            CONTAINER if phase == "probe" else "",
-            REQUEST.expected_database,
-            REQUEST.expected_authentication,
-        ],
-    )
-    monkeypatch.setattr(
-        sys,
-        "stdin",
-        type("Input", (), {"buffer": __import__("io").BytesIO(DSN.encode())})(),
-    )
-    exec(  # noqa: S102 -- execute only the checked-in driver with offline fakes
-        proof.REMOTE_DRIVER,
-        {
-            "bounded_run": bounded,
-            "database_driver": proof.DATABASE_DRIVER,
-            "source_driver": proof.SOURCE_DRIVER,
-        },
-    )
-    return json.loads(capsys.readouterr().out), calls
+    monkeypatch.setattr(server, "_bounded_run", bounded)
+    value = {
+        "version": 1,
+        "operation": phase,
+        "image": IMAGE,
+        "database": REQUEST.expected_database,
+        "authentication": REQUEST.expected_authentication,
+    }
+    if phase == "probe":
+        value.update(container_id=CONTAINER, dsn=DSN)
+    try:
+        result = server.handle(value, POLICY)
+    except Exception:
+        result = {"stage": "runtime", "status": "refused"}
+    return result, calls
 
 
 @pytest.mark.parametrize(
@@ -259,6 +280,10 @@ def test_runtime_probe_only_executes_exact_container(monkeypatch, capsys):
     result, calls = runtime_fake(monkeypatch, capsys, phase="probe")
     assert result == {"stage": "database", "status": "verified"}
     assert [command[1] for command, _ in calls] == [
+        "inspect",
+        "image",
+        "diff",
+        "exec",
         "inspect",
         "image",
         "diff",
@@ -322,7 +347,7 @@ def connect(dsn, **kwargs):
     calls.append("connect")
     return fake_connection
 sys.modules["psycopg"] = types.SimpleNamespace(connect=connect)
-sys.modules["psycopg.conninfo"] = types.SimpleNamespace(conninfo_to_dict=lambda dsn: {"user":"app_admin", "dbname":"dotmac_erp"})
+sys.modules["psycopg.conninfo"] = types.SimpleNamespace(conninfo_to_dict=lambda dsn: {"user":"app_admin", "password":"sentinel-secret", "dbname":"dotmac_erp", "host":"db", "port":"5432"})
 def verify(c):
     assert c is fake_connection and c.read_only is True
     calls.append("verify")
@@ -332,13 +357,13 @@ def verify(c):
     return VERDICT
 owner = types.SimpleNamespace(__file__="/app/scripts/bootstrap_database_roles.py",verify_migration_connection=verify,EXPECTED_DATABASE_VAR="MIGRATION_EXPECTED_DATABASE",EXPECTED_AUTHENTICATION_VAR="MIGRATION_EXPECTED_AUTHENTICATION")
 sys.modules["scripts"] = types.SimpleNamespace(bootstrap_database_roles=owner)
-sys.argv = ["driver", "dotmac_erp", "scram-sha-256:app_admin"]
+sys.argv = ["driver", "dotmac_erp", "scram-sha-256:app_admin", "db", "5432"]
 import os
 os.environ["PGHOSTADDR"] = "wrong"
 os.environ["PGOPTIONS"] = "-c role=postgres"
 os.environ["MIGRATION_DATABASE_URL"] = "sentinel-secret"
 os.environ["CUSTOM_RUNTIME_CREDENTIAL"] = "sentinel-secret"
-sys.stdin = types.SimpleNamespace(buffer=io.BytesIO(b"postgresql+psycopg://app_admin:sentinel-secret@db/dotmac_erp"))
+sys.stdin = types.SimpleNamespace(buffer=io.BytesIO(b"postgresql+psycopg://app_admin:sentinel-secret@db:5432/dotmac_erp"))
 if CLEANUP.startswith("hang_"):
     import signal
     actual_alarm = signal.alarm
@@ -351,7 +376,7 @@ exec(DRIVER)
 assert calls == ["connect", "verify", "rollback", "close"]
 """
     source = (
-        f"DRIVER={proof.DATABASE_DRIVER!r}\nVERDICT={verdict!r}\nFAIL={fail!r}\nCLEANUP={cleanup!r}\n"
+        f"DRIVER={server.DATABASE_DRIVER!r}\nVERDICT={verdict!r}\nFAIL={fail!r}\nCLEANUP={cleanup!r}\n"
         + harness
     )
     completed = subprocess.run(  # noqa: S603 -- isolated checked-in driver and fake modules
@@ -432,7 +457,7 @@ owner = types.SimpleNamespace(__file__="/wrong/owner.py" if MODE == "wrong_origi
 sys.modules["scripts"] = types.SimpleNamespace(bootstrap_database_roles=owner)
 exec(DRIVER)
 """
-    source = f"DRIVER={proof.SOURCE_DRIVER!r}\nMODE={mode!r}\n" + harness
+    source = f"DRIVER={server.SOURCE_DRIVER!r}\nMODE={mode!r}\n" + harness
     completed = subprocess.run(  # noqa: S603 -- checked-in driver, no host/database calls
         [sys.executable, "-I", "-B", "-c", source],
         capture_output=True,
@@ -470,7 +495,7 @@ def test_child_environment_excludes_inherited_material(monkeypatch):
         assert "sentinel-secret" not in repr(kwargs["env"])
         return Child()
 
-    monkeypatch.setattr(proof.subprocess, "Popen", popen)
+    monkeypatch.setattr(server.subprocess, "Popen", popen)
     assert proof._bounded_run(["fake"], b"", 1) == (0, b"{}")
 
 
@@ -486,3 +511,208 @@ def test_projection_guards_loader_overrides_without_collecting_values(
         assert '"' + key + '"' in projection
     assert "{{json .Config.Env}}" not in projection
     assert '"ProcessOverride":{{$override}}' in projection
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"version":1,"version":1}',
+        b"{}{}",
+        b"[]",
+        b"{}" + b" " * 8192,
+    ],
+)
+def test_protocol_rejects_duplicate_trailing_nonobject_and_oversize(raw):
+    with pytest.raises(ValueError):
+        server.decode_object(raw)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"version": True},
+        {"version": 2},
+        {"operation": "shell"},
+        {"command": "id"},
+        {"dsn": DSN},
+        {"image": "latest"},
+    ],
+)
+def test_closed_inspect_request(change):
+    value = {
+        "version": 1,
+        "operation": "inspect",
+        "image": IMAGE,
+        "database": "dotmac_erp",
+        "authentication": "scram-sha-256:app_admin",
+    }
+    value.update(change)
+    with pytest.raises(ValueError):
+        server.validate_request(value)
+
+
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        DSN.replace("@db:", "@other:"),
+        DSN.replace(":5432/", ":5433/"),
+        DSN + "?hostaddr=127.0.0.1",
+        DSN + "?options=-c%20role=postgres",
+        DSN + "?service=evil",
+        DSN + "?passfile=/tmp/evil",
+        DSN.replace("app_admin", "postgres"),
+        DSN.replace(":5432", ""),
+        DSN.replace("@db:", "@db,other:"),
+        DSN.replace("dotmac_erp", "other"),
+    ],
+)
+def test_destination_refused_before_any_container_call(monkeypatch, dsn):
+    monkeypatch.setattr(
+        server,
+        "inspect_runtime",
+        lambda *args: pytest.fail("inspection after bad destination"),
+    )
+    with pytest.raises(ValueError):
+        server.handle(
+            {
+                "version": 1,
+                "operation": "probe",
+                "image": IMAGE,
+                "database": "dotmac_erp",
+                "authentication": "scram-sha-256:app_admin",
+                "container_id": CONTAINER,
+                "dsn": dsn,
+            },
+            POLICY,
+        )
+
+
+def test_probe_rechecks_runtime_immediately_before_material(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        server, "inspect_runtime", lambda *args: calls.append("inspect") or CONTAINER
+    )
+
+    def run(command, material, limit):
+        assert calls == ["inspect", "inspect"]
+        assert material == DSN.encode()
+        calls.append("material")
+        return b'{"stage":"database","status":"verified"}'
+
+    monkeypatch.setattr(server, "_run", run)
+    assert (
+        server.handle(
+            {
+                "version": 1,
+                "operation": "probe",
+                "image": IMAGE,
+                "database": "dotmac_erp",
+                "authentication": "scram-sha-256:app_admin",
+                "container_id": CONTAINER,
+                "dsn": DSN,
+            },
+            POLICY,
+        )["status"]
+        == "verified"
+    )
+    assert calls == ["inspect", "inspect", "material"]
+
+
+def test_bounded_child_that_never_reads_stdin_times_out():
+    with pytest.raises(subprocess.TimeoutExpired):
+        server._bounded_run(
+            [sys.executable, "-I", "-B", "-c", "import time; time.sleep(20)"],
+            b"x" * 262144,
+            0.2,
+        )
+
+
+def test_forced_launcher_rejects_arbitrary_original_command():
+    launcher = Path(__file__).parents[1] / "deploy/credential-proof/forced-launcher.sh"
+    completed = subprocess.run(  # noqa: S603 -- checked-in rejection launcher only
+        ["/bin/sh", str(launcher)],
+        env={"SSH_ORIGINAL_COMMAND": "id; echo sentinel-secret"},
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    assert completed.returncode == 2
+    assert json.loads(completed.stdout) == {"stage": "runtime", "status": "refused"}
+    assert completed.stderr == b""
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"version": True},
+        {"container": "other"},
+        {"database": "other"},
+        {"authentication": "trust:app_admin"},
+        {"database_host": "db,evil"},
+        {"database_port": True},
+        {"database_port": 65536},
+        {"extra": "unexpected"},
+    ],
+)
+def test_independent_policy_rejects_broadened_scope(monkeypatch, tmp_path, change):
+    policy = dict(POLICY)
+    policy.update(change)
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(policy))
+    monkeypatch.setattr(server.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(server, "HELPER_PATH", Path(server.__file__))
+    monkeypatch.setattr(server, "POLICY_PATH", path)
+    monkeypatch.setattr(server, "trusted_file", lambda path: None)
+    with pytest.raises(ValueError):
+        server.load_policy()
+
+
+@pytest.mark.parametrize("fault", ["owner", "writable", "symlink", "parent_file"])
+def test_installation_checks_all_parents(monkeypatch, fault):
+    import stat
+    from types import SimpleNamespace
+
+    leaf = Path("/trusted/helper")
+
+    def metadata(path):
+        mode = stat.S_IFREG | 0o755 if path == leaf else stat.S_IFDIR | 0o755
+        uid = 0
+        if path == Path("/trusted"):
+            if fault == "owner":
+                uid = 1000
+            elif fault == "writable":
+                mode |= 0o020
+            elif fault == "symlink":
+                mode = stat.S_IFLNK | 0o755
+            elif fault == "parent_file":
+                mode = stat.S_IFREG | 0o755
+        return SimpleNamespace(st_uid=uid, st_mode=mode)
+
+    monkeypatch.setattr(Path, "lstat", metadata)
+    with pytest.raises(ValueError):
+        server.trusted_file(leaf)
+
+
+@pytest.mark.parametrize("user", ["root", "admin", "deploy"])
+def test_transport_refuses_other_accounts_before_subprocess(monkeypatch, user):
+    monkeypatch.setattr(
+        proof,
+        "_bounded_run",
+        lambda *args: pytest.fail("alternate SSH account executed"),
+    )
+    with pytest.raises(ValueError, match="ssh_user"):
+        proof._ssh(replace(REQUEST, ssh_user=user), "inspect")
+
+
+def test_sudoers_grants_only_noargument_helper_without_io_logging():
+    path = Path(__file__).parents[1] / "deploy/credential-proof/sudoers.template"
+    rules = [
+        line
+        for line in path.read_text().splitlines()
+        if line and not line.startswith("#")
+    ]
+    assert rules == [
+        "Defaults:erp-proof env_reset, !setenv",
+        "Defaults:erp-proof secure_path=/usr/bin:/bin",
+        'erp-proof ALL=(root) NOPASSWD: NOSETENV: NOLOG_INPUT: NOLOG_OUTPUT: /usr/local/libexec/dotmac-erp-credential-proof.py ""',
+    ]
