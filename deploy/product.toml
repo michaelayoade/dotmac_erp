@@ -73,6 +73,9 @@ source_revision = "95ecb053053cbbb3f90a7252a798c43652722594" # pragma: allowlist
 # superuser; this table structurally cannot repeat that mistake because a
 # role naming the owner material is a parse-time refusal, not a review note).
 # ─────────────────────────────────────────────────────────────────────────
+# Production's measured known consumer graph uses no runtime OpenBao refs.
+# The production-only binding is deploy/profiles/production-runtime-no-openbao.yml;
+# deployment-controller migration credentials retain their separate AppRole.
 [runtime_materials]
 names = [
     "DATABASE_URL",
@@ -87,8 +90,6 @@ names = [
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
-    "OPENBAO_ADDR",
-    "OPENBAO_TOKEN",
     "METRICS_TOKEN",
 ]
 
@@ -153,8 +154,6 @@ materials = [
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
-    "OPENBAO_ADDR",
-    "OPENBAO_TOKEN",
     # app (not worker/beat) serves /metrics behind a token
     # (app/main.py:1102, token_env_keys=("METRICS_TOKEN",)).
     "METRICS_TOKEN",
@@ -251,8 +250,6 @@ materials = [
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
-    "OPENBAO_ADDR",
-    "OPENBAO_TOKEN",
 ]
 
 [roles.environment]
@@ -316,8 +313,6 @@ materials = [
     "S3_ENDPOINT_URL",
     "S3_ACCESS_KEY",
     "S3_SECRET_KEY",
-    "OPENBAO_ADDR",
-    "OPENBAO_TOKEN",
 ]
 
 [roles.environment]
@@ -579,7 +574,7 @@ hosts = [
 # ═══════════════════════════════════════════════════════════════════════════
 # External dependencies — only things a required phase genuinely cannot
 # proceed without, per app/dependency_health.py's OWN required-set
-# (DEFAULT_REQUIRED_DEPENDENCIES = {"storage", "openbao"}) plus the two
+# (storage; OpenBao is required only when configured) plus the two
 # checked unconditionally in readiness_probe() (`_check_database()`,
 # `_check_redis()`). Optional integrations the app degrades gracefully
 # without (SMTP, CRM, Paystack, Nextcloud, dotmac_sub, Remita — all present in
@@ -629,17 +624,6 @@ kind = "object_store"
 # "storage" is in app/dependency_health.py's DEFAULT_REQUIRED_DEPENDENCIES.
 required_for = ["ready"]
 material = "S3_ENDPOINT_URL"
-
-[[external_dependencies]]
-code = "openbao"
-# No dedicated ExternalDependency.KINDS value exists for a secrets store;
-# OpenBao is reached over its HTTP API, so "http_api" is the closest fit —
-# see the report for this being noted as an imperfect categorical fit, not a
-# blocking gap.
-kind = "http_api"
-# "openbao" is the other entry in DEFAULT_REQUIRED_DEPENDENCIES.
-required_for = ["ready"]
-material = "OPENBAO_ADDR"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Product alerts — ERP finance/job-domain only. Infrastructure alerts
