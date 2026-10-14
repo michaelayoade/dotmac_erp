@@ -75,6 +75,29 @@ full-SHA check still runs after the deploy script's pull and before the drain.
 `MIGRATION_DATABASE_URL` as a break-glass path. The normal production entrypoint
 is the controller wrapper above.
 
+## Production runtime binding
+
+The deployment controller's migration AppRole remains required for the canonical
+`app_admin` DSN. Runtime OpenBao aliases are separate: the production descriptor
+now omits those unused materials after the bounded 2026-10-14 known-consumer
+census completed all catalog organizations, including inactive ones, with zero
+reference prefixes. This source change does not record a live configuration
+change or claim global completeness across unknown stores.
+
+Activate `deploy/profiles/production-runtime-no-openbao.yml` as the ordinary
+`docker-compose.override.yml` in the production checkout. If an override already
+exists, stop and review a merge; preserve its current image, commands and other
+bindings. The profile empties all four OpenBao/Vault address/token aliases only
+for app, worker and Beat. Remove all assignments of `OPENBAO_ADDR`,
+`OPENBAO_TOKEN`, `VAULT_ADDR` and `VAULT_TOKEN` from protected `.env`, including
+duplicates, without displaying their values. Never place the controller's AppRole
+coordinates there. See `deploy/README.md` for the evidence and coverage boundary.
+
+Configured staging OpenBao remains authenticated and required. Before a future
+production runtime reference is activated, provision its declared credential
+access, remove this production binding, and pass authenticated readiness plus
+the candidate boot-material/reference checks. No material gate is disabled.
+
 ## Candidate boot-material gate
 
 The existing deploy script runs `python -m scripts.verify_deployment_secrets`

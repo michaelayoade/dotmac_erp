@@ -1,0 +1,21 @@
+# Production-only binding for the measured runtime with no OpenBao consumers.
+# Provision an identity and remove this binding before activating genuine refs.
+services:
+  app:
+    environment:
+      OPENBAO_ADDR: ''
+      OPENBAO_TOKEN: ''
+      VAULT_ADDR: ''
+      VAULT_TOKEN: ''
+  worker:
+    environment:
+      OPENBAO_ADDR: ''
+      OPENBAO_TOKEN: ''
+      VAULT_ADDR: ''
+      VAULT_TOKEN: ''
+  beat:
+    environment:
+      OPENBAO_ADDR: ''
+      OPENBAO_TOKEN: ''
+      VAULT_ADDR: ''
+      VAULT_TOKEN: ''
