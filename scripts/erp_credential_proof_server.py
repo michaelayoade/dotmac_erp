@@ -185,7 +185,7 @@ def _run(args, material=b"", limit=65536):
     return output
 
 
-container_projection = r"""{{ $override := false }}{{range .Config.Env}}{{ $key := index (split . "=") 0 }}{{if and (ne . (printf "%s=" $key)) (or (eq $key "PYTHONPATH") (eq $key "PYTHONHOME") (eq (index (split $key "_") 0) "LD") (eq $key "GCONV_PATH") (eq $key "GLIBC_TUNABLES"))}}{{$override = true}}{{end}}{{end}}[{"Id":{{json .Id}},"Name":{{json .Name}},"State":{"Running":{{json .State.Running}}},"Image":{{json .Image}},"Config":{"Image":{{json .Config.Image}},"WorkingDir":{{json .Config.WorkingDir}},"ProcessOverride":{{$override}}},"Mounts":[{{range $i,$m := .Mounts}}{{if $i}},{{end}}{"Destination":{{json $m.Destination}}}{{end}}]}"""
+container_projection = r"""{{ $override := false }}{{range .Config.Env}}{{ $key := index (split . "=") 0 }}{{if and (ne . (printf "%s=" $key)) (or (eq $key "PYTHONPATH") (eq $key "PYTHONHOME") (eq (index (split $key "_") 0) "LD") (eq $key "GCONV_PATH") (eq $key "GLIBC_TUNABLES"))}}{{$override = true}}{{end}}{{end}}[{"Id":{{json .Id}},"Name":{{json .Name}},"State":{"Running":{{json .State.Running}}},"Image":{{json .Image}},"Config":{"Image":{{json .Config.Image}},"WorkingDir":{{json .Config.WorkingDir}},"ProcessOverride":{{$override}}},"Mounts":[{{range $i,$m := .Mounts}}{{if $i}},{{end}}{"Destination":{{json $m.Destination}}}{{end}}]}]"""
 image_projection = r"""[{"Id":{{json .Id}},"RepoDigests":{{json .RepoDigests}}}]"""
 
 

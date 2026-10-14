@@ -1,4 +1,6 @@
 # Dedicated locked-password account, with a normal shell solely for forced command.
+# Requires independently checked effective global PermitUserEnvironment=no.
+# PermitUserEnvironment is not allowed inside Match; refuse enrollment otherwise.
 Match User erp-proof
     AuthenticationMethods publickey
     PasswordAuthentication no
@@ -6,5 +8,4 @@ Match User erp-proof
     PermitTTY no
     DisableForwarding yes
     PermitUserRC no
-    PermitUserEnvironment no
     ForceCommand /usr/local/libexec/dotmac-erp-proof-launcher
