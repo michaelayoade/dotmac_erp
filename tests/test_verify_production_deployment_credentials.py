@@ -566,7 +566,10 @@ def test_closed_inspect_request(change):
         DSN.replace("dotmac_erp", "other"),
     ],
 )
-def test_destination_refused_before_any_container_call(monkeypatch, dsn):
+@pytest.mark.parametrize("host", ["db", "dotmac_pg_local"])
+def test_destination_refused_before_any_container_call(monkeypatch, dsn, host):
+    policy = {**POLICY, "database_host": host}
+    dsn = dsn.replace("@db", f"@{host}")
     monkeypatch.setattr(
         server,
         "inspect_runtime",
@@ -583,7 +586,7 @@ def test_destination_refused_before_any_container_call(monkeypatch, dsn):
                 "container_id": CONTAINER,
                 "dsn": dsn,
             },
-            POLICY,
+            policy,
         )
 
 
@@ -649,6 +652,20 @@ def test_forced_launcher_rejects_arbitrary_original_command():
         {"database": "other"},
         {"authentication": "trust:app_admin"},
         {"database_host": "db,evil"},
+        {"database_host": "dotmac_pg_local,evil"},
+        {"database_host": "dotmac_pg_local:5432"},
+        {"database_host": "dotmac_pg_local/evil"},
+        {"database_host": "dotmac_pg_local?hostaddr=127.0.0.1"},
+        {"database_host": "dotmac_pg_local#evil"},
+        {"database_host": "dotmac_pg_local@evil"},
+        {"database_host": "dotmac_pg_local\n"},
+        {"database_host": "dotmac_pg_local\r"},
+        {"database_host": "dotmac_pg_local\x00"},
+        {"database_host": "dotmac pg local"},
+        {"database_host": "_dotmac_pg_local"},
+        {"database_host": "a" * 254},
+        {"database_host": ""},
+        {"database_host": None},
         {"database_port": True},
         {"database_port": 65536},
         {"extra": "unexpected"},
@@ -665,6 +682,23 @@ def test_independent_policy_rejects_broadened_scope(monkeypatch, tmp_path, chang
     monkeypatch.setattr(server, "trusted_file", lambda path: None)
     with pytest.raises(ValueError):
         server.load_policy()
+
+
+@pytest.mark.parametrize("host", ["db", "dotmac_pg_local", "a" + "_" * 252])
+def test_independent_policy_accepts_bounded_docker_hostname(
+    monkeypatch, tmp_path, host
+):
+    policy = {**POLICY, "database_host": host}
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(policy))
+    monkeypatch.setattr(server.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(server, "HELPER_PATH", Path(server.__file__))
+    monkeypatch.setattr(server, "POLICY_PATH", path)
+    monkeypatch.setattr(server, "trusted_file", lambda path: None)
+
+    loaded = server.load_policy()
+    assert loaded == policy
+    server.validate_dsn(DSN.replace("@db:", f"@{host}:"), loaded)
 
 
 @pytest.mark.parametrize("fault", ["owner", "writable", "symlink", "parent_file"])

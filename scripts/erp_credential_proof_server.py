@@ -356,7 +356,7 @@ def load_policy():
     ):
         raise ValueError("policy")
     if type(policy["database_host"]) is not str or not re.fullmatch(
-        r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}", policy["database_host"]
+        r"[A-Za-z0-9][A-Za-z0-9._-]{0,252}", policy["database_host"]
     ):
         raise ValueError("endpoint")
     if (
