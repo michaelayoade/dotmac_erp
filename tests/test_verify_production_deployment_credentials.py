@@ -337,7 +337,7 @@ class Connection:
         calls.append("close")
         if CLEANUP == "close": raise RuntimeError("sentinel-secret")
         if CLEANUP == "hang_close": __import__("signal").pause()
-conn = Connection()
+fake_connection = Connection()
 def connect(dsn, **kwargs):
     import os
     assert not any(key.startswith("PG") for key in os.environ)
@@ -345,11 +345,11 @@ def connect(dsn, **kwargs):
     assert dsn.startswith("postgresql://")
     assert kwargs == {"autocommit":False,"connect_timeout":5,"options":"-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000 -c idle_in_transaction_session_timeout=5000"}
     calls.append("connect")
-    return conn
+    return fake_connection
 sys.modules["psycopg"] = types.SimpleNamespace(connect=connect)
 sys.modules["psycopg.conninfo"] = types.SimpleNamespace(conninfo_to_dict=lambda dsn: {"user":"app_admin", "password":"sentinel-secret", "dbname":"dotmac_erp", "host":"db", "port":"5432"})
 def verify(c):
-    assert c is conn and c.read_only is True
+    assert c is fake_connection and c.read_only is True
     calls.append("verify")
     print("sentinel-secret")
     print("sentinel-secret", file=sys.stderr)
