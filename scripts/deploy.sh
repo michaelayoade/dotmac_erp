@@ -597,6 +597,30 @@ fi
 # From here a failure triggers an automatic rollback.
 trap 'echo "Deploy FAILED"; handle_deploy_failure; exit 1' ERR
 
+# All three application roles are mandatory, unprofiled services in the existing
+# production Compose topology and are explicitly recreated below. Use those
+# same service definitions: Compose owns their image, environment and mounts.
+# Bypass startup and dependencies; the candidate CLI is a read-only boot-material
+# check. Its output (including import/Compose errors) must never reach deploy logs.
+verify_candidate_deployment_secrets() {
+    local service
+    for service in app worker beat; do
+        if ! docker compose run --rm --no-deps -T --entrypoint python "$service" \
+            -m scripts.verify_deployment_secrets >/dev/null 2>&1
+        then
+            echo "DEPLOY STOPPED: candidate deployment secret check refused for ${service}." >&2
+            return 1
+        fi
+    done
+}
+
+# Candidate bytes have been selected and pulled; the installed image may predate
+# the CLI, so this check deliberately does not run before backup or image pull.
+echo "→ Preflight: candidate deployment secrets before migration..."
+if ! verify_candidate_deployment_secrets; then
+    exit 1
+fi
+
 # Step 3a: PREFLIGHT migration identity, role posture and ownership before DDL.
 #
 # `20260814_database_roles` fails closed when `app_admin`, `app_user` or
@@ -740,6 +764,20 @@ then
     echo "Migrations from step 3b have ALREADY been applied and are NOT rolled" >&2
     echo "back. Repair the runtime credential, or unset the module's" >&2
     echo "activation flag, then re-run deploy." >&2
+    if [[ "$forward_fix_only" == "1" ]]; then
+        handle_deploy_failure
+    fi
+    exit 1
+fi
+echo ""
+
+# Recheck the same role-bound candidate material immediately before replacement.
+# As with runtime admission, explicit refusal avoids the ERR trap's ordinary
+# rollback (which would start services). Migrations remain applied; the existing
+# forward-only standing is preserved in activation/forward-fix modes.
+echo "→ Preflight: candidate deployment secrets before service replacement..."
+if ! verify_candidate_deployment_secrets; then
+    echo "Migrations remain applied. Repair candidate material and re-run deploy." >&2
     if [[ "$forward_fix_only" == "1" ]]; then
         handle_deploy_failure
     fi

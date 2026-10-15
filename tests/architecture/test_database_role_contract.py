@@ -147,8 +147,8 @@ def compose_run_invocation(deploy: str, command: str) -> str:
 def test_the_two_deploy_verifiers_use_different_credentials() -> None:
     """The one deliberate asymmetry in `scripts/deploy.sh`, pinned.
 
-    Every other one-off in that script is handed `-e MIGRATION_DATABASE_URL`.
-    The admission step must NOT be: it exists to observe the runtime
+    Migration-executor one-offs are handed `-e MIGRATION_DATABASE_URL`.
+    Runtime admission and boot-material probes must NOT be: it exists to observe the runtime
     connection, and `app_admin` is BYPASSRLS by contract, so re-verifying it
     there would certify a role that can read past every tenant policy.
     """
@@ -236,7 +236,13 @@ def test_operator_migration_entrypoints_do_not_reuse_the_running_app() -> None:
 
     assert "-e MIGRATION_DATABASE_URL app" in deploy
     assert "docker compose run --rm -e MIGRATION_DATABASE_URL app" in makefile
-    assert "--entrypoint" not in deploy
+    # Migration operations retain the image's established startup behavior.
+    # The read-only secret probe deliberately bypasses application startup.
+    for command in (
+        "python scripts/bootstrap_database_roles.py --verify-only",
+        "alembic upgrade heads\n",
+    ):
+        assert "--entrypoint" not in compose_run_invocation(deploy, command)
     assert "--entrypoint" not in makefile
     assert "docker exec dotmac_erp_app alembic" not in makefile
 
