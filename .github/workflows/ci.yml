@@ -173,6 +173,9 @@ jobs:
           poetry run python -m scripts.product_manifest check
           --path deploy/product-manifest.json
 
+      - name: Verify installed native customer import canary
+        run: poetry run pytest tests/ifrs/import_export/test_native_customer_import.py -q --timeout=60
+
       - name: Run tests with coverage
         run: poetry run pytest tests/ --ignore=tests/integration --ignore=tests/e2e --cov=app --cov-report=xml --cov-report=term-missing -q --timeout=60
 

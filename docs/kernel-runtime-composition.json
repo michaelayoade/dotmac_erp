@@ -11,16 +11,16 @@
     {
       "id": "dependency-manifest",
       "source_path": "pyproject.toml",
-      "source_blob_sha256": "39bc895caa064ae7dde0f135f07b1e3cb7c09cf38a9f61d897138e5a66473fb9",
+      "source_blob_sha256": "be3b416f9d108ba9eac0886f94ddffe869f5a4f0ab3c8b9693f23278bde4668b",
       "selector": "whole-file.v1",
-      "extract_sha256": "39bc895caa064ae7dde0f135f07b1e3cb7c09cf38a9f61d897138e5a66473fb9"
+      "extract_sha256": "be3b416f9d108ba9eac0886f94ddffe869f5a4f0ab3c8b9693f23278bde4668b"
     },
     {
       "id": "dependency-lock",
       "source_path": "poetry.lock",
-      "source_blob_sha256": "2d57bf4b0640cdaa5837cb927ce7fcd388dda78f2014bd3fc421187a16afe03b",
+      "source_blob_sha256": "3c3d5dd1ec02e361cbe12431f3606d24dcff61c7ed2ec29d8f5e3546cfdf2037",
       "selector": "whole-file.v1",
-      "extract_sha256": "2d57bf4b0640cdaa5837cb927ce7fcd388dda78f2014bd3fc421187a16afe03b"
+      "extract_sha256": "3c3d5dd1ec02e361cbe12431f3606d24dcff61c7ed2ec29d8f5e3546cfdf2037"
     },
     {
       "id": "production-install",
