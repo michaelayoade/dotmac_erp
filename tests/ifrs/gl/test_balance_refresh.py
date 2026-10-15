@@ -100,7 +100,7 @@ def test_process_queue_sets_processed_and_counts_errors() -> None:
     db.scalars.return_value = _ScalarResult([q1, q2])
 
     service = BalanceRefreshService(db)
-    service._refresh_balance = MagicMock(side_effect=[1, RuntimeError("boom")])
+    service.refresh_balance = MagicMock(side_effect=[1, RuntimeError("boom")])
 
     results = service.process_queue(batch_size=10)
 
@@ -153,7 +153,7 @@ def test_refresh_balance_updates_existing_row() -> None:
         "app.services.finance.gl.balance_refresh.org_context_service.get_functional_currency",
         return_value="USD",
     ):
-        refreshed = BalanceRefreshService(db)._refresh_balance(
+        refreshed = BalanceRefreshService(db).refresh_balance(
             org_id, account_id, period_id
         )
 
@@ -167,3 +167,19 @@ def test_refresh_balance_updates_existing_row() -> None:
     assert existing.is_stale is False
     assert existing.stale_since is None
     assert existing.refresh_count == 4
+
+
+def test_refresh_balance_serializes_account_period_on_postgres() -> None:
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "postgresql"
+    db.execute.side_effect = [MagicMock(), _ExecuteResult([])]
+    db.scalars.return_value = _ScalarResult([])
+
+    with patch(
+        "app.services.finance.gl.balance_refresh.org_context_service.get_functional_currency",
+        return_value="USD",
+    ):
+        BalanceRefreshService(db).refresh_balance(uuid4(), uuid4(), uuid4())
+
+    lock_statement = str(db.execute.call_args_list[0].args[0])
+    assert "pg_advisory_xact_lock" in lock_statement
