@@ -297,6 +297,7 @@ class MockSettings:
     avatar_url_prefix = "/static/avatars"
     s3_connect_timeout_s = 3.0
     s3_read_timeout_s = 10.0
+    s3_max_pool_connections = 10
     brand_name = "Starter Template"
     brand_tagline = "FastAPI starter"
     brand_logo_url = None
