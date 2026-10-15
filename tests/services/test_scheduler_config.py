@@ -535,6 +535,35 @@ class TestBuildBeatSchedule:
         assert matching_records[0].levelno == logging.WARNING
 
     @patch("app.services.scheduler_config.SessionLocal")
+    def test_builtin_schedule_conflict_warns_once_while_it_persists(
+        self, mock_session_local, caplog
+    ):
+        mock_session = MagicMock()
+        mock_session_local.return_value = mock_session
+
+        task = MagicMock()
+        task.id = uuid.uuid4()
+        task.enabled = True
+        task.schedule_type = ScheduleType.interval
+        task.interval_seconds = 60
+        task.task_name = "app.tasks.analytics.refresh_cash_flow_metrics"
+        task.args_json = []
+        task.kwargs_json = {}
+        mock_session.scalars.return_value.all.return_value = [task]
+
+        build_beat_schedule()
+        build_beat_schedule()
+
+        matching_records = [
+            record
+            for record in caplog.records
+            if "Ignoring enabled database schedule for code-owned task"
+            in record.getMessage()
+            and str(task.id) in record.getMessage()
+        ]
+        assert len(matching_records) == 1
+
+    @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_enabled_only(self, mock_session_local):
         """Should only include enabled tasks."""
         mock_session = MagicMock()
