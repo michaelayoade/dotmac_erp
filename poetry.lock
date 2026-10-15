@@ -1113,14 +1113,14 @@ reference = "forgejo"
 
 [[package]]
 name = "dotmac-imports"
-version = "0.1.0a2"
+version = "0.2.0a1"
 description = "DotMac bulk-import run ledger, dry-run/apply promotion and column mapping"
 optional = false
 python-versions = ">=3.11,<3.14"
 groups = ["main"]
 files = [
-    {file = "dotmac_imports-0.1.0a2-py3-none-any.whl", hash = "sha256:cd4056426f300c001c784f3675704991f12ff3fc98174c17575bbaefda79200a"},
-    {file = "dotmac_imports-0.1.0a2.tar.gz", hash = "sha256:f1617a06fc206221109f514ab374d002174f2e42b7c95e4bb3d6e7e83f3d82fd"},
+    {file = "dotmac_imports-0.2.0a1-cp312-cp312-manylinux_2_35_x86_64.whl", hash = "sha256:2ca848468f74547a4b050f2c039ecaa2ea53458e880b3de09f3c4f55d9772b17"},
+    {file = "dotmac_imports-0.2.0a1.tar.gz", hash = "sha256:d1a260df6eefda44e5443aba8489f76a87db14c437134b59b3cd173e48c8e6a6"},
 ]
 
 [package.dependencies]
@@ -5196,4 +5196,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "ed00f9acb7e45ecd3190870d4ab4291be453b394bf6251d0910fd36232b48f75"
+content-hash = "d98ccd2522b076fdbb20a0b89f67c5c7e85aa37b07de9ec57577f09f5ed1ca4d"

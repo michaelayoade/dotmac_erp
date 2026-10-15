@@ -80,7 +80,7 @@ dotmac-files = {version = "0.1.0a5", source = "forgejo"}
 # owns only reusable mechanics and its independently composed `mod_imports`
 # lineage. The pin is released only after this first adopter proves the a2
 # contract against PostgreSQL.
-dotmac-imports = {version = "0.1.0a2", source = "forgejo"}
+dotmac-imports = {version = "0.2.0a1", source = "forgejo"}
 
 # Balanced general-ledger decisions and immutable posted-ledger evidence
 # (Starter ADR-0041). ERP is the product-first source and remains the LIVE
