@@ -188,15 +188,6 @@ def post_invoice(
 
     # Debit lines (expense/asset/inventory accounts)
     for inv_line in lines:
-        # Determine account using smart routing
-        account_id = determine_debit_account(db, org_id, inv_line, supplier)
-
-        if not account_id:
-            return APPostingResult(
-                success=False,
-                message=f"No expense account for line {inv_line.line_number}",
-            )
-
         tax_amount = inv_line.tax_amount or Decimal("0")
         tax_code = (
             db.get(TaxCode, inv_line.tax_code_id) if inv_line.tax_code_id else None
@@ -214,38 +205,46 @@ def post_invoice(
         )
         functional_amount = line_total * exchange_rate
 
-        # For standard invoice: debit expense
-        # For credit note: credit expense (negative amounts)
-        if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
-            # Credit note: credit the expense (reduce expense)
-            journal_lines.append(
-                JournalLineInput(
-                    account_id=account_id,
-                    debit_amount=Decimal("0"),
-                    credit_amount=abs(line_total),
-                    debit_amount_functional=Decimal("0"),
-                    credit_amount_functional=abs(functional_amount),
-                    description=f"AP Credit Note: {inv_line.description}",
-                    cost_center_id=inv_line.cost_center_id,
-                    project_id=inv_line.project_id,
-                    segment_id=inv_line.segment_id,
+        # Zero-value source lines carry no GL consequence. Skipping them also
+        # avoids emitting an invalid zero-debit/zero-credit journal line.
+        if line_total != Decimal("0"):
+            account_id = determine_debit_account(db, org_id, inv_line, supplier)
+            if not account_id:
+                return APPostingResult(
+                    success=False,
+                    message=f"No expense account for line {inv_line.line_number}",
                 )
-            )
-        else:
-            # Standard/Debit note: debit expense
-            journal_lines.append(
-                JournalLineInput(
-                    account_id=account_id,
-                    debit_amount=line_total,
-                    credit_amount=Decimal("0"),
-                    debit_amount_functional=functional_amount,
-                    credit_amount_functional=Decimal("0"),
-                    description=f"AP Invoice: {inv_line.description}",
-                    cost_center_id=inv_line.cost_center_id,
-                    project_id=inv_line.project_id,
-                    segment_id=inv_line.segment_id,
+
+            # For standard invoice: debit expense
+            # For credit note: credit expense (negative amounts)
+            if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=account_id,
+                        debit_amount=Decimal("0"),
+                        credit_amount=abs(line_total),
+                        debit_amount_functional=Decimal("0"),
+                        credit_amount_functional=abs(functional_amount),
+                        description=f"AP Credit Note: {inv_line.description}",
+                        cost_center_id=inv_line.cost_center_id,
+                        project_id=inv_line.project_id,
+                        segment_id=inv_line.segment_id,
+                    )
                 )
-            )
+            else:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=account_id,
+                        debit_amount=line_total,
+                        credit_amount=Decimal("0"),
+                        debit_amount_functional=functional_amount,
+                        credit_amount_functional=Decimal("0"),
+                        description=f"AP Invoice: {inv_line.description}",
+                        cost_center_id=inv_line.cost_center_id,
+                        project_id=inv_line.project_id,
+                        segment_id=inv_line.segment_id,
+                    )
+                )
 
         if not split_tax_from_expense or not tax_code:
             continue

@@ -260,6 +260,10 @@ class APInvoicePostingSaga(SagaOrchestrator):
         journal_lines: list[JournalLineInput] = []
 
         for inv_line in lines:
+            line_total = inv_line.line_amount + inv_line.tax_amount
+            if line_total == Decimal("0"):
+                continue
+
             # Determine debit account
             account_id = determine_debit_account(db, org_id, inv_line, supplier)
             if not account_id:
@@ -268,7 +272,6 @@ class APInvoicePostingSaga(SagaOrchestrator):
                     error=f"No expense account for line {inv_line.line_number}",
                 )
 
-            line_total = inv_line.line_amount + inv_line.tax_amount
             functional_amount = line_total * exchange_rate
 
             if invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE:
