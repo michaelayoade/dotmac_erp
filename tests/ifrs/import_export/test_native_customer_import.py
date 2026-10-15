@@ -10,6 +10,7 @@ import io
 import site
 from contextlib import ExitStack
 from importlib.machinery import ExtensionFileLoader
+from importlib.metadata import distribution
 from pathlib import Path
 from unittest.mock import patch
 from uuid import UUID
@@ -73,7 +74,16 @@ def test_customer_source_preparation_uses_installed_native_decoder(
     )
     assert any(origin.is_relative_to(root) for root in installed_roots), origin
     assert "site-packages" in origin.parts, origin
-    assert not origin.is_relative_to(Path(__file__).resolve().parents[3]), origin
+    # CI's virtualenv may live inside the checkout. Bind the compiled module
+    # to the installed wheel rather than rejecting that valid environment.
+    installed = distribution("dotmac-imports")
+    assert installed.version == "0.2.0a1"
+    assert installed.files is not None
+    assert any(
+        Path(installed.locate_file(member)).resolve() == origin
+        for member in installed.files
+        if member.parts[0] == "dotmac_imports" and member.name == origin.name
+    ), origin
 
     provider = _MemoryProvider()
     source = prepare_upload(
