@@ -168,6 +168,42 @@ accepted:
 - unbacked alert definitions are omitted rather than emitted as rules that no
   producer can satisfy.
 
+## Production runtime without OpenBao consumers
+
+The production descriptor omits runtime `OPENBAO_ADDR` and `OPENBAO_TOKEN`
+materials and the OpenBao runtime dependency. The 2026-10-14 read-only census
+of the installed `29201b3f` image (full revision retained in the census receipt) completed every
+catalog scope, including inactive organizations. It found zero reference prefixes
+in all settings and integration credential rows and the two scoped finance
+credential stores. Both finance organization columns passed the NOT NULL and
+exact validated organization-FK gates, with RLS retained. Effective app, worker
+and Beat environments contained no references. The effective JWT/TOTP boot
+materials and `DOTMAC_SUB_API_TOKEN` were literal-backed. This supports the measured known consumer graph, not a
+claim about every possible store or future feature.
+
+`deploy/profiles/production-runtime-no-openbao.yml` is the production-only
+Compose binding. It sets `OPENBAO_ADDR`, `OPENBAO_TOKEN`, `VAULT_ADDR` and
+`VAULT_TOKEN` to empty strings for app, worker and Beat. Explicit environment
+entries override stale `env_file` values and preserve the existing image and
+commands. This change prepares source; it does not record live activation.
+
+At the reviewed production activation, install this file as the ordinary
+`docker-compose.override.yml` beside the root Compose file. If that override
+already exists, stop and review a merge that preserves its existing settings;
+do not overwrite it. Confirm Compose will load the resulting override on all
+ordinary deploy invocations. Remove every assignment of the same four aliases
+from the operator-owned production `.env`, including duplicate assignments,
+using protected value-free editing; never display or log their values. Keep the
+controller's protected AppRole coordinate files outside runtime environment files.
+
+Staging keeps its configured values and authenticated OpenBao readiness checks.
+The base Compose file now gives all four aliases empty defaults, while explicit
+nonempty staging values remain effective. Before enabling a genuine runtime
+secret reference in production, provision its declared identity and permissions,
+remove the production unused-store binding, and verify authenticated readiness
+and the existing candidate material/reference gates before activation. Those
+gates remain fail closed; this profile adds no bypass.
+
 ## Why the rendered topology is not yet the runtime
 
 Moving the deploy path's IMAGE onto the rendered file is safe and done. Moving

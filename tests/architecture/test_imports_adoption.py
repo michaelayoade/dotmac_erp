@@ -85,7 +85,7 @@ def test_imports_is_an_exact_forgejo_pin() -> None:
     dependency = tomllib.loads(
         (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )["tool"]["poetry"]["dependencies"]["dotmac-imports"]
-    assert dependency == {"version": "0.1.0a2", "source": "forgejo"}
+    assert dependency == {"version": "0.2.0a1", "source": "forgejo"}
 
 
 def test_imports_lineage_is_composed_at_its_pinned_head() -> None:

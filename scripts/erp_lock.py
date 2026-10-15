@@ -1,9 +1,9 @@
 """The refusals `.github/workflows/erp-lock.yml` needs, out of the YAML.
 
-ERP's pending one-shot movement is `dotmac-files` 0.1.0a4 -> 0.1.0a5.
-`dotmac-tax` stays at 0.1.0a4, and its lock entry is immutable under the
-whole-lock drift check. Once the resolved pair is applied, a re-dispatch
-against that tree fails the old-version check. Both packages use the same
+ERP's pending one-shot movement is `dotmac-imports` 0.1.0a2 -> 0.2.0a1.
+`dotmac-files` stays at 0.1.0a5 and `dotmac-tax` at 0.1.0a4; their entries are
+immutable under the whole-lock drift check. Once the resolved pair is applied, a re-dispatch
+against that tree fails the old-version check. All three packages use the same
 PRIVATE Forgejo index that
 `dotmac_vendor_control_plane`'s `kernel-lock.yml` / `scripts/kernel_lock.py`
 resolve `dotmac-kernel` against, and a lock entry for a privately-published
@@ -18,7 +18,7 @@ have refused outright (see
 ## The closed allowlist of movements
 
 `ALLOWED_MOVEMENTS` names exactly one move. A caller cannot ask this module to
-move `dotmac-tax`, move `dotmac-files` to another version, or move a third
+move `dotmac-tax`, move `dotmac-imports` to another version, or move a third
 package at all. Extending the allowlist is a reviewed edit to this file,
 not a workflow input.
 
@@ -38,7 +38,7 @@ and every other off-index form is refused exactly as upstream refuses it.
 
 ## The subjects
 
-* `set-versions` — move the files pin in the manifest, refusing unless the ref's
+* `set-versions` — move the imports pin in the manifest, refusing unless the ref's
   OWN tree declares the exact allowed OLD version, exactly
   once, and refusing again unless the rewrite lands on the exact allowed NEW
   version, exactly once — enumerated across every dependency surface Poetry
@@ -96,22 +96,23 @@ import dependency_normalisation
 #: never a workflow input. After this move is applied, a re-dispatch fails
 #: the refusal check against the currently declared version by design.
 ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {
-    "dotmac-files": ("0.1.0a4", "0.1.0a5"),
+    "dotmac-imports": ("0.1.0a2", "0.2.0a1"),
 }
 
-#: Private pin that must stay at this version throughout this one-shot move.
-IMMUTABLE_PINS = {"dotmac-tax": "0.1.0a4"}
+#: Private pins frozen throughout this one-shot move.
+IMMUTABLE_PINS = {"dotmac-files": "0.1.0a5", "dotmac-tax": "0.1.0a4"}
 
-#: The released wheel's digest, reviewed independently of the index this run
-#: reads. Starter's merged release verification record at d74bf8dd names
-#: `dotmac-files-v0.1.0a5` (peeled 895ce0e4) and verification run
-#: 36558827348. A runtime index replacement must fail before resolve sees it.
+#: Verified native wheel, pinned independently of the index response. Starter
+#: release run 38726218479 installed the published bytes and registered ERP's
+#: composition before creating annotated tag e850ff3bef530db272dccae44b15e51e4c390aaf,
+#: peeled to 008ccaeaebda6855ba34b8e70740e3859954a37b. Its canonical
+#: ModuleReleaseTagEvidence.v1 supplies this exact filename and SHA-256.
 RELEASED_WHEEL_DIGESTS = {
     (
-        "dotmac-files",
-        "0.1.0a5",
-        "dotmac_files-0.1.0a5-py3-none-any.whl",
-    ): "e6b0a4aa4cdaed5bdeff9aeb3b948e26db287aae18e118afaf759e6d5211a7c7",
+        "dotmac-imports",
+        "0.2.0a1",
+        "dotmac_imports-0.2.0a1-cp312-cp312-manylinux_2_35_x86_64.whl",
+    ): "2ca848468f74547a4b050f2c039ecaa2ea53458e880b3de09f3c4f55d9772b17",
 }
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
@@ -147,7 +148,7 @@ CREDENTIAL_ENV = "FORGEJO_CREDENTIAL"
 #: `version`,
 #: `files` and `dependencies` — `dependencies` ONLY because a version move can
 #: legitimately shift the moved package's own floor on a transitive
-#: dependency (e.g. a new `dotmac-files` release raising its `dotmac-kernel`
+#: dependency (e.g. a new `dotmac-imports` release raising its `dotmac-kernel`
 #: floor), and that permitted freedom is bounded elsewhere, by
 #: `wheel_dependency_problems`, against the acquired wheel's own
 #: `Requires-Dist` — never left unchecked. `source`, `extras`, `optional`,
@@ -750,7 +751,7 @@ def manifest_problems(
     """Everything about this manifest that would misdirect the credential.
 
     `target_versions` is the NEW version expected for each moved package,
-    e.g. `{"dotmac-files": "0.1.0a5"}`.
+    e.g. `{"dotmac-imports": "0.2.0a1"}`.
     """
 
     problems: list[str] = []
@@ -1034,7 +1035,18 @@ def acquisition_plan(
 
 def artifact_names(package: str, version: str) -> set[str]:
     stem = package.replace("-", "_")
-    return {f"{stem}-{version}-py3-none-any.whl", f"{stem}-{version}.tar.gz"}
+    wheels = {
+        filename
+        for (name, release, filename) in RELEASED_WHEEL_DIGESTS
+        if name == package and release == version
+    }
+    if len(wheels) != 1 or not all(
+        artifact_belongs_to(filename, package, version)
+        and _WHEEL_FILENAME.fullmatch(filename)
+        for filename in wheels
+    ):
+        raise Refusal(f"expected exactly one reviewed wheel for {package} {version}")
+    return wheels | {f"{stem}-{version}.tar.gz"}
 
 
 # ── bounding `dependencies` to the wheel's own metadata, no credential ──────
@@ -1131,6 +1143,10 @@ def wheel_dependency_problems(
 # from unchanged: the predicate is a property of Poetry 2.4.1's
 # `HTTPRepository._get_info_from_links`, not of ERP, and the pinned version is
 # the same one.
+# Any parseable wheel supplies metadata, including a cp312 native wheel on
+# another platform: this is a metadata gate, not a runtime compatibility gate.
+# Keeping the sdist alongside it does not cause Poetry to execute its backend.
+# ERP retains Python >=3.11,<3.13; source installs require Rust 1.90.
 
 _WHEEL_FILENAME = re.compile(
     r"^(?P<namever>(?P<name>.+?)-(?P<ver>\d[^-]*))"

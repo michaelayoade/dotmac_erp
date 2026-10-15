@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "container": "dotmac_erp_app",
+  "image_repository": "ghcr.io/michaelayoade/dotmac_erp",
+  "database": "dotmac_erp",
+  "authentication": "scram-sha-256:app_admin",
+  "database_host": "<VERIFIED_APPLICATION_PATH_DATABASE_ENDPOINT>",
+  "database_port": 5432
+}

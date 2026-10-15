@@ -68,7 +68,8 @@ REASONS = {
     ".dotmac/standards-profile.json": (
         "Public integrity identifiers: the pinned governance commit (hard "
         "rule 15) and schema-9 conservation fingerprints, including the new "
-        "permanent-SMTP-refusal test fingerprint. These are hex by definition; "
+        "permanent-SMTP-refusal and authenticated OpenBao readiness retry test "
+        "fingerprints. These are hex by definition; "
         "none authenticates an actor or grants access."
     ),
     ".github/dependency-bundle-policy.json": (
@@ -169,25 +170,30 @@ def test_the_suppression_count_only_shrinks() -> None:
     fingerprint for its permanent SMTP refusal test, bringing the reviewed
     suppression total to 30.
 
+    The authenticated OpenBao readiness retry test adds one public schema-9
+    conservation fingerprint, derived by the pinned Governance verifier and
+    recorded in the connector ledger. It grants no access and brings the
+    reviewed suppression total to 31. No detector filter is widened.
+
     The v3 composition record no longer consumes a baseline slot: it is a
     closed digest-only envelope whose SHA-pinned verifier independently
     derives every public hash and refuses unknown fields. Scanning those
     expected digests with an entropy heuristic would add eleven findings
     without increasing secret coverage.
 
-    Every entry above the reviewed 30 would be unexplained, and the reason
+    Every entry above the reviewed 31 would be unexplained, and the reason
     check above only fires per FILE â€” a new finding in an already-listed
     file would otherwise slip in silently, which is exactly the shape this
     one had. The bound below is `==`, not `<=`: per ADR-0018 a ratchet is
-    two-directional, and an UNEXPLAINED drop below 30 (a finding quietly
+    two-directional, and an UNEXPLAINED drop below 31 (a finding quietly
     disappearing without its `REASONS` entry being removed by
     `test_no_reason_outlives_its_finding`, or a finding merging into another
     file's count) is exactly as worth surfacing as a rise -- either way,
     someone must look at this docstring and correct it in the same change.
     """
     total = sum(len(v) for v in _baseline()["results"].values())
-    assert total == 30, (
-        f"{total} suppressed findings, expected exactly 30. A rise means fix "
+    assert total == 31, (
+        f"{total} suppressed findings, expected exactly 31. A rise means fix "
         "the finding or explain and pin the new total here; a drop means "
         "correct this docstring's accounting and lower the pin in the same "
         "change -- never leave a stale number unexamined either direction."

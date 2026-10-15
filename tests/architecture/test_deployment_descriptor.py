@@ -42,7 +42,6 @@ from dotmac_kernel.prerequisites import (
 
 from app.migration_bindings import ASSEMBLY_PREREQUISITE_BINDINGS
 from app.migration_planes import ASSEMBLY_MODULE_PLANES
-from scripts.product_manifest import product_manifest_digest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DESCRIPTOR_PATH = REPO_ROOT / "deploy" / "product.toml"
@@ -62,6 +61,11 @@ FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
 IMAGE_SOURCE_REVISION = "95ecb053053cbbb3f90a7252a798c43652722594"
 IMAGE_DIGEST = "sha256:002e036234daff0aa2a67dfa982637a6ad734342a1acfffe28ebaf6d9bb38cfc"
+# SHA-256 of deploy/product-manifest.json at IMAGE_SOURCE_REVISION. This
+# published assembly remains fixed when the next candidate's manifest changes.
+IMAGE_MANIFEST_DIGEST = (
+    "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6"
+)
 
 #: The migration owner material, named explicitly here as a SECOND line of
 #: defence beside spec.py's own parse-time refusal (D3: dotmac_erp's
@@ -120,10 +124,10 @@ def test_descriptor_parses() -> None:
     assert len(spec.roles) >= 1
 
 
-def test_descriptor_binds_the_canonical_product_manifest() -> None:
+def test_descriptor_binds_the_published_image_manifest() -> None:
     spec = _load()
     assert spec.manifest_path == "deploy/product-manifest.json"
-    assert spec.manifest_digest == product_manifest_digest()
+    assert spec.manifest_digest == IMAGE_MANIFEST_DIGEST
 
 
 def test_descriptor_heads_match_the_composed_alembic_graph() -> None:
@@ -168,7 +172,7 @@ def test_descriptor_matches_committed_publication_evidence() -> None:
         "schema": "dotmac.image-release.v2",
         "digest": IMAGE_DIGEST,
         "git_sha": IMAGE_SOURCE_REVISION,
-        "manifest_digest": product_manifest_digest(),
+        "manifest_digest": IMAGE_MANIFEST_DIGEST,
         "reference": f"{IMAGE_REPOSITORY}@{IMAGE_DIGEST}",
     }
     assert evidence["git_sha"] == spec.source_revision

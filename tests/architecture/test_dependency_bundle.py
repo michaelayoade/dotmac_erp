@@ -4106,7 +4106,7 @@ def test_lock_packages_is_stricter_than_erp_locks_acquisition_plan() -> None:
         "package": [
             {
                 "name": "dotmac-files",
-                "version": "0.1.0a4",
+                "version": "0.1.0a5",
                 "source": {
                     "type": "legacy",
                     "reference": "forgejo",
@@ -4116,6 +4116,15 @@ def test_lock_packages_is_stricter_than_erp_locks_acquisition_plan() -> None:
             {
                 "name": "dotmac-tax",
                 "version": "0.1.0a4",
+                "source": {
+                    "type": "legacy",
+                    "reference": "forgejo",
+                    "url": erp_lock.LOCK_INDEX_URL,
+                },
+            },
+            {
+                "name": "dotmac-imports",
+                "version": "0.1.0a2",
                 "source": {
                     "type": "legacy",
                     "reference": "forgejo",
@@ -4137,9 +4146,7 @@ def test_lock_packages_is_stricter_than_erp_locks_acquisition_plan() -> None:
         db._lock_packages(lock)
 
     manifest = {"tool": {"poetry": {"dependencies": {}}}}
-    plan = erp_lock.acquisition_plan(
-        manifest, lock, {"dotmac-files": "0.1.0a4", "dotmac-tax": "0.1.0a4"}
-    )
+    plan = erp_lock.acquisition_plan(manifest, lock, {"dotmac-imports": "0.2.0a1"})
     assert plan.get("dotmac-kernel") == "0.1.0a1", (
         "erp_lock's acquisition_plan silently trusts the mismatched entry "
         "-- this is the tracked gap, not an assertion that it should"

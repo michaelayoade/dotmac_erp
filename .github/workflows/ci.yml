@@ -173,6 +173,9 @@ jobs:
           poetry run python -m scripts.product_manifest check
           --path deploy/product-manifest.json
 
+      - name: Verify installed native customer import canary
+        run: poetry run pytest tests/ifrs/import_export/test_native_customer_import.py -q --timeout=60
+
       - name: Run tests with coverage
         run: poetry run pytest tests/ --ignore=tests/integration --ignore=tests/e2e --cov=app --cov-report=xml --cov-report=term-missing -q --timeout=60
 
@@ -328,6 +331,9 @@ jobs:
           cache-to: type=gha,mode=max
           secrets: |
             forgejo_token=${{ secrets.FORGEJO_READ_TOKEN }}
+
+      - name: Verify credential proof with native Docker projection
+        run: python tests/native/test_erp_credential_proof_projection.py --image dotmac-erp:ci
 
       - name: Verify tested image provenance labels
         env:
