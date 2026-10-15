@@ -12,6 +12,10 @@ from app.models.scheduler import ScheduledTask, ScheduleType
 
 logger = logging.getLogger(__name__)
 
+# Celery Beat rebuilds the schedule frequently. Keep configuration drift
+# visible, but do not emit the same warning on every refresh cycle.
+_reported_builtin_schedule_conflicts: set[tuple[str, str]] = set()
+
 
 def _is_mock_like(value: object) -> bool:
     return type(value).__module__.startswith("unittest.mock")
@@ -488,6 +492,7 @@ def builtin_beat_task_names() -> frozenset[str]:
 def build_beat_schedule() -> dict:
     schedule: dict[str, dict] = _builtin_beat_schedule()
     builtin_tasks = builtin_beat_task_names()
+    current_builtin_conflicts: set[tuple[str, str]] = set()
     session = SessionLocal()
     try:
         tasks = list(
@@ -518,12 +523,15 @@ def build_beat_schedule() -> dict:
                 # is ignored because application code owns the schedule. It
                 # is actionable configuration drift, not an application
                 # failure, so keep it visible without reporting it as ERROR.
-                logger.warning(
-                    "Ignoring enabled database schedule for code-owned task "
-                    "task_name=%s task_id=%s",
-                    task.task_name,
-                    task.id,
-                )
+                conflict = (str(task.id), task.task_name)
+                current_builtin_conflicts.add(conflict)
+                if conflict not in _reported_builtin_schedule_conflicts:
+                    logger.warning(
+                        "Ignoring enabled database schedule for code-owned task "
+                        "task_name=%s task_id=%s",
+                        task.task_name,
+                        task.id,
+                    )
                 continue
 
             schedule[f"scheduled_task_{task.id}"] = {
@@ -532,6 +540,10 @@ def build_beat_schedule() -> dict:
                 "args": task.args_json or [],
                 "kwargs": task.kwargs_json or {},
             }
+        _reported_builtin_schedule_conflicts.intersection_update(
+            current_builtin_conflicts
+        )
+        _reported_builtin_schedule_conflicts.update(current_builtin_conflicts)
     except Exception:
         logger.exception("Failed to build Celery beat schedule.")
     finally:
