@@ -283,14 +283,11 @@ def test_failed_line_rollback_leaves_no_partial_balance(
     fiscal_period,
     gl_account,
 ) -> None:
-    """CANARY: one failed line prevents whole-event success.
+    """CANARY: rollback removes an additive balance mutation.
 
-    The rewritten ``handle_ledger_posting_completed`` re-raises per-line
-    failures (unit-covered in tests/tasks/test_outbox_relay.py); the relay
-    then rolls back the whole delivery transaction. This proves the DB half:
-    the rollback removes every balance row the event had already applied,
-    so an unrecorded partial application cannot survive to be re-applied
-    (which would double-count, per the test above).
+    The relay now uses authoritative refreshes, but this proves that any
+    remaining caller of the legacy additive writer still gets transaction
+    rollback semantics.
     """
     from app.models.finance.gl.account_balance import AccountBalance
     from app.services.finance.gl.account_balance import AccountBalanceService
