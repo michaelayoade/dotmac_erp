@@ -104,8 +104,12 @@ def test_customer_source_preparation_uses_installed_native_decoder(
             ).encode(),
         ),
     )
-    monkeypatch.setattr(durable_customers.settings, "import_partition_rows", 1)
-    monkeypatch.setattr(durable_customers.settings, "import_partition_max_bytes", 4096)
+    monkeypatch.setattr(
+        durable_customers.settings, "import_partition_rows", 1, raising=False
+    )
+    monkeypatch.setattr(
+        durable_customers.settings, "import_partition_max_bytes", 4096, raising=False
+    )
     previews = []
     real_preview = durable_customers.preview
 
