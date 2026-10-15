@@ -140,6 +140,7 @@ class Settings:
     s3_region: str = os.getenv("S3_REGION", "us-east-1")
     s3_connect_timeout_s: float = float(os.getenv("S3_CONNECT_TIMEOUT_S", "3.0"))
     s3_read_timeout_s: float = float(os.getenv("S3_READ_TIMEOUT_S", "10.0"))
+    s3_max_pool_connections: int = int(os.getenv("S3_MAX_POOL_CONNECTIONS", "10"))
 
     # Durable bulk imports.  Files spool to disk before the dotmac-files
     # provider streams them, so this ceiling is an admission limit rather than

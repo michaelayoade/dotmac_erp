@@ -73,6 +73,7 @@ def _get_client() -> Minio:
                 read=settings.s3_read_timeout_s,
             ),
             retries=False,
+            maxsize=settings.s3_max_pool_connections,
         )
 
         _client = Minio(
