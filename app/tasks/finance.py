@@ -1708,9 +1708,9 @@ def rebuild_account_balances() -> dict[str, Any]:
     """
     Safety-net: rebuild all account balances from posted_ledger_line.
 
-    The primary balance update mechanism is event-driven (outbox_relay.py
-    handles ledger.posting.completed → AccountBalanceService.update_balance_for_posting).
-    This daily task catches any missed events by recalculating balances for
+    The primary balance update mechanism is the authoritative refresh queue;
+    the outbox relay uses the same refresh writer for low-latency updates.
+    This daily task catches any missed refreshes by recalculating balances for
     all open fiscal periods across all active organizations.
 
     Returns:

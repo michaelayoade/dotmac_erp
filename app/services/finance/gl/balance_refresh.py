@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account_balance import AccountBalance, BalanceType
@@ -51,7 +51,7 @@ class BalanceRefreshService:
         now = datetime.now(UTC)
         for entry in pending:
             try:
-                self._refresh_balance(
+                self.refresh_balance(
                     organization_id=entry.organization_id,
                     account_id=entry.account_id,
                     fiscal_period_id=entry.fiscal_period_id,
@@ -70,17 +70,34 @@ class BalanceRefreshService:
         self.db.flush()
         return results
 
-    def _refresh_balance(
+    def refresh_balance(
         self,
         organization_id: UUID,
         account_id: UUID,
         fiscal_period_id: UUID,
     ) -> int:
-        """Refresh all dimensioned balances for one account + period."""
+        """Authoritatively refresh all dimensions for one account + period.
+
+        The account/period lock serializes the queue worker and outbox relay.
+        Without it, an older snapshot can overwrite a newer refresh that
+        finishes first.
+        """
         org_id = coerce_uuid(organization_id)
         acct_id = coerce_uuid(account_id)
         period_id = coerce_uuid(fiscal_period_id)
         now = datetime.now(UTC)
+
+        if self.db.get_bind().dialect.name == "postgresql":
+            lock_identity = ":".join(
+                ("gl.balance_refresh", str(org_id), str(acct_id), str(period_id))
+            )
+            self.db.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(:lock_identity, 0))"
+                ),
+                {"lock_identity": lock_identity},
+            )
+
         currency_code = org_context_service.get_functional_currency(self.db, org_id)
 
         grouped = self.db.execute(
