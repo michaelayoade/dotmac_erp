@@ -504,6 +504,62 @@ class TestPostInvoice:
 
     @patch("app.services.finance.posting.base.JournalService")
     @patch("app.services.finance.posting.base.LedgerPostingService")
+    def test_post_invoice_skips_zero_value_source_lines(
+        self,
+        mock_ledger_service,
+        mock_journal_service,
+        mock_db,
+        organization_id,
+        user_id,
+        mock_invoice,
+        mock_supplier,
+    ):
+        """Zero-value source rows must not become invalid GL lines."""
+        mock_invoice.supplier_id = mock_supplier.supplier_id
+        zero_line = MockSupplierInvoiceLine(
+            invoice_id=mock_invoice.invoice_id,
+            line_number=1,
+            description="Zero-value source row",
+            line_amount=Decimal("0"),
+            tax_amount=Decimal("0"),
+            expense_account_id=None,
+        )
+        expense_line = MockSupplierInvoiceLine(
+            invoice_id=mock_invoice.invoice_id,
+            line_number=2,
+            line_amount=Decimal("1000.00"),
+        )
+
+        def get_side_effect(_model, record_id):
+            if record_id == mock_invoice.invoice_id:
+                return mock_invoice
+            if record_id == mock_supplier.supplier_id:
+                return mock_supplier
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+        mock_db.scalars.return_value.all.return_value = [zero_line, expense_line]
+        mock_journal_service.create_journal.return_value = MockJournal()
+        mock_ledger_service.post_journal_entry.return_value = MockPostingResult()
+
+        result = APPostingAdapter.post_invoice(
+            db=mock_db,
+            organization_id=organization_id,
+            invoice_id=mock_invoice.invoice_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is True
+        journal_input = mock_journal_service.create_journal.call_args.args[2]
+        assert len(journal_input.lines) == 2
+        assert all(
+            line.debit_amount != Decimal("0") or line.credit_amount != Decimal("0")
+            for line in journal_input.lines
+        )
+
+    @patch("app.services.finance.posting.base.JournalService")
+    @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_invoice_keeps_wht_out_of_gl_until_payment(
         self,
         mock_ledger_service,
