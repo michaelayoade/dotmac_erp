@@ -50,6 +50,19 @@ def svc(mock_minio_client):
     return service
 
 
+def test_client_uses_configured_connection_pool_size() -> None:
+    with (
+        patch("minio.Minio") as minio_cls,
+        patch.object(storage_mod.urllib3, "PoolManager") as pool_manager,
+    ):
+        storage_mod._get_client()
+
+    assert pool_manager.call_args.kwargs["maxsize"] == (
+        storage_mod.settings.s3_max_pool_connections
+    )
+    assert minio_cls.call_args.kwargs["http_client"] is pool_manager.return_value
+
+
 class TestUpload:
     def test_upload_puts_object(self, svc, mock_minio_client):
         with patch.object(storage_mod, "_get_client", return_value=mock_minio_client):
