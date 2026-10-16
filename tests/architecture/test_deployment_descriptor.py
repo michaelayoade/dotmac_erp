@@ -580,6 +580,18 @@ def _compose_service(name: str) -> dict:
     return compose["services"][name]
 
 
+def _compose_environment(name: str) -> dict[str, str]:
+    environment = _compose_service(name).get("environment") or {}
+    if isinstance(environment, dict):
+        return {str(key): str(value) for key, value in environment.items()}
+    return {
+        str(item).split("=", 1)[0]: str(item).split("=", 1)[1]
+        if "=" in str(item)
+        else ""
+        for item in environment
+    }
+
+
 def test_app_published_port_gap_is_pinned_not_silently_duplicated() -> None:
     """8002-vs-8003 resolved by evidence, not by picking the nicer number.
 
@@ -611,7 +623,7 @@ def test_app_published_port_gap_is_pinned_not_silently_duplicated() -> None:
 def test_descriptor_literal_env_matches_compose_knobs() -> None:
     """Real Compose tunables are carried; insecure hardcodes stay excluded."""
     spec = _load()
-    app_env = _compose_service("app")["environment"]
+    app_env = _compose_environment("app")
     for name in (
         "APP_URL",
         "DEFAULT_ORGANIZATION_ID",
@@ -628,7 +640,7 @@ def test_descriptor_literal_env_matches_compose_knobs() -> None:
         assert "CSP_ALLOW_UNSAFE" not in role.environment
         assert "MIGRATION_DATABASE_URL" not in role.environment
 
-    worker_env = _compose_service("worker")["environment"]
+    worker_env = _compose_environment("worker")
     assert spec.role("worker").environment["WORKER_METRICS_PORT"] == str(
         worker_env["WORKER_METRICS_PORT"]
     )
