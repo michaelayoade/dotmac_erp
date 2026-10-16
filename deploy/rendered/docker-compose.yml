@@ -103,9 +103,16 @@ services:
       S3_ACCESS_KEY: "${S3_ACCESS_KEY:?S3_ACCESS_KEY must be set}"
       S3_ENDPOINT_URL: "${S3_ENDPOINT_URL:?S3_ENDPOINT_URL must be set}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:?S3_SECRET_KEY must be set}"
+      APP_URL: "https://erp.dotmac.io"
       BANKING_AUTO_MATCH_ENABLED: "false"
+      DEFAULT_ORGANIZATION_ID: 00000000-0000-0000-0000-000000000001
+      GUNICORN_WORKERS: "4"
+      PROMETHEUS_MULTIPROC_DIR: /tmp/dotmac-erp-prometheus
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONPYCACHEPREFIX: /tmp/pycache
       PYTHONUNBUFFERED: "1"
       S3_BUCKET_NAME: dotmac-erp
+      TRUSTED_PROXY_IPS: "172.16.0.0/12,127.0.0.1"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -204,12 +211,9 @@ services:
   worker:
     image: "ghcr.io/michaelayoade/dotmac_erp@sha256:002e036234daff0aa2a67dfa982637a6ad734342a1acfffe28ebaf6d9bb38cfc"
     command:
-      - celery
-      - -A
-      - app.celery_app
-      - worker
-      - -l
-      - info
+      - python
+      - -m
+      - app.celery_worker_entrypoint
     environment:
       CELERY_BROKER_URL: "${CELERY_BROKER_URL:?CELERY_BROKER_URL must be set}"
       CELERY_RESULT_BACKEND: "${CELERY_RESULT_BACKEND:?CELERY_RESULT_BACKEND must be set}"
@@ -220,8 +224,10 @@ services:
       S3_ENDPOINT_URL: "${S3_ENDPOINT_URL:?S3_ENDPOINT_URL must be set}"
       S3_SECRET_KEY: "${S3_SECRET_KEY:?S3_SECRET_KEY must be set}"
       BANKING_AUTO_MATCH_ENABLED: "false"
+      PROMETHEUS_MULTIPROC_DIR: /tmp/dotmac-erp-prometheus
       PYTHONUNBUFFERED: "1"
       S3_BUCKET_NAME: dotmac-erp
+      WORKER_METRICS_PORT: "8004"
     depends_on:
       migrate:
         condition: service_completed_successfully
