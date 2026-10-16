@@ -633,7 +633,7 @@ def test_descriptor_literal_env_matches_compose_knobs() -> None:
         "PROMETHEUS_MULTIPROC_DIR",
         "TRUSTED_PROXY_IPS",
     ):
-        assert spec.role("app").environment[name] == str(app_env[name]), name
+        assert dict(spec.role("app").environment)[name] == str(app_env[name]), name
     # D4 hardcodes stay out of every role (existing descriptor decision).
     for role in spec.roles:
         assert "OPENBAO_ALLOW_INSECURE" not in role.environment
@@ -641,10 +641,10 @@ def test_descriptor_literal_env_matches_compose_knobs() -> None:
         assert "MIGRATION_DATABASE_URL" not in role.environment
 
     worker_env = _compose_environment("worker")
-    assert spec.role("worker").environment["WORKER_METRICS_PORT"] == str(
+    assert dict(spec.role("worker").environment)["WORKER_METRICS_PORT"] == str(
         worker_env["WORKER_METRICS_PORT"]
     )
-    assert spec.role("worker").environment["PROMETHEUS_MULTIPROC_DIR"] == str(
+    assert dict(spec.role("worker").environment)["PROMETHEUS_MULTIPROC_DIR"] == str(
         worker_env["PROMETHEUS_MULTIPROC_DIR"]
     )
 
