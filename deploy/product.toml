@@ -168,6 +168,13 @@ materials = [
 PYTHONUNBUFFERED = "1"
 S3_BUCKET_NAME = "dotmac-erp"
 BANKING_AUTO_MATCH_ENABLED = "false"
+APP_URL = "https://erp.dotmac.io"
+DEFAULT_ORGANIZATION_ID = "00000000-0000-0000-0000-000000000001"
+GUNICORN_WORKERS = "4"
+PYTHONDONTWRITEBYTECODE = "1"
+PYTHONPYCACHEPREFIX = "/tmp/pycache"
+PROMETHEUS_MULTIPROC_DIR = "/tmp/dotmac-erp-prometheus"
+TRUSTED_PROXY_IPS = "172.16.0.0/12,127.0.0.1"
 
 [roles.resources]
 # NOT sourced from ERP: docker-compose.yml declares no `deploy.resources`
@@ -231,13 +238,12 @@ code = "worker"
 depends_on = ["redis"]
 # No `/app/entrypoint-monitoring.sh` prefix — see the `app` role above for
 # why the retired boot-time installer had to leave every role at once.
+# The Compose worker command verbatim: the entrypoint module owns worker
+# metrics/process setup around the same Celery app the ping below probes.
 command = [
-    "celery",
-    "-A",
-    "app.celery_app",
-    "worker",
-    "-l",
-    "info",
+    "python",
+    "-m",
+    "app.celery_worker_entrypoint",
 ]
 replicas = 1
 stop_grace_seconds = 120
@@ -261,6 +267,8 @@ materials = [
 PYTHONUNBUFFERED = "1"
 S3_BUCKET_NAME = "dotmac-erp"
 BANKING_AUTO_MATCH_ENABLED = "false"
+WORKER_METRICS_PORT = "8004"
+PROMETHEUS_MULTIPROC_DIR = "/tmp/dotmac-erp-prometheus"
 
 [roles.resources]
 # Same "not sourced from ERP" caveat as the app role above — no resource
@@ -617,6 +625,16 @@ cpus = "0.5"
 # cannot collide with another product's Redis on a shared host.
 container = 6379
 host = 6382
+
+[[external_dependencies]]
+# The profile-gated promtail/vmagent Compose services stay host concerns
+# (host config trees, Docker socket); the endpoint they ship to is the
+# product dependency and is declared here so a rendered topology cannot
+# silently drop metrics shipping.
+code = "victoriametrics"
+kind = "other"
+required_for = ["ready"]
+material = "VM_REMOTE_WRITE_URL"
 
 [[external_dependencies]]
 code = "object_store"
