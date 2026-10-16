@@ -24,6 +24,7 @@ from pathlib import Path
 import tomllib
 
 import pytest
+import yaml
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
@@ -570,6 +571,103 @@ def test_the_image_reachability_detector_fires_on_an_uncopied_script() -> None:
     copied = _scripts_copied_into_the_runtime_image(_dockerfile_text())
     assert invoked == {"scripts/not_copied_anywhere.py"}
     assert invoked - copied == {"scripts/not_copied_anywhere.py"}
+
+
+def _compose_service(name: str) -> dict:
+    compose = yaml.safe_load(
+        (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    )
+    return compose["services"][name]
+
+
+def _compose_environment(name: str) -> dict[str, str]:
+    environment = _compose_service(name).get("environment") or {}
+    if isinstance(environment, dict):
+        return {str(key): str(value) for key, value in environment.items()}
+    return {
+        str(item).split("=", 1)[0]: str(item).split("=", 1)[1]
+        if "=" in str(item)
+        else ""
+        for item in environment
+    }
+
+
+def test_app_published_port_gap_is_pinned_not_silently_duplicated() -> None:
+    """8002-vs-8003 resolved by evidence, not by picking the nicer number.
+
+    Container port 8002 is the application listener in BOTH files, and the
+    descriptor's ingress route correctly targets it. The live host
+    publication is 8003 on both loopback families (the DOCKER-USER/firewall
+    and nginx upstream facts in docker-compose.yml's header comment and
+    deploy/README.md). The a2 renderer derives published ports from ingress
+    routes as host==container, so declaring an extra [[roles.ports]] 8003
+    mapping double-publishes 8002 AND 8003 (proven by rendering); the honest
+    parity state is therefore: no explicit app port, route port 8002, and the
+    8003 host mapping recorded as a cutover gap requiring the vhost/firewall
+    change, exactly as deploy/README.md enumerates.
+    """
+    spec = _load()
+    app = spec.role("app")
+    assert app.ports == ()
+    assert [route.port for route in spec.ingress.routes if route.role == "app"] == [
+        8002
+    ]
+
+    compose_ports = _compose_service("app")["ports"]
+    assert {(row["target"], int(row["published"])) for row in compose_ports} == {
+        (8002, 8003)
+    }
+    assert "8003" in DEPLOYMENT_README_PATH.read_text(encoding="utf-8")
+
+
+def test_descriptor_literal_env_matches_compose_knobs() -> None:
+    """Real Compose tunables are carried; insecure hardcodes stay excluded."""
+    spec = _load()
+    app_env = _compose_environment("app")
+    for name in (
+        "APP_URL",
+        "DEFAULT_ORGANIZATION_ID",
+        "GUNICORN_WORKERS",
+        "PYTHONDONTWRITEBYTECODE",
+        "PYTHONPYCACHEPREFIX",
+        "PROMETHEUS_MULTIPROC_DIR",
+        "TRUSTED_PROXY_IPS",
+    ):
+        assert dict(spec.role("app").environment)[name] == str(app_env[name]), name
+    # D4 hardcodes stay out of every role (existing descriptor decision).
+    for role in spec.roles:
+        assert "OPENBAO_ALLOW_INSECURE" not in role.environment
+        assert "CSP_ALLOW_UNSAFE" not in role.environment
+        assert "MIGRATION_DATABASE_URL" not in role.environment
+
+    worker_env = _compose_environment("worker")
+    assert dict(spec.role("worker").environment)["WORKER_METRICS_PORT"] == str(
+        worker_env["WORKER_METRICS_PORT"]
+    )
+    assert dict(spec.role("worker").environment)["PROMETHEUS_MULTIPROC_DIR"] == str(
+        worker_env["PROMETHEUS_MULTIPROC_DIR"]
+    )
+
+
+def test_worker_command_matches_the_compose_entrypoint() -> None:
+    assert list(_load().role("worker").command) == list(
+        _compose_service("worker")["command"]
+    )
+
+
+def test_observability_remote_write_is_a_declared_external_dependency() -> None:
+    """vmagent/promtail stay host concerns, but their endpoint is declared.
+
+    The profile-gated observability agents are not product roles (they mount
+    host config trees and the Docker socket). What the product actually
+    depends on — the VictoriaMetrics remote-write endpoint — must still be a
+    named material, or a rendered topology silently drops metrics shipping.
+    """
+    spec = _load()
+    by_code = {dep.code: dep for dep in spec.external_dependencies}
+    assert by_code["victoriametrics"].material == "VM_REMOTE_WRITE_URL"
+    assert "promtail" not in {role.code for role in spec.roles}
+    assert "vmagent" not in {role.code for role in spec.roles}
 
 
 def test_the_image_reachability_detector_does_not_fire_on_a_copied_script() -> None:
