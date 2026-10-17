@@ -97,9 +97,9 @@ class AuthFlowApiService:
         if not person:
             raise HTTPException(status_code=404, detail="User not found")
 
-        avatar_service.delete_avatar(person.avatar_url)
+        avatar_service.delete_avatar(person.avatar_url, db)
 
-        avatar_url = await avatar_service.save_avatar(file, str(person.id))
+        avatar_url = await avatar_service.save_avatar(file, str(person.id), db)
         person.avatar_url = avatar_url
         db.commit()
 
@@ -110,7 +110,7 @@ class AuthFlowApiService:
         if not person:
             raise HTTPException(status_code=404, detail="User not found")
 
-        avatar_service.delete_avatar(person.avatar_url)
+        avatar_service.delete_avatar(person.avatar_url, db)
         person.avatar_url = None
         db.commit()
 
