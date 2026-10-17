@@ -21,8 +21,9 @@ import uuid
 from datetime import date, datetime
 
 from dotmac_numbering import SeriesConfiguration, allocate, configure_series
-from dotmac_numbering.service import TenantScope
 from sqlalchemy.orm import Session
+
+from app.tenancy import OrganizationTenantContext
 
 from app.models.finance.core_config.numbering_sequence import (
     NumberingSequence,
@@ -71,7 +72,9 @@ def allocate_from_module(
     Runs inside the caller's transaction; the caller holds the legacy
     row lock, which serializes seeding per organization and series.
     """
-    scope = TenantScope(tenant_id=organization_id)
+    scope = OrganizationTenantContext.for_organization(
+        organization_id
+    ).tenant_scope
     next_value = (
         1
         if should_reset(sequence, reference_date)

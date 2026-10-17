@@ -37,7 +37,7 @@ ALEMBIC_ENV = REPO_ROOT / "alembic" / "env.py"
 
 DISTRIBUTION = "dotmac-numbering"
 IMPORT_PACKAGE = "dotmac_numbering"
-CUTOVER_ALLOWED_MODULES = {IMPORT_PACKAGE, f"{IMPORT_PACKAGE}.service"}
+CUTOVER_ALLOWED_MODULES = {IMPORT_PACKAGE}
 EXPECTED_VERSION = "0.1.0a2"
 EXPECTED_LOCATION = "dotmac_numbering.migrations:versions"
 EXPECTED_REVISION = "nu_0001_numbering"
@@ -176,7 +176,7 @@ def test_numbering_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
     )
     # The bank-statement cutover seam may use the runtime service surface only.
     assert not _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering")
-    assert not _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering.service")
+    assert _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering.service")
     assert _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering.models")
     assert _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering.manifest")
     assert _is_numbering_runtime_import(other_path, "dotmac_numbering.service")
