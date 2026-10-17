@@ -25,6 +25,8 @@ from datetime import date, datetime
 from dotmac_numbering import SeriesConfiguration, allocate, configure_series
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_org.organization import Organization
+from app.services.tenant_projection import reconcile_organization_tenant
 from app.tenancy import OrganizationTenantContext
 
 from app.models.finance.core_config.numbering_sequence import (
@@ -51,7 +53,6 @@ CUT_OVER_SERIES = frozenset(
         SequenceType.CONTRACT,
         SequenceType.EMPLOYEE,
         SequenceType.LEAVE_APPLICATION,
-        SequenceType.CUSTOMER,
         SequenceType.EXPENSE,
     }
 )
@@ -102,6 +103,15 @@ def allocate_from_module(
     Runs inside the caller's transaction; the caller holds the legacy
     row lock, which serializes seeding per organization and series.
     """
+    # Stateful shared modules key their rows to the kernel tenant catalogue;
+    # reconcile the Organization's projection in this transaction so the
+    # allocation cannot fail on a missing tenant row. The catalogue only
+    # exists on PostgreSQL (the SQLite unit harness has no tenant table).
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
     scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
     next_value = (
         1

@@ -35,7 +35,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+import dotmac_kernel.idempotency  # noqa: F401  (registers idempotency_records)
 import pytest
+from dotmac_kernel.models import Base as KernelBase
+from dotmac_numbering import models as _numbering_models  # noqa: F401
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -107,9 +110,26 @@ _TABLES = [
     FeatureFlagRegistry.__table__,
     DomainSetting.__table__,
     DomainSettingHistory.__table__,
+    # Journal numbers are issued by dotmac-numbering since the numbering
+    # cutover, so the world needs the module's tables (and the kernel
+    # idempotency ledger its allocate path writes receipts against).
+    *(
+        table
+        for table in KernelBase.metadata.tables.values()
+        if table.schema == "mod_numbering" or table.name == "idempotency_records"
+    ),
 ]
 
-_SCHEMAS = {"gl", "ar", "tax", "core_config", "platform", "audit", "banking"}
+_SCHEMAS = {
+    "gl",
+    "ar",
+    "tax",
+    "core_config",
+    "platform",
+    "audit",
+    "banking",
+    "mod_numbering",
+}
 
 _TODAY = date(2026, 7, 15)
 
