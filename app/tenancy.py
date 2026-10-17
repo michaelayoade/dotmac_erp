@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from dotmac_kernel.cache import TenantScope
+from dotmac_kernel.cache import PlatformScope, TenantScope
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,4 +39,14 @@ class OrganizationTenantContext:
         return TenantScope(self.tenant_id)
 
 
-__all__ = ["OrganizationTenantContext"]
+def platform_scope() -> PlatformScope:
+    """Return the deployment-wide scope for platform-plane module rows.
+
+    Avatars belong to a person, not to any tenant organization, so their
+    file records live on the platform plane. The scope is still chosen
+    only here: services cannot independently pick tenant or platform.
+    """
+    return PlatformScope()
+
+
+__all__ = ["OrganizationTenantContext", "platform_scope"]

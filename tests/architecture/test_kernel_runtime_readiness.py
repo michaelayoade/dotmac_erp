@@ -296,8 +296,11 @@ def check_consume_pure_modules(root: Path) -> bool:
 
 
 def check_tenancy_scope_symbol_composed(root: Path) -> bool:
-    return "from dotmac_kernel.cache import TenantScope" in _read(
-        root, "app/tenancy.py"
+    source = _read(root, "app/tenancy.py")
+    return (
+        "from dotmac_kernel.cache import" in source
+        and "TenantScope" in source
+        and "PlatformScope" in source
     )
 
 

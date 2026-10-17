@@ -56,7 +56,12 @@ ALLOWED_KERNEL_MODULES: frozenset[str] = frozenset(
 # ERP's Organization remains authoritative. Path and symbol are both
 # load-bearing; every other import from dotmac_kernel.models stays prohibited.
 ADOPTED_KERNEL_IMPORTS: dict[Path, frozenset[tuple[str, str]]] = {
-    Path("tenancy.py"): frozenset({("dotmac_kernel.cache", "TenantScope")}),
+    Path("tenancy.py"): frozenset(
+        {
+            ("dotmac_kernel.cache", "TenantScope"),
+            ("dotmac_kernel.cache", "PlatformScope"),
+        }
+    ),
     Path("services/tenant_projection.py"): frozenset(
         {("dotmac_kernel.models", "Tenant")}
     ),

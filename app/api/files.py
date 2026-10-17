@@ -24,6 +24,7 @@ from app.services.finance.common.attachment import attachment_service
 from app.services.storage import (
     StorageObjectMissing,
     StorageReadUnavailable,
+    get_dotmac_files_provider,
     get_storage,
 )
 
@@ -236,13 +237,42 @@ def download_form_attachment(
 def download_avatar(
     filename: str,
     organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db_with_org),
 ):
-    """Download an avatar image (authenticated)."""
+    """Download an avatar image (authenticated).
+
+    Post-cutover URLs carry the ``dotmac-files`` file id and stream
+    through the module's authorized target; pre-cutover filename URLs
+    keep the legacy object path until the backfill rewrites them.
+    """
     if Path(filename).name != filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
-    s3_key = f"avatars/{filename}"
-    return _stream_s3_file(s3_key, filename=filename)
+    try:
+        file_id = UUID(filename)
+    except ValueError:
+        return _stream_s3_file(f"avatars/{filename}", filename=filename)
+
+    from dotmac_files import FileError, download_target, open_object
+
+    from app.tenancy import platform_scope
+
+    try:
+        target = download_target(db, scope=platform_scope(), file_id=file_id)
+        readable = open_object(get_dotmac_files_provider(), target=target)
+    except FileError:
+        raise HTTPException(status_code=404, detail="File not found") from None
+
+    def _chunks():
+        with readable:
+            while chunk := readable.read(64 * 1024):
+                yield chunk
+
+    return StreamingResponse(
+        _chunks(),
+        media_type=target.detected_media_type,
+        headers={"Content-Length": str(target.size_bytes)},
+    )
 
 
 # ---------------------------------------------------------------------------
