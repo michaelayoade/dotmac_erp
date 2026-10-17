@@ -20,8 +20,8 @@ Both constructors are REAL wherever a plant claims a divergence.  The
 retiring path runs through ``CustomerImporter`` under ``construct_only``
 against a session that raises on any access; the durable path runs through
 ``CustomerImportPort.apply`` into the real ``CustomerService.create_customer``
-against a session stub that answers only the two reads the writer makes.  The
-DATABASE is stubbed; neither implementation under comparison is.
+against a real in-memory session holding only the tables the writer touches.
+Neither implementation under comparison is stubbed.
 
 Fixtures only.  No real customer file, no external target and no personal
 data appear here -- the "no synthetic data" rule governs Gate 4's real-corpus
@@ -173,42 +173,92 @@ class _EmptyResult:
 
 
 class _DurableSession:
-    """The database, stubbed -- the durable implementation is not.
+    """A real in-memory database -- the durable implementation is not stubbed.
 
     ``CustomerService.create_customer`` makes exactly two reads: the numbering
     sequence (``db.scalar``) and the customer-code uniqueness check
-    (``db.scalars(...).first()``).  Answering those two is the smallest
-    substitution that lets the REAL writer run without a database.  The
-    sequence is kept between calls, as a real row would be, so consecutive
-    rows get consecutive codes instead of both restarting at one.
+    (``db.scalars(...).first()``).  This wrapper answers both from a real
+    SQLite session holding just the tables the writer touches, because
+    customer codes are now allocated by ``dotmac-numbering`` inside the
+    session and a hand-stubbed session cannot run its queries.  The sequence
+    row persists between calls, as a real row would, so consecutive rows get
+    consecutive codes instead of both restarting at one.
     """
 
     def __init__(self) -> None:
+        import dotmac_kernel.idempotency  # noqa: F401
+        from dotmac_kernel.models import Base as KernelBase
+        from dotmac_numbering import models as _numbering_models  # noqa: F401
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.pool import StaticPool
+
+        engine = create_engine(
+            "sqlite+pysqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            execution_options={
+                "schema_translate_map": {
+                    "core_config": None,
+                    "ar": None,
+                    "mod_numbering": None,
+                }
+            },
+        )
+        tables = [
+            NumberingSequence.__table__,
+            Customer.__table__,
+            *(
+                table
+                for table in KernelBase.metadata.tables.values()
+                if table.schema == "mod_numbering"
+                or table.name == "idempotency_records"
+            ),
+        ]
+        # Mirror the shared harness: Postgres server defaults are not
+        # SQLite syntax. Python-side defaults supply the values instead.
+        from sqlalchemy import DefaultClause
+        from sqlalchemy import text as sa_text
+
+        for table in tables:
+            for column in table.columns:
+                default = column.server_default
+                if default is None:
+                    continue
+                default_text = str(getattr(default, "arg", default)).lower()
+                if "gen_random_uuid" in default_text or "uuid_generate" in default_text:
+                    column.server_default = None
+                elif "now()" in default_text:
+                    column.server_default = DefaultClause(sa_text("CURRENT_TIMESTAMP"))
+            table.create(engine, checkfirst=True)
+        self._session = sessionmaker(bind=engine, autoflush=False)()
         self.sequence: NumberingSequence | None = None
         self.added: list[object] = []
         self.numbering_reads = 0
         self.uniqueness_reads = 0
 
-    def scalar(self, statement: object) -> NumberingSequence | None:
-        del statement
+    def scalar(self, statement: object) -> Any:
         self.numbering_reads += 1
-        return self.sequence
+        return self._session.scalar(statement)  # type: ignore[arg-type]
 
-    def scalars(self, statement: object) -> _EmptyResult:
-        del statement
+    def scalars(self, statement: object) -> Any:
         self.uniqueness_reads += 1
-        return _EmptyResult()
+        return self._session.scalars(statement)  # type: ignore[arg-type]
 
     def add(self, instance: object) -> None:
         if isinstance(instance, NumberingSequence):
             self.sequence = instance
         self.added.append(instance)
+        self._session.add(instance)
 
     def flush(self) -> None:
-        return None
+        self._session.flush()
 
     def refresh(self, instance: object) -> None:
-        del instance
+        self._session.refresh(instance)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._session, name)
 
 
 def _legacy_entity(raw: dict[str, str], org: uuid.UUID = ORG) -> Customer:
@@ -247,6 +297,22 @@ def _durable_entity(
         )
     port = CustomerImportPort(db, org, USER, AR, skip_duplicates=False)
     port.apply(mapped)
+    # The comparator refuses cross-stage comparison by design: the retiring
+    # entity is transient, so return the durable entity to the transient
+    # stage (values intact) after the real writer has run.
+    from sqlalchemy.orm import make_transient
+
+    for item in db.added:
+        if isinstance(item, Customer):
+            make_transient(item)
+            # Neither constructor decides the run timestamps; the flush
+            # applied the server defaults, so unset them again to restore
+            # the pre-flush field vector the disposition compares.
+            vars(item).pop("created_at", None)
+            vars(item).pop("updated_at", None)
+            # Likewise the surrogate key: it is database-assigned at insert
+            # and neither constructor decides it.
+            vars(item).pop("customer_id", None)
     customers = [item for item in db.added if isinstance(item, Customer)]
     if not customers:
         raise AssertionError(
