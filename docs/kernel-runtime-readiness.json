@@ -62,7 +62,7 @@
       "source_reference": "tests/architecture/test_kernel_import_boundary.py:39-53"
     },
     {
-      "declaration": "One adopted persisted kernel symbol, dotmac_kernel.cache.TenantScope, is composed in app/tenancy.py.",
+      "declaration": "Two adopted persisted kernel symbols, dotmac_kernel.cache.TenantScope and dotmac_kernel.cache.PlatformScope, are composed in app/tenancy.py.",
       "source_reference": "app/tenancy.py:15"
     },
     {

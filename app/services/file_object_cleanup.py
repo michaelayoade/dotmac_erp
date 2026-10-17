@@ -242,6 +242,21 @@ def stage_tenant_file_if_unreserved(db: Session, *, prepared: PreparedFile) -> N
     stage_file(db, prepared=prepared)
 
 
+def stage_platform_file(db: Session, *, prepared: PreparedFile) -> None:
+    """Stage a platform-plane file (person-owned avatars).
+
+    Platform keys carry no tenant, so there is no cleanup reservation to
+    honour -- cleanup is tenant-only (see the runbook note below). The
+    canonical-key check is the same discipline as the tenant path: only
+    the key ``prepare_upload`` derived for this file id may be staged.
+    """
+    if isinstance(prepared.scope, _TenantFileScope):
+        raise TypeError("platform staging requires a platform scope")
+    if prepared.storage_key != f"platform/files/{prepared.id}":
+        raise CleanupUnsafeReferenceView("prepared file has a noncanonical key")
+    stage_file(db, prepared=prepared)
+
+
 @runtime_checkable
 class _TenantFileScope(Protocol):
     """Structural view of the tenant scope created by ``app.tenancy``."""

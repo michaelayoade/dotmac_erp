@@ -601,6 +601,11 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         "app/services/file_upload.py",
         "app/api/finance/import_export.py",
         "app/tasks/imports.py",
+        # Avatar files cutover (platform plane): prepare/open only, verified
+        # by reading each — none calls ``.delete(`` on the provider.
+        "app/services/avatar.py",
+        "app/api/files.py",
+        "scripts/backfill_avatar_files.py",
     }
 )
 
