@@ -1,11 +1,13 @@
-"""`dotmac-numbering` is composed on ERP's tenant plane, with no caller cutover.
+"""`dotmac-numbering` is composed on ERP's tenant plane.
 
 This is the static half of the composition proof.  The PostgreSQL rehearsal in
 `tests/integration/test_accounting_lineage_composition.py` proves the migration
 and live catalog; these tests prove the exact artifact, revision location,
-assembly-selected plane and absence of a runtime dependency under `app/`.
-The release-only product assembly may import exactly
-`dotmac_numbering.manifest`; that declarative seam is not a runtime caller.
+assembly-selected plane. The release-only product assembly may import
+exactly `dotmac_numbering.manifest`; that declarative seam is not a runtime
+caller. Bank-statement issuance is cut over through exactly one sanctioned
+runtime seam, `app/services/finance/common/numbering_module.py`; every other
+runtime import under `app/` remains rejected.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from app.migration_planes import ASSEMBLY_MODULE_PLANES
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = REPO_ROOT / "app"
 PRODUCT_ASSEMBLY = APP_ROOT / "product_assembly.py"
+CUTOVER_SEAM = APP_ROOT / "services" / "finance" / "common" / "numbering_module.py"
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 LOCK = REPO_ROOT / "poetry.lock"
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -34,6 +37,7 @@ ALEMBIC_ENV = REPO_ROOT / "alembic" / "env.py"
 
 DISTRIBUTION = "dotmac-numbering"
 IMPORT_PACKAGE = "dotmac_numbering"
+CUTOVER_ALLOWED_MODULES = {IMPORT_PACKAGE}
 EXPECTED_VERSION = "0.1.0a2"
 EXPECTED_LOCATION = "dotmac_numbering.migrations:versions"
 EXPECTED_REVISION = "nu_0001_numbering"
@@ -60,8 +64,10 @@ def _imported_modules(path: Path) -> set[str]:
 
 
 def _is_numbering_runtime_import(path: Path, module: str) -> bool:
-    """Only the product assembly may consume the declarative manifest."""
+    """Only the assembly manifest seam and the cutover seam pass."""
     if module != IMPORT_PACKAGE and not module.startswith(f"{IMPORT_PACKAGE}."):
+        return False
+    if path == CUTOVER_SEAM and module in CUTOVER_ALLOWED_MODULES:
         return False
     return path != PRODUCT_ASSEMBLY or module != f"{IMPORT_PACKAGE}.manifest"
 
@@ -168,3 +174,9 @@ def test_numbering_manifest_seam_is_narrow_and_runtime_sensitive() -> None:
     assert _is_numbering_runtime_import(
         PRODUCT_ASSEMBLY, "dotmac_numbering.manifest.private"
     )
+    # The bank-statement cutover seam may use the runtime service surface only.
+    assert not _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering")
+    assert _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering.service")
+    assert _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering.models")
+    assert _is_numbering_runtime_import(CUTOVER_SEAM, "dotmac_numbering.manifest")
+    assert _is_numbering_runtime_import(other_path, "dotmac_numbering.service")
