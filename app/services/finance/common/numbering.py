@@ -5,6 +5,7 @@ Generates document numbers based on configurable sequences.
 """
 
 import logging
+import os
 import uuid
 from datetime import date, datetime
 
@@ -540,6 +541,32 @@ class SyncNumberingService:
 
         # Generate the formatted number
         number = format_number(sequence, reference_date)
+
+        if (
+            sequence_type is SequenceType.BANK_STATEMENT
+            and os.environ.get("ERP_NUMBERING_SHADOW") == "shadow"
+        ):
+            # Slice-1 shadow: allocate from the composed module in the same
+            # transaction and compare values. Legacy issuance is never
+            # altered; shadow faults are evidence, not failures.
+            try:
+                from app.services.finance.common.numbering_shadow import (
+                    shadow_allocate,
+                )
+
+                shadow_allocate(
+                    self.db,
+                    organization_id=organization_id,
+                    sequence=sequence,
+                    reference_date=reference_date,
+                    legacy_number=number,
+                    legacy_value=int(sequence.current_number),
+                )
+            except Exception:
+                logger.exception(
+                    "numbering shadow fault series=bank_statement organization=%s",
+                    organization_id,
+                )
 
         self.db.flush()
         return number
