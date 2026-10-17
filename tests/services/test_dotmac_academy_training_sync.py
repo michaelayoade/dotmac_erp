@@ -379,6 +379,193 @@ def test_v2_completion_also_records_certification(db_session):
         )
     )
     assert cert is not None
+    assert result["certification_id"] == str(cert.certification_id)
+    assert cert.certification_name == "Fiber Splicing"
+    assert cert.issue_date == date(2026, 8, 15)
+    assert cert.is_verified is True
+
+
+@pytest.mark.parametrize(
+    "completion_at",
+    ["2026-08-15T10:30:00+00:00", "2026-08-15T11:00:00+00:00"],
+)
+def test_v2_stale_completion_records_missing_credential_and_replays(
+    db_session, completion_at
+):
+    """Unit behavior: credential delivery is independent of progress ordering."""
+    employee = _employee(db_session, "late-complete@dotmac.ng")
+    course = _academy_course(db_session)
+    newer = _v2_payload(
+        employee.employee_code,
+        progress_pct=80,
+        occurred_at="2026-08-15T11:00:00+00:00",
+    )
+    initial = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="training_progress_updated",
+        payload=newer,
+    )
+    progress = db_session.scalar(
+        select(TrainingCourseProgress).where(
+            TrainingCourseProgress.organization_id == ORG,
+            TrainingCourseProgress.course_id == course.id,
+            TrainingCourseProgress.employee_id == employee.employee_id,
+        )
+    )
+    assert progress is not None
+    db_session.refresh(progress)
+    projected_at = progress.academy_updated_at
+    completion = dict(
+        newer,
+        event="course_completed",
+        progress_pct=100,
+        occurred_at=completion_at,
+        certificate_ref="late-cert",
+        completed_on="2026-08-14",
+    )
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload=completion,
+    )
+    assert result["status"] == "recorded"
+    assert result["assignment_id"] == initial["assignment_id"]
+    certs = list(
+        db_session.scalars(
+            select(EmployeeCertification).where(
+                EmployeeCertification.organization_id == ORG,
+                EmployeeCertification.employee_id == employee.employee_id,
+            )
+        )
+    )
+    assert len(certs) == 1
+    cert = certs[0]
+    assert result["certification_id"] == str(cert.certification_id)
+    assert cert.credential_id == "late-cert"
+    assert cert.issue_date == date(2026, 8, 14)
+    assert cert.certification_name == "Fiber Splicing"
+    assert cert.is_verified is True
+    replay = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload=completion,
+    )
+    assert replay == {**result, "status": "duplicate"}
+    db_session.refresh(progress)
+    db_session.refresh(cert)
+    assert progress.completion_percentage == 80
+    assert progress.status.value == "in_progress"
+    assert progress.academy_updated_at == projected_at
+    assert cert.credential_id == "late-cert"
+    assert cert.issue_date == date(2026, 8, 14)
+    assert list(
+        db_session.scalars(
+            select(EmployeeCertification).where(
+                EmployeeCertification.organization_id == ORG,
+                EmployeeCertification.employee_id == employee.employee_id,
+            )
+        )
+    ) == [cert]
+
+
+@pytest.mark.parametrize(
+    "completion_at",
+    ["2026-08-15T10:30:00+00:00", "2026-08-15T11:00:00+00:00"],
+)
+def test_v2_stale_completion_preserves_existing_credential(db_session, completion_at):
+    employee = _employee(db_session, "preserve-cert@dotmac.ng")
+    _academy_course(db_session)
+    newer = _v2_payload(
+        employee.employee_code,
+        event="course_completed",
+        progress_pct=100,
+        occurred_at="2026-08-15T11:00:00+00:00",
+        certificate_ref="existing-cert",
+        course_title="Current credential title",
+        completed_on="2026-08-15",
+    )
+    initial = dispatch(
+        db_session, organization_id=ORG, event_type="course_completed", payload=newer
+    )
+    cert = db_session.scalar(
+        select(EmployeeCertification).where(
+            EmployeeCertification.organization_id == ORG,
+            EmployeeCertification.employee_id == employee.employee_id,
+            EmployeeCertification.credential_id == "existing-cert",
+        )
+    )
+    assert cert is not None
+    cert.is_verified = False
+    db_session.flush()
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload=dict(
+            newer,
+            occurred_at=completion_at,
+            course_title="Old credential title",
+            completed_on="2026-08-14",
+        ),
+    )
+    assert result == {**initial, "status": "duplicate"}
+    db_session.refresh(cert)
+    assert cert.certification_name == "Current credential title"
+    assert cert.issue_date == date(2026, 8, 15)
+    assert cert.is_verified is False
+
+
+@pytest.mark.parametrize("certificate_ref", [None, "   "])
+def test_v2_stale_completion_without_certificate_ref_is_ignored(
+    db_session, certificate_ref
+):
+    employee = _employee(db_session, "missing-cert@dotmac.ng")
+    course = _academy_course(db_session)
+    newer = _v2_payload(
+        employee.employee_code,
+        progress_pct=80,
+        occurred_at="2026-08-15T11:00:00+00:00",
+    )
+    dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="training_progress_updated",
+        payload=newer,
+    )
+    result = dispatch(
+        db_session,
+        organization_id=ORG,
+        event_type="course_completed",
+        payload=dict(
+            newer,
+            event="course_completed",
+            progress_pct=100,
+            occurred_at="2026-08-15T10:30:00+00:00",
+            certificate_ref=certificate_ref,
+        ),
+    )
+    assert result == {"status": "ignored", "reason": "missing certificate_ref"}
+    assert (
+        db_session.scalar(
+            select(EmployeeCertification).where(
+                EmployeeCertification.organization_id == ORG,
+                EmployeeCertification.employee_id == employee.employee_id,
+            )
+        )
+        is None
+    )
+    progress = db_session.scalar(
+        select(TrainingCourseProgress).where(
+            TrainingCourseProgress.organization_id == ORG,
+            TrainingCourseProgress.course_id == course.id,
+            TrainingCourseProgress.employee_id == employee.employee_id,
+        )
+    )
+    assert progress.completion_percentage == 80
+    assert progress.status.value == "in_progress"
 
 
 def test_v2_rejects_unmapped_employee_and_course(db_session):

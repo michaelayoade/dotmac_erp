@@ -192,6 +192,11 @@ def record_training_projection(
     if course is None:
         return {"status": "ignored", "reason": "no course mapped to academy_course_ref"}
 
+    event_type = str(payload.get("event") or "")
+    certificate_ref = str(payload.get("certificate_ref") or "").strip()
+    if event_type == "course_completed" and not certificate_ref:
+        return {"status": "ignored", "reason": "missing certificate_ref"}
+
     assignment = db.scalar(
         select(TrainingCourseAssignment).where(
             TrainingCourseAssignment.organization_id == organization_id,
@@ -211,7 +216,6 @@ def record_training_projection(
         )
         db.add(assignment)
 
-    event_type = str(payload.get("event") or "")
     status = (
         TrainingProgressStatus.COMPLETED
         if event_type == "course_completed" or progress_pct == 100
@@ -226,6 +230,7 @@ def record_training_projection(
             TrainingCourseProgress.employee_id == employee.employee_id,
         )
     )
+    stale_progress = False
     if progress is None:
         progress = TrainingCourseProgress(
             organization_id=organization_id,
@@ -238,17 +243,18 @@ def record_training_projection(
         projected_at = progress.academy_updated_at
         if projected_at.tzinfo is None:
             projected_at = projected_at.replace(tzinfo=timezone.utc)
-        if occurred_at <= projected_at:
+        stale_progress = occurred_at <= projected_at
+        if stale_progress and event_type != "course_completed":
+            db.flush()
             return {"status": "duplicate", "assignment_id": str(assignment.id)}
-    progress.completion_percentage = progress_pct
-    progress.status = status
-    progress.academy_updated_at = occurred_at
+    if not stale_progress:
+        progress.completion_percentage = progress_pct
+        progress.status = status
+        progress.academy_updated_at = occurred_at
 
     certification_id: str | None = None
+    result_status = "recorded"
     if event_type == "course_completed":
-        certificate_ref = str(payload.get("certificate_ref") or "").strip()
-        if not certificate_ref:
-            return {"status": "ignored", "reason": "missing certificate_ref"}
         cert = db.scalar(
             select(EmployeeCertification).where(
                 EmployeeCertification.organization_id == organization_id,
@@ -267,6 +273,10 @@ def record_training_projection(
                 is_verified=True,
             )
             db.add(cert)
+        elif stale_progress:
+            # Progress ordering must not suppress a missing credential, or let
+            # an older completion overwrite facts on an existing credential.
+            result_status = "duplicate"
         else:
             cert.certification_name = str(payload.get("course_title") or course.title)
             cert.issue_date = _parse_date(payload.get("completed_on"))
@@ -276,7 +286,7 @@ def record_training_projection(
 
     db.flush()
     return {
-        "status": "recorded",
+        "status": result_status,
         "assignment_id": str(assignment.id),
         "certification_id": certification_id,
     }
