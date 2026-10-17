@@ -529,6 +529,21 @@ class SyncNumberingService:
             self.db.add(sequence)
             self.db.flush()
 
+        if sequence_type is SequenceType.BANK_STATEMENT:
+            # Cut over: the composed dotmac-numbering module issues these.
+            from app.services.finance.common.numbering_module import (
+                allocate_from_module,
+            )
+
+            number = allocate_from_module(
+                self.db,
+                organization_id=organization_id,
+                sequence=sequence,
+                reference_date=reference_date,
+            )
+            self.db.flush()
+            return number
+
         if should_reset(sequence, reference_date):
             sequence.current_number = 0
             sequence.current_year = reference_date.year
