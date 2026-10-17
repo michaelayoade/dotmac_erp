@@ -23,7 +23,9 @@ from app.models.finance.core_config.numbering_sequence import (
     ResetFrequency,
     SequenceType,
 )
+from app.services.finance.common.numbering import _default_sequence_kwargs
 from app.services.finance.common.numbering_module import (
+    CUT_OVER_SERIES,
     allocate_from_module,
     series_code_for,
     series_configuration_for,
@@ -151,3 +153,71 @@ def test_cutover_refuses_an_incoherent_legacy_row(session: Session) -> None:
             sequence=sequence,
             reference_date=date(2026, 5, 20),
         )
+
+
+def _default_sequence(sequence_type: SequenceType) -> NumberingSequence:
+    return NumberingSequence(
+        organization_id=uuid.uuid4(),
+        sequence_type=sequence_type,
+        **_default_sequence_kwargs(sequence_type),
+    )
+
+
+@pytest.mark.parametrize("sequence_type", sorted(CUT_OVER_SERIES, key=str))
+def test_every_cut_over_series_issues_its_first_number(
+    session: Session, sequence_type: SequenceType
+) -> None:
+    sequence = _default_sequence(sequence_type)
+
+    number = allocate_from_module(
+        session,
+        organization_id=sequence.organization_id,
+        sequence=sequence,
+        reference_date=date(2026, 5, 20),
+    )
+
+    assert "--" not in number
+    assert number.endswith("1".zfill(sequence.min_digits))
+    assert sequence.current_number == 1
+
+
+def test_monthly_series_renders_year_and_month_segments(session: Session) -> None:
+    sequence = _default_sequence(SequenceType.JOURNAL)
+
+    number = allocate_from_module(
+        session,
+        organization_id=sequence.organization_id,
+        sequence=sequence,
+        reference_date=date(2026, 5, 20),
+    )
+
+    assert number == "JE-2026-05-0001"
+
+
+def test_never_reset_series_renders_without_date_segments(
+    session: Session,
+) -> None:
+    sequence = _default_sequence(SequenceType.CONTRACT)
+
+    number = allocate_from_module(
+        session,
+        organization_id=sequence.organization_id,
+        sequence=sequence,
+        reference_date=date(2026, 5, 20),
+    )
+
+    assert number == "CTR-000001"
+
+
+def test_trailing_separator_in_legacy_prefix_is_cleaned(session: Session) -> None:
+    sequence = _default_sequence(SequenceType.EXPENSE)
+    assert sequence.prefix == "EXP-"
+
+    number = allocate_from_module(
+        session,
+        organization_id=sequence.organization_id,
+        sequence=sequence,
+        reference_date=date(2026, 5, 20),
+    )
+
+    assert number == "EXP-2026-00001"

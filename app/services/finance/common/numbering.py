@@ -529,7 +529,9 @@ class SyncNumberingService:
             self.db.add(sequence)
             self.db.flush()
 
-        if sequence_type is SequenceType.BANK_STATEMENT:
+        from app.services.finance.common.numbering_module import CUT_OVER_SERIES
+
+        if sequence_type in CUT_OVER_SERIES:
             # Cut over: the composed dotmac-numbering module issues these.
             from app.services.finance.common.numbering_module import (
                 allocate_from_module,

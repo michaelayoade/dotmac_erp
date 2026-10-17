@@ -1,10 +1,12 @@
 """Direct allocation from the composed ``dotmac-numbering`` module.
 
-Bank-statement numbers are issued by the module, not by the legacy
-allocator (Michael's ruling, 2026-10-17: direct cutover for
+Series in ``CUT_OVER_SERIES`` are issued by the module, not by the
+legacy allocator (Michael's ruling, 2026-10-17: direct cutover for
 internal-facing series, module format accepted — ``STMT-2026-00042``,
-not the legacy fused ``STMT2026-00042``). Numbers issued before the
-cutover keep their legacy rendering; the two shapes cannot collide.
+not the legacy fused ``STMT2026-00042``). Numbers issued before a
+series' cutover keep their legacy rendering; the two shapes cannot
+collide. Counterparty and financial-document series stay on the
+legacy allocator pending their own ruling.
 
 The legacy ``NumberingSequence`` row is read once per call to seed a
 fresh module period counter at the value the legacy allocator would
@@ -23,13 +25,37 @@ from datetime import date, datetime
 from dotmac_numbering import SeriesConfiguration, allocate, configure_series
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_org.organization import Organization
+from app.services.tenant_projection import reconcile_organization_tenant
 from app.tenancy import OrganizationTenantContext
 
 from app.models.finance.core_config.numbering_sequence import (
     NumberingSequence,
     ResetFrequency,
+    SequenceType,
 )
 from app.services.finance.common.sequence_utils import should_reset
+
+#: Internal-facing series issued by the module. Bank statements cut over
+#: first (#722); the rest of the internal batch follows the same pattern.
+CUT_OVER_SERIES = frozenset(
+    {
+        SequenceType.BANK_STATEMENT,
+        SequenceType.JOURNAL,
+        SequenceType.SUPPORT_TICKET,
+        SequenceType.PROJECT,
+        SequenceType.TASK,
+        SequenceType.MATERIAL_REQUEST,
+        SequenceType.GOODS_RECEIPT,
+        SequenceType.ITEM,
+        SequenceType.ASSET,
+        SequenceType.LEASE,
+        SequenceType.CONTRACT,
+        SequenceType.EMPLOYEE,
+        SequenceType.LEAVE_APPLICATION,
+        SequenceType.EXPENSE,
+    }
+)
 
 _RESET_POLICIES = {
     ResetFrequency.NEVER: "never",
@@ -46,9 +72,14 @@ def series_configuration_for(
     sequence: NumberingSequence, *, start_value: int = 1
 ) -> SeriesConfiguration:
     """Map one legacy row onto the module series shape, or refuse by name."""
+    prefix = sequence.prefix or ""
+    if sequence.separator:
+        # Legacy prefixes may carry their own trailing separator (``EXP-``);
+        # the module joins segments itself, so keep exactly one separator.
+        prefix = prefix.rstrip(sequence.separator)
     return SeriesConfiguration(
         series_code=series_code_for(sequence),
-        prefix=sequence.prefix or "",
+        prefix=prefix,
         suffix=sequence.suffix or "",
         separator=sequence.separator,
         min_digits=sequence.min_digits,
@@ -72,6 +103,15 @@ def allocate_from_module(
     Runs inside the caller's transaction; the caller holds the legacy
     row lock, which serializes seeding per organization and series.
     """
+    # Stateful shared modules key their rows to the kernel tenant catalogue;
+    # reconcile the Organization's projection in this transaction so the
+    # allocation cannot fail on a missing tenant row. The catalogue only
+    # exists on PostgreSQL (the SQLite unit harness has no tenant table).
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
     scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
     next_value = (
         1
