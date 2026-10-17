@@ -1,9 +1,11 @@
 """The refusals `.github/workflows/erp-lock.yml` needs, out of the YAML.
 
-ERP's pending one-shot movement is `dotmac-imports` 0.1.0a2 -> 0.2.0a1.
-`dotmac-files` stays at 0.1.0a5 and `dotmac-tax` at 0.1.0a4; their entries are
-immutable under the whole-lock drift check. Once the resolved pair is applied, a re-dispatch
-against that tree fails the old-version check. All three packages use the same
+ERP's pending one-shot movement is `dotmac-kernel` 0.1.0a98 -> 0.1.0a105.
+Every other Forgejo pin stays frozen at its declared version (see
+`IMMUTABLE_PINS`); their entries are immutable under the whole-lock drift
+check. Once the resolved pair is applied, a re-dispatch against that tree
+fails the old-version check. This replaces the spent `dotmac-imports`
+0.1.0a2 -> 0.2.0a1 movement, already applied on main. All of these packages use the same
 PRIVATE Forgejo index that
 `dotmac_vendor_control_plane`'s `kernel-lock.yml` / `scripts/kernel_lock.py`
 resolve `dotmac-kernel` against, and a lock entry for a privately-published
@@ -18,7 +20,7 @@ have refused outright (see
 ## The closed allowlist of movements
 
 `ALLOWED_MOVEMENTS` names exactly one move. A caller cannot ask this module to
-move `dotmac-tax`, move `dotmac-imports` to another version, or move a third
+move `dotmac-tax`, move `dotmac-kernel` to another version, or move a third
 package at all. Extending the allowlist is a reviewed edit to this file,
 not a workflow input.
 
@@ -38,7 +40,7 @@ and every other off-index form is refused exactly as upstream refuses it.
 
 ## The subjects
 
-* `set-versions` — move the imports pin in the manifest, refusing unless the ref's
+* `set-versions` — move the kernel pin in the manifest, refusing unless the ref's
   OWN tree declares the exact allowed OLD version, exactly
   once, and refusing again unless the rewrite lands on the exact allowed NEW
   version, exactly once — enumerated across every dependency surface Poetry
@@ -96,23 +98,29 @@ import dependency_normalisation
 #: never a workflow input. After this move is applied, a re-dispatch fails
 #: the refusal check against the currently declared version by design.
 ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {
-    "dotmac-imports": ("0.1.0a2", "0.2.0a1"),
+    "dotmac-kernel": ("0.1.0a98", "0.1.0a105"),
 }
 
-#: Private pins frozen throughout this one-shot move.
-IMMUTABLE_PINS = {"dotmac-files": "0.1.0a5", "dotmac-tax": "0.1.0a4"}
+#: Private pins frozen throughout this one-shot move. `dotmac-imports` joins
+#: files and tax here now that its own movement has landed. Every other lock
+#: entry is held identical by the whole-lock drift check regardless.
+IMMUTABLE_PINS = {
+    "dotmac-files": "0.1.0a5",
+    "dotmac-imports": "0.2.0a1",
+    "dotmac-tax": "0.1.0a4",
+}
 
-#: Verified native wheel, pinned independently of the index response. Starter
-#: release run 38726218479 installed the published bytes and registered ERP's
-#: composition before creating annotated tag e850ff3bef530db272dccae44b15e51e4c390aaf,
-#: peeled to 008ccaeaebda6855ba34b8e70740e3859954a37b. Its canonical
-#: ModuleReleaseTagEvidence.v1 supplies this exact filename and SHA-256.
+#: Verified wheel, pinned independently of the index response. Starter's
+#: KernelReleaseEvidence.v2 for tag dotmac-kernel-v0.1.0a105 (tag object
+#: bd5f252b936efb3ee61aeb871b915f2e41bab754, peeled to source
+#: 2f5abe9101c9aef48f23977cad81a3e499672287; publisher run 38587531416,
+#: verifier run 38588148403) supplies this exact filename and SHA-256.
 RELEASED_WHEEL_DIGESTS = {
     (
-        "dotmac-imports",
-        "0.2.0a1",
-        "dotmac_imports-0.2.0a1-cp312-cp312-manylinux_2_35_x86_64.whl",
-    ): "2ca848468f74547a4b050f2c039ecaa2ea53458e880b3de09f3c4f55d9772b17",
+        "dotmac-kernel",
+        "0.1.0a105",
+        "dotmac_kernel-0.1.0a105-py3-none-any.whl",
+    ): "f8937e5525c3efd27e2030bf69ed0c37e137c345e376668a79e00ebf349b6ffa",
 }
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
@@ -148,7 +156,7 @@ CREDENTIAL_ENV = "FORGEJO_CREDENTIAL"
 #: `version`,
 #: `files` and `dependencies` — `dependencies` ONLY because a version move can
 #: legitimately shift the moved package's own floor on a transitive
-#: dependency (e.g. a new `dotmac-imports` release raising its `dotmac-kernel`
+#: dependency (e.g. a new `dotmac-kernel` release raising its `fastapi`
 #: floor), and that permitted freedom is bounded elsewhere, by
 #: `wheel_dependency_problems`, against the acquired wheel's own
 #: `Requires-Dist` — never left unchecked. `source`, `extras`, `optional`,
@@ -751,7 +759,7 @@ def manifest_problems(
     """Everything about this manifest that would misdirect the credential.
 
     `target_versions` is the NEW version expected for each moved package,
-    e.g. `{"dotmac-imports": "0.2.0a1"}`.
+    e.g. `{"dotmac-kernel": "0.1.0a105"}`.
     """
 
     problems: list[str] = []

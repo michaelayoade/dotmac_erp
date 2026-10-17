@@ -3,17 +3,20 @@
 #
 # ── THIS WORKFLOW'S ONE PENDING MOVEMENT ────────────────────────────────────
 #
-# `ALLOWED_MOVEMENTS` is a CLOSED, one-shot allowlist: `dotmac-imports`
-# 0.1.0a2 -> 0.2.0a1. Files remains at 0.1.0a5 and Tax at 0.1.0a4,
-# and the whole-lock drift check refuses any change to their entries. After the
-# resolved pair is applied, a re-dispatch fails the old-version check.
-# The native wheel filename and SHA-256 require independent review in
+# `ALLOWED_MOVEMENTS` is a CLOSED, one-shot allowlist: `dotmac-kernel`
+# 0.1.0a98 -> 0.1.0a105. Every other Forgejo pin stays frozen (see
+# `IMMUTABLE_PINS`), and the whole-lock drift check refuses any change to
+# their entries. After the resolved pair is applied, a re-dispatch fails the
+# old-version check. This replaces the spent `dotmac-imports` 0.1.0a2 ->
+# 0.2.0a1 movement, which is already applied on main.
+# The wheel filename and SHA-256 require independent review in
 # `RELEASED_WHEEL_DIGESTS`; `acquire` rejects changed bytes before uploading
-# the bundle. Starter release run 38726218479 and annotated tag
-# e850ff3bef530db272dccae44b15e51e4c390aaf bind the reviewed native wheel digest.
+# the bundle. Starter's KernelReleaseEvidence.v2 for tag
+# dotmac-kernel-v0.1.0a105 (tag object bd5f252b936e, publisher run 38587531416,
+# verifier run 38588148403) binds the reviewed wheel digest.
 # Keep wheel and sdist: Poetry 2.4.1 reads metadata from any parseable wheel
 # without a platform compatibility check. Merely offering the sdist alongside
-# it does not execute its backend. Python 3.11 source installs need Rust 1.90.
+# it does not execute its backend.
 #
 # A future repin requires a reviewed change to `ALLOWED_MOVEMENTS`, never a
 # re-dispatch of this one.
@@ -95,11 +98,11 @@ on:
           names a tree nobody reviewed.
         required: true
         type: string
-      dotmac_imports_version:
+      dotmac_kernel_version:
         description: >-
-          The dotmac-imports version to move to. The only value this workflow
-          accepts is 0.2.0a1; anything else is refused by name. The source
-          manifest must still declare 0.1.0a2.
+          The dotmac-kernel version to move to. The only value this workflow
+          accepts is 0.1.0a105; anything else is refused by name. The source
+          manifest must still declare 0.1.0a98.
         required: true
         type: string
 
@@ -120,7 +123,7 @@ jobs:
       - name: Refuse anything but an exact commit and the one allowed movement
         env:
           REF: ${{ inputs.ref }}
-          IMPORTS_VERSION: ${{ inputs.dotmac_imports_version }}
+          KERNEL_VERSION: ${{ inputs.dotmac_kernel_version }}
         run: |
           set -euo pipefail
           # A 40-hex ref is the only input that cannot mean something
@@ -130,8 +133,8 @@ jobs:
             echo "::error::ref must be a full 40-character commit SHA, got '${REF}'"
             exit 1
           fi
-          if [ "${IMPORTS_VERSION}" != "0.2.0a1" ]; then
-            echo "::error::dotmac_imports_version must be 0.2.0a1, got '${IMPORTS_VERSION}'"
+          if [ "${KERNEL_VERSION}" != "0.1.0a105" ]; then
+            echo "::error::dotmac_kernel_version must be 0.1.0a105, got '${KERNEL_VERSION}'"
             exit 1
           fi
 
@@ -181,9 +184,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Move the imports pin, and refuse a tree that would misdirect the credential
+      - name: Move the kernel pin, and refuse a tree that would misdirect the credential
         env:
-          IMPORTS_VERSION: ${{ inputs.dotmac_imports_version }}
+          KERNEL_VERSION: ${{ inputs.dotmac_kernel_version }}
         run: |
           set -euo pipefail
           # `set-versions` refuses unless the ref's OWN tree declares the
@@ -194,10 +197,10 @@ jobs:
           # configure the resolver.
           python scripts/erp_lock.py set-versions \
             --manifest work/pyproject.toml \
-            --movement "dotmac-imports=${IMPORTS_VERSION}"
+            --movement "dotmac-kernel=${KERNEL_VERSION}"
           python scripts/erp_lock.py manifest-guard \
             --manifest work/pyproject.toml --checkout work \
-            --movement "dotmac-imports=${IMPORTS_VERSION}"
+            --movement "dotmac-kernel=${KERNEL_VERSION}"
 
       - name: There is a credential to resolve with
         env:
@@ -220,7 +223,7 @@ jobs:
       - name: Download the closed bundle from the private index
         env:
           TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}
-          IMPORTS_VERSION: ${{ inputs.dotmac_imports_version }}
+          KERNEL_VERSION: ${{ inputs.dotmac_kernel_version }}
         run: |
           set -euo pipefail
           # The netrc exists for the length of this ONE step. curl offers it
@@ -237,7 +240,7 @@ jobs:
           python scripts/erp_lock.py acquire \
             --manifest work/pyproject.toml \
             --lock work/poetry.lock \
-            --movement "dotmac-imports=${IMPORTS_VERSION}" \
+            --movement "dotmac-kernel=${KERNEL_VERSION}" \
             --out /tmp/bundle
 
       - name: The bundle carries no credential out of this job
@@ -321,9 +324,9 @@ jobs:
       - name: Install the repository-pinned, importable Poetry
         uses: ./.github/actions/setup-poetry
 
-      - name: Move the imports pin, and refuse a tree that would misdirect the credential
+      - name: Move the kernel pin, and refuse a tree that would misdirect the credential
         env:
-          IMPORTS_VERSION: ${{ inputs.dotmac_imports_version }}
+          KERNEL_VERSION: ${{ inputs.dotmac_kernel_version }}
         run: |
           set -euo pipefail
           # Re-derived here rather than carried from `acquire` as an
@@ -331,10 +334,10 @@ jobs:
           # judged.
           python scripts/erp_lock.py set-versions \
             --manifest work/pyproject.toml \
-            --movement "dotmac-imports=${IMPORTS_VERSION}"
+            --movement "dotmac-kernel=${KERNEL_VERSION}"
           python scripts/erp_lock.py manifest-guard \
             --manifest work/pyproject.toml --checkout work \
-            --movement "dotmac-imports=${IMPORTS_VERSION}"
+            --movement "dotmac-kernel=${KERNEL_VERSION}"
 
       - name: This job holds no credential, and says so before it resolves
         run: |
@@ -367,7 +370,7 @@ jobs:
             --directory /tmp/bundle > /tmp/mirror.log 2>&1 &
           for _ in $(seq 1 50); do
             if curl -sS -o /dev/null --fail \
-              "http://127.0.0.1:${MIRROR_PORT}/simple/dotmac-imports/"; then
+              "http://127.0.0.1:${MIRROR_PORT}/simple/dotmac-kernel/"; then
               echo "the bundle is being served on 127.0.0.1:${MIRROR_PORT}"
               exit 0
             fi
@@ -405,7 +408,7 @@ jobs:
           python scripts/erp_lock.py off-index-lock \
             --lock /tmp/poetry.lock.before
 
-      - name: Resolve the imports pin, with no way to ask for more
+      - name: Resolve the kernel pin, with no way to ask for more
         working-directory: work
         env:
           POETRY_CONFIG_DIR: /tmp/poetry-config
@@ -434,10 +437,10 @@ jobs:
           set -euo pipefail
           poetry check --lock
 
-      - name: Only imports moved, and only version, files and dependencies
+      - name: Only kernel moved, and only version, files and dependencies
         run: |
           set -euo pipefail
-          # The drift gate covers the WHOLE lock. Only `dotmac-imports` may
+          # The drift gate covers the WHOLE lock. Only `dotmac-kernel` may
           # differ, and only in `version`, `files` and `dependencies`.
           # `dotmac-files`, `dotmac-tax`, and every other entry remain identical.
           # `dependencies` is permitted here because a version move can raise
@@ -473,13 +476,13 @@ jobs:
 
       - name: The lock's hashes are the bytes the index published
         env:
-          IMPORTS_VERSION: ${{ inputs.dotmac_imports_version }}
+          KERNEL_VERSION: ${{ inputs.dotmac_kernel_version }}
         run: |
           set -euo pipefail
           python scripts/erp_lock.py verify \
             --lock work/poetry.lock \
             --digests /tmp/bundle/digests.json \
-            --movement "dotmac-imports=${IMPORTS_VERSION}"
+            --movement "dotmac-kernel=${KERNEL_VERSION}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -518,7 +521,7 @@ jobs:
       - name: Assemble the evidence — the manifest and the lock, bound together
         env:
           REF: ${{ inputs.ref }}
-          IMPORTS_VERSION: ${{ inputs.dotmac_imports_version }}
+          KERNEL_VERSION: ${{ inputs.dotmac_kernel_version }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -538,7 +541,7 @@ jobs:
             --lock /tmp/pair/poetry.lock \
             --credential-proof /tmp/bundle/credential-scan.ok \
             --coordinate "ref=${REF}" \
-            --coordinate "dotmac_imports_version=${IMPORTS_VERSION}" \
+            --coordinate "dotmac_kernel_version=${KERNEL_VERSION}" \
             --coordinate "repository=${REPOSITORY}" \
             --coordinate "workflow_run=${RUN_ID}" \
             --coordinate "run_attempt=${RUN_ATTEMPT}" \
@@ -546,7 +549,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: erp-lock-${{ inputs.dotmac_imports_version }}
+          name: erp-lock-${{ inputs.dotmac_kernel_version }}
           path: /tmp/evidence
           if-no-files-found: error
 
