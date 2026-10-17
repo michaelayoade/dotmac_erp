@@ -72,9 +72,7 @@ def allocate_from_module(
     Runs inside the caller's transaction; the caller holds the legacy
     row lock, which serializes seeding per organization and series.
     """
-    scope = OrganizationTenantContext.for_organization(
-        organization_id
-    ).tenant_scope
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
     next_value = (
         1
         if should_reset(sequence, reference_date)
