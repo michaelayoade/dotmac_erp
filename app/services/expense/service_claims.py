@@ -496,8 +496,6 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         the web flow's single-or-JSON-array convention. Raises FileUploadError
         on invalid files.
         """
-        from app.services.file_upload import get_expense_receipt_upload
-
         claim = self.get_claim(org_id, claim_id)
         if claim.employee_id != employee_id:
             raise ExpenseClaimNotFoundError(claim_id)
@@ -508,15 +506,16 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         if item is None:
             raise ExpenseNotFoundError(f"Claim item {item_id} not found")
 
-        result = get_expense_receipt_upload().save(
+        from app.services.expense.receipt_files import stage_receipt
+
+        prepared = stage_receipt(
+            self.db,
+            org_id,
             file_data=file_data,
             content_type=content_type,
-            subdirs=(str(org_id),),
             original_filename=original_filename,
         )
-        item.receipt_url = self._append_receipt_url(
-            item.receipt_url, str(result.file_path)
-        )
+        item.receipt_url = self._append_receipt_url(item.receipt_url, str(prepared.id))
         self.db.flush()
         logger.info(
             "Attached receipt to expense claim item %s (claim %s)",
