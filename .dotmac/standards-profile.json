@@ -190,7 +190,7 @@
         "path": "tests/tasks/test_outbox_relay.py",
         "symbol": "test_email_handler_dead_letters_permanent_smtp_error",
         "category": "outbound_transport",
-        "fingerprint": "6bc63b552c27b8334cdb4d63382292eb5ec464dc07e7fb63d800a88bd275f63d"
+        "fingerprint": "b775e17fadfcaca7f8f710e2af679aaff5420895d3fe7fe39d273e56a1f3accb"
       },
       {
         "path": "tests/test_email_services.py",

@@ -185,10 +185,8 @@ def _make_line(
     )
 
 
-@patch(
-    "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting"
-)
-def test_handler_missing_batch_id_is_non_retryable(mock_update: MagicMock) -> None:
+@patch("app.services.finance.gl.balance_refresh.BalanceRefreshService.refresh_balance")
+def test_handler_missing_batch_id_is_non_retryable(mock_refresh: MagicMock) -> None:
     db = MagicMock()
     event = SimpleNamespace(
         event_id=uuid4(),
@@ -199,7 +197,7 @@ def test_handler_missing_batch_id_is_non_retryable(mock_update: MagicMock) -> No
     with pytest.raises(NonRetryableEventError):
         handle_ledger_posting_completed(db, event)
     db.scalars.assert_not_called()
-    mock_update.assert_not_called()
+    mock_refresh.assert_not_called()
 
 
 def test_automation_handler_executes_rule_in_delivery_transaction() -> None:
@@ -242,10 +240,8 @@ def test_automation_handler_executes_rule_in_delivery_transaction() -> None:
     execute.assert_called_once()
 
 
-@patch(
-    "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting"
-)
-def test_handler_no_lines_for_batch(mock_update: MagicMock) -> None:
+@patch("app.services.finance.gl.balance_refresh.BalanceRefreshService.refresh_balance")
+def test_handler_no_lines_for_batch(mock_refresh: MagicMock) -> None:
     db = MagicMock()
     db.scalars.return_value.all.return_value = []
     event = _make_event()
@@ -253,13 +249,11 @@ def test_handler_no_lines_for_batch(mock_update: MagicMock) -> None:
     handle_ledger_posting_completed(db, event)
     # scalars called but no balance updates
     db.scalars.assert_called_once()
-    mock_update.assert_not_called()
+    mock_refresh.assert_not_called()
 
 
-@patch(
-    "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting"
-)
-def test_handler_updates_balances(mock_update: MagicMock) -> None:
+@patch("app.services.finance.gl.balance_refresh.BalanceRefreshService.refresh_balance")
+def test_handler_refreshes_affected_balance_keys(mock_refresh: MagicMock) -> None:
     db = MagicMock()
     line1 = _make_line()
     line2 = _make_line()
@@ -268,14 +262,12 @@ def test_handler_updates_balances(mock_update: MagicMock) -> None:
 
     handle_ledger_posting_completed(db, event)
 
-    assert mock_update.call_count == 2
+    assert mock_refresh.call_count == 2
 
 
-@patch(
-    "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting"
-)
+@patch("app.services.finance.gl.balance_refresh.BalanceRefreshService.refresh_balance")
 def test_handler_acquires_balance_keys_in_deterministic_order(
-    mock_update: MagicMock,
+    mock_refresh: MagicMock,
 ) -> None:
     db = MagicMock()
     later = _make_line(account_id="ffffffff-ffff-ffff-ffff-ffffffffffff")
@@ -284,23 +276,16 @@ def test_handler_acquires_balance_keys_in_deterministic_order(
 
     handle_ledger_posting_completed(db, _make_event())
 
-    account_ids = [call.kwargs["account_id"] for call in mock_update.call_args_list]
+    account_ids = [call.args[1] for call in mock_refresh.call_args_list]
     assert account_ids == [earlier.account_id, later.account_id]
 
 
 @patch(
-    "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting",
+    "app.services.finance.gl.balance_refresh.BalanceRefreshService.refresh_balance",
     side_effect=[RuntimeError("boom"), None],
 )
-def test_handler_raises_on_per_line_failure(mock_update: MagicMock) -> None:
-    """CANARY: one failed ledger line prevents whole-event success.
-
-    The old handler swallowed per-line exceptions and returned normally,
-    letting the relay settle the event as PUBLISHED with balances only
-    partially applied. update_balance_for_posting is additive (re-applying
-    a line double-counts), so the failure MUST raise and roll back the
-    whole delivery transaction — no unrecorded partial can settle.
-    """
+def test_handler_raises_on_refresh_failure(mock_refresh: MagicMock) -> None:
+    """CANARY: one failed refresh prevents whole-event success."""
     db = MagicMock()
     line1 = _make_line()
     line2 = _make_line()
@@ -310,28 +295,23 @@ def test_handler_raises_on_per_line_failure(mock_update: MagicMock) -> None:
     with pytest.raises(RuntimeError, match="boom"):
         handle_ledger_posting_completed(db, event)
 
-    # Failed on the first line and stopped — no further application.
-    assert mock_update.call_count == 1
+    assert mock_refresh.call_count == 1
 
 
-@patch(
-    "app.services.finance.gl.account_balance.AccountBalanceService.update_balance_for_posting"
-)
-def test_handler_passes_decimal_zero_for_none_amounts(mock_update: MagicMock) -> None:
+@patch("app.services.finance.gl.balance_refresh.BalanceRefreshService.refresh_balance")
+def test_handler_deduplicates_account_period_keys(mock_refresh: MagicMock) -> None:
     db = MagicMock()
     line = _make_line()
-    line.debit_amount = None
-    line.credit_amount = None
-    db.scalars.return_value.all.return_value = [line]
+    duplicate = _make_line(
+        account_id=line.account_id,
+        fiscal_period_id=line.fiscal_period_id,
+    )
+    db.scalars.return_value.all.return_value = [line, duplicate]
     event = _make_event()
 
     handle_ledger_posting_completed(db, event)
 
-    call_kwargs = mock_update.call_args.kwargs
-    assert call_kwargs["debit_amount"] == Decimal("0")
-    assert call_kwargs["credit_amount"] == Decimal("0")
-    assert isinstance(call_kwargs["debit_amount"], Decimal)
-    assert isinstance(call_kwargs["credit_amount"], Decimal)
+    mock_refresh.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

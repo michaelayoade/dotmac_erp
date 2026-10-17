@@ -27,9 +27,8 @@ that settles as PUBLISHED with a recorded no-op note.
 Handler success means the complete declared consequence committed. Handlers
 must NOT commit and must NOT swallow per-item failures: any exception rolls
 back the whole delivery transaction, so a partial application can never
-persist (this whole-event atomicity is what keeps retries idempotent when
-the underlying writer — e.g. AccountBalanceService.update_balance_for_posting,
-which is additive — is not per-item idempotent).
+persist. Balance projection handlers use authoritative refreshes so retries
+are idempotent even when the queue worker and relay overlap.
 """
 
 from __future__ import annotations
@@ -41,7 +40,6 @@ import os
 import socket
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
@@ -138,21 +136,19 @@ def handle_ledger_posting_completed(db: Session, event: Any) -> None:
     """
     Handle ledger.posting.completed events.
 
-    Reads posted ledger lines for the batch and incrementally updates
-    account_balance rows. This provides near-real-time balance updates
-    (the daily rebuild_account_balances task and the outbox reconciler
-    serve as safety nets).
+    Reads posted ledger lines for the batch and authoritatively refreshes each
+    affected account/period projection. The posting transaction also enqueues
+    these keys for refresh; using the same idempotent writer here prevents the
+    relay and queue worker from double-applying a posting when they race.
 
-    Failure semantics: any per-line failure RAISES, which rolls back the
-    whole delivery transaction. ``update_balance_for_posting`` is additive
-    (re-applying a line double-counts), so partial progress must never be
-    committed — whole-event atomicity is the idempotency mechanism. An
-    unrecorded partial failure can therefore never settle as published.
+    Failure semantics: any refresh failure raises and rolls back the whole
+    delivery transaction, so an incomplete consequence cannot settle as
+    published.
     """
     from sqlalchemy import select
 
     from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
-    from app.services.finance.gl.account_balance import AccountBalanceService
+    from app.services.finance.gl.balance_refresh import BalanceRefreshService
 
     payload = event.payload
     batch_id = payload.get("batch_id")
@@ -178,38 +174,18 @@ def handle_ledger_posting_completed(db: Session, event: Any) -> None:
         logger.info("No ledger lines for batch %s (may already be processed)", batch_id)
         return
 
-    # Every delivery acquires dimensional balance locks in the same order, so
-    # two batches with overlapping accounts cannot form a lock cycle.
-    lines.sort(
-        key=lambda line: (
-            str(line.account_id),
-            str(line.fiscal_period_id),
-            str(line.business_unit_id or ""),
-            str(line.cost_center_id or ""),
-            str(line.project_id or ""),
-            str(line.segment_id or ""),
-            str(line.ledger_line_id),
-        )
+    refresh_keys = sorted(
+        {(line.account_id, line.fiscal_period_id) for line in lines},
+        key=lambda key: (str(key[0]), str(key[1])),
     )
-    for line in lines:
-        # No per-line exception handling: a failed line fails the event.
-        AccountBalanceService.update_balance_for_posting(
-            db,
-            organization_id=org_id,
-            account_id=line.account_id,
-            fiscal_period_id=line.fiscal_period_id,
-            debit_amount=line.debit_amount or Decimal("0"),
-            credit_amount=line.credit_amount or Decimal("0"),
-            business_unit_id=line.business_unit_id,
-            cost_center_id=line.cost_center_id,
-            project_id=line.project_id,
-            segment_id=line.segment_id,
-        )
+    refresh_service = BalanceRefreshService(db)
+    for account_id, fiscal_period_id in refresh_keys:
+        refresh_service.refresh_balance(org_id, account_id, fiscal_period_id)
 
     logger.info(
-        "Updated account balances for batch %s (%d lines)",
+        "Refreshed account balances for batch %s (%d keys)",
         batch_id,
-        len(lines),
+        len(refresh_keys),
     )
 
 
