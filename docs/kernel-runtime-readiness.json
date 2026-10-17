@@ -54,7 +54,7 @@
   ],
   "composition": [
     {
-      "declaration": "dotmac-kernel is pinned at the exact version 0.1.0a98 from the forgejo private index (no range operator).",
+      "declaration": "dotmac-kernel is pinned at the exact version 0.1.0a105 from the forgejo private index (no range operator).",
       "source_reference": "pyproject.toml:60"
     },
     {

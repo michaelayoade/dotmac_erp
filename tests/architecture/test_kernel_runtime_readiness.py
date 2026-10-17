@@ -234,7 +234,7 @@ def check_sync_runtime_not_yet_composed(root: Path) -> bool:
         if any(marker in content for marker in KERNEL_SYNC_RUNTIME_MARKERS):
             return False
     pin = _read(root, "pyproject.toml")
-    return 'dotmac-kernel = {version = "0.1.0a98", source = "forgejo"}' in pin
+    return 'dotmac-kernel = {version = "0.1.0a105", source = "forgejo"}' in pin
 
 
 REQUIREMENT_CHECKS: dict[str, Any] = {
@@ -269,7 +269,7 @@ REQUIREMENT_CHECKS: dict[str, Any] = {
 
 def check_kernel_pin_is_exact(root: Path) -> bool:
     pin = _read(root, "pyproject.toml")
-    return 'dotmac-kernel = {version = "0.1.0a98", source = "forgejo"}' in pin
+    return 'dotmac-kernel = {version = "0.1.0a105", source = "forgejo"}' in pin
 
 
 def check_consume_pure_modules(root: Path) -> bool:
