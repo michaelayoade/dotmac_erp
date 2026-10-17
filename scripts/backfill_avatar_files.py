@@ -29,14 +29,15 @@ import os
 import sys
 from pathlib import PurePath
 
-from dotmac_files import FilePolicy, prepare_upload, stage_file
-from dotmac_kernel.cache import PlatformScope
+from dotmac_files import FilePolicy, prepare_upload
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.models.person import Person
 from app.services.avatar import avatar_file_id
+from app.services.file_object_cleanup import stage_platform_file
+from app.tenancy import platform_scope
 from app.services.storage import get_dotmac_files_provider
 
 _MEDIA_BY_EXTENSION = {
@@ -86,7 +87,7 @@ def backfill(db: Session, *, dry_run: bool) -> dict:
                 content = readable.read()
             prepared = prepare_upload(
                 provider,
-                scope=PlatformScope(),
+                scope=platform_scope(),
                 policy=policy,
                 original_filename=filename,
                 declared_media_type=_MEDIA_BY_EXTENSION.get(
@@ -94,7 +95,7 @@ def backfill(db: Session, *, dry_run: bool) -> dict:
                 ),
                 chunks=iter([content]),
             )
-            stage_file(db, prepared=prepared)
+            stage_platform_file(db, prepared=prepared)
             person.avatar_url = f"/files/avatars/{prepared.id}"
             db.commit()
             summary["backfilled"] += 1

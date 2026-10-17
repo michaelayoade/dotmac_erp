@@ -254,10 +254,11 @@ def download_avatar(
         return _stream_s3_file(f"avatars/{filename}", filename=filename)
 
     from dotmac_files import FileError, download_target, open_object
-    from dotmac_kernel.cache import PlatformScope
+
+    from app.tenancy import platform_scope
 
     try:
-        target = download_target(db, scope=PlatformScope(), file_id=file_id)
+        target = download_target(db, scope=platform_scope(), file_id=file_id)
         readable = open_object(get_dotmac_files_provider(), target=target)
     except FileError:
         raise HTTPException(status_code=404, detail="File not found") from None

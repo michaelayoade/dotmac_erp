@@ -22,14 +22,14 @@ from dotmac_files import (
     FilePolicy,
     prepare_upload,
     request_deletion,
-    stage_file,
 )
-from dotmac_kernel.cache import PlatformScope
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.services.file_object_cleanup import stage_platform_file
 from app.services.storage import get_dotmac_files_provider
+from app.tenancy import platform_scope
 
 logger = logging.getLogger(__name__)
 
@@ -87,14 +87,14 @@ async def save_avatar(file: UploadFile, person_id: str, db: Session) -> str:
     try:
         prepared = prepare_upload(
             get_dotmac_files_provider(),
-            scope=PlatformScope(),
+            scope=platform_scope(),
             policy=policy,
             original_filename=file.filename
             or f"avatar{_get_extension(file.content_type or '')}",
             declared_media_type=file.content_type or "",
             chunks=iter([content]),
         )
-        stage_file(db, prepared=prepared)
+        stage_platform_file(db, prepared=prepared)
     except FileError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -113,7 +113,7 @@ def delete_avatar(avatar_url: str | None, db: Session | None = None) -> None:
             try:
                 request_deletion(
                     db,
-                    scope=PlatformScope(),
+                    scope=platform_scope(),
                     file_id=file_id,
                     now=datetime.now(timezone.utc),
                 )

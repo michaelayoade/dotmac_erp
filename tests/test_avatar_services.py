@@ -108,7 +108,7 @@ class TestAvatarSizeLimits:
                 avatar_service, "get_dotmac_files_provider", return_value=MagicMock()
             ),
             patch.object(avatar_service, "prepare_upload", return_value=_prepared()),
-            patch.object(avatar_service, "stage_file") as stage,
+            patch.object(avatar_service, "stage_platform_file") as stage,
         ):
             url = await avatar_service.save_avatar(file, "person-123", db)
             assert url == "/files/avatars/12345678-1234-5678-1234-567812345678"

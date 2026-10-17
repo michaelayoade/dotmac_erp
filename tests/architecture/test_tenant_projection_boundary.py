@@ -93,6 +93,7 @@ def test_only_the_projection_service_may_import_kernel_tenant() -> None:
     assert {
         Path("tenancy.py"): {
             ("dotmac_kernel.cache", "TenantScope"),
+            ("dotmac_kernel.cache", "PlatformScope"),
         },
         Path("services/tenant_projection.py"): {
             ("dotmac_kernel.models", "Tenant"),

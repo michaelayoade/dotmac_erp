@@ -72,7 +72,10 @@ def test_only_reservation_owner_calls_stage_file() -> None:
             count = stage_calls(ast.parse(path.read_text(encoding="utf-8")))
             if count:
                 hits[relative] = count
-    assert hits == {OWNER: 1}
+    # Two calls, both in the owner: tenant staging behind the cleanup-key
+    # reservation, and platform staging (avatars) behind the canonical-key
+    # check. Any call anywhere else is a bypass.
+    assert hits == {OWNER: 2}
 
 
 def test_direct_stage_bypass_is_detected() -> None:
