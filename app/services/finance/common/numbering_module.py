@@ -36,8 +36,10 @@ from app.models.finance.core_config.numbering_sequence import (
 )
 from app.services.finance.common.sequence_utils import should_reset
 
-#: Internal-facing series issued by the module. Bank statements cut over
-#: first (#722); the rest of the internal batch follows the same pattern.
+#: Series issued by the module. Bank statements cut over first (#722),
+#: the internal batch followed (#723), then the counterparty, payroll and
+#: treasury series. Only INVOICE and CREDIT_NOTE remain on the legacy
+#: allocator, pending their continuity report.
 CUT_OVER_SERIES = frozenset(
     {
         SequenceType.BANK_STATEMENT,
@@ -54,6 +56,17 @@ CUT_OVER_SERIES = frozenset(
         SequenceType.EMPLOYEE,
         SequenceType.LEAVE_APPLICATION,
         SequenceType.EXPENSE,
+        SequenceType.CUSTOMER,
+        SequenceType.QUOTE,
+        SequenceType.SALES_ORDER,
+        SequenceType.SHIPMENT,
+        SequenceType.PURCHASE_ORDER,
+        SequenceType.SUPPLIER_INVOICE,
+        SequenceType.EXPENSE_INVOICE,
+        SequenceType.SALARY_SLIP,
+        SequenceType.PAYROLL_ENTRY,
+        SequenceType.PAYMENT,
+        SequenceType.RECEIPT,
     }
 )
 
