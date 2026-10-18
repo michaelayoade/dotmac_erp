@@ -80,6 +80,7 @@ def _stage_attachment_file(
     file_data: bytes,
     content_type: str | None,
     original_filename: str | None,
+    config=None,
 ):
     """Upload and stage one finance attachment on the tenant files plane."""
     from dotmac_files import FileError, FilePolicy, prepare_upload
@@ -95,7 +96,7 @@ def _stage_attachment_file(
     from app.services.tenant_projection import reconcile_organization_tenant
     from app.tenancy import OrganizationTenantContext
 
-    config = _upload_service().config
+    config = config or _upload_service().config
     policy = FilePolicy(
         max_bytes=config.max_size_bytes,
         allowed_extensions=frozenset(config.allowed_extensions),

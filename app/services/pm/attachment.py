@@ -2,7 +2,12 @@
 Project Attachment Service.
 
 Handles file uploads and attachments for projects and tasks.
-Uses the common.attachment model with polymorphic association.
+Uses the common.attachment model with polymorphic association. New
+uploads are ``dotmac-files`` tenant records staged in the caller's
+transaction (shared seam with finance attachments); ``file_path``
+then holds the canonical tenant storage key. Pre-cutover relative
+paths keep their legacy serving branch until
+``scripts/backfill_pm_attachment_files.py`` rewrites them.
 """
 
 import logging
@@ -148,21 +153,21 @@ class ProjectAttachmentService:
             (attachment, error_message)
         """
         content = file_data.read()
-        file_size = len(content)
 
-        is_valid, error = self.validate_file(filename, file_size, content_type)
-        if not is_valid:
-            return None, error
+        from app.services.finance.common.attachment import _stage_attachment_file
 
         try:
-            upload_result = self.upload_service.save(
-                content,
+            prepared = _stage_attachment_file(
+                db,
+                organization_id,
+                file_data=content,
                 content_type=content_type,
-                subdirs=[entity_type.lower(), str(entity_id)],
                 original_filename=filename,
+                config=self.upload_service.config,
             )
         except FileUploadError as exc:
             return None, str(exc)
+        file_size = prepared.size_bytes
 
         # Determine category
         category = (
@@ -177,13 +182,13 @@ class ProjectAttachmentService:
             entity_type=entity_type,
             entity_id=entity_id,
             file_name=filename,
-            file_path=upload_result.relative_path,
+            file_path=prepared.storage_key,
             content_type=content_type,
             file_size=file_size,
             category=category,
             description=description,
             storage_provider="LOCAL",
-            checksum=upload_result.checksum,
+            checksum=prepared.checksum_sha256.removeprefix("sha256:"),
             uploaded_by=uploaded_by_id,
         )
         db.add(attachment)
@@ -224,6 +229,35 @@ class ProjectAttachmentService:
             return False, "Attachment not found"
 
         if hard_delete:
+            # Retire the staged file record, or delete the legacy object.
+            from app.services.finance.common.attachment import staged_file_id
+
+            staged_id = staged_file_id(attachment)
+            if staged_id is not None:
+                from datetime import datetime, timezone
+
+                from dotmac_files import FileError, request_deletion
+
+                from app.tenancy import OrganizationTenantContext
+
+                try:
+                    request_deletion(
+                        db,
+                        scope=OrganizationTenantContext.for_organization(
+                            organization_id
+                        ).tenant_scope,
+                        file_id=staged_id,
+                        now=datetime.now(timezone.utc),
+                    )
+                except FileError:
+                    logger.warning(
+                        "attachment file %s could not be marked for deletion",
+                        staged_id,
+                    )
+                db.delete(attachment)
+                db.flush()
+                logger.info("Deleted attachment %s", attachment_id)
+                return True, None
             # Delete file from disk
             try:
                 if Path(attachment.file_path).is_absolute():
@@ -264,6 +298,13 @@ class ProjectAttachmentService:
         if not attachment:
             return None
 
+        from app.services.finance.common.attachment import staged_file_id
+
+        if staged_file_id(attachment) is not None:
+            # Post-cutover attachments have no local path; callers stream
+            # them via staged_download_response below.
+            return None
+
         try:
             if Path(attachment.file_path).is_absolute():
                 resolved = Path(attachment.file_path).resolve()
@@ -281,6 +322,44 @@ class ProjectAttachmentService:
             return None
 
         return str(resolved)
+
+
+def staged_download_response(db: Session, organization_id: uuid.UUID, attachment):
+    """Stream a post-cutover attachment, or None when it is not staged."""
+    from app.services.finance.common.attachment import staged_file_id
+
+    file_id = staged_file_id(attachment)
+    if file_id is None:
+        return None
+
+    from dotmac_files import FileError, download_target, open_object
+    from fastapi.responses import StreamingResponse
+
+    from app.services.storage import get_dotmac_files_provider
+    from app.tenancy import OrganizationTenantContext
+
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        target = download_target(db, scope=scope, file_id=file_id)
+        readable = open_object(get_dotmac_files_provider(), target=target)
+    except FileError:
+        return None
+
+    def _chunks():
+        with readable:
+            while chunk := readable.read(64 * 1024):
+                yield chunk
+
+    return StreamingResponse(
+        _chunks(),
+        media_type=target.detected_media_type
+        or attachment.content_type
+        or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{attachment.file_name}"',
+            "Content-Length": str(target.size_bytes),
+        },
+    )
 
 
 # Singleton instance

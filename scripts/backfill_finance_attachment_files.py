@@ -26,7 +26,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.models.finance.common.attachment import Attachment
+from app.models.finance.common.attachment import Attachment, AttachmentCategory
 from app.services.finance.common.attachment import (
     _stage_attachment_file,
     staged_file_id,
@@ -59,6 +59,13 @@ def backfill(db: Session, *, dry_run: bool) -> dict:
     summary = {"candidates": 0, "present": 0, "backfilled": 0, "failures": []}
     attachments = db.scalars(select(Attachment)).all()
     for attachment in attachments:
+        # PM categories stage under the PM upload policy instead; see
+        # scripts/backfill_pm_attachment_files.py.
+        if attachment.category in (
+            AttachmentCategory.PROJECT,
+            AttachmentCategory.TASK,
+        ):
+            continue
         if staged_file_id(attachment) is not None:
             continue
         summary["candidates"] += 1
