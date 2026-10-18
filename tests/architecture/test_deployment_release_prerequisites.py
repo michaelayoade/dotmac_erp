@@ -32,7 +32,7 @@ from scripts.write_image_release import (
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = ROOT / "deploy" / "product-manifest.json"
 EXPECTED_MANIFEST_DIGEST = (
-    "sha256:8e012e8b1930a2f997b19c3e1f7569d53ffa873a2821b42d842224c693670f66"
+    "sha256:7de43ab6bc1e7a7f2f96cc2dcdd9ee5e1b1ca3db18c2feac200a08c1b0518d10"
 )
 
 
