@@ -10,7 +10,6 @@ import base64
 import hashlib
 import itertools
 import json
-import sys
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -77,16 +76,6 @@ def _ensure_hr_tables(engine) -> None:
 
 
 _claim_number_counter = itertools.count(1)
-
-
-def _dotmac_files_import_stub() -> SimpleNamespace:
-    """Keep the receipt-owner test isolated from the external storage package."""
-    return SimpleNamespace(
-        FilePolicy=MagicMock,
-        PreparedFile=object,
-        StorageProvider=object,
-        prepare_upload=MagicMock(),
-    )
 
 
 @pytest.fixture()
@@ -833,38 +822,37 @@ class TestFieldManagerDecision:
             f"expense-receipt.v1:{payload.source_claim_id}:"
             f"{source_line_id}:{source_attachment_id}"
         )
-        upload_service = MagicMock()
-        upload_service.save.return_value = SimpleNamespace(
-            s3_key=f"expense_receipts/{org_id}/receipt.pdf",
-            file_size=len(content),
-            checksum=hashlib.sha256(content).hexdigest(),
+        prepared = SimpleNamespace(
+            id=uuid.uuid4(),
+            storage_key=f"tenants/{org_id}/files/receipt.pdf",
+            size_bytes=len(content),
+            checksum_sha256="sha256:" + hashlib.sha256(content).hexdigest(),
         )
-        with patch.dict(sys.modules, {"dotmac_files": _dotmac_files_import_stub()}):
-            with patch(
-                "app.services.file_upload.get_expense_receipt_upload",
-                return_value=upload_service,
-            ):
-                first = service.attach_expense_receipt(
-                    org_id,
-                    source_claim_id=payload.source_claim_id,
-                    item_id=draft.items[0].item_id,
-                    payload=receipt,
-                    idempotency_key=key,
-                    uploaded_by_person_id=employee.person_id,
-                )
-                second = service.attach_expense_receipt(
-                    org_id,
-                    source_claim_id=payload.source_claim_id,
-                    item_id=draft.items[0].item_id,
-                    payload=receipt,
-                    idempotency_key=key,
-                    uploaded_by_person_id=employee.person_id,
-                )
+        with patch(
+            "app.services.expense.receipt_files.stage_receipt",
+            return_value=prepared,
+        ) as stage_receipt:
+            first = service.attach_expense_receipt(
+                org_id,
+                source_claim_id=payload.source_claim_id,
+                item_id=draft.items[0].item_id,
+                payload=receipt,
+                idempotency_key=key,
+                uploaded_by_person_id=employee.person_id,
+            )
+            second = service.attach_expense_receipt(
+                org_id,
+                source_claim_id=payload.source_claim_id,
+                item_id=draft.items[0].item_id,
+                payload=receipt,
+                idempotency_key=key,
+                uploaded_by_person_id=employee.person_id,
+            )
 
         assert first.created is True
         assert second.created is False
         assert second.attachment_id == first.attachment_id
-        assert upload_service.save.call_count == 1
+        assert stage_receipt.call_count == 1
         attachments = list(
             db_session.scalars(
                 select(Attachment).where(
@@ -935,16 +923,15 @@ class TestFieldManagerDecision:
             f"{source_line_id}:{receipt.source_attachment_id}"
         )
 
-        with patch.dict(sys.modules, {"dotmac_files": _dotmac_files_import_stub()}):
-            with pytest.raises(SubExpenseReceiptError) as exc:
-                service.attach_expense_receipt(
-                    org_id,
-                    source_claim_id=payload.source_claim_id,
-                    item_id=draft.items[0].item_id,
-                    payload=receipt,
-                    idempotency_key=key,
-                    uploaded_by_person_id=employee.person_id,
-                )
+        with pytest.raises(SubExpenseReceiptError) as exc:
+            service.attach_expense_receipt(
+                org_id,
+                source_claim_id=payload.source_claim_id,
+                item_id=draft.items[0].item_id,
+                payload=receipt,
+                idempotency_key=key,
+                uploaded_by_person_id=employee.person_id,
+            )
         assert exc.value.code == "checksum_mismatch"
 
     def test_trusted_sub_approval_skips_erp_approval_chain(
