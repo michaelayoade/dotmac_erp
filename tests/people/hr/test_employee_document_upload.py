@@ -12,8 +12,7 @@ from starlette.datastructures import Headers, UploadFile
 
 from app.models.people.hr import DocumentType
 from app.services.file_upload import (
-    InvalidExtensionError,
-    UploadResult,
+    FileUploadError,
     get_employee_document_upload,
 )
 from app.services.people.hr.employee_extended import (
@@ -30,17 +29,14 @@ def test_upload_document_stores_generated_path_and_file_metadata(monkeypatch):
     db = MagicMock()
     db.scalar.return_value = SimpleNamespace(employee_id=employee_id)
 
-    upload_service = MagicMock()
-    upload_service.save.return_value = UploadResult(
-        s3_key=f"employee_documents/{organization_id}/{employee_id}/generated.pdf",
-        relative_path=f"{organization_id}/{employee_id}/generated.pdf",
-        filename="generated.pdf",
-        file_size=18,
-        checksum="checksum",
-    )
+    prepared = MagicMock()
+    prepared.storage_key = f"tenants/{organization_id}/files/{uuid4()}"
+    prepared.size_bytes = 18
+    prepared.checksum_sha256 = "sha256:checksum"
+    stage = MagicMock(return_value=prepared)
     monkeypatch.setattr(
-        "app.services.people.hr.employee_extended.get_employee_document_upload",
-        lambda: upload_service,
+        "app.services.people.hr.employee_extended._stage_employee_file",
+        stage,
     )
 
     service = EmployeeDocumentService(db, organization_id)
@@ -53,15 +49,17 @@ def test_upload_document_stores_generated_path_and_file_metadata(monkeypatch):
         content_type="application/pdf",
     )
 
-    upload_service.save.assert_called_once_with(
+    stage.assert_called_once_with(
+        db,
+        organization_id,
         file_data=b"%PDF test content",
         content_type="application/pdf",
-        subdirs=(str(organization_id), str(employee_id)),
         original_filename="contract.pdf",
     )
     assert document.organization_id == organization_id
     assert document.employee_id == employee_id
-    assert document.file_path.endswith("/generated.pdf")
+    assert document.file_path == prepared.storage_key
+    assert document.content_checksum == "checksum"
     assert document.file_name == "contract.pdf"
     assert document.file_size == 18
     assert document.mime_type == "application/pdf"
@@ -75,13 +73,9 @@ def test_upload_document_rejects_file_validation_error(monkeypatch):
     db = MagicMock()
     db.scalar.return_value = SimpleNamespace(employee_id=employee_id)
 
-    upload_service = MagicMock()
-    upload_service.save.side_effect = InvalidExtensionError(
-        "File extension '.exe' not allowed"
-    )
     monkeypatch.setattr(
-        "app.services.people.hr.employee_extended.get_employee_document_upload",
-        lambda: upload_service,
+        "app.services.people.hr.employee_extended._stage_employee_file",
+        MagicMock(side_effect=FileUploadError("File extension '.exe' not allowed")),
     )
 
     service = EmployeeDocumentService(db, organization_id)
@@ -106,7 +100,7 @@ def test_upload_document_rejects_employee_outside_organization(monkeypatch):
 
     get_upload = MagicMock()
     monkeypatch.setattr(
-        "app.services.people.hr.employee_extended.get_employee_document_upload",
+        "app.services.people.hr.employee_extended._stage_employee_file",
         get_upload,
     )
 
@@ -133,7 +127,7 @@ def test_upload_document_rejects_empty_file(monkeypatch):
 
     get_upload = MagicMock()
     monkeypatch.setattr(
-        "app.services.people.hr.employee_extended.get_employee_document_upload",
+        "app.services.people.hr.employee_extended._stage_employee_file",
         get_upload,
     )
 

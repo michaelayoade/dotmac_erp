@@ -64,7 +64,7 @@ from app.services.expense.limit_service import (
     ExpenseLimitService,
     ExpenseLimitServiceError,
 )
-from app.services.file_upload import FileUploadError, get_employee_document_upload
+from app.services.file_upload import FileUploadError
 from app.services.finance.banking.bank_directory import BankDirectoryService
 from app.services.people.attendance import AttendanceService, CheckInRequirementError
 from app.services.people.attendance.attendance_service import AttendanceServiceError
@@ -79,6 +79,8 @@ from app.services.people.hr.employee_extended import (
     EmployeeExtendedDataError,
     EmployeeDocumentService,
     EmployeeExtendedSelfServiceService,
+    _stage_employee_file,
+    delete_employee_file,
 )
 from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.info_change_service import (
@@ -1159,6 +1161,7 @@ class SelfServiceWebService:
 
     def _upload_pending_evidence(
         self,
+        db: Session,
         *,
         org_id: UUID,
         employee_id: UUID,
@@ -1172,22 +1175,22 @@ class SelfServiceWebService:
         file_bytes = upload.file.read()
         if not file_bytes:
             raise EmployeeExtendedDataError("The selected file is empty")
-        upload_service = get_employee_document_upload()
         try:
-            result = upload_service.save(
+            prepared = _stage_employee_file(
+                db,
+                org_id,
                 file_data=file_bytes,
-                content_type=upload.content_type or "application/octet-stream",
-                subdirs=(str(org_id), str(employee_id)),
+                content_type=upload.content_type,
                 original_filename=file_name,
             )
         except FileUploadError as exc:
             raise EmployeeExtendedDataError(str(exc)) from exc
         return PendingEvidence(
-            path=result.relative_path,
+            path=prepared.storage_key,
             file_name=file_name,
-            file_size=result.file_size,
+            file_size=prepared.size_bytes,
             mime_type=upload.content_type,
-            checksum=result.checksum,
+            checksum=prepared.checksum_sha256.removeprefix("sha256:"),
         )
 
     @staticmethod
@@ -1655,10 +1658,10 @@ class SelfServiceWebService:
         employee_id = self._get_employee_id(db, org_id, person_id)
 
         pending_evidence = None
-        upload_service = get_employee_document_upload()
         info_change_service = InfoChangeService(db)
         try:
             pending_evidence = self._upload_pending_evidence(
+                db,
                 org_id=org_id,
                 employee_id=employee_id,
                 upload=upload,
@@ -1681,7 +1684,7 @@ class SelfServiceWebService:
             self._rollback_and_reprime(db, org_id)
             if pending_evidence:
                 try:
-                    upload_service.delete(pending_evidence.path)
+                    delete_employee_file(db, org_id, pending_evidence.path)
                 except Exception:
                     logger.exception("Failed to clean up pending self-service document")
             return self.document_upload_form_response(
@@ -1707,7 +1710,6 @@ class SelfServiceWebService:
         info_change_service = InfoChangeService(db)
         normalized_rows: list[DocumentBatchItemInput] = []
         row_errors = False
-        upload_service = get_employee_document_upload()
         uploaded: list[PendingEvidence] = []
         try:
             for row in rows:
@@ -1721,6 +1723,7 @@ class SelfServiceWebService:
                 upload = row.get("_upload")
                 try:
                     pending = self._upload_pending_evidence(
+                        db,
                         org_id=org_id,
                         employee_id=employee_id,
                         upload=upload,
@@ -1742,7 +1745,11 @@ class SelfServiceWebService:
                 )
             if row_errors:
                 for item in uploaded:
-                    upload_service.delete(item.path)
+                    delete_employee_file(db, org_id, item.path)
+                if uploaded:
+                    # Persist the deletion marks for staged uploads that
+                    # will never be submitted; nothing else is pending.
+                    db.commit()
                 return self.document_upload_form_response(
                     request,
                     auth,
@@ -1764,7 +1771,7 @@ class SelfServiceWebService:
             self._rollback_and_reprime(db, org_id)
             for item in uploaded:
                 try:
-                    upload_service.delete(item.path)
+                    delete_employee_file(db, org_id, item.path)
                 except Exception:
                     logger.exception("Failed to clean up pending self-service document")
             return self.document_upload_form_response(
@@ -1826,10 +1833,10 @@ class SelfServiceWebService:
             else InfoChangeOperation.CREATE
         )
         pending_evidence = None
-        upload_service = get_employee_document_upload()
         try:
             if section in SUPPORTING_FILE_REQUIRED_SECTIONS:
                 pending_evidence = self._upload_pending_evidence(
+                    db,
                     org_id=org_id,
                     employee_id=employee_id,
                     upload=upload,
@@ -1883,7 +1890,7 @@ class SelfServiceWebService:
             self._rollback_and_reprime(db, org_id)
             if pending_evidence:
                 try:
-                    upload_service.delete(pending_evidence.path)
+                    delete_employee_file(db, org_id, pending_evidence.path)
                 except Exception:
                     logger.exception("Failed to clean up pending self-service evidence")
             return self.extended_profile_response(
@@ -1910,7 +1917,6 @@ class SelfServiceWebService:
         person_id = coerce_uuid(auth.person_id)
         employee_id = self._get_employee_id(db, org_id, person_id)
         info_change_service = InfoChangeService(db)
-        upload_service = get_employee_document_upload()
         prepared: list[ExtendedBatchItemInput] = []
         uploaded: list[PendingEvidence] = []
         row_errors = False
@@ -1933,6 +1939,7 @@ class SelfServiceWebService:
                 if section in SUPPORTING_FILE_REQUIRED_SECTIONS:
                     try:
                         pending_evidence = self._upload_pending_evidence(
+                            db,
                             org_id=org_id,
                             employee_id=employee_id,
                             upload=row.get("_upload"),
@@ -1956,7 +1963,11 @@ class SelfServiceWebService:
                 )
             if row_errors:
                 for item in uploaded:
-                    upload_service.delete(item.path)
+                    delete_employee_file(db, org_id, item.path)
+                if uploaded:
+                    # Persist the deletion marks for staged uploads that
+                    # will never be submitted; nothing else is pending.
+                    db.commit()
                 return self.extended_profile_response(
                     request,
                     auth,
@@ -1983,7 +1994,7 @@ class SelfServiceWebService:
             self._rollback_and_reprime(db, org_id)
             for item in uploaded:
                 try:
-                    upload_service.delete(item.path)
+                    delete_employee_file(db, org_id, item.path)
                 except Exception:
                     logger.exception("Failed to clean up pending self-service evidence")
             return self.extended_profile_response(

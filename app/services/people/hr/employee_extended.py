@@ -51,6 +51,8 @@ if TYPE_CHECKING:
 __all__ = [
     "EmployeeDocumentService",
     "ResolvedDocumentDownload",
+    "delete_employee_file",
+    "staged_file_id_for_path",
     "EmployeeQualificationService",
     "EmployeeCertificationService",
     "EmployeeDependentService",
@@ -115,6 +117,98 @@ class ResolvedDocumentDownload:
     content_type: str
     content_length: int | None
     filename: str
+
+
+def staged_file_id_for_path(file_path: str | None) -> uuid.UUID | None:
+    """The staged file id for a post-cutover path, else None."""
+    path = file_path or ""
+    if not path.startswith("tenants/"):
+        return None
+    try:
+        return uuid.UUID(path.rsplit("/", 1)[-1])
+    except ValueError:
+        return None
+
+
+def _stage_employee_file(
+    db: Session,
+    organization_id: uuid.UUID,
+    *,
+    file_data: bytes,
+    content_type: str | None,
+    original_filename: str | None,
+):
+    """Upload and stage one employee document on the tenant files plane."""
+    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files.providers import StorageError
+
+    from app.models.finance.core_org.organization import Organization
+    from app.services.file_object_cleanup import (
+        CleanupUnsafeReferenceView,
+        stage_tenant_file_if_unreserved,
+    )
+    from app.services.file_upload import FileStorageError
+    from app.services.storage import get_dotmac_files_provider
+    from app.services.tenant_projection import reconcile_organization_tenant
+    from app.tenancy import OrganizationTenantContext
+
+    config = get_employee_document_upload().config
+    policy = FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=frozenset(config.allowed_extensions),
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        prepared = prepare_upload(
+            get_dotmac_files_provider(),
+            scope=scope,
+            policy=policy,
+            original_filename=original_filename or "document",
+            declared_media_type=content_type or "",
+            chunks=iter([file_data]),
+        )
+    except FileError as exc:
+        raise FileUploadError(str(exc)) from exc
+    except StorageError as exc:
+        raise FileStorageError(str(exc)) from exc
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
+    try:
+        stage_tenant_file_if_unreserved(db, prepared=prepared)
+    except CleanupUnsafeReferenceView as exc:
+        raise FileUploadError(str(exc)) from exc
+    return prepared
+
+
+def delete_employee_file(
+    db: Session, organization_id: uuid.UUID, file_path: str | None
+) -> None:
+    """Delete one employee file object, staged or legacy, best effort."""
+    if not file_path:
+        return
+    staged_id = staged_file_id_for_path(file_path)
+    if staged_id is None:
+        get_employee_document_upload().delete(file_path)
+        return
+    from dotmac_files import FileError, request_deletion
+
+    from app.tenancy import OrganizationTenantContext
+
+    try:
+        request_deletion(
+            db,
+            scope=OrganizationTenantContext.for_organization(
+                organization_id
+            ).tenant_scope,
+            file_id=staged_id,
+            now=datetime.now(timezone.utc),
+        )
+    except FileError:
+        logger.warning("employee file %s could not be marked for deletion", staged_id)
 
 
 def _clean_text(value: object | None) -> str | None:
@@ -219,6 +313,40 @@ class EmployeeDocumentService:
     ) -> ResolvedDocumentDownload:
         """Resolve an active employee document to a storage-backed download stream."""
         document = self.get_document(document_id)
+        staged_id = staged_file_id_for_path(document.file_path)
+        if staged_id is not None:
+            from dotmac_files import FileError, download_target, open_object
+
+            from app.services.storage import get_dotmac_files_provider
+            from app.tenancy import OrganizationTenantContext
+
+            scope = OrganizationTenantContext.for_organization(
+                self.organization_id
+            ).tenant_scope
+            try:
+                target = download_target(self.db, scope=scope, file_id=staged_id)
+                readable = open_object(get_dotmac_files_provider(), target=target)
+            except FileError:
+                raise DocumentNotFoundError(
+                    f"Document {document_id} not found"
+                ) from None
+
+            def _chunks():
+                with readable:
+                    while chunk := readable.read(64 * 1024):
+                        yield chunk
+
+            return ResolvedDocumentDownload(
+                chunks=_chunks(),
+                content_type=target.detected_media_type
+                or document.mime_type
+                or "application/octet-stream",
+                content_length=target.size_bytes,
+                filename=_safe_download_filename(
+                    document.file_name,
+                    fallback=f"employee-document-{document.document_id}",
+                ),
+            )
         storage = get_storage()
         s3_key = document.file_path
         if not s3_key.startswith("employee_documents/"):
@@ -333,12 +461,12 @@ class EmployeeDocumentService:
         if not file_bytes:
             raise EmployeeExtendedDataError("The selected file is empty")
 
-        upload_service = get_employee_document_upload()
         try:
-            upload_result = upload_service.save(
+            prepared = _stage_employee_file(
+                self.db,
+                self.organization_id,
                 file_data=file_bytes,
-                content_type=content_type or "application/octet-stream",
-                subdirs=(str(self.organization_id), str(employee_id)),
+                content_type=content_type,
                 original_filename=original_filename,
             )
         except FileUploadError as exc:
@@ -349,18 +477,20 @@ class EmployeeDocumentService:
                 employee_id=employee_id,
                 document_type=document_type,
                 document_name=document_name,
-                file_path=upload_result.relative_path,
+                file_path=prepared.storage_key,
                 file_name=original_filename,
-                file_size=upload_result.file_size,
+                file_size=prepared.size_bytes,
                 mime_type=content_type,
-                content_checksum=upload_result.checksum,
+                content_checksum=prepared.checksum_sha256.removeprefix("sha256:"),
                 description=description,
                 issue_date=issue_date,
                 expiry_date=expiry_date,
             )
         except Exception:
             try:
-                upload_service.delete(upload_result.relative_path)
+                delete_employee_file(
+                    self.db, self.organization_id, prepared.storage_key
+                )
             except Exception:
                 logger.exception(
                     "Failed to clean up employee document upload after database error"

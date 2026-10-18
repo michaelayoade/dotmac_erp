@@ -52,7 +52,6 @@ from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
-from app.services.file_upload import get_employee_document_upload
 from app.services.email import employee_can_receive_email, send_email
 from app.services.notification import NotificationService
 from app.services.people.hr.employee_extended import (
@@ -62,6 +61,8 @@ from app.services.people.hr.employee_extended import (
     EmployeeQualificationService,
     EmployeeSkillService,
     SkillService,
+    delete_employee_file,
+    staged_file_id_for_path,
 )
 from app.services.people.hr.org_resolver import OrgResolver
 from app.services.storage import get_storage
@@ -623,9 +624,10 @@ class InfoChangeService:
         """Delete pending evidence for a request if present."""
         if not request.pending_document_path:
             return
-        upload_service = get_employee_document_upload()
         try:
-            upload_service.delete(request.pending_document_path)
+            delete_employee_file(
+                self.db, request.organization_id, request.pending_document_path
+            )
         except Exception:
             logger.exception(
                 "Failed to delete pending evidence for info change request %s",
@@ -2013,6 +2015,36 @@ class InfoChangeService:
             raise ValueError("Evidence not found")
         if employee_id is not None and request.employee_id != employee_id:
             raise ValueError("Evidence not found")
+        staged_id = staged_file_id_for_path(request.pending_document_path)
+        if staged_id is not None:
+            from dotmac_files import FileError, download_target, open_object
+
+            from app.services.storage import get_dotmac_files_provider
+            from app.tenancy import OrganizationTenantContext
+
+            scope = OrganizationTenantContext.for_organization(
+                organization_id
+            ).tenant_scope
+            try:
+                target = download_target(self.db, scope=scope, file_id=staged_id)
+                readable = open_object(get_dotmac_files_provider(), target=target)
+            except FileError:
+                raise ValueError("Evidence not found") from None
+
+            def _chunks():
+                with readable:
+                    while chunk := readable.read(64 * 1024):
+                        yield chunk
+
+            filename = (
+                Path(request.pending_document_name or "evidence").name or "evidence"
+            )
+            return (
+                _chunks(),
+                target.detected_media_type or "application/octet-stream",
+                target.size_bytes,
+                filename,
+            )
         storage = get_storage()
         s3_key = request.pending_document_path
         if not s3_key.startswith("employee_documents/"):

@@ -625,6 +625,12 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         # app/api/files.py is already listed above (avatar cutover).
         "app/services/careers/web.py",
         "scripts/backfill_form_answer_files.py",
+        # Employee document cutover (tenant plane): prepare/open only.
+        # self_service_web stages via hr.employee_extended helpers and
+        # never imports the provider itself.
+        "app/services/people/hr/employee_extended.py",
+        "app/services/people/hr/info_change_service.py",
+        "scripts/backfill_employee_document_files.py",
     }
 )
 
