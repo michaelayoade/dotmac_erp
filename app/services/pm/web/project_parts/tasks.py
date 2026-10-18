@@ -503,6 +503,12 @@ def download_task_attachment(
     ):
         raise HTTPException(status_code=404, detail="Attachment not found")
 
+    from app.services.pm.attachment import staged_download_response
+
+    staged = staged_download_response(db, org_id, attachment)
+    if staged is not None:
+        return staged
+
     file_path = project_attachment_service.get_file_path(
         db, org_id, coerce_uuid(attachment_id)
     )
