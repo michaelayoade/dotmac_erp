@@ -335,6 +335,16 @@ class NumberingService:
         self, sequence: NumberingSequence, sample_number: int = 1
     ) -> str:
         """Generate a preview of what a number would look like."""
+        from app.services.finance.common.numbering_module import CUT_OVER_SERIES
+
+        if sequence.sequence_type in CUT_OVER_SERIES:
+            from app.services.finance.common.numbering_module import (
+                preview_from_module,
+            )
+
+            return preview_from_module(
+                sequence, sample_number=sample_number, reference_date=date.today()
+            )
         today = date.today()
         parts = []
 

@@ -221,3 +221,25 @@ def test_trailing_separator_in_legacy_prefix_is_cleaned(session: Session) -> Non
     )
 
     assert number == "EXP-2026-00001"
+
+
+def test_preview_uses_the_module_formatter_for_cut_over_series() -> None:
+    from app.services.finance.common.numbering import NumberingService
+
+    service = NumberingService.__new__(NumberingService)
+    sequence = _sequence()
+
+    preview = service.preview_format(sequence, sample_number=42)
+
+    assert preview == f"STMT-{date.today().year}-00042"
+
+
+def test_preview_for_a_legacy_series_keeps_the_legacy_shape() -> None:
+    from app.services.finance.common.numbering import NumberingService
+
+    service = NumberingService.__new__(NumberingService)
+    sequence = _sequence(sequence_type=SequenceType.INVOICE, prefix="INV")
+
+    preview = service.preview_format(sequence, sample_number=42)
+
+    assert preview == f"INV{date.today().year}-00042"

@@ -22,7 +22,13 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from dotmac_numbering import SeriesConfiguration, allocate, configure_series
+from dotmac_numbering import (
+    NumberSeries,
+    SeriesConfiguration,
+    allocate,
+    configure_series,
+    format_number,
+)
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_org.organization import Organization
@@ -102,6 +108,30 @@ def series_configuration_for(
         reset_policy=_RESET_POLICIES[sequence.reset_frequency],
         start_value=start_value,
     )
+
+
+def preview_from_module(
+    sequence: NumberingSequence, *, sample_number: int = 1, reference_date: date
+) -> str:
+    """Render a settings preview with the module's one formatter.
+
+    Uses a transient series built from the same configuration mapping
+    as allocation, so the preview can never drift from issued numbers.
+    """
+    configuration = series_configuration_for(sequence)
+    series = NumberSeries(
+        series_code=configuration.series_code,
+        prefix=configuration.prefix,
+        suffix=configuration.suffix,
+        separator=configuration.separator,
+        min_digits=configuration.min_digits,
+        include_year=int(configuration.include_year),
+        year_digits=configuration.year_digits,
+        include_month=int(configuration.include_month),
+        reset_policy=configuration.reset_policy,
+        start_value=configuration.start_value,
+    )
+    return format_number(series, value=sample_number, reference_date=reference_date)
 
 
 def allocate_from_module(
