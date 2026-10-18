@@ -965,6 +965,42 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
         if cls._is_remote_receipt(receipt_url):
             return RedirectResponse(receipt_url, status_code=302)
 
+        from app.services.expense.receipt_files import receipt_file_id
+
+        file_id = receipt_file_id(receipt_url)
+        if file_id is not None:
+            # Post-cutover staged receipt: stream through the module's
+            # authorized target under this claim's tenant scope.
+            from dotmac_files import FileError, download_target, open_object
+
+            from app.services.storage import get_dotmac_files_provider
+            from app.tenancy import OrganizationTenantContext
+
+            scope = OrganizationTenantContext.for_organization(org_id).tenant_scope
+            try:
+                target = download_target(db, scope=scope, file_id=file_id)
+                readable = open_object(get_dotmac_files_provider(), target=target)
+            except FileError:
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=Receipt+not+found",
+                    status_code=303,
+                )
+
+            def _chunks():
+                with readable:
+                    while chunk := readable.read(64 * 1024):
+                        yield chunk
+
+            filename = cls._UNSAFE_FILENAME_RE.sub("_", target.original_filename)
+            return StreamingResponse(
+                _chunks(),
+                media_type=target.detected_media_type,
+                headers={
+                    "Content-Disposition": f'inline; filename="{filename}"',
+                    "Content-Length": str(target.size_bytes),
+                },
+            )
+
         org_prefix = f"expense_receipts/{org_id}/"
         if receipt_url.startswith("expense_receipts/"):
             if not receipt_url.lower().startswith(org_prefix.lower()):

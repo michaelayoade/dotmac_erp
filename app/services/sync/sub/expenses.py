@@ -849,11 +849,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
             AttachmentCategory,
         )
         from app.services.expense import ExpenseService
-        from app.services.file_upload import (
-            FileStorageError,
-            FileUploadError,
-            get_expense_receipt_upload,
-        )
+        from app.services.file_upload import FileStorageError, FileUploadError
 
         expected_key = (
             f"expense-receipt.v1:{source_claim_id}:"
@@ -940,11 +936,13 @@ class _ExpenseSyncMixin(_SubSyncBase):
             )
 
         try:
-            upload = get_expense_receipt_upload().save(
-                content,
+            from app.services.expense.receipt_files import stage_receipt
+
+            prepared = stage_receipt(
+                self.db,
+                org_id,
+                file_data=content,
                 content_type=payload.mime_type,
-                subdirs=(str(org_id), str(claim.claim_id), str(item.item_id)),
-                prefix=str(payload.source_attachment_id),
                 original_filename=payload.file_name,
             )
         except FileStorageError as exc:
@@ -963,18 +961,18 @@ class _ExpenseSyncMixin(_SubSyncBase):
             entity_type="EXPENSE_CLAIM_ITEM",
             entity_id=item.item_id,
             file_name=payload.file_name,
-            file_path=upload.s3_key,
-            file_size=upload.file_size,
+            file_path=prepared.storage_key,
+            file_size=prepared.size_bytes,
             content_type=payload.mime_type,
             category=AttachmentCategory.RECEIPT,
             description=marker,
             storage_provider="S3",
-            checksum=upload.checksum,
+            checksum=prepared.checksum_sha256.removeprefix("sha256:"),
             uploaded_by=uploaded_by_person_id,
         )
         self.db.add(attachment)
         item.receipt_url = ExpenseService.append_receipt_url(
-            item.receipt_url, upload.s3_key
+            item.receipt_url, str(prepared.id)
         )
         self.db.flush()
         return SubExpenseReceiptResponse(
