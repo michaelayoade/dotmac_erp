@@ -617,6 +617,10 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         "app/services/sla_policies_admin_web.py",
         "app/services/sla_policies_web.py",
         "scripts/backfill_sla_policy_files.py",
+        # Support attachment cutover (tenant plane): prepare/open only.
+        "app/services/support/attachment.py",
+        "app/services/support/web_attachments.py",
+        "scripts/backfill_support_attachment_files.py",
     }
 )
 

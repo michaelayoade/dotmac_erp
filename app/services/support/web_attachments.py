@@ -99,6 +99,43 @@ class AttachmentWebService:
 
         storage_path = attachment.storage_path or ""
 
+        # Post-cutover staged attachment: stream through the module's
+        # authorized target under the attachment's tenant scope.
+        from app.services.support.attachment import staged_file_id
+
+        file_id = staged_file_id(attachment)
+        if file_id is not None:
+            from dotmac_files import FileError, download_target, open_object
+
+            from app.services.storage import get_dotmac_files_provider
+            from app.tenancy import OrganizationTenantContext
+
+            scope = OrganizationTenantContext.for_organization(org_id).tenant_scope
+            try:
+                target = download_target(db, scope=scope, file_id=file_id)
+                readable = open_object(get_dotmac_files_provider(), target=target)
+            except FileError:
+                return RedirectResponse(
+                    url=f"/support/tickets/{ticket_id}?error=File+not+found",
+                    status_code=303,
+                )
+
+            def _chunks():
+                with readable:
+                    while chunk := readable.read(64 * 1024):
+                        yield chunk
+
+            return StreamingResponse(
+                _chunks(),
+                media_type=attachment.content_type or "application/octet-stream",
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="{attachment.filename}"'
+                    ),
+                    "Content-Length": str(target.size_bytes),
+                },
+            )
+
         # Preferred: stream from S3 (FileUploadService stores there).
         if storage_path and not Path(storage_path).is_absolute():
             s3_key = storage_path
