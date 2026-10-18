@@ -196,18 +196,15 @@ class TestSaveFile:
         """Test successful file save."""
         file_content = BytesIO(b"PDF file content here")
 
-        mock_upload_result = MagicMock()
-        mock_upload_result.relative_path = "org/invoice/file.pdf"
-        mock_upload_result.file_size = 21
-        mock_upload_result.checksum = "abc123"
-
-        mock_svc = MagicMock()
-        mock_svc.save.return_value = mock_upload_result
+        mock_prepared = MagicMock()
+        mock_prepared.storage_key = f"tenants/{org_id}/files/{uuid4()}"
+        mock_prepared.size_bytes = 21
+        mock_prepared.checksum_sha256 = "sha256:abc123"
 
         with (
             patch(
-                "app.services.finance.common.attachment._upload_service",
-                return_value=mock_svc,
+                "app.services.finance.common.attachment._stage_attachment_file",
+                return_value=mock_prepared,
             ),
             patch(
                 "app.services.finance.common.attachment.Attachment"
@@ -240,7 +237,15 @@ class TestSaveFile:
         )
         file_content = BytesIO(b"binary content")
 
-        with pytest.raises(ValueError) as exc:
+        with (
+            patch(
+                "app.services.finance.common.attachment._stage_attachment_file",
+                side_effect=FileUploadError(
+                    "File type application/x-msdownload not allowed"
+                ),
+            ),
+            pytest.raises(ValueError) as exc,
+        ):
             AttachmentService.save_file(
                 mock_db, org_id, invalid_input, file_content, user_id
             )
@@ -261,12 +266,9 @@ class TestSaveFile:
         # Create file larger than max size
         large_content = BytesIO(b"x" * (MAX_FILE_SIZE + 1000))
 
-        mock_svc = MagicMock()
-        mock_svc.save.side_effect = FileUploadError("File too large")
-
         with patch(
-            "app.services.finance.common.attachment._upload_service",
-            return_value=mock_svc,
+            "app.services.finance.common.attachment._stage_attachment_file",
+            side_effect=FileUploadError("File too large"),
         ):
             with pytest.raises(ValueError) as exc:
                 AttachmentService.save_file(
