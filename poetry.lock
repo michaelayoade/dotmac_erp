@@ -1092,14 +1092,14 @@ reference = "forgejo"
 
 [[package]]
 name = "dotmac-files"
-version = "0.1.0a5"
+version = "0.1.0a6"
 description = "DotMac dual-plane stored-object lifecycle and validation"
 optional = false
 python-versions = ">=3.11,<3.14"
 groups = ["main"]
 files = [
-    {file = "dotmac_files-0.1.0a5-py3-none-any.whl", hash = "sha256:e6b0a4aa4cdaed5bdeff9aeb3b948e26db287aae18e118afaf759e6d5211a7c7"},
-    {file = "dotmac_files-0.1.0a5.tar.gz", hash = "sha256:5aae9a846d9baeef5823d237719841dfada3fedd1cdb142d623ebe2f86f8d9ee"},
+    {file = "dotmac_files-0.1.0a6-py3-none-any.whl", hash = "sha256:9bc308283406ea029106560128623a668f69e4008a0a6a9a03a2fa218b046e29"},
+    {file = "dotmac_files-0.1.0a6.tar.gz", hash = "sha256:05cbdf65bd0e291f5c9682c5f3d229e5ff3540b3ed5ec35852edd74b8acd6272"},
 ]
 
 [package.dependencies]
@@ -5196,4 +5196,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.13"
-content-hash = "05f9e47502161bd82671517294ede59450e84f691e053d056750b8a3c69ca0e2"
+content-hash = "9ba74e4ab4a67c8654a8048489401af1ad24f91a30d273ca9625aad0f9ef9b62"
