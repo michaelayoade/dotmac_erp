@@ -5,6 +5,12 @@ Handles secure file uploads for job applications with:
 - File type validation (extension + magic bytes)
 - Size limits
 - Secure file storage
+
+New resumes are ``dotmac-files`` tenant records: ``save_resume``
+stages and commits the file (the application row is created later)
+and returns the staged file id. Legacy object keys keep their
+existing lookup/delete/download branches until
+``scripts/backfill_resume_files.py`` rewrites stored resume URLs.
 """
 
 import logging
@@ -39,6 +45,59 @@ class FileTooLargeError(ResumeServiceError):
     """File exceeds size limit."""
 
     pass
+
+
+def _stage_resume_file(
+    db,
+    organization_id: uuid.UUID,
+    *,
+    file_data: bytes,
+    original_filename: str | None,
+    config,
+):
+    """Upload and stage one resume on the tenant files plane."""
+    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files.providers import StorageError
+
+    from app.models.finance.core_org.organization import Organization
+    from app.services.file_object_cleanup import (
+        CleanupUnsafeReferenceView,
+        stage_tenant_file_if_unreserved,
+    )
+    from app.services.file_upload import FileStorageError
+    from app.services.storage import get_dotmac_files_provider
+    from app.services.tenant_projection import reconcile_organization_tenant
+    from app.tenancy import OrganizationTenantContext
+
+    policy = FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=frozenset(config.allowed_extensions),
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        prepared = prepare_upload(
+            get_dotmac_files_provider(),
+            scope=scope,
+            policy=policy,
+            original_filename=original_filename or "resume",
+            declared_media_type="",
+            chunks=iter([file_data]),
+        )
+    except FileError as exc:
+        raise FileUploadError(str(exc)) from exc
+    except StorageError as exc:
+        raise FileStorageError(str(exc)) from exc
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
+    try:
+        stage_tenant_file_if_unreserved(db, prepared=prepared)
+    except CleanupUnsafeReferenceView as exc:
+        raise FileUploadError(str(exc)) from exc
+    return prepared
 
 
 class ResumeService:
@@ -105,18 +164,23 @@ class ResumeService:
         return True, None
 
     def save_resume(
-        self, org_id: uuid.UUID, filename: str, file_data: bytes
+        self, db, org_id: uuid.UUID, filename: str, file_data: bytes
     ) -> tuple[str, str]:
         """
         Save a resume file securely.
 
+        The staged tenant file record commits here: the application row
+        is created by a later submission step, so the file must be
+        durable before it exists.
+
         Args:
-            org_id: Organization UUID for folder isolation
+            db: Database session
+            org_id: Organization UUID for tenant isolation
             filename: Original filename
             file_data: File content
 
         Returns:
-            Tuple of (file_id, relative_path)
+            Tuple of (file_id, storage_key)
 
         Raises:
             InvalidFileTypeError: If file type is not allowed
@@ -130,19 +194,22 @@ class ResumeService:
             raise InvalidFileTypeError(error or "Invalid file")
 
         try:
-            upload_result = self.upload_service.save(
-                file_data,
-                content_type=None,
-                subdirs=[str(org_id)],
+            prepared = _stage_resume_file(
+                db,
+                org_id,
+                file_data=file_data,
                 original_filename=filename,
+                config=self.upload_service.config,
             )
+            db.commit()
         except FileUploadError as exc:
+            db.rollback()
             raise InvalidFileTypeError(str(exc)) from exc
 
-        file_id = Path(upload_result.filename).stem
+        file_id = str(prepared.id)
         logger.info("Resume saved: %s for org %s", file_id, org_id)
 
-        return file_id, upload_result.relative_path
+        return file_id, prepared.storage_key
 
     def _find_s3_key(self, org_id: uuid.UUID, file_id: str) -> str | None:
         """Find the S3 key for a resume by checking each allowed extension.
@@ -180,17 +247,41 @@ class ResumeService:
             return Path(s3_key)
         return None
 
-    def delete_resume(self, org_id: uuid.UUID, file_id: str) -> bool:
+    def delete_resume(self, db, org_id: uuid.UUID, file_id: str) -> bool:
         """
-        Delete a resume file from S3.
+        Delete a resume file, staged or legacy.
 
         Args:
+            db: Database session
             org_id: Organization UUID
             file_id: File UUID
 
         Returns:
             True if deleted, False if not found
         """
+        staged_id = self._staged_file_id(file_id)
+        if staged_id is not None and self._staged_target(db, org_id, staged_id):
+            from datetime import datetime, timezone
+
+            from dotmac_files import FileError, request_deletion
+
+            from app.tenancy import OrganizationTenantContext
+
+            try:
+                request_deletion(
+                    db,
+                    scope=OrganizationTenantContext.for_organization(
+                        org_id
+                    ).tenant_scope,
+                    file_id=staged_id,
+                    now=datetime.now(timezone.utc),
+                )
+                db.commit()
+            except FileError:
+                db.rollback()
+                return False
+            logger.info("Resume deleted: %s for org %s", file_id, org_id)
+            return True
         s3_key = self._find_s3_key(org_id, file_id)
         if s3_key:
             get_storage().delete(s3_key)
@@ -198,19 +289,44 @@ class ResumeService:
             return True
         return False
 
-    def get_resume_url(self, org_id: uuid.UUID, file_id: str) -> str | None:
+    @staticmethod
+    def _staged_file_id(file_id: str) -> uuid.UUID | None:
+        try:
+            return uuid.UUID(str(file_id))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _staged_target(db, org_id: uuid.UUID, file_id: uuid.UUID):
+        """The authorized download target for a staged resume, if any."""
+        from dotmac_files import FileError, download_target
+
+        from app.tenancy import OrganizationTenantContext
+
+        scope = OrganizationTenantContext.for_organization(org_id).tenant_scope
+        try:
+            return download_target(db, scope=scope, file_id=file_id)
+        except FileError:
+            return None
+
+    def get_resume_url(self, db, org_id: uuid.UUID, file_id: str) -> str | None:
         """
         Get the URL for accessing a resume file.
 
-        Returns an authenticated download URL that proxies from S3.
+        Returns an authenticated download URL. Staged resumes resolve
+        through the by-id route; legacy keys keep their org/name URL.
 
         Args:
+            db: Database session
             org_id: Organization UUID
             file_id: File UUID
 
         Returns:
             URL path if file exists, None otherwise
         """
+        staged_id = self._staged_file_id(file_id)
+        if staged_id is not None and self._staged_target(db, org_id, staged_id):
+            return f"/files/resumes/{file_id}"
         path = self.get_resume_path(org_id, file_id)
         if path:
             return f"/files/resumes/{org_id}/{path.name}"

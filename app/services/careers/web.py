@@ -304,7 +304,9 @@ class CareersWebService:
         Returns (file_id, error_message).
         """
         try:
-            file_id, _ = self._resume_service.save_resume(org_id, filename, content)
+            file_id, _ = self._resume_service.save_resume(
+                self.db, org_id, filename, content
+            )
             return file_id, None
         except InvalidFileTypeError as e:
             return None, str(e)

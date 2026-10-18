@@ -409,7 +409,9 @@ class CareersService:
         # Build resume URL if file was uploaded
         resume_url = None
         if resume_file_id:
-            resume_url = self.resume_service.get_resume_url(org_id, resume_file_id)
+            resume_url = self.resume_service.get_resume_url(
+                self.db, org_id, resume_file_id
+            )
 
         # Create application
         application_number = self._generate_application_number(org_id)
