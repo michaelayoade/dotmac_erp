@@ -50,12 +50,12 @@ def test_qualification_error_reprime_happens_before_form_rerender(
     monkeypatch.setattr(
         service,
         "_upload_pending_evidence",
-        lambda **_kwargs: pending_evidence,
+        lambda *_args, **_kwargs: pending_evidence,
     )
     monkeypatch.setattr(
         self_service_web,
-        "get_employee_document_upload",
-        lambda: MagicMock(),
+        "delete_employee_file",
+        lambda *_args: None,
     )
     monkeypatch.setattr(
         InfoChangeService,
