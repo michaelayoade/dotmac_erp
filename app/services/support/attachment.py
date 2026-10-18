@@ -1,7 +1,12 @@
 """
 Ticket Attachment Service.
 
-Handles file uploads and attachments for support tickets.
+Handles file uploads and attachments for support tickets. New uploads
+are ``dotmac-files`` tenant records staged in the caller's transaction;
+``TicketAttachment.storage_path`` then holds the canonical tenant
+storage key (``tenants/<org>/files/<id>``). Pre-cutover relative paths
+keep their legacy serving branch until
+``scripts/backfill_support_attachment_files.py`` rewrites them.
 """
 
 import logging
@@ -22,6 +27,71 @@ from app.services.file_upload import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def staged_file_id(attachment: TicketAttachment) -> uuid.UUID | None:
+    """The staged file id for a post-cutover attachment, else None."""
+    storage_path = attachment.storage_path or ""
+    if not storage_path.startswith("tenants/"):
+        return None
+    try:
+        return uuid.UUID(storage_path.rsplit("/", 1)[-1])
+    except ValueError:
+        return None
+
+
+def _stage_support_file(
+    db: Session,
+    organization_id: uuid.UUID,
+    *,
+    file_data: bytes,
+    content_type: str | None,
+    original_filename: str | None,
+):
+    """Upload and stage one support attachment on the tenant files plane."""
+    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files.providers import StorageError
+
+    from app.models.finance.core_org.organization import Organization
+    from app.services.file_object_cleanup import (
+        CleanupUnsafeReferenceView,
+        stage_tenant_file_if_unreserved,
+    )
+    from app.services.file_upload import FileStorageError
+    from app.services.storage import get_dotmac_files_provider
+    from app.services.tenant_projection import reconcile_organization_tenant
+    from app.tenancy import OrganizationTenantContext
+
+    config = get_support_attachment_upload().config
+    policy = FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=frozenset(config.allowed_extensions),
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        prepared = prepare_upload(
+            get_dotmac_files_provider(),
+            scope=scope,
+            policy=policy,
+            original_filename=original_filename or "attachment",
+            declared_media_type=content_type or "",
+            chunks=iter([file_data]),
+        )
+    except FileError as exc:
+        raise FileUploadError(str(exc)) from exc
+    except StorageError as exc:
+        raise FileStorageError(str(exc)) from exc
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
+    try:
+        stage_tenant_file_if_unreserved(db, prepared=prepared)
+    except CleanupUnsafeReferenceView as exc:
+        raise FileUploadError(str(exc)) from exc
+    return prepared
 
 
 class AttachmentService:
@@ -143,29 +213,32 @@ class AttachmentService:
         Returns:
             (attachment, error_message)
         """
-        content = file_data.read()
-        file_size = len(content)
+        from app.models.support.ticket import Ticket
 
-        is_valid, error = self.validate_file(filename, file_size, content_type)
-        if not is_valid:
-            return None, error
+        ticket = db.get(Ticket, ticket_id)
+        if ticket is None:
+            return None, "Ticket not found"
+
+        content = file_data.read()
 
         try:
-            upload_result = self.upload_service.save(
-                content,
+            prepared = _stage_support_file(
+                db,
+                ticket.organization_id,
+                file_data=content,
                 content_type=content_type,
-                subdirs=[str(ticket_id)],
                 original_filename=filename,
             )
         except FileUploadError as exc:
             return None, str(exc)
+        file_size = prepared.size_bytes
 
         # Create database record
         attachment = TicketAttachment(
             ticket_id=ticket_id,
             comment_id=comment_id,
             filename=filename,
-            storage_path=upload_result.relative_path,
+            storage_path=prepared.storage_key,
             content_type=content_type,
             file_size=file_size,
             uploaded_by_id=uploaded_by_id,
@@ -207,6 +280,32 @@ class AttachmentService:
             return False, "Attachment not found"
 
         if hard_delete:
+            # Retire the staged file record, or delete the legacy object.
+            staged_id = staged_file_id(attachment)
+            if staged_id is not None:
+                from datetime import datetime, timezone
+
+                from dotmac_files import FileError, request_deletion
+
+                from app.tenancy import OrganizationTenantContext
+
+                try:
+                    request_deletion(
+                        db,
+                        scope=OrganizationTenantContext.for_organization(
+                            organization_id
+                        ).tenant_scope,
+                        file_id=staged_id,
+                        now=datetime.now(timezone.utc),
+                    )
+                except FileError:
+                    logger.warning(
+                        "attachment file %s could not be marked for deletion",
+                        staged_id,
+                    )
+                db.delete(attachment)
+                logger.info("Deleted attachment %s", attachment_id)
+                return True, None
             try:
                 if Path(attachment.storage_path).is_absolute():
                     validated_path = resolve_safe_path(
@@ -254,6 +353,10 @@ class AttachmentService:
         """
         attachment = self.get_attachment(db, organization_id, attachment_id)
         if not attachment or not attachment.is_active:
+            return None
+        if staged_file_id(attachment) is not None:
+            # Post-cutover attachments have no local path; callers stream
+            # them through the module's authorized download target.
             return None
 
         try:
