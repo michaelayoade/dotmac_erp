@@ -243,3 +243,56 @@ def test_preview_for_a_legacy_series_keeps_the_legacy_shape() -> None:
     preview = service.preview_format(sequence, sample_number=42)
 
     assert preview == f"INV{date.today().year}-00042"
+
+
+def _async_service_returning(sequence):
+    from unittest.mock import AsyncMock, MagicMock
+
+    from app.services.finance.common.numbering import NumberingService
+
+    service = NumberingService.__new__(NumberingService)
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = sequence
+    service.db = MagicMock()
+    service.db.execute = AsyncMock(return_value=result)
+    service.db.flush = AsyncMock()
+    return service
+
+
+def test_settings_refuse_identity_edits_for_cut_over_series() -> None:
+    import asyncio
+
+    sequence = _sequence()
+    service = _async_service_returning(sequence)
+
+    with pytest.raises(ValueError, match="frozen for cut-over series"):
+        asyncio.run(
+            service.update_sequence(sequence.sequence_id or uuid.uuid4(), prefix="NEW")
+        )
+
+
+def test_settings_allow_unchanged_identity_for_cut_over_series() -> None:
+    import asyncio
+
+    sequence = _sequence()
+    service = _async_service_returning(sequence)
+
+    updated = asyncio.run(
+        service.update_sequence(sequence.sequence_id or uuid.uuid4(), prefix="STMT")
+    )
+
+    assert updated is sequence
+
+
+def test_settings_refuse_counter_reset_for_cut_over_series() -> None:
+    import asyncio
+
+    sequence = _sequence()
+    service = _async_service_returning(sequence)
+
+    with pytest.raises(ValueError, match="never move backward"):
+        asyncio.run(
+            service.reset_sequence_counter(
+                sequence.sequence_id or uuid.uuid4(), new_value=0
+            )
+        )
