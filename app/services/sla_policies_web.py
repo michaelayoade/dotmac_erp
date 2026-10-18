@@ -76,6 +76,39 @@ class SLAPolicyReadService:
         ):
             raise SLAPolicyDocumentNotFoundError("SLA policy document not found")
 
+        if policy.file_path.startswith("tenants/"):
+            # Post-cutover staged document: resolve through the module
+            # under this organization's tenant scope (the row query above
+            # already pinned organization, module and published status).
+            from dotmac_files import FileError, download_target, open_object
+
+            from app.services.storage import get_dotmac_files_provider
+            from app.tenancy import OrganizationTenantContext
+
+            try:
+                file_id = UUID(policy.file_path.rsplit("/", 1)[-1])
+                scope = OrganizationTenantContext.for_organization(
+                    organization_id
+                ).tenant_scope
+                target = download_target(self.db, scope=scope, file_id=file_id)
+                readable = open_object(get_dotmac_files_provider(), target=target)
+            except (FileError, ValueError):
+                raise SLAPolicyDocumentNotFoundError(
+                    "SLA policy document not found"
+                ) from None
+
+            def _chunks():
+                with readable:
+                    while chunk := readable.read(64 * 1024):
+                        yield chunk
+
+            return SLAPolicyDocumentStream(
+                chunks=_chunks(),
+                content_type=policy.file_content_type,
+                content_length=target.size_bytes,
+                file_name=policy.file_name,
+            )
+
         expected_prefix = f"sla_policies/{organization_id}/{article_id}/"
         if not policy.file_path.startswith(expected_prefix):
             raise SLAPolicyDocumentNotFoundError("SLA policy document not found")

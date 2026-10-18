@@ -610,6 +610,10 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         "app/services/expense/receipt_files.py",
         "app/services/expense/web_claims.py",
         "scripts/backfill_expense_receipt_files.py",
+        # SLA policy document cutover (tenant plane): prepare/open only.
+        "app/services/sla_policies_admin_web.py",
+        "app/services/sla_policies_web.py",
+        "scripts/backfill_sla_policy_files.py",
     }
 )
 
