@@ -610,6 +610,9 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         "app/services/expense/receipt_files.py",
         "app/services/expense/web_claims.py",
         "scripts/backfill_expense_receipt_files.py",
+        # Finance attachment cutover (tenant plane): prepare/open only.
+        "app/services/finance/common/attachment.py",
+        "scripts/backfill_finance_attachment_files.py",
     }
 )
 

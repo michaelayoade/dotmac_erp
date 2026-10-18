@@ -1,7 +1,12 @@
 """
 Attachment Service - File upload and management.
 
-Handles file storage, retrieval, and metadata management for document attachments.
+Handles file storage, retrieval, and metadata management for document
+attachments. New uploads are ``dotmac-files`` tenant records staged in
+the caller's transaction; ``Attachment.file_path`` then holds the
+canonical tenant storage key (``tenants/<org>/files/<id>``).
+Pre-cutover relative paths keep their legacy serving branch until
+``scripts/backfill_finance_attachment_files.py`` rewrites them.
 """
 
 import logging
@@ -57,6 +62,71 @@ def _upload_service() -> FileUploadService:
     return get_finance_attachment_upload()
 
 
+def staged_file_id(attachment: Attachment) -> uuid.UUID | None:
+    """The staged file id for a post-cutover attachment, else None."""
+    file_path = attachment.file_path or ""
+    if not file_path.startswith("tenants/"):
+        return None
+    try:
+        return uuid.UUID(file_path.rsplit("/", 1)[-1])
+    except ValueError:
+        return None
+
+
+def _stage_attachment_file(
+    db: Session,
+    organization_id: uuid.UUID,
+    *,
+    file_data: bytes,
+    content_type: str | None,
+    original_filename: str | None,
+):
+    """Upload and stage one finance attachment on the tenant files plane."""
+    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files.providers import StorageError
+
+    from app.models.finance.core_org.organization import Organization
+    from app.services.file_object_cleanup import (
+        CleanupUnsafeReferenceView,
+        stage_tenant_file_if_unreserved,
+    )
+    from app.services.file_upload import FileStorageError
+    from app.services.storage import get_dotmac_files_provider
+    from app.services.tenant_projection import reconcile_organization_tenant
+    from app.tenancy import OrganizationTenantContext
+
+    config = _upload_service().config
+    policy = FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=frozenset(config.allowed_extensions),
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        prepared = prepare_upload(
+            get_dotmac_files_provider(),
+            scope=scope,
+            policy=policy,
+            original_filename=original_filename or "attachment",
+            declared_media_type=content_type or "",
+            chunks=iter([file_data]),
+        )
+    except FileError as exc:
+        raise FileUploadError(str(exc)) from exc
+    except StorageError as exc:
+        raise FileStorageError(str(exc)) from exc
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
+    try:
+        stage_tenant_file_if_unreserved(db, prepared=prepared)
+    except CleanupUnsafeReferenceView as exc:
+        raise FileUploadError(str(exc)) from exc
+    return prepared
+
+
 class AttachmentService:
     """Service for managing document attachments."""
 
@@ -97,15 +167,13 @@ class AttachmentService:
         entity_id = coerce_uuid(input.entity_id)
         user_id = coerce_uuid(uploaded_by)
 
-        safe_entity_type = safe_entity_segment(input.entity_type)
         file_bytes = file_content.read()
-        upload_service = _upload_service()
-
         try:
-            upload_result = upload_service.save(
-                file_bytes,
+            prepared = _stage_attachment_file(
+                db,
+                org_id,
+                file_data=file_bytes,
                 content_type=input.content_type,
-                subdirs=[str(org_id), safe_entity_type.lower()],
                 original_filename=input.file_name,
             )
         except FileUploadError as exc:
@@ -117,13 +185,13 @@ class AttachmentService:
             entity_type=input.entity_type,
             entity_id=entity_id,
             file_name=input.file_name,
-            file_path=upload_result.relative_path,
-            file_size=upload_result.file_size,
+            file_path=prepared.storage_key,
+            file_size=prepared.size_bytes,
             content_type=input.content_type,
             category=input.category,
             description=input.description,
             storage_provider="S3",
-            checksum=upload_result.checksum,
+            checksum=prepared.checksum_sha256.removeprefix("sha256:"),
             uploaded_by=user_id,
             uploaded_at=datetime.utcnow(),
         )
@@ -194,14 +262,36 @@ class AttachmentService:
         if not attachment:
             return False
 
-        # Delete file from storage
-        try:
-            file_path = AttachmentService.get_file_path(attachment)
-        except ValueError:
-            file_path = None
+        # Retire the staged file record, or delete the legacy local file.
+        staged_id = staged_file_id(attachment)
+        if staged_id is not None:
+            from datetime import timezone
 
-        if file_path and file_path.exists():
-            file_path.unlink()
+            from dotmac_files import FileError, request_deletion
+
+            from app.tenancy import OrganizationTenantContext
+
+            try:
+                request_deletion(
+                    db,
+                    scope=OrganizationTenantContext.for_organization(
+                        org_id
+                    ).tenant_scope,
+                    file_id=staged_id,
+                    now=datetime.now(timezone.utc),
+                )
+            except FileError:
+                logger.warning(
+                    "attachment file %s could not be marked for deletion",
+                    staged_id,
+                )
+        else:
+            try:
+                legacy_path = AttachmentService.get_file_path(attachment)
+            except ValueError:
+                legacy_path = None
+            if legacy_path and legacy_path.exists():
+                legacy_path.unlink()
 
         # Delete database record
         db.delete(attachment)

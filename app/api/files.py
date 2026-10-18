@@ -189,6 +189,40 @@ def download_attachment(
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
+    from app.services.finance.common.attachment import staged_file_id
+
+    file_id = staged_file_id(attachment)
+    if file_id is not None:
+        # Post-cutover staged attachment: stream through the module's
+        # authorized target under the attachment's tenant scope.
+        from dotmac_files import FileError, download_target, open_object
+
+        from app.tenancy import OrganizationTenantContext
+
+        scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+        try:
+            target = download_target(db, scope=scope, file_id=file_id)
+            readable = open_object(get_dotmac_files_provider(), target=target)
+        except FileError:
+            raise HTTPException(
+                status_code=404, detail="Attachment not found"
+            ) from None
+
+        def _chunks():
+            with readable:
+                while chunk := readable.read(64 * 1024):
+                    yield chunk
+
+        filename = _UNSAFE_FILENAME_RE.sub("_", attachment.file_name)
+        return StreamingResponse(
+            _chunks(),
+            media_type=attachment.content_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "Content-Length": str(target.size_bytes),
+            },
+        )
+
     # Build S3 key from the stored file_path
     file_path_str = attachment.file_path or ""
     if file_path_str.startswith("attachments/"):
