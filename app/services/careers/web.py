@@ -40,6 +40,59 @@ logger = logging.getLogger(__name__)
 _SUPPRESSED_APPLICATION_CONFIRMATION_JOB_CODES = {"FA1"}
 
 
+def _stage_form_file(
+    db: Session,
+    organization_id: uuid.UUID,
+    *,
+    file_data: bytes,
+    content_type: str | None,
+    original_filename: str | None,
+):
+    """Upload and stage one dynamic form attachment on the tenant plane."""
+    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files.providers import StorageError
+
+    from app.services.file_object_cleanup import (
+        CleanupUnsafeReferenceView,
+        stage_tenant_file_if_unreserved,
+    )
+    from app.services.file_upload import FileStorageError
+    from app.services.storage import get_dotmac_files_provider
+    from app.services.tenant_projection import reconcile_organization_tenant
+    from app.tenancy import OrganizationTenantContext
+
+    config = get_form_attachment_upload().config
+    policy = FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=frozenset(config.allowed_extensions),
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        prepared = prepare_upload(
+            get_dotmac_files_provider(),
+            scope=scope,
+            policy=policy,
+            original_filename=original_filename or "attachment",
+            declared_media_type=content_type or "",
+            chunks=iter([file_data]),
+        )
+    except FileError as exc:
+        raise FileUploadError(str(exc)) from exc
+    except StorageError as exc:
+        raise FileStorageError(str(exc)) from exc
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
+    try:
+        stage_tenant_file_if_unreserved(db, prepared=prepared)
+    except CleanupUnsafeReferenceView as exc:
+        raise FileUploadError(str(exc)) from exc
+    return prepared
+
+
 @dataclass
 class OrganizationContext:
     """Context data for a careers portal organization."""
@@ -263,21 +316,29 @@ class CareersWebService:
         content: bytes,
         content_type: str | None = None,
     ) -> tuple[dict | None, str | None]:
-        """Upload a dynamic form attachment and return a file token object."""
+        """Upload a dynamic form attachment and return a file token object.
+
+        The staged tenant file record commits here: the returned token is
+        embedded in form answers submitted later, so the file must be
+        durable before any application exists.
+        """
         try:
-            result = get_form_attachment_upload().save(
+            prepared = _stage_form_file(
+                self.db,
+                org_id,
                 file_data=content,
                 content_type=content_type,
-                subdirs=(str(org_id),),
                 original_filename=filename,
             )
+            self.db.commit()
         except FileUploadError as e:
+            self.db.rollback()
             return None, str(e)
         return {
-            "file_url": f"/files/{result.s3_key}",
+            "file_url": f"/files/form_attachments/{org_id}/staged/{prepared.id}",
             "file_name": filename,
-            "s3_key": result.s3_key,
-            "file_size": result.file_size,
+            "s3_key": prepared.storage_key,
+            "file_size": prepared.size_bytes,
         }, None
 
     async def submit_application(

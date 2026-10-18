@@ -621,6 +621,10 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         "app/services/support/attachment.py",
         "app/services/support/web_attachments.py",
         "scripts/backfill_support_attachment_files.py",
+        # Form attachment cutover (tenant plane): prepare/open only.
+        # app/api/files.py is already listed above (avatar cutover).
+        "app/services/careers/web.py",
+        "scripts/backfill_form_answer_files.py",
     }
 )
 
