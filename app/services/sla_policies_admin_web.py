@@ -26,6 +26,60 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
+def _stage_sla_document(
+    db: Session,
+    organization_id: UUID,
+    *,
+    file_data: bytes,
+    content_type: str | None,
+    original_filename: str | None,
+):
+    """Upload and stage one SLA policy document on the tenant files plane."""
+    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files.providers import StorageError
+
+    from app.models.finance.core_org.organization import Organization
+    from app.services.file_object_cleanup import (
+        CleanupUnsafeReferenceView,
+        stage_tenant_file_if_unreserved,
+    )
+    from app.services.file_upload import FileStorageError
+    from app.services.storage import get_dotmac_files_provider
+    from app.services.tenant_projection import reconcile_organization_tenant
+    from app.tenancy import OrganizationTenantContext
+
+    config = get_sla_policy_document_upload().config
+    policy = FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=frozenset(config.allowed_extensions),
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        prepared = prepare_upload(
+            get_dotmac_files_provider(),
+            scope=scope,
+            policy=policy,
+            original_filename=original_filename or "sla-policy.pdf",
+            declared_media_type=content_type or "",
+            chunks=iter([file_data]),
+        )
+    except FileError as exc:
+        raise FileUploadError(str(exc)) from exc
+    except StorageError as exc:
+        raise FileStorageError(str(exc)) from exc
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
+    try:
+        stage_tenant_file_if_unreserved(db, prepared=prepared)
+    except CleanupUnsafeReferenceView as exc:
+        raise FileUploadError(str(exc)) from exc
+    return prepared
+
+
 class SLAPolicySection(TypedDict):
     """Validated section stored in ``body_json``."""
 
@@ -143,14 +197,20 @@ class SLAPolicyAdminService:
         organization_id: UUID,
         document_input: SLAPolicyDocumentInput,
     ) -> HelpArticleOverride:
-        """Create a draft SLA policy backed by an S3 document object."""
+        """Create a draft SLA policy backed by a staged tenant file.
+
+        The file record and the policy row share this transaction; a
+        database failure rolls both back and the uploaded object is
+        left for orphan reconciliation, so no compensating delete is
+        needed here.
+        """
         article_id = uuid4()
-        upload_service = get_sla_policy_document_upload()
         try:
-            upload = upload_service.save(
+            prepared = _stage_sla_document(
+                self.db,
+                organization_id,
                 file_data=document_input.file_data,
                 content_type=document_input.file_content_type,
-                subdirs=(str(organization_id), str(article_id)),
                 original_filename=document_input.file_name,
             )
         except FileUploadError as exc:
@@ -163,26 +223,17 @@ class SLAPolicyAdminService:
             title=document_input.title,
             summary=document_input.summary,
             body_json=None,
-            file_path=upload.s3_key,
+            file_path=prepared.storage_key,
             file_name=document_input.file_name,
             file_content_type=document_input.file_content_type,
-            file_size_bytes=upload.file_size,
-            content_hash=upload.checksum,
+            file_size_bytes=prepared.size_bytes,
+            content_hash=prepared.checksum_sha256.removeprefix("sha256:"),
             module_key=self.MODULE_KEY,
             content_type=self.CONTENT_TYPE,
             status=ArticleStatus.DRAFT,
         )
-        try:
-            self.db.add(policy)
-            self.db.flush()
-        except Exception:
-            try:
-                upload_service.delete(upload.s3_key)
-            except Exception:
-                logger.exception(
-                    "Failed to clean up SLA policy document after database error"
-                )
-            raise
+        self.db.add(policy)
+        self.db.flush()
         logger.info("Created SLA policy document: %s", policy.article_id)
         return policy
 
