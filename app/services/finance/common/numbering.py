@@ -335,6 +335,16 @@ class NumberingService:
         self, sequence: NumberingSequence, sample_number: int = 1
     ) -> str:
         """Generate a preview of what a number would look like."""
+        from app.services.finance.common.numbering_module import CUT_OVER_SERIES
+
+        if sequence.sequence_type in CUT_OVER_SERIES:
+            from app.services.finance.common.numbering_module import (
+                preview_from_module,
+            )
+
+            return preview_from_module(
+                sequence, sample_number=sample_number, reference_date=date.today()
+            )
         today = date.today()
         parts = []
 
@@ -398,6 +408,34 @@ class NumberingService:
         if not sequence:
             return None
 
+        from app.services.finance.common.numbering_module import CUT_OVER_SERIES
+
+        if sequence.sequence_type in CUT_OVER_SERIES:
+            # The module freezes identity-shaping fields once a series is
+            # configured; a legacy-row edit would diverge silently and fail
+            # at issuance. Refuse here, where the operator can read why.
+            proposed = {
+                "prefix": prefix,
+                "suffix": suffix,
+                "separator": separator,
+                "min_digits": min_digits,
+                "include_year": include_year,
+                "include_month": include_month,
+                "year_format": year_format,
+                "reset_frequency": reset_frequency,
+            }
+            changed = [
+                field
+                for field, value in proposed.items()
+                if value is not None and value != getattr(sequence, field)
+            ]
+            if changed:
+                raise ValueError(
+                    f"{sequence.sequence_type.value} numbers are issued by "
+                    "dotmac-numbering; identity fields "
+                    f"({', '.join(changed)}) are frozen for cut-over series."
+                )
+
         if prefix is not None:
             sequence.prefix = prefix
         if suffix is not None:
@@ -433,6 +471,15 @@ class NumberingService:
 
         if not sequence:
             return None
+
+        from app.services.finance.common.numbering_module import CUT_OVER_SERIES
+
+        if sequence.sequence_type in CUT_OVER_SERIES:
+            raise ValueError(
+                f"{sequence.sequence_type.value} numbers are issued by "
+                "dotmac-numbering; module counters never move backward, "
+                "so a counter reset would have no effect on issuance."
+            )
 
         sequence.current_number = new_value
         sequence.current_year = date.today().year

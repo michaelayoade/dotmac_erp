@@ -210,11 +210,10 @@ def test_document_input_restricts_extension_mime_and_empty_files():
 def test_create_document_persists_only_approved_metadata_as_a_draft():
     organization_id = uuid.uuid4()
     db = MagicMock()
-    upload_service = MagicMock()
-    upload_service.save.return_value = SimpleNamespace(
-        s3_key="sla_policies/org/article/abc123.pdf",
-        file_size=12,
-        checksum="a" * 64,
+    prepared = SimpleNamespace(
+        storage_key=f"tenants/{organization_id}/files/abc123",
+        size_bytes=12,
+        checksum_sha256="sha256:" + "a" * 64,
     )
     service = SLAPolicyAdminService(db)
     document_input = service.build_document_input(
@@ -225,9 +224,9 @@ def test_create_document_persists_only_approved_metadata_as_a_draft():
     )
 
     with patch(
-        "app.services.sla_policies_admin_web.get_sla_policy_document_upload",
-        return_value=upload_service,
-    ):
+        "app.services.sla_policies_admin_web._stage_sla_document",
+        return_value=prepared,
+    ) as stage_document:
         policy = service.create_document(organization_id, document_input)
 
     assert policy.organization_id == organization_id
@@ -235,14 +234,13 @@ def test_create_document_persists_only_approved_metadata_as_a_draft():
     assert policy.content_type == "sla_policy"
     assert policy.status is ArticleStatus.DRAFT
     assert policy.body_json is None
-    assert policy.file_path == "sla_policies/org/article/abc123.pdf"
+    assert policy.file_path == prepared.storage_key
     assert policy.file_name == "Policy.pdf"
     assert policy.file_content_type == "application/pdf"
     assert policy.file_size_bytes == 12
     assert policy.content_hash == "a" * 64
-    upload_service.save.assert_called_once()
-    assert upload_service.save.call_args.kwargs["subdirs"][0] == str(organization_id)
-    assert uuid.UUID(upload_service.save.call_args.kwargs["subdirs"][1])
+    stage_document.assert_called_once()
+    assert stage_document.call_args.args[1] == organization_id
     db.add.assert_called_once_with(policy)
     db.flush.assert_called_once_with()
 

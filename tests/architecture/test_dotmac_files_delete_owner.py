@@ -613,6 +613,10 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         # Finance attachment cutover (tenant plane): prepare/open only.
         "app/services/finance/common/attachment.py",
         "scripts/backfill_finance_attachment_files.py",
+        # SLA policy document cutover (tenant plane): prepare/open only.
+        "app/services/sla_policies_admin_web.py",
+        "app/services/sla_policies_web.py",
+        "scripts/backfill_sla_policy_files.py",
     }
 )
 
