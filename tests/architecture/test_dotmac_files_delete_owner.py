@@ -635,6 +635,10 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         # app/services/finance/common/attachment.py already listed above.
         "app/services/pm/attachment.py",
         "scripts/backfill_pm_attachment_files.py",
+        # Resume cutover (tenant plane): prepare/open only.
+        # app/api/files.py is already listed above (avatar cutover).
+        "app/services/careers/resume_service.py",
+        "scripts/backfill_resume_files.py",
     }
 )
 

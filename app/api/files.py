@@ -98,17 +98,56 @@ def _stream_s3_file(
 # ---------------------------------------------------------------------------
 
 
+def _stream_staged_resume(db: Session, organization_id: UUID, file_id: str):
+    """Stream a post-cutover staged resume, or None when it is not staged."""
+    try:
+        staged_id = UUID(str(file_id))
+    except (TypeError, ValueError):
+        return None
+
+    from dotmac_files import FileError, download_target, open_object
+
+    from app.tenancy import OrganizationTenantContext
+
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        target = download_target(db, scope=scope, file_id=staged_id)
+        readable = open_object(get_dotmac_files_provider(), target=target)
+    except FileError:
+        return None
+
+    def _chunks():
+        with readable:
+            while chunk := readable.read(64 * 1024):
+                yield chunk
+
+    filename = _UNSAFE_FILENAME_RE.sub("_", target.original_filename)
+    return StreamingResponse(
+        _chunks(),
+        media_type=target.detected_media_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Length": str(target.size_bytes),
+        },
+    )
+
+
 @router.get("/resumes/{org_id}/{filename}")
 def download_resume(
     org_id: UUID,
     filename: str,
     organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db_with_org),
 ):
     """Download a resume file (authenticated)."""
     if org_id != organization_id:
         raise HTTPException(status_code=404, detail="Resume not found")
     if Path(filename).name != filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
+
+    staged = _stream_staged_resume(db, organization_id, Path(filename).stem)
+    if staged is not None:
+        return staged
 
     service = ResumeService()
     file_id = Path(filename).stem
@@ -132,8 +171,13 @@ def download_resume(
 def download_resume_by_id(
     file_id: str,
     organization_id: UUID = Depends(require_organization_id),
+    db: Session = Depends(get_db_with_org),
 ):
     """Download a resume file by ID (authenticated)."""
+    staged = _stream_staged_resume(db, organization_id, file_id)
+    if staged is not None:
+        return staged
+
     service = ResumeService()
     file_path = service.get_resume_path(organization_id, file_id)
     if not file_path:
