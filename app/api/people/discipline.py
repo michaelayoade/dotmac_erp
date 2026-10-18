@@ -474,6 +474,10 @@ def download_document(
     if not document.file_path:
         raise HTTPException(status_code=404, detail="Document file not available")
 
+    staged = service.staged_download_response(org_id, document)
+    if staged is not None:
+        return staged
+
     s3_key = document.file_path
     if not s3_key.startswith("discipline/"):
         s3_key = f"discipline/{s3_key}"

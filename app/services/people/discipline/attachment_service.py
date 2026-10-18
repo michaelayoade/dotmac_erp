@@ -2,7 +2,12 @@
 Discipline Attachment Service.
 
 Handles file uploads, downloads, and deletions for disciplinary case documents.
-Provides secure file storage with MIME type validation.
+Provides secure file storage with MIME type validation. New uploads
+are ``dotmac-files`` tenant records staged in the caller's
+transaction; ``CaseDocument.file_path`` then holds the canonical
+tenant storage key. Pre-cutover relative paths keep their legacy
+serving branch until
+``scripts/backfill_discipline_document_files.py`` rewrites them.
 """
 
 import logging
@@ -27,6 +32,71 @@ logger = logging.getLogger(__name__)
 
 def _upload_service() -> FileUploadService:
     return get_discipline_attachment_upload()
+
+
+def staged_file_id(document: CaseDocument) -> uuid.UUID | None:
+    """The staged file id for a post-cutover document, else None."""
+    file_path = document.file_path or ""
+    if not file_path.startswith("tenants/"):
+        return None
+    try:
+        return uuid.UUID(file_path.rsplit("/", 1)[-1])
+    except ValueError:
+        return None
+
+
+def _stage_discipline_file(
+    db: Session,
+    organization_id: uuid.UUID,
+    *,
+    file_data: bytes,
+    content_type: str | None,
+    original_filename: str | None,
+):
+    """Upload and stage one discipline document on the tenant files plane."""
+    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files.providers import StorageError
+
+    from app.models.finance.core_org.organization import Organization
+    from app.services.file_object_cleanup import (
+        CleanupUnsafeReferenceView,
+        stage_tenant_file_if_unreserved,
+    )
+    from app.services.file_upload import FileStorageError
+    from app.services.storage import get_dotmac_files_provider
+    from app.services.tenant_projection import reconcile_organization_tenant
+    from app.tenancy import OrganizationTenantContext
+
+    config = _upload_service().config
+    policy = FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=frozenset(config.allowed_extensions),
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+    scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
+    try:
+        prepared = prepare_upload(
+            get_dotmac_files_provider(),
+            scope=scope,
+            policy=policy,
+            original_filename=original_filename or "document",
+            declared_media_type=content_type or "",
+            chunks=iter([file_data]),
+        )
+    except FileError as exc:
+        raise FileUploadError(str(exc)) from exc
+    except StorageError as exc:
+        raise FileStorageError(str(exc)) from exc
+    if db.get_bind().dialect.name == "postgresql":
+        organization = db.get(Organization, organization_id)
+        if organization is not None:
+            reconcile_organization_tenant(db, organization)
+            db.flush()
+    try:
+        stage_tenant_file_if_unreserved(db, prepared=prepared)
+    except CleanupUnsafeReferenceView as exc:
+        raise FileUploadError(str(exc)) from exc
+    return prepared
 
 
 class DisciplineAttachmentService:
@@ -95,12 +165,12 @@ class DisciplineAttachmentService:
             raise NotFoundError(f"Disciplinary case {case_id} not found")
 
         file_bytes = file_content.read()
-        upload_service = _upload_service()
         try:
-            upload_result = upload_service.save(
-                file_bytes,
+            prepared = _stage_discipline_file(
+                self.db,
+                org_id,
+                file_data=file_bytes,
                 content_type=content_type,
-                subdirs=[str(org_id), str(case_uuid)],
                 original_filename=file_name,
             )
         except FileUploadError as exc:
@@ -112,9 +182,9 @@ class DisciplineAttachmentService:
             document_type=document_type,
             title=title or file_name,
             description=description,
-            file_path=upload_result.relative_path,
+            file_path=prepared.storage_key,
             file_name=file_name,
-            file_size=upload_result.file_size,
+            file_size=prepared.size_bytes,
             mime_type=content_type,
             uploaded_by_id=user_id,
         )
@@ -126,7 +196,7 @@ class DisciplineAttachmentService:
             "Uploaded document '%s' to case %s (size: %s)",
             file_name,
             case.case_number,
-            upload_result.file_size,
+            prepared.size_bytes,
         )
 
         return document
@@ -171,8 +241,50 @@ class DisciplineAttachmentService:
         Get the full file path for a document.
 
         Validates path is within upload directory for security.
+        Post-cutover staged documents have no local path; resolving
+        their tenant storage key raises ValueError like any unsafe
+        path, and download callers use staged_download_response.
         """
         return resolve_safe_path(_upload_service().base_path, document.file_path)
+
+    def staged_download_response(
+        self, organization_id: uuid.UUID, document: CaseDocument
+    ):
+        """Stream a post-cutover document, or None when it is not staged."""
+        file_id = staged_file_id(document)
+        if file_id is None:
+            return None
+
+        from dotmac_files import FileError, download_target, open_object
+        from fastapi.responses import StreamingResponse
+
+        from app.services.storage import get_dotmac_files_provider
+        from app.tenancy import OrganizationTenantContext
+
+        scope = OrganizationTenantContext.for_organization(
+            coerce_uuid(organization_id)
+        ).tenant_scope
+        try:
+            target = download_target(self.db, scope=scope, file_id=file_id)
+            readable = open_object(get_dotmac_files_provider(), target=target)
+        except FileError:
+            return None
+
+        def _chunks():
+            with readable:
+                while chunk := readable.read(64 * 1024):
+                    yield chunk
+
+        return StreamingResponse(
+            _chunks(),
+            media_type=target.detected_media_type
+            or document.mime_type
+            or "application/octet-stream",
+            headers={
+                "Content-Disposition": (f'attachment; filename="{document.file_name}"'),
+                "Content-Length": str(target.size_bytes),
+            },
+        )
 
     def list_for_case(
         self,
@@ -203,6 +315,33 @@ class DisciplineAttachmentService:
         document = self.get_document(organization_id, document_id)
         if not document:
             return False
+
+        # Retire the staged file record, or delete the legacy object.
+        staged_id = staged_file_id(document)
+        if staged_id is not None:
+            from datetime import datetime, timezone
+
+            from dotmac_files import FileError, request_deletion
+
+            from app.tenancy import OrganizationTenantContext
+
+            try:
+                request_deletion(
+                    self.db,
+                    scope=OrganizationTenantContext.for_organization(
+                        coerce_uuid(organization_id)
+                    ).tenant_scope,
+                    file_id=staged_id,
+                    now=datetime.now(timezone.utc),
+                )
+            except FileError:
+                logger.warning(
+                    "document file %s could not be marked for deletion", staged_id
+                )
+            self.db.delete(document)
+            self.db.flush()
+            logger.info("Deleted document %s", document_id)
+            return True
 
         # Delete file from storage
         try:
