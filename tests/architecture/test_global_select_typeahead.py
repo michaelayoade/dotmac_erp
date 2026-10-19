@@ -40,6 +40,13 @@ def test_typeahead_supports_remote_loading_and_accessible_keyboard_use() -> None
     assert "aria-multiselectable" in script
 
 
+def test_typeahead_keyboard_cannot_choose_disabled_options() -> None:
+    script = TYPEAHEAD_JS.read_text(encoding="utf-8")
+
+    assert "const activeItem = visibleItems[activeIndex];" in script
+    assert "if (!activeItem.disabled) choose(activeItem);" in script
+
+
 def test_typeahead_component_styles_are_built_from_source() -> None:
     entrypoint = (ROOT / "src" / "css" / "main.css").read_text(encoding="utf-8")
     component = (ROOT / "src" / "css" / "components" / "_typeahead.css").read_text(

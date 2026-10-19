@@ -502,7 +502,8 @@
                 setActive(activeIndex + (event.key === "ArrowDown" ? 1 : -1));
             } else if (event.key === "Enter" && activeIndex >= 0) {
                 event.preventDefault();
-                choose(visibleItems[activeIndex]);
+                const activeItem = visibleItems[activeIndex];
+                if (!activeItem.disabled) choose(activeItem);
             } else if (event.key === "Escape") {
                 close();
             } else if (multiple && event.key === "Backspace" && !input.value) {
