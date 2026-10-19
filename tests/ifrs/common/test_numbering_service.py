@@ -59,6 +59,23 @@ class MockNumberingSequence:
         self.last_used_at = last_used_at
 
 
+@pytest.fixture(autouse=True)
+def _legacy_allocator_branch(monkeypatch):
+    """Exercise the legacy allocator branch in isolation.
+
+    Every live series has been issued by ``dotmac-numbering`` since
+    2026-10-19, so no real SequenceType selects the legacy branch any
+    more. These mock-based tests cover that branch (kept as the
+    mirrored rollback record until the allocator retires), so the
+    cut-over set is emptied here; module-branch behaviour is covered
+    by test_numbering_cutover.py.
+    """
+    monkeypatch.setattr(
+        "app.services.finance.common.numbering_module.CUT_OVER_SERIES",
+        frozenset(),
+    )
+
+
 @pytest.fixture
 def org_id():
     return uuid4()

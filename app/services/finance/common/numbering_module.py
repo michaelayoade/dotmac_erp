@@ -5,8 +5,9 @@ legacy allocator (Michael's ruling, 2026-10-17: direct cutover for
 internal-facing series, module format accepted — ``STMT-2026-00042``,
 not the legacy fused ``STMT2026-00042``). Numbers issued before a
 series' cutover keep their legacy rendering; the two shapes cannot
-collide. Counterparty and financial-document series stay on the
-legacy allocator pending their own ruling.
+collide. As of 2026-10-19 every series is issued by the module; the
+legacy allocator remains only as the mirrored rollback record until
+it retires.
 
 The legacy ``NumberingSequence`` row is read once per call to seed a
 fresh module period counter at the value the legacy allocator would
@@ -44,12 +45,13 @@ from app.services.finance.common.sequence_utils import should_reset
 
 #: Series issued by the module. Bank statements cut over first (#722),
 #: the internal batch followed (#723), then the counterparty, payroll and
-#: treasury series. INVOICE follows its clean production continuity
-#: report (2026-10-19, exit 0, zero findings). Only CREDIT_NOTE remains
-#: on the legacy allocator.
+#: treasury series. INVOICE and CREDIT_NOTE complete the set after
+#: their clean production continuity report (2026-10-19, exit 0, zero
+#: findings): every series is now issued by the module.
 CUT_OVER_SERIES = frozenset(
     {
         SequenceType.INVOICE,
+        SequenceType.CREDIT_NOTE,
         SequenceType.BANK_STATEMENT,
         SequenceType.JOURNAL,
         SequenceType.SUPPORT_TICKET,

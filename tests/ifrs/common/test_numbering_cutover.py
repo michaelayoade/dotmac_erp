@@ -234,15 +234,33 @@ def test_preview_uses_the_module_formatter_for_cut_over_series() -> None:
     assert preview == f"STMT-{date.today().year}-00042"
 
 
-def test_preview_for_a_legacy_series_keeps_the_legacy_shape() -> None:
-    from app.services.finance.common.numbering import NumberingService
+def test_credit_note_cutover_continues_the_legacy_counter(session: Session) -> None:
+    """The production continuity report was clean, so seeding is exact.
 
-    service = NumberingService.__new__(NumberingService)
-    sequence = _sequence(sequence_type=SequenceType.CREDIT_NOTE, prefix="CN")
+    With INVOICE and CREDIT_NOTE cut over, every SequenceType is
+    issued by the module and the legacy preview shape no longer has a
+    live series to demonstrate against.
+    """
+    sequence = _sequence(
+        sequence_type=SequenceType.CREDIT_NOTE,
+        prefix="CN",
+        min_digits=4,
+        include_month=True,
+        reset_frequency=ResetFrequency.MONTHLY,
+        current_number=3,
+        current_year=2026,
+        current_month=5,
+    )
 
-    preview = service.preview_format(sequence, sample_number=42)
+    number = allocate_from_module(
+        session,
+        organization_id=sequence.organization_id,
+        sequence=sequence,
+        reference_date=date(2026, 5, 20),
+    )
 
-    assert preview == f"CN{date.today().year}-00042"
+    assert number == "CN-2026-05-0004"
+    assert sequence.current_number == 4
 
 
 def test_invoice_cutover_continues_the_legacy_counter(session: Session) -> None:
