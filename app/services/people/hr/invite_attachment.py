@@ -136,8 +136,11 @@ def read_invite_attachment_bytes(
 
     scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
     target = download_target(db, scope=scope, file_id=staged_id)
-    with open_object(get_dotmac_files_provider(), target=target) as readable:
+    readable = open_object(get_dotmac_files_provider(), target=target)
+    try:
         return readable.read()
+    finally:
+        readable.close()
 
 
 def get_default_invite_attachment_metadata(
