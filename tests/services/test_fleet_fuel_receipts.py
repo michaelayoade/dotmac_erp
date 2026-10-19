@@ -87,9 +87,30 @@ class _FakeDocumentUpload:
         )
 
 
+def _patch_stage(monkeypatch, checksum="abc123"):
+    """Stage through the tenant-files seam instead of the legacy save."""
+
+    def _fake_stage(
+        db, organization_id, *, file_data, content_type, original_filename, config=None
+    ):
+        file_id = uuid4()
+        return SimpleNamespace(
+            id=file_id,
+            storage_key=f"tenants/{organization_id}/files/{file_id}",
+            size_bytes=len(file_data),
+            checksum_sha256=f"sha256:{checksum}",
+        )
+
+    monkeypatch.setattr(
+        "app.services.finance.common.attachment._stage_attachment_file",
+        _fake_stage,
+    )
+
+
 @pytest.mark.asyncio
 async def test_save_fuel_receipt_attachment_creates_common_attachment(monkeypatch):
     db = _FakeDb()
+    _patch_stage(monkeypatch, "abc123")
     fuel_log_id = uuid4()
     upload = UploadFile(
         BytesIO(b"\xff\xd8\xffphone receipt"),
@@ -116,6 +137,7 @@ async def test_save_fuel_receipt_attachment_creates_common_attachment(monkeypatc
     assert attachment.entity_type == FleetWebService.FUEL_LOG_ATTACHMENT_ENTITY_TYPE
     assert attachment.entity_id == fuel_log_id
     assert attachment.file_name == "receipt.jpg"
+    assert attachment.file_path.startswith(f"tenants/{TEST_ORG_ID}/files/")
     assert attachment.file_size == len(b"\xff\xd8\xffphone receipt")
     assert attachment.content_type == "image/jpeg"
     assert attachment.category == AttachmentCategory.RECEIPT
@@ -125,6 +147,7 @@ async def test_save_fuel_receipt_attachment_creates_common_attachment(monkeypatc
 @pytest.mark.asyncio
 async def test_save_incident_attachment_creates_common_attachment(monkeypatch):
     db = _FakeDb()
+    _patch_stage(monkeypatch, "def456")
     incident_id = uuid4()
     upload = UploadFile(
         BytesIO(b"\xff\xd8\xffincident photo"),
@@ -151,6 +174,7 @@ async def test_save_incident_attachment_creates_common_attachment(monkeypatch):
     assert attachment.entity_type == FleetWebService.INCIDENT_ATTACHMENT_ENTITY_TYPE
     assert attachment.entity_id == incident_id
     assert attachment.file_name == "damage.jpg"
+    assert attachment.file_path.startswith(f"tenants/{TEST_ORG_ID}/files/")
     assert attachment.file_size == len(b"\xff\xd8\xffincident photo")
     assert attachment.content_type == "image/jpeg"
     assert attachment.category == AttachmentCategory.OTHER
@@ -160,6 +184,7 @@ async def test_save_incident_attachment_creates_common_attachment(monkeypatch):
 @pytest.mark.asyncio
 async def test_save_maintenance_attachment_creates_common_attachment(monkeypatch):
     db = _FakeDb()
+    _patch_stage(monkeypatch, "maint123")
     maintenance_id = uuid4()
     upload = UploadFile(
         BytesIO(b"%PDF maintenance estimate"),
@@ -186,6 +211,7 @@ async def test_save_maintenance_attachment_creates_common_attachment(monkeypatch
     assert attachment.entity_type == FleetWebService.MAINTENANCE_ATTACHMENT_ENTITY_TYPE
     assert attachment.entity_id == maintenance_id
     assert attachment.file_name == "estimate.pdf"
+    assert attachment.file_path.startswith(f"tenants/{TEST_ORG_ID}/files/")
     assert attachment.file_size == len(b"%PDF maintenance estimate")
     assert attachment.content_type == "application/pdf"
     assert attachment.category == AttachmentCategory.OTHER
@@ -303,6 +329,7 @@ async def test_update_entity_response_updates_incident(monkeypatch):
 @pytest.mark.asyncio
 async def test_save_document_file_updates_vehicle_document(monkeypatch):
     db = _FakeDb()
+    _patch_stage(monkeypatch, "ghi789")
     document = SimpleNamespace(file_name=None, file_path=None)
     upload = UploadFile(
         BytesIO(b"%PDF fleet document"),
@@ -322,4 +349,4 @@ async def test_save_document_file_updates_vehicle_document(monkeypatch):
 
     assert db.flushed is True
     assert document.file_name == "registration.pdf"
-    assert document.file_path == (f"{TEST_ORG_ID}/fleet_documents/document_123.pdf")
+    assert document.file_path.startswith(f"tenants/{TEST_ORG_ID}/files/")
