@@ -511,9 +511,11 @@ class HRDocumentService:
                 ) from exc
 
             def _chunks() -> Iterator[bytes]:
-                with readable:
+                try:
                     while chunk := readable.read(64 * 1024):
                         yield chunk
+                finally:
+                    readable.close()
 
             return _chunks(), target.detected_media_type, target.size_bytes
 
