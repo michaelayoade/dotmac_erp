@@ -41,6 +41,7 @@ from uuid import UUID
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.db.session_context import allow_cross_org
 from app.models.finance.ar.invoice import Invoice, InvoiceType
 from app.models.finance.core_config.numbering_sequence import (
     NumberingSequence,
@@ -80,22 +81,30 @@ def _parse_value(number: str, separator: str) -> int | None:
 
 def continuity_findings(db: Session) -> list[Finding]:
     findings: list[Finding] = []
-    sequences = {
-        (row.organization_id, row.sequence_type): row
-        for row in db.scalars(
-            select(NumberingSequence).where(NumberingSequence.sequence_type.in_(SERIES))
-        )
-    }
-    # Column select, not entity load: the report needs four facts per
-    # document and must not drag relationship graphs into a read-only scan.
-    invoices = db.execute(
-        select(
-            Invoice.organization_id,
-            Invoice.invoice_number,
-            Invoice.invoice_type,
-            Invoice.invoice_date,
-        ).where(Invoice.invoice_number.is_not(None))
-    ).all()
+    # Genuinely cross-tenant read: every organization's counters and
+    # issued numbers are compared in one scan, so the ORM org listener
+    # is bypassed explicitly for both queries (production runtime is
+    # the postgres superuser today; under a future RLS-bound app role
+    # this report must move to per-org sessions).
+    with allow_cross_org(db):
+        sequences = {
+            (row.organization_id, row.sequence_type): row
+            for row in db.scalars(
+                select(NumberingSequence).where(
+                    NumberingSequence.sequence_type.in_(SERIES)
+                )
+            )
+        }
+        # Column select, not entity load: the report needs four facts per
+        # document and must not drag relationship graphs into a read-only scan.
+        invoices = db.execute(
+            select(
+                Invoice.organization_id,
+                Invoice.invoice_number,
+                Invoice.invoice_type,
+                Invoice.invoice_date,
+            ).where(Invoice.invoice_number.is_not(None))
+        ).all()
 
     # (org, series, period) -> {value: [rendered, ...]}, and max parsed value.
     value_renderings: dict[tuple[UUID, SequenceType, str], dict[int, list[str]]] = {}
