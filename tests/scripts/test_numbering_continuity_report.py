@@ -130,3 +130,31 @@ def test_an_externally_numbered_document_is_ignored(db: Session) -> None:
     db.flush()
 
     assert continuity_findings(db) == []
+
+
+def test_the_scan_runs_under_allow_cross_org_and_restores_it(db: Session) -> None:
+    """Production regression: the org listener refused the unprimed scan."""
+    import scripts.numbering_continuity_report as report
+
+    seen: list[bool] = []
+    real_allow_cross_org = report.allow_cross_org
+
+    from contextlib import contextmanager
+
+    @contextmanager
+    def spy(session):
+        with real_allow_cross_org(session):
+            seen.append(session.info.get("allow_cross_org") is True)
+            yield
+
+    db.add(_sequence(current_number=7))
+    db.flush()
+    original = report.allow_cross_org
+    report.allow_cross_org = spy
+    try:
+        assert report.continuity_findings(db) == []
+    finally:
+        report.allow_cross_org = original
+
+    assert seen == [True]
+    assert db.info.get("allow_cross_org") in (False, None)
