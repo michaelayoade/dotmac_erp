@@ -21,15 +21,17 @@ from app.models.finance.core_org.location import Location
 from app.schemas.settings import DomainSettingUpdate
 from app.rls import tenant_context
 from app.services import domain_settings as domain_settings_service
-from app.services.file_upload import FileUploadError, get_hr_invite_attachment_upload
+from app.services.file_upload import FileUploadError
 from app.services.people import (
     PEOPLE_SETTINGS_DOMAIN,
     REQUIRE_DOB_FOR_CHECKIN_SETTING,
 )
 from app.services.people.hr.invite_attachment import (
     clear_default_invite_attachment_metadata,
+    delete_invite_attachment_object,
     get_default_invite_attachment_metadata,
     set_default_invite_attachment_metadata,
+    stage_default_invite_attachment,
 )
 from app.services.people.hr.invite_email import (
     EMPLOYEE_INVITE_NEXT_URL,
@@ -38,7 +40,6 @@ from app.services.people.hr.invite_email import (
     set_employee_invite_email_template,
 )
 from app.services.settings_spec import resolve_value
-from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -335,9 +336,9 @@ class PeopleSettingsWebService:
         previous = get_default_invite_attachment_metadata(db, organization_id)
         if remove_existing and not has_upload:
             removed = clear_default_invite_attachment_metadata(db, organization_id)
+            if removed:
+                delete_invite_attachment_object(db, organization_id, removed)
             db.commit()
-            if removed and removed.get("s3_key"):
-                get_storage().delete(str(removed["s3_key"]))
             return True, None
 
         if not file or not file.filename:
@@ -353,30 +354,30 @@ class PeopleSettingsWebService:
             return False, "Choose a file to upload."
 
         try:
-            result = get_hr_invite_attachment_upload().save(
-                data,
+            prepared = stage_default_invite_attachment(
+                db,
+                organization_id,
+                file_data=data,
                 content_type=content_type,
-                subdirs=[str(organization_id)],
-                prefix="welcome_pack",
                 original_filename=file.filename,
             )
         except FileUploadError as exc:
+            db.rollback()
             return False, str(exc)
 
         set_default_invite_attachment_metadata(
             db,
             organization_id,
             {
-                "s3_key": result.s3_key,
+                "s3_key": prepared.storage_key,
                 "filename": file.filename,
                 "content_type": content_type,
-                "file_size": result.file_size,
+                "file_size": prepared.size_bytes,
             },
         )
+        if previous and previous.get("s3_key") != prepared.storage_key:
+            delete_invite_attachment_object(db, organization_id, previous)
         db.commit()
-
-        if previous and previous.get("s3_key") and previous["s3_key"] != result.s3_key:
-            get_storage().delete(str(previous["s3_key"]))
 
         return True, None
 
