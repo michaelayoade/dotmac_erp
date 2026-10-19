@@ -34,6 +34,19 @@ from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
+#: Declared media type per admitted handbook extension. The legacy
+#: handbook contract admits by extension only (no authoritative browser
+#: content type); the module's content detection must still agree.
+_HANDBOOK_MEDIA_BY_EXTENSION = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
+    ".txt": "text/plain",
+    ".rtf": "application/rtf",
+}
+
 __all__ = [
     "HRDocumentService",
     "HRDocumentFileNotFoundError",
@@ -367,47 +380,82 @@ class HRDocumentService:
         content_type: str | None = None,
     ) -> tuple[str, int, str]:
         """
-        Save a document file and return (path, size, hash).
+        Stage a document file and return (storage key, size, hash).
 
-        Args:
-            org_id: Organization ID
-            file_name: Original filename
-            file_content: File bytes
-            content_type: Browser-declared media type retained as object metadata
-
-        Returns:
-            Tuple of (relative_path, file_size_bytes, content_hash)
+        New uploads are ``dotmac-files`` tenant records staged in the
+        caller's transaction; the returned path is the canonical tenant
+        storage key. The handbook contract admits by extension only, so
+        the declared media type is derived from the extension and the
+        module's content detection is authoritative (the browser
+        ``content_type`` is retained as document metadata by callers).
 
         Raises:
             HRDocumentValidationError: If the file violates the handbook contract.
             HRDocumentStorageUnavailableError: If object storage is unavailable.
         """
+        from dotmac_files import FileError, FilePolicy, prepare_upload
+        from dotmac_files.providers import StorageError
+
+        from app.models.finance.core_org.organization import Organization
+        from app.services.file_object_cleanup import (
+            CleanupUnsafeReferenceView,
+            stage_tenant_file_if_unreserved,
+        )
+        from app.services.storage import get_dotmac_files_provider
+        from app.services.tenant_projection import reconcile_organization_tenant
+        from app.tenancy import OrganizationTenantContext
+
+        config = get_hr_handbook_upload().config
+        declared = _HANDBOOK_MEDIA_BY_EXTENSION.get(
+            "." + file_name.rsplit(".", 1)[-1].lower() if "." in file_name else ""
+        )
+        policy = FilePolicy(
+            max_bytes=config.max_size_bytes,
+            allowed_extensions=frozenset(config.allowed_extensions),
+            allowed_media_types=frozenset(_HANDBOOK_MEDIA_BY_EXTENSION.values()),
+        )
+        scope = OrganizationTenantContext.for_organization(org_id).tenant_scope
         try:
-            result = get_hr_handbook_upload().save(
-                file_content,
-                content_type=content_type,
-                subdirs=(str(org_id),),
-                original_filename=file_name,
+            prepared = prepare_upload(
+                get_dotmac_files_provider(),
+                scope=scope,
+                policy=policy,
+                original_filename=file_name or "document",
+                declared_media_type=declared or "",
+                chunks=iter([file_content]),
             )
         except FileStorageError as exc:
             raise HRDocumentStorageUnavailableError(
                 "Document storage is temporarily unavailable"
             ) from exc
-        except FileUploadError as exc:
+        except StorageError as exc:
+            raise HRDocumentStorageUnavailableError(
+                "Document storage is temporarily unavailable"
+            ) from exc
+        except (FileError, FileUploadError) as exc:
             raise HRDocumentValidationError(str(exc)) from exc
 
-        if result.checksum is None:  # pragma: no cover - fixed by the config contract
-            raise HRDocumentStorageUnavailableError(
-                "Document storage omitted the required checksum"
-            )
+        if self.db.get_bind().dialect.name == "postgresql":
+            organization = self.db.get(Organization, org_id)
+            if organization is not None:
+                reconcile_organization_tenant(self.db, organization)
+                self.db.flush()
+        try:
+            stage_tenant_file_if_unreserved(self.db, prepared=prepared)
+        except CleanupUnsafeReferenceView as exc:
+            raise HRDocumentValidationError(str(exc)) from exc
 
         logger.info(
-            "Saved HR document object: %s (%d bytes)",
-            result.s3_key,
-            result.file_size,
+            "Staged HR document object: %s (%d bytes)",
+            prepared.storage_key,
+            prepared.size_bytes,
         )
 
-        return result.s3_key, result.file_size, result.checksum
+        return (
+            prepared.storage_key,
+            prepared.size_bytes,
+            prepared.checksum_sha256.removeprefix("sha256:"),
+        )
 
     @staticmethod
     def _document_storage_key(document: HRDocument) -> str:
@@ -424,11 +472,53 @@ class HRDocumentService:
             return f"hr_documents/{key}"
         raise HRDocumentFileNotFoundError("Document object reference is invalid")
 
+    @staticmethod
+    def _staged_file_id(document: HRDocument) -> UUID | None:
+        """The staged file id for a post-cutover document, else None."""
+        value = document.file_path or ""
+        if not value.startswith("tenants/"):
+            return None
+        try:
+            return UUID(value.rsplit("/", 1)[-1])
+        except ValueError:
+            return None
+
     def stream_document(
         self,
         document: HRDocument,
     ) -> tuple[Iterator[bytes], str | None, int | None]:
         """Open an authenticated handbook object without a local fallback."""
+        staged_id = self._staged_file_id(document)
+        if staged_id is not None:
+            from dotmac_files import FileError, download_target, open_object
+
+            from app.services.storage import get_dotmac_files_provider
+            from app.tenancy import OrganizationTenantContext
+
+            scope = OrganizationTenantContext.for_organization(
+                document.organization_id
+            ).tenant_scope
+            try:
+                target = download_target(self.db, scope=scope, file_id=staged_id)
+                readable = open_object(get_dotmac_files_provider(), target=target)
+            except FileError as exc:
+                raise HRDocumentFileNotFoundError(
+                    "Document object was not found"
+                ) from exc
+            except Exception as exc:
+                raise HRDocumentStorageUnavailableError(
+                    "Document storage is temporarily unavailable"
+                ) from exc
+
+            def _chunks() -> Iterator[bytes]:
+                try:
+                    while chunk := readable.read(64 * 1024):
+                        yield chunk
+                finally:
+                    readable.close()
+
+            return _chunks(), target.detected_media_type, target.size_bytes
+
         key = self._document_storage_key(document)
         try:
             storage = get_storage()

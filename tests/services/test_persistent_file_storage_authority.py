@@ -37,40 +37,61 @@ def _upload_result(key: str, payload: bytes) -> UploadResult:
 
 
 def test_handbook_upload_returns_only_an_opaque_object_reference() -> None:
-    org_id = uuid4()
+    org_id, file_id = uuid4(), uuid4()
     payload = b"%PDF-1.7 handbook"
     upload = MagicMock()
-    upload.save.return_value = _upload_result(
-        f"hr_documents/{org_id}/object.pdf", payload
-    )
-
-    with patch(
-        "app.services.people.hr.handbook_service.get_hr_handbook_upload",
-        return_value=upload,
-    ):
-        reference, size, checksum = HRDocumentService(MagicMock()).save_document_file(
-            org_id, "handbook.pdf", payload, content_type="application/pdf"
-        )
-
-    assert reference == f"hr_documents/{org_id}/object.pdf"
-    assert size == len(payload)
-    assert checksum == "a" * 64
-    upload.save.assert_called_once_with(
-        payload,
-        content_type="application/pdf",
-        subdirs=(str(org_id),),
-        original_filename="handbook.pdf",
-    )
-
-
-def test_handbook_upload_does_not_create_metadata_when_storage_fails() -> None:
-    upload = MagicMock()
-    upload.save.side_effect = FileStorageError("Object storage upload failed")
+    upload.config.max_size_bytes = 10 * 1024 * 1024
+    upload.config.allowed_extensions = frozenset({".pdf"})
+    prepared = MagicMock()
+    prepared.storage_key = f"tenants/{org_id}/files/{file_id}"
+    prepared.size_bytes = len(payload)
+    prepared.checksum_sha256 = "sha256:" + "a" * 64
 
     with (
         patch(
             "app.services.people.hr.handbook_service.get_hr_handbook_upload",
             return_value=upload,
+        ),
+        patch(
+            "app.services.storage.get_dotmac_files_provider",
+            return_value=MagicMock(),
+        ),
+        patch("dotmac_files.prepare_upload", return_value=prepared) as prepare,
+        patch(
+            "app.services.file_object_cleanup.stage_tenant_file_if_unreserved"
+        ) as stage,
+    ):
+        reference, size, checksum = HRDocumentService(MagicMock()).save_document_file(
+            org_id, "handbook.pdf", payload, content_type="application/pdf"
+        )
+
+    assert reference == f"tenants/{org_id}/files/{file_id}"
+    assert size == len(payload)
+    assert checksum == "a" * 64
+    assert prepare.call_args.kwargs["declared_media_type"] == "application/pdf"
+    assert prepare.call_args.kwargs["original_filename"] == "handbook.pdf"
+    stage.assert_called_once()
+
+
+def test_handbook_upload_does_not_create_metadata_when_storage_fails() -> None:
+    from dotmac_files.providers import StorageError
+
+    upload = MagicMock()
+    upload.config.max_size_bytes = 10 * 1024 * 1024
+    upload.config.allowed_extensions = frozenset({".pdf"})
+
+    with (
+        patch(
+            "app.services.people.hr.handbook_service.get_hr_handbook_upload",
+            return_value=upload,
+        ),
+        patch(
+            "app.services.storage.get_dotmac_files_provider",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "dotmac_files.prepare_upload",
+            side_effect=StorageError("Object storage upload failed"),
         ),
         pytest.raises(
             HRDocumentStorageUnavailableError,
