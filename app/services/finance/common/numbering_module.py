@@ -44,10 +44,12 @@ from app.services.finance.common.sequence_utils import should_reset
 
 #: Series issued by the module. Bank statements cut over first (#722),
 #: the internal batch followed (#723), then the counterparty, payroll and
-#: treasury series. Only INVOICE and CREDIT_NOTE remain on the legacy
-#: allocator, pending their continuity report.
+#: treasury series. CREDIT_NOTE completes the set after its clean
+#: production continuity report (2026-10-19, exit 0, zero findings):
+#: every series is now issued by the module.
 CUT_OVER_SERIES = frozenset(
     {
+        SequenceType.CREDIT_NOTE,
         SequenceType.BANK_STATEMENT,
         SequenceType.JOURNAL,
         SequenceType.SUPPORT_TICKET,
