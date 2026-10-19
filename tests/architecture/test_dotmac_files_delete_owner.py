@@ -645,6 +645,10 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         # HR invite attachment cutover (tenant plane): prepare/open only.
         "app/services/people/hr/invite_attachment.py",
         "scripts/backfill_hr_invite_attachment_files.py",
+        # Fleet attachment cutover (tenant plane): prepare/open only.
+        # fleet_web stages via finance.common.attachment helpers and
+        # never imports the provider itself.
+        "scripts/backfill_fleet_attachment_files.py",
     }
 )
 

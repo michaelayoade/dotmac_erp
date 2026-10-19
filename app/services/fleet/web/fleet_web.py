@@ -2378,6 +2378,7 @@ class FleetWebService:
             FileUploadError,
             get_fleet_fuel_receipt_upload,
         )
+        from app.services.finance.common.attachment import _stage_attachment_file
         from app.services.upload_utils import read_upload_bytes
 
         if uploaded_by is None:
@@ -2391,14 +2392,13 @@ class FleetWebService:
             error_detail=f"Receipt image is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
         )
         try:
-            upload_result = upload_service.save(
-                file_bytes,
+            prepared = _stage_attachment_file(
+                db,
+                coerce_uuid(organization_id),
+                file_data=file_bytes,
                 content_type=upload.content_type,
-                subdirs=[
-                    str(coerce_uuid(organization_id)),
-                    self.FUEL_LOG_ATTACHMENT_ENTITY_TYPE.lower(),
-                ],
                 original_filename=upload.filename,
+                config=upload_service.config,
             )
         except FileUploadError as exc:
             raise ValueError(str(exc)) from exc
@@ -2408,13 +2408,13 @@ class FleetWebService:
             entity_type=self.FUEL_LOG_ATTACHMENT_ENTITY_TYPE,
             entity_id=coerce_uuid(fuel_log_id),
             file_name=upload.filename,
-            file_path=upload_result.relative_path,
-            file_size=upload_result.file_size,
+            file_path=prepared.storage_key,
+            file_size=prepared.size_bytes,
             content_type=upload.content_type or "application/octet-stream",
             category=AttachmentCategory.RECEIPT,
             description="Fuel purchase receipt",
             storage_provider="S3",
-            checksum=upload_result.checksum,
+            checksum=prepared.checksum_sha256.removeprefix("sha256:"),
             uploaded_by=coerce_uuid(uploaded_by),
             uploaded_at=datetime.utcnow(),
         )
@@ -2428,10 +2428,14 @@ class FleetWebService:
         document: Any,
         upload: Any,
     ) -> None:
-        """Validate and save a fleet document file onto the document record."""
+        """Validate and stage a fleet document file onto the document record."""
         from app.services.file_upload import (
             FileUploadError,
             get_finance_attachment_upload,
+        )
+        from app.services.finance.common.attachment import _stage_attachment_file
+        from app.services.fleet.document_service import (
+            retire_vehicle_document_file,
         )
         from app.services.upload_utils import read_upload_bytes
 
@@ -2443,20 +2447,22 @@ class FleetWebService:
             error_detail=f"Document file is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
         )
         try:
-            upload_result = upload_service.save(
-                file_bytes,
+            prepared = _stage_attachment_file(
+                self.db,
+                coerce_uuid(organization_id),
+                file_data=file_bytes,
                 content_type=upload.content_type,
-                subdirs=[
-                    str(coerce_uuid(organization_id)),
-                    "fleet_documents",
-                ],
                 original_filename=upload.filename,
+                config=upload_service.config,
             )
         except FileUploadError as exc:
             raise ValueError(str(exc)) from exc
 
+        retire_vehicle_document_file(
+            self.db, coerce_uuid(organization_id), document.file_path
+        )
         document.file_name = upload.filename
-        document.file_path = upload_result.relative_path
+        document.file_path = prepared.storage_key
         self.db.flush()
 
     async def _save_incident_attachment(
@@ -2476,6 +2482,7 @@ class FleetWebService:
             FileUploadError,
             get_fleet_incident_attachment_upload,
         )
+        from app.services.finance.common.attachment import _stage_attachment_file
         from app.services.upload_utils import read_upload_bytes
 
         if uploaded_by is None:
@@ -2489,14 +2496,13 @@ class FleetWebService:
             error_detail=f"Incident attachment is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
         )
         try:
-            upload_result = upload_service.save(
-                file_bytes,
+            prepared = _stage_attachment_file(
+                db,
+                coerce_uuid(organization_id),
+                file_data=file_bytes,
                 content_type=upload.content_type,
-                subdirs=[
-                    str(coerce_uuid(organization_id)),
-                    self.INCIDENT_ATTACHMENT_ENTITY_TYPE.lower(),
-                ],
                 original_filename=upload.filename,
+                config=upload_service.config,
             )
         except FileUploadError as exc:
             raise ValueError(str(exc)) from exc
@@ -2506,13 +2512,13 @@ class FleetWebService:
             entity_type=self.INCIDENT_ATTACHMENT_ENTITY_TYPE,
             entity_id=coerce_uuid(incident_id),
             file_name=upload.filename,
-            file_path=upload_result.relative_path,
-            file_size=upload_result.file_size,
+            file_path=prepared.storage_key,
+            file_size=prepared.size_bytes,
             content_type=upload.content_type or "application/octet-stream",
             category=AttachmentCategory.OTHER,
             description="Fleet incident attachment",
             storage_provider="S3",
-            checksum=upload_result.checksum,
+            checksum=prepared.checksum_sha256.removeprefix("sha256:"),
             uploaded_by=coerce_uuid(uploaded_by),
             uploaded_at=datetime.utcnow(),
         )
@@ -2536,6 +2542,7 @@ class FleetWebService:
             FileUploadError,
             get_fleet_maintenance_attachment_upload,
         )
+        from app.services.finance.common.attachment import _stage_attachment_file
         from app.services.upload_utils import read_upload_bytes
 
         if uploaded_by is None:
@@ -2549,14 +2556,13 @@ class FleetWebService:
             error_detail=f"Maintenance attachment is too large. Maximum size is {max_bytes // (1024 * 1024)}MB.",
         )
         try:
-            upload_result = upload_service.save(
-                file_bytes,
+            prepared = _stage_attachment_file(
+                db,
+                coerce_uuid(organization_id),
+                file_data=file_bytes,
                 content_type=upload.content_type,
-                subdirs=[
-                    str(coerce_uuid(organization_id)),
-                    self.MAINTENANCE_ATTACHMENT_ENTITY_TYPE.lower(),
-                ],
                 original_filename=upload.filename,
+                config=upload_service.config,
             )
         except FileUploadError as exc:
             raise ValueError(str(exc)) from exc
@@ -2566,13 +2572,13 @@ class FleetWebService:
             entity_type=self.MAINTENANCE_ATTACHMENT_ENTITY_TYPE,
             entity_id=coerce_uuid(maintenance_id),
             file_name=upload.filename,
-            file_path=upload_result.relative_path,
-            file_size=upload_result.file_size,
+            file_path=prepared.storage_key,
+            file_size=prepared.size_bytes,
             content_type=upload.content_type or "application/octet-stream",
             category=AttachmentCategory.OTHER,
             description="Fleet maintenance attachment",
             storage_provider="S3",
-            checksum=upload_result.checksum,
+            checksum=prepared.checksum_sha256.removeprefix("sha256:"),
             uploaded_by=coerce_uuid(uploaded_by),
             uploaded_at=datetime.utcnow(),
         )
