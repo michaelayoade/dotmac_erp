@@ -25,6 +25,46 @@ from app.services.common import (
 logger = logging.getLogger(__name__)
 
 
+def vehicle_document_staged_file_id(file_path: str | None) -> UUID | None:
+    """The staged file id for a post-cutover vehicle document, else None."""
+    value = file_path or ""
+    if not value.startswith("tenants/"):
+        return None
+    try:
+        return UUID(value.rsplit("/", 1)[-1])
+    except ValueError:
+        return None
+
+
+def retire_vehicle_document_file(
+    db: Session, organization_id: UUID, file_path: str | None
+) -> None:
+    """Mark a replaced/removed staged vehicle-document file for deletion."""
+    staged_id = vehicle_document_staged_file_id(file_path)
+    if staged_id is None:
+        return
+    from datetime import datetime, timezone
+
+    from dotmac_files import FileError, request_deletion
+
+    from app.tenancy import OrganizationTenantContext
+
+    try:
+        request_deletion(
+            db,
+            scope=OrganizationTenantContext.for_organization(
+                organization_id
+            ).tenant_scope,
+            file_id=staged_id,
+            now=datetime.now(timezone.utc),
+        )
+    except FileError:
+        logger.warning(
+            "vehicle document file %s could not be marked for deletion",
+            staged_id,
+        )
+
+
 class DocumentService:
     """Service for vehicle document operations."""
 
@@ -157,6 +197,7 @@ class DocumentService:
     def delete(self, document_id: UUID) -> None:
         """Delete a document record."""
         doc = self.get_or_raise(document_id)
+        retire_vehicle_document_file(self.db, self.organization_id, doc.file_path)
         self.db.delete(doc)
         logger.info("Deleted document %s", document_id)
 
