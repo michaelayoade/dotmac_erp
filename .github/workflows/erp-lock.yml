@@ -4,16 +4,16 @@
 # ── THIS WORKFLOW'S ONE PENDING MOVEMENT ────────────────────────────────────
 #
 # `ALLOWED_MOVEMENTS` is a CLOSED, one-shot allowlist: `dotmac-files`
-# 0.1.0a5 -> 0.1.0a6. Every other Forgejo pin stays frozen (see
+# 0.1.0a6 -> 0.1.0a7. Every other Forgejo pin stays frozen (see
 # `IMMUTABLE_PINS`), and the whole-lock drift check refuses any change to
 # their entries. After the resolved pair is applied, a re-dispatch fails the
-# old-version check. This replaces the spent `dotmac-kernel` 0.1.0a98 ->
-# 0.1.0a105 movement, which is already applied on main.
+# old-version check. This replaces the spent `dotmac-files` 0.1.0a5 ->
+# 0.1.0a6 movement, which is already applied on main.
 # The wheel filename and SHA-256 require independent review in
 # `RELEASED_WHEEL_DIGESTS`; `acquire` rejects changed bytes before uploading
 # the bundle. Starter's module-release verification record for tag
-# dotmac-files-v0.1.0a6 (tag object f9c1dd3183, publisher/verifier run
-# 39126186137) binds the reviewed wheel digest.
+# dotmac-files-v0.1.0a7 (tag object 25f1d9bd7c, publisher/verifier run
+# 39211782120) binds the reviewed wheel digest.
 # Keep wheel and sdist: Poetry 2.4.1 reads metadata from any parseable wheel
 # without a platform compatibility check. Merely offering the sdist alongside
 # it does not execute its backend.
@@ -101,8 +101,8 @@ on:
       dotmac_files_version:
         description: >-
           The dotmac-files version to move to. The only value this workflow
-          accepts is 0.1.0a6; anything else is refused by name. The source
-          manifest must still declare 0.1.0a5.
+          accepts is 0.1.0a7; anything else is refused by name. The source
+          manifest must still declare 0.1.0a6.
         required: true
         type: string
 
@@ -133,8 +133,8 @@ jobs:
             echo "::error::ref must be a full 40-character commit SHA, got '${REF}'"
             exit 1
           fi
-          if [ "${FILES_VERSION}" != "0.1.0a6" ]; then
-            echo "::error::dotmac_files_version must be 0.1.0a6, got '${FILES_VERSION}'"
+          if [ "${FILES_VERSION}" != "0.1.0a7" ]; then
+            echo "::error::dotmac_files_version must be 0.1.0a7, got '${FILES_VERSION}'"
             exit 1
           fi
 

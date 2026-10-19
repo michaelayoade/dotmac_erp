@@ -1,6 +1,6 @@
 """The refusals `.github/workflows/erp-lock.yml` needs, out of the YAML.
 
-ERP's pending one-shot movement is `dotmac-files` 0.1.0a5 -> 0.1.0a6.
+ERP's pending one-shot movement is `dotmac-files` 0.1.0a6 -> 0.1.0a7.
 Every other Forgejo pin stays frozen at its declared version (see
 `IMMUTABLE_PINS`); their entries are immutable under the whole-lock drift
 check. Once the resolved pair is applied, a re-dispatch against that tree
@@ -98,7 +98,7 @@ import dependency_normalisation
 #: never a workflow input. After this move is applied, a re-dispatch fails
 #: the refusal check against the currently declared version by design.
 ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {
-    "dotmac-files": ("0.1.0a5", "0.1.0a6"),
+    "dotmac-files": ("0.1.0a6", "0.1.0a7"),
 }
 
 #: Private pins frozen throughout this one-shot move. `dotmac-kernel` joins
@@ -111,16 +111,16 @@ IMMUTABLE_PINS = {
 }
 
 #: Verified wheel, pinned independently of the index response. Starter's
-#: module-release verification record for tag dotmac-files-v0.1.0a6 (tag
-#: object f9c1dd3183a4777575f2a596526a4b39155f5b6b, peeled to source
-#: 19accb23ee10b16048088b3beb7e374d16ab31b4; publisher/verifier run
-#: 39126186137) supplies this exact filename and SHA-256.
+#: module-release verification record for tag dotmac-files-v0.1.0a7 (tag
+#: object 25f1d9bd7c3d15b102e008a368e5dad88b452308, peeled to source
+#: d94ff7edb8a8cfc28c709b40a1b9f87ea38d16c9; publisher/verifier run
+#: 39211782120) supplies this exact filename and SHA-256.
 RELEASED_WHEEL_DIGESTS = {
     (
         "dotmac-files",
-        "0.1.0a6",
-        "dotmac_files-0.1.0a6-py3-none-any.whl",
-    ): "9bc308283406ea029106560128623a668f69e4008a0a6a9a03a2fa218b046e29",
+        "0.1.0a7",
+        "dotmac_files-0.1.0a7-py3-none-any.whl",
+    ): "47640e4a56c4c2f131393719d4415a1699ec2a27794e6a63e9d7da5aac50f6dc",
 }
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
@@ -759,7 +759,7 @@ def manifest_problems(
     """Everything about this manifest that would misdirect the credential.
 
     `target_versions` is the NEW version expected for each moved package,
-    e.g. `{"dotmac-files": "0.1.0a6"}`.
+    e.g. `{"dotmac-files": "0.1.0a7"}`.
     """
 
     problems: list[str] = []
