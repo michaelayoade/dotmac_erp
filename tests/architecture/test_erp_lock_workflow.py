@@ -7,7 +7,7 @@ structural repair (the credential and the resolver never share a job; the
 resolver is never handed something it must build). Two things are genuinely
 different here, not merely renamed, and each has its own tests below:
 
-1. ERP moves `dotmac-files` 0.1.0a5 -> 0.1.0a6 against a CLOSED allowlist;
+1. ERP moves `dotmac-files` 0.1.0a6 -> 0.1.0a7 against a CLOSED allowlist;
    Kernel remains at 0.1.0a105, Imports at 0.2.0a1 and Tax at 0.1.0a4. A caller
    cannot ask for another package or version, and the whole-lock drift gate
    holds all three immutable.
@@ -359,7 +359,7 @@ def test_kernel_pin_is_a105_on_both_sides_even_if_identical() -> None:
 
 def test_the_allowlist_names_exactly_the_decided_movement() -> None:
     assert ALLOWED_MOVEMENTS == {
-        FILES: ("0.1.0a5", "0.1.0a6"),
+        FILES: ("0.1.0a6", "0.1.0a7"),
     }
     assert IMMUTABLE_PINS == {
         IMPORTS_FROZEN: IMPORTS_FROZEN_VERSION,
@@ -370,8 +370,8 @@ def test_the_allowlist_names_exactly_the_decided_movement() -> None:
         (
             FILES,
             TARGETS[FILES],
-            "dotmac_files-0.1.0a6-py3-none-any.whl",
-        ): "9bc308283406ea029106560128623a668f69e4008a0a6a9a03a2fa218b046e29"
+            "dotmac_files-0.1.0a7-py3-none-any.whl",
+        ): "47640e4a56c4c2f131393719d4415a1699ec2a27794e6a63e9d7da5aac50f6dc"
     }
     assert expected_released_wheels == RELEASED_WHEEL_DIGESTS
 
@@ -387,8 +387,8 @@ def test_a_third_package_is_refused_by_name() -> None:
 
 
 def test_an_unlisted_version_of_a_listed_package_is_refused_by_name() -> None:
-    with pytest.raises(Refusal, match="0.1.0a7"):
-        erp_lock._parse_movement_args(["dotmac-files=0.1.0a7"])  # noqa: SLF001
+    with pytest.raises(Refusal, match="0.1.0a8"):
+        erp_lock._parse_movement_args(["dotmac-files=0.1.0a8"])  # noqa: SLF001
 
 
 def test_a_tax_movement_is_refused() -> None:
@@ -809,11 +809,11 @@ def test_the_repositorys_real_manifest_and_lock_produce_a_closed_plan() -> None:
 @pytest.mark.parametrize(
     ("filename", "expected"),
     [
-        ("dotmac_files-0.1.0a6-py3-none-any.whl", True),
-        ("dotmac_files-0.1.0a6.tar.gz", True),
-        ("dotmac_files-0.1.0a60.tar.gz", False),
-        ("dotmac_files_extra-0.1.0a6.tar.gz", False),
-        ("dotmac_files-0.1.0a5.tar.gz", False),
+        ("dotmac_files-0.1.0a7-py3-none-any.whl", True),
+        ("dotmac_files-0.1.0a7.tar.gz", True),
+        ("dotmac_files-0.1.0a70.tar.gz", False),
+        ("dotmac_files_extra-0.1.0a7.tar.gz", False),
+        ("dotmac_files-0.1.0a6.tar.gz", False),
     ],
 )
 def test_an_artifact_is_matched_to_its_exact_version(
@@ -824,14 +824,14 @@ def test_an_artifact_is_matched_to_its_exact_version(
 
 def test_native_artifact_pair_is_exactly_the_reviewed_wheel_and_sdist() -> None:
     assert artifact_names(FILES, TARGETS[FILES]) == {
-        "dotmac_files-0.1.0a6-py3-none-any.whl",
-        "dotmac_files-0.1.0a6.tar.gz",
+        "dotmac_files-0.1.0a7-py3-none-any.whl",
+        "dotmac_files-0.1.0a7.tar.gz",
     }
 
 
 @pytest.mark.parametrize(
     "replacement",
-    [None, "dotmac_files-0.1.0a6-cp312-cp312-manylinux_2_35_x86_64.whl"],
+    [None, "dotmac_files-0.1.0a7-cp312-cp312-manylinux_2_35_x86_64.whl"],
 )
 def test_hash_verification_refuses_a_missing_or_altered_native_wheel(
     replacement: str | None,
@@ -1122,7 +1122,7 @@ _LOCK_TOML = """\
 [[package]]
 name = "dotmac-imports"
 version = "0.2.0a1"
-files = [{file = "dotmac_files-0.1.0a6-py3-none-any.whl", hash = "sha256:a"}]
+files = [{file = "dotmac_files-0.1.0a7-py3-none-any.whl", hash = "sha256:a"}]
 
 [metadata]
 lock-version = "2.1"
@@ -1232,8 +1232,8 @@ def _fake_index(monkeypatch: pytest.MonkeyPatch, offered: dict[str, list[str]]) 
         elif package.endswith(".whl"):
             with zipfile.ZipFile(target, "w") as archive:
                 archive.writestr(
-                    "dotmac_files-0.1.0a6.dist-info/METADATA",
-                    "Metadata-Version: 2.1\nName: dotmac-files\nVersion: 0.1.0a6\n"
+                    "dotmac_files-0.1.0a7.dist-info/METADATA",
+                    "Metadata-Version: 2.1\nName: dotmac-files\nVersion: 0.1.0a7\n"
                     "Requires-Dist: dotmac-kernel (>=0.1.0a98)\n",
                 )
         else:
@@ -1273,7 +1273,7 @@ def test_the_bundle_records_requires_dist_for_a_moved_package(
         monkeypatch,
         {FILES: sorted(artifact_names(FILES, TARGETS[FILES]))},
     )
-    wheel_name = "dotmac_files-0.1.0a6-py3-none-any.whl"
+    wheel_name = "dotmac_files-0.1.0a7-py3-none-any.whl"
     fake_wheel = tmp_path / wheel_name
     erp_lock.fetch(f"{LOCK_INDEX_URL}/files/{wheel_name}", fake_wheel)
     monkeypatch.setattr(
@@ -1309,12 +1309,12 @@ def test_acquire_refuses_a_replaced_released_wheel_before_bundle_metadata(
 @pytest.mark.parametrize(
     "offered",
     [
-        ["dotmac_files-0.1.0a6.tar.gz"],
+        ["dotmac_files-0.1.0a7.tar.gz"],
         [
-            "dotmac_files-0.1.0a6-cp312-cp312-manylinux_2_35_x86_64.whl",
-            "dotmac_files-0.1.0a6.tar.gz",
+            "dotmac_files-0.1.0a7-cp312-cp312-manylinux_2_35_x86_64.whl",
+            "dotmac_files-0.1.0a7.tar.gz",
         ],
-        ["dotmac_files-0.1.0a6-py3-none-any.whl"],
+        ["dotmac_files-0.1.0a7-py3-none-any.whl"],
     ],
 )
 def test_acquire_refuses_a_missing_or_altered_native_artifact_pair(
