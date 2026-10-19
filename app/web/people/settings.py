@@ -17,7 +17,6 @@ from app.services.people.hr.invite_attachment import (
     get_default_invite_attachment_metadata,
 )
 from app.services.people.settings_web import people_settings_web_service
-from app.services.storage import get_storage
 from app.templates import templates
 from app.web.deps import (
     get_db_for_org,
@@ -194,9 +193,15 @@ async def download_default_invite_attachment(
 
     filename = Path(str(metadata.get("filename") or "welcome-pack")).name
     content_type = str(metadata.get("content_type") or "application/octet-stream")
+    from dotmac_files import FileError
+
+    from app.services.people.hr.invite_attachment import (
+        read_invite_attachment_bytes,
+    )
+
     try:
-        data = get_storage().download(str(metadata["s3_key"]))
-    except (ModuleNotFoundError, RuntimeError):
+        data = read_invite_attachment_bytes(db, auth.organization_id, metadata)
+    except (ModuleNotFoundError, RuntimeError, FileError, OSError):
         return RedirectResponse(url="/people/settings/hr?error=Attachment+not+found")
     return Response(
         content=data,

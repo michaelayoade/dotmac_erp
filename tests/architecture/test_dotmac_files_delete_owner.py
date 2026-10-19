@@ -642,6 +642,9 @@ GRANDFATHERED_WRITE_PROVIDER_IMPORTERS = frozenset(
         # Discipline document cutover (tenant plane): prepare/open only.
         "app/services/people/discipline/attachment_service.py",
         "scripts/backfill_discipline_document_files.py",
+        # HR invite attachment cutover (tenant plane): prepare/open only.
+        "app/services/people/hr/invite_attachment.py",
+        "scripts/backfill_hr_invite_attachment_files.py",
     }
 )
 

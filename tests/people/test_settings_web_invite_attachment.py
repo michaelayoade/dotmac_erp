@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from io import BytesIO
+from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
@@ -120,18 +122,18 @@ def test_update_employee_invite_email_template_stores_org_setting(db_session, pe
 async def test_update_default_invite_attachment_stores_org_setting(
     db_session, person, monkeypatch
 ):
-    uploaded: dict[str, bytes] = {}
+    staged: dict[str, bytes] = {}
 
-    class _Storage:
-        def upload(self, key, data, content_type=None):
-            uploaded[key] = data
+    def _stage(db, org_id, *, file_data, content_type, original_filename):
+        prepared = MagicMock()
+        prepared.id = uuid4()
+        prepared.storage_key = f"tenants/{org_id}/files/{prepared.id}"
+        prepared.size_bytes = len(file_data)
+        staged[prepared.storage_key] = file_data
+        return prepared
 
-        def delete(self, key):
-            uploaded.pop(key, None)
-
-    monkeypatch.setattr("app.services.storage.get_storage", lambda: _Storage())
     monkeypatch.setattr(
-        "app.services.people.settings_web.get_storage", lambda: _Storage()
+        "app.services.people.settings_web.stage_default_invite_attachment", _stage
     )
 
     success, error = await people_settings_web_service.update_default_invite_attachment(
@@ -154,7 +156,7 @@ async def test_update_default_invite_attachment_stores_org_setting(
     assert setting is not None
     assert setting.value_json["filename"] == "welcome.pdf"
     assert setting.value_json["content_type"] == "application/pdf"
-    assert uploaded[setting.value_json["s3_key"]] == b"%PDF welcome pack"
+    assert staged[setting.value_json["s3_key"]] == b"%PDF welcome pack"
 
 
 @pytest.mark.asyncio
@@ -163,16 +165,19 @@ async def test_update_default_invite_attachment_can_clear_existing(
 ):
     deleted: list[str] = []
 
-    class _Storage:
-        def upload(self, key, data, content_type=None):
-            pass
+    def _stage(db, org_id, *, file_data, content_type, original_filename):
+        prepared = MagicMock()
+        prepared.id = uuid4()
+        prepared.storage_key = f"tenants/{org_id}/files/{prepared.id}"
+        prepared.size_bytes = len(file_data)
+        return prepared
 
-        def delete(self, key):
-            deleted.append(key)
-
-    monkeypatch.setattr("app.services.storage.get_storage", lambda: _Storage())
     monkeypatch.setattr(
-        "app.services.people.settings_web.get_storage", lambda: _Storage()
+        "app.services.people.settings_web.stage_default_invite_attachment", _stage
+    )
+    monkeypatch.setattr(
+        "app.services.people.settings_web.delete_invite_attachment_object",
+        lambda db, org_id, metadata: deleted.append(metadata["s3_key"]),
     )
 
     await people_settings_web_service.update_default_invite_attachment(
@@ -222,7 +227,9 @@ async def test_download_default_invite_attachment_returns_file(
         },
     )
     db_session.commit()
-    monkeypatch.setattr("app.web.people.settings.get_storage", lambda: _Storage())
+    monkeypatch.setattr(
+        "app.services.people.hr.invite_attachment.get_storage", lambda: _Storage()
+    )
 
     auth = WebAuthContext(
         is_authenticated=True,
