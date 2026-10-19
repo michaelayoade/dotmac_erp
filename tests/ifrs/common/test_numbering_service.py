@@ -442,7 +442,7 @@ class TestSyncNumberingServiceGenerateNextNumber:
         with patch("app.services.finance.common.numbering.select") as mock_select:
             mock_select.return_value = MagicMock()
             service = SyncNumberingService(mock_db)
-            service.generate_next_number(org_id, SequenceType.INVOICE)
+            service.generate_next_number(org_id, SequenceType.CREDIT_NOTE)
 
         assert sequence.current_number == 1
         assert sequence.current_year == date.today().year
@@ -464,7 +464,7 @@ class TestSyncNumberingServiceGenerateNextNumber:
         with patch("app.services.finance.common.numbering.select") as mock_select:
             mock_select.return_value = MagicMock()
             service = SyncNumberingService(mock_db)
-            result = service.generate_next_number(org_id, SequenceType.INVOICE)
+            result = service.generate_next_number(org_id, SequenceType.CREDIT_NOTE)
 
         assert sequence.current_number == 6
         assert "0006" in result
@@ -484,7 +484,7 @@ class TestSyncNumberingServiceGenerateNextNumber:
             mock_select.return_value = MagicMock()
             service = SyncNumberingService(mock_db)
             service.generate_next_number(
-                org_id, SequenceType.INVOICE, reference_date=date(2025, 1, 1)
+                org_id, SequenceType.CREDIT_NOTE, reference_date=date(2025, 1, 1)
             )
 
         assert sequence.current_number == 1
@@ -505,7 +505,7 @@ class TestSyncNumberingServiceGenerateNextNumber:
             mock_select.return_value = MagicMock()
             service = SyncNumberingService(mock_db)
             service.generate_next_number(
-                org_id, SequenceType.INVOICE, reference_date=date(2025, 1, 1)
+                org_id, SequenceType.CREDIT_NOTE, reference_date=date(2025, 1, 1)
             )
 
         assert sequence.current_number == 101
@@ -525,7 +525,7 @@ class TestSyncNumberingServiceGenerateNextNumber:
         with patch("app.services.finance.common.numbering.select") as mock_select:
             mock_select.return_value = MagicMock()
             service = SyncNumberingService(mock_db)
-            service.generate_next_number(org_id, SequenceType.INVOICE)
+            service.generate_next_number(org_id, SequenceType.CREDIT_NOTE)
 
         assert sequence.last_used_at is not None
 
@@ -584,6 +584,7 @@ class TestAsyncNumberingService:
         sequence_id = uuid4()
         sequence = MockNumberingSequence(
             sequence_id=sequence_id,
+            sequence_type=SequenceType.CREDIT_NOTE,
             prefix="OLD",
         )
 
@@ -620,6 +621,7 @@ class TestAsyncNumberingService:
         sequence_id = uuid4()
         sequence = MockNumberingSequence(
             sequence_id=sequence_id,
+            sequence_type=SequenceType.CREDIT_NOTE,
             current_number=100,
         )
 
@@ -672,7 +674,8 @@ class TestPreviewFormat:
     def test_preview_format(self, mock_db):
         """Test preview formatting."""
         sequence = MockNumberingSequence(
-            prefix="INV",
+            sequence_type=SequenceType.CREDIT_NOTE,
+            prefix="CN",
             include_year=True,
             include_month=True,
             year_format=4,
@@ -684,7 +687,7 @@ class TestPreviewFormat:
         result = service.preview_format(sequence, sample_number=1)
 
         today = date.today()
-        expected = f"INV{today.year}{today.month:02d}-0001"
+        expected = f"CN{today.year}{today.month:02d}-0001"
         assert result == expected
 
     def test_preview_format_custom_number(self, mock_db):
