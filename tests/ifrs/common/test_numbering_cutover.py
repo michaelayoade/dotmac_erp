@@ -238,11 +238,40 @@ def test_preview_for_a_legacy_series_keeps_the_legacy_shape() -> None:
     from app.services.finance.common.numbering import NumberingService
 
     service = NumberingService.__new__(NumberingService)
-    sequence = _sequence(sequence_type=SequenceType.INVOICE, prefix="INV")
+    sequence = _sequence(sequence_type=SequenceType.CREDIT_NOTE, prefix="CN")
 
     preview = service.preview_format(sequence, sample_number=42)
 
-    assert preview == f"INV{date.today().year}-00042"
+    assert preview == f"CN{date.today().year}-00042"
+
+
+def test_invoice_cutover_continues_the_legacy_counter(session: Session) -> None:
+    """The production continuity report was clean, so seeding is exact.
+
+    Legacy issued ``INV202605-0007`` last (fused shape); the module
+    continues at 8 in its segmented shape, which cannot collide with
+    any legacy rendering under the (org, invoice_number) uniqueness.
+    """
+    sequence = _sequence(
+        sequence_type=SequenceType.INVOICE,
+        prefix="INV",
+        min_digits=4,
+        include_month=True,
+        reset_frequency=ResetFrequency.MONTHLY,
+        current_number=7,
+        current_year=2026,
+        current_month=5,
+    )
+
+    number = allocate_from_module(
+        session,
+        organization_id=sequence.organization_id,
+        sequence=sequence,
+        reference_date=date(2026, 5, 20),
+    )
+
+    assert number == "INV-2026-05-0008"
+    assert sequence.current_number == 8
 
 
 def _async_service_returning(sequence):
