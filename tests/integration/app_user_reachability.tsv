@@ -5,6 +5,7 @@ ar.payment_allocation	denied-no-grant	false	false
 audit.audit_log	denied-no-grant	true	true
 banking.bank_accounts	denied-no-grant	false	false
 banking.bank_statement_lines	denied-no-grant	false	false
+core_config.numbering_sequence	denied-no-grant	true	true
 core_org.organization	denied-no-grant	true	true
 core_org.organization_branding	denied-no-grant	false	false
 expense.expense_claim	denied-no-grant	true	false
