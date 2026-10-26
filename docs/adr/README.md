@@ -74,3 +74,5 @@ sequencing call and is not recorded here as though it were settled.
 | [0007](0007-unobserved-is-not-failed.md) | An unobserved transfer is not a failed one | Accepted |
 | [0012](0012-invoice-sync-failures-are-durable-outcomes.md) | Invoice synchronization failures are durable outcomes | Proposed |
 | [0013](0013-external-effects-are-recorded-by-their-owner-before-they-run.md) | External effects are recorded by their owner before they run | Accepted |
+| [0014](0014-generated-documents-have-one-storage-owner.md) | Generated documents have one storage owner | Accepted |
+| [0015](0015-kernel-identity-effects-are-erp-hosted-with-a-gated-revisit.md) | Kernel identity effects are ERP-hosted, with a gated revisit | Accepted |
