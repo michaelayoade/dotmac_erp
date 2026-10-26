@@ -36,7 +36,7 @@ environment = "production"
 # identity, module versions and persistence-plane selections are one release
 # fact; the digest below is the SHA-256 of the committed canonical bytes.
 manifest_path = "deploy/product-manifest.json"
-manifest_digest = "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6"
+manifest_digest = "sha256:cf1c33e9cfab4d17dfeac8b5ca1187f5b215f81328a8614dc148617d627c9a0e"
 
 [image]
 # A digest, never a tag — and as of this change that is true of the LIVE
@@ -56,11 +56,11 @@ manifest_digest = "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb6
 # `source_revision`. Deliberately NOT a resolution of `:latest` or of a
 # `sha-<short>` tag: those are mutable references, which is the exact shape the
 # first line refuses.
-reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:002e036234daff0aa2a67dfa982637a6ad734342a1acfffe28ebaf6d9bb38cfc"
+reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:bf082d4747ab1a3c921f82b97082bdbcf62dea20e16eeead45c98164d1faa93d"
 # The exact protected-main revision the bound image was built from. Changing
 # either this or the digest without the other breaks the pairing that makes the
 # image identifiable, so they move together or not at all.
-source_revision = "95ecb053053cbbb3f90a7252a798c43652722594" # pragma: allowlist secret
+source_revision = "bcc32dbc179f989d44f791aaff87b3ba45a09e3e" # pragma: allowlist secret
 
 # ─────────────────────────────────────────────────────────────────────────
 # Runtime materials — the exact env var NAMES ERP's app/worker/beat services
