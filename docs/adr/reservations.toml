@@ -329,13 +329,13 @@ pr = 651
 [[reservation]]
 number = 14
 slug = "generated-documents-have-one-storage-owner"
-status = "reserved"
+status = "authored"
 claimed = "2026-10-26"
 
 [[reservation]]
 number = 15
 slug = "kernel-identity-effects-are-erp-hosted-with-a-gated-revisit"
-status = "reserved"
+status = "authored"
 claimed = "2026-10-26"
 
 [[collision]]
