@@ -122,7 +122,7 @@
 #              and CI fails. Reconciling the claim is how the branch merges.
 #              No new `contested` row may ever be added.
 
-next_free = 14
+next_free = 15
 
 # ---------------------------------------------------------------------------
 # Historical authored decisions on protected `main`. Where present,
@@ -325,6 +325,12 @@ claimed = "2026-09-27"
 landed_at = "2026-09-27"
 landed_commit = "99e7fa52"
 pr = 651
+
+[[reservation]]
+number = 14
+slug = "generated-documents-have-one-storage-owner"
+status = "reserved"
+claimed = "2026-10-26"
 
 [[collision]]
 number = 3
