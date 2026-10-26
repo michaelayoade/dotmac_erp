@@ -60,12 +60,12 @@ FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 # below. A tag is deliberately absent: the descriptor refuses mutable
 # references, and a `sha-<short>` tag is one.
 IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
-IMAGE_SOURCE_REVISION = "95ecb053053cbbb3f90a7252a798c43652722594"
-IMAGE_DIGEST = "sha256:002e036234daff0aa2a67dfa982637a6ad734342a1acfffe28ebaf6d9bb38cfc"
+IMAGE_SOURCE_REVISION = "bcc32dbc179f989d44f791aaff87b3ba45a09e3e"
+IMAGE_DIGEST = "sha256:bf082d4747ab1a3c921f82b97082bdbcf62dea20e16eeead45c98164d1faa93d"
 # SHA-256 of deploy/product-manifest.json at IMAGE_SOURCE_REVISION. This
 # published assembly remains fixed when the next candidate's manifest changes.
 IMAGE_MANIFEST_DIGEST = (
-    "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6"
+    "sha256:cf1c33e9cfab4d17dfeac8b5ca1187f5b215f81328a8614dc148617d627c9a0e"
 )
 
 #: The migration owner material, named explicitly here as a SECOND line of
@@ -165,7 +165,7 @@ def test_public_source_revision_is_projected_into_telemetry() -> None:
 
 def test_descriptor_matches_committed_publication_evidence() -> None:
     """Preserve the published digest/source/assembly binding when selecting a release."""
-    evidence_path = REPO_ROOT / "deploy/releases/2026-10-04-95ecb053.image-release.json"
+    evidence_path = REPO_ROOT / "deploy/releases/2026-10-20-bcc32dbc.image-release.json"
     raw = evidence_path.read_text(encoding="utf-8")
     evidence = json.loads(raw)
     spec = _load()
@@ -213,6 +213,12 @@ def test_descriptor_matches_committed_publication_evidence() -> None:
             "2026-10-04-345340bf.image-release.json",
             "345340bf63eb18e46cc9610f6f8f0e4e494f7307",
             "sha256:89444a8c72ec795303ce2196f2d586179bbae74cebf09188ea1f8280a5df58d9",
+            "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6",
+        ),
+        (
+            "2026-10-04-95ecb053.image-release.json",
+            "95ecb053053cbbb3f90a7252a798c43652722594",
+            "sha256:002e036234daff0aa2a67dfa982637a6ad734342a1acfffe28ebaf6d9bb38cfc",
             "sha256:e2ecd8e658643bb35b8f8045ea5f62ff38867786010a123345bdb615f699acc6",
         ),
     ],
