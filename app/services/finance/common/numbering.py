@@ -6,7 +6,7 @@ Generates document numbers based on configurable sequences.
 
 import logging
 import uuid
-from datetime import date, datetime
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -248,32 +248,6 @@ class NumberingService:
         await self.db.flush()
         return sequence
 
-    async def _get_or_create_sequence_for_update(
-        self,
-        organization_id: uuid.UUID,
-        sequence_type: SequenceType,
-    ) -> NumberingSequence:
-        stmt = (
-            select(NumberingSequence)
-            .where(
-                NumberingSequence.organization_id == organization_id,
-                NumberingSequence.sequence_type == sequence_type,
-            )
-            .with_for_update()
-        )
-        result = await self.db.execute(stmt)
-        sequence = result.scalar_one_or_none()
-        if sequence:
-            return sequence
-        sequence = NumberingSequence(
-            organization_id=organization_id,
-            sequence_type=sequence_type,
-            **_default_sequence_kwargs(sequence_type),
-        )
-        self.db.add(sequence)
-        await self.db.flush()
-        return sequence
-
     async def get_sequence_by_id(
         self,
         sequence_id: uuid.UUID,
@@ -285,51 +259,6 @@ class NumberingService:
             )
         )
         return result.scalar_one_or_none()
-
-    async def generate_next_number(
-        self,
-        organization_id: uuid.UUID,
-        sequence_type: SequenceType,
-        reference_date: date | None = None,
-    ) -> str:
-        """
-        Generate the next document number.
-
-        Args:
-            organization_id: The organization UUID
-            sequence_type: Type of document (INVOICE, QUOTE, etc.)
-            reference_date: Date to use for year/month in number (defaults to today)
-
-        Returns:
-            Generated document number string
-        """
-        if reference_date is None:
-            reference_date = date.today()
-
-        sequence = await self._get_or_create_sequence_for_update(
-            organization_id, sequence_type
-        )
-
-        if should_reset(sequence, reference_date):
-            sequence.current_number = 0
-            sequence.current_year = reference_date.year
-            sequence.current_month = reference_date.month
-
-        # Increment the sequence
-        sequence.current_number += 1
-        sequence.last_used_at = datetime.now()
-
-        # Generate the formatted number
-        number = format_number(sequence, reference_date)
-
-        await self.db.flush()
-        return number
-
-    def _should_reset(self, sequence: NumberingSequence, reference_date: date) -> bool:
-        return should_reset(sequence, reference_date)
-
-    def _format_number(self, sequence: NumberingSequence, reference_date: date) -> str:
-        return format_number(sequence, reference_date)
 
     def preview_format(
         self, sequence: NumberingSequence, sample_number: int = 1
@@ -345,33 +274,10 @@ class NumberingService:
             return preview_from_module(
                 sequence, sample_number=sample_number, reference_date=date.today()
             )
-        today = date.today()
-        parts = []
-
-        if sequence.prefix:
-            parts.append(sequence.prefix)
-
-        if sequence.include_year:
-            if sequence.year_format == 2:
-                parts.append(str(today.year)[-2:])
-            else:
-                parts.append(str(today.year))
-
-        if sequence.include_month:
-            parts.append(f"{today.month:02d}")
-
-        date_str = "".join(parts)
-        seq_str = str(sample_number).zfill(sequence.min_digits)
-
-        if date_str:
-            result = f"{date_str}{sequence.separator}{seq_str}"
-        else:
-            result = seq_str
-
-        if sequence.suffix:
-            result += sequence.suffix
-
-        return result
+        raise ValueError(
+            f"{sequence.sequence_type.value} is not a cut-over series; "
+            "the legacy preview formatter retired with the allocator."
+        )
 
     async def get_all_sequences(
         self,
@@ -481,12 +387,11 @@ class NumberingService:
                 "so a counter reset would have no effect on issuance."
             )
 
-        sequence.current_number = new_value
-        sequence.current_year = date.today().year
-        sequence.current_month = date.today().month
-
-        await self.db.flush()
-        return sequence
+        raise ValueError(
+            f"{sequence.sequence_type.value} is not a cut-over series; "
+            "the legacy counter reset retired with the allocator. "
+            "Cut the series over to dotmac-numbering instead."
+        )
 
     async def initialize_all_sequences(
         self,
@@ -593,20 +498,11 @@ class SyncNumberingService:
             self.db.flush()
             return number
 
-        if should_reset(sequence, reference_date):
-            sequence.current_number = 0
-            sequence.current_year = reference_date.year
-            sequence.current_month = reference_date.month
-
-        # Increment the sequence
-        sequence.current_number += 1
-        sequence.last_used_at = datetime.now()
-
-        # Generate the formatted number
-        number = format_number(sequence, reference_date)
-
-        self.db.flush()
-        return number
+        raise ValueError(
+            f"{sequence_type.value} is not a cut-over series; the legacy "
+            "allocator retired on 2026-10-27. Add the series to "
+            "CUT_OVER_SERIES so dotmac-numbering issues it."
+        )
 
     def _should_reset(self, sequence: NumberingSequence, reference_date: date) -> bool:
         return should_reset(sequence, reference_date)
