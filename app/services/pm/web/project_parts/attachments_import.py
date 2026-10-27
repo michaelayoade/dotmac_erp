@@ -5,22 +5,18 @@ from uuid import UUID
 from app.services.pm.web.project_parts.base import (
     Depends,
     File,
-    FileResponse,
     Form,
     HTTPException,
     JSONResponse,
-    Path,
     RedirectResponse,
     Request,
     Session,
-    StreamingResponse,
     UploadFile,
     WebAuthContext,
     _resolve_project_ref,
     base_context,
     coerce_uuid,
     get_db,
-    get_storage,
     project_import_web_service,
     require_projects_access,
     templates,
@@ -190,41 +186,7 @@ def download_project_attachment(
     if staged is not None:
         return staged
 
-    file_path = project_attachment_service.get_file_path(
-        db, org_id, coerce_uuid(attachment_id)
-    )
-
-    if not file_path:
-        # Preferred: stream from S3 (FileUploadService stores there).
-        if attachment.file_path and not Path(attachment.file_path).is_absolute():
-            s3_key = attachment.file_path
-            if not s3_key.startswith("projects/"):
-                s3_key = f"projects/{s3_key}"
-
-            storage = get_storage()
-            if storage.exists(s3_key):
-                chunks, content_type, content_length = storage.stream(s3_key)
-                headers: dict[str, str] = {}
-                if content_length is not None:
-                    headers["Content-Length"] = str(content_length)
-                headers["Content-Disposition"] = (
-                    f'attachment; filename="{attachment.file_name}"'
-                )
-                return StreamingResponse(
-                    chunks,
-                    media_type=content_type
-                    or attachment.content_type
-                    or "application/octet-stream",
-                    headers=headers,
-                )
-
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(
-        path=file_path,
-        filename=attachment.file_name,
-        media_type=attachment.content_type,
-    )
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 def delete_project_attachment(

@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -143,7 +143,7 @@ def test_page_template_has_safe_read_only_empty_state():
     assert "download" not in template.lower()
 
 
-def test_document_lookup_is_strictly_scoped_and_streams_from_s3():
+def test_document_lookup_is_strictly_scoped_and_legacy_key_not_found():
     organization_id = uuid.uuid4()
     article_id = uuid.uuid4()
     key = f"sla_policies/{organization_id}/{article_id}/abc123.pdf"
@@ -159,12 +159,9 @@ def test_document_lookup_is_strictly_scoped_and_streams_from_s3():
     )
     db = MagicMock()
     db.scalar.return_value = policy
-    storage = MagicMock()
-    storage.exists.return_value = True
-    storage.stream.return_value = (iter([b"%PDF"]), "text/plain", 4)
 
-    with patch("app.services.sla_policies_web.get_storage", return_value=storage):
-        document = SLAPolicyReadService(db).get_published_document_for_org(
+    with pytest.raises(SLAPolicyDocumentNotFoundError):
+        SLAPolicyReadService(db).get_published_document_for_org(
             organization_id, article_id
         )
 
@@ -181,10 +178,6 @@ def test_document_lookup_is_strictly_scoped_and_streams_from_s3():
     assert "help_article_override.status = 'PUBLISHED'" in sql
     assert f"help_article_override.article_id = '{article_id}'" in sql
     assert len(stmt._where_criteria) == 5
-    assert document.content_type == "application/pdf"
-    assert document.content_length == 4
-    storage.exists.assert_called_once_with(key)
-    storage.stream.assert_called_once_with(key)
 
 
 def test_document_lookup_rejects_untrusted_storage_key():

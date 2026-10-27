@@ -327,7 +327,4 @@ class ResumeService:
         staged_id = self._staged_file_id(file_id)
         if staged_id is not None and self._staged_target(db, org_id, staged_id):
             return f"/files/resumes/{file_id}"
-        path = self.get_resume_path(org_id, file_id)
-        if path:
-            return f"/files/resumes/{org_id}/{path.name}"
         return None

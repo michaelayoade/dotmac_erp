@@ -4,17 +4,14 @@ from app.services.pm.web.project_parts.base import (
     Decimal,
     Depends,
     File,
-    FileResponse,
     Form,
     HTTPException,
     NotFoundError,
     PaginationParams,
-    Path,
     Query,
     RedirectResponse,
     Request,
     Session,
-    StreamingResponse,
     UploadFile,
     ValidationError,
     WebAuthContext,
@@ -34,7 +31,6 @@ from app.services.pm.web.project_parts.base import (
     coerce_uuid,
     get_db,
     get_recent_activity_for_record,
-    get_storage,
     logger,
     require_projects_access,
     templates,
@@ -509,40 +505,7 @@ def download_task_attachment(
     if staged is not None:
         return staged
 
-    file_path = project_attachment_service.get_file_path(
-        db, org_id, coerce_uuid(attachment_id)
-    )
-    if not file_path:
-        # Preferred: stream from S3 (FileUploadService stores there).
-        if attachment.file_path and not Path(attachment.file_path).is_absolute():
-            s3_key = attachment.file_path
-            if not s3_key.startswith("projects/"):
-                s3_key = f"projects/{s3_key}"
-
-            storage = get_storage()
-            if storage.exists(s3_key):
-                chunks, content_type, content_length = storage.stream(s3_key)
-                headers: dict[str, str] = {}
-                if content_length is not None:
-                    headers["Content-Length"] = str(content_length)
-                headers["Content-Disposition"] = (
-                    f'attachment; filename="{attachment.file_name}"'
-                )
-                return StreamingResponse(
-                    chunks,
-                    media_type=content_type
-                    or attachment.content_type
-                    or "application/octet-stream",
-                    headers=headers,
-                )
-
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(
-        path=str(file_path),
-        filename=attachment.file_name,
-        media_type=attachment.content_type,
-    )
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 async def upload_task_attachment(
