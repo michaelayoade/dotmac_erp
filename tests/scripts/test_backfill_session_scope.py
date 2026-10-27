@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import importlib
 from contextlib import contextmanager
 from unittest.mock import MagicMock
 from uuid import UUID
+
+import pytest
 
 
 @contextmanager
@@ -170,3 +173,48 @@ def test_inventory_backfill_applies_batch_size_once_across_all_orgs(monkeypatch)
 
     assert candidate_limits == [(org_ids[0], 3), (org_ids[1], 1)]
     assert sum(processed) == 3
+
+
+FILE_BACKFILL_MODULES = [
+    "backfill_avatar_files",
+    "backfill_discipline_document_files",
+    "backfill_employee_document_files",
+    "backfill_expense_receipt_files",
+    "backfill_finance_attachment_files",
+    "backfill_fleet_attachment_files",
+    "backfill_form_answer_files",
+    "backfill_hr_handbook_files",
+    "backfill_hr_invite_attachment_files",
+    "backfill_pm_attachment_files",
+    "backfill_resume_files",
+    "backfill_sla_policy_files",
+    "backfill_support_attachment_files",
+]
+
+
+@pytest.mark.parametrize("module_name", FILE_BACKFILL_MODULES)
+def test_file_backfill_discovers_globally_then_runs_per_org(monkeypatch, module_name):
+    module = importlib.import_module(f"scripts.{module_name}")
+
+    org_ids = [
+        UUID("00000000-0000-0000-0000-000000000041"),
+        UUID("00000000-0000-0000-0000-000000000042"),
+    ]
+    tenant_db = MagicMock()
+    captured_org_ids: list[UUID] = []
+
+    monkeypatch.setattr(module, "organization_ids", lambda **_: org_ids)
+
+    def session_for_org(org_id):
+        captured_org_ids.append(org_id)
+        return _session(tenant_db)
+
+    monkeypatch.setattr(module, "session_for_org", session_for_org)
+    monkeypatch.setattr(
+        module,
+        "backfill",
+        lambda db, *, dry_run: {"candidates": 1, "failures": []},
+    )
+
+    assert module.main(["--dry-run"]) == 0
+    assert captured_org_ids == org_ids
