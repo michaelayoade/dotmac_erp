@@ -25,6 +25,8 @@ from app.services.file_upload import (
     FileStorageError,
     FileUploadError,
     get_expense_receipt_upload,
+    policy_from_upload_config,
+    resolve_declared_media_type,
 )
 from app.services.storage import get_dotmac_files_provider
 from app.services.tenant_projection import reconcile_organization_tenant
@@ -34,11 +36,7 @@ from app.tenancy import OrganizationTenantContext
 def receipt_policy() -> FilePolicy:
     """The module policy equivalent of the legacy receipt upload config."""
     config = get_expense_receipt_upload().config
-    return FilePolicy(
-        max_bytes=config.max_size_bytes,
-        allowed_extensions=frozenset(config.allowed_extensions),
-        allowed_media_types=frozenset(config.allowed_content_types),
-    )
+    return policy_from_upload_config(config)
 
 
 def stage_receipt(
@@ -57,7 +55,9 @@ def stage_receipt(
             scope=scope,
             policy=receipt_policy(),
             original_filename=original_filename or "receipt",
-            declared_media_type=content_type or "",
+            declared_media_type=resolve_declared_media_type(
+                original_filename, content_type
+            ),
             chunks=iter([file_data]),
         )
     except FileError as exc:
