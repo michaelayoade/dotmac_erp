@@ -4,9 +4,9 @@
 #
 # product:          dotmac-erp
 # schema:           ProductDeploymentSpec.v1
-# image:            ghcr.io/michaelayoade/dotmac_erp@sha256:db32c9bf171394c82cbbf0beafd8fed6226022a38c31518e6636e5c10bded7b6
-# descriptor image: ghcr.io/michaelayoade/dotmac_erp@sha256:db32c9bf171394c82cbbf0beafd8fed6226022a38c31518e6636e5c10bded7b6
-# source revision:  bfe0d5eb633544770fd9d57b5d89ef8a2690db6f
+# image:            ghcr.io/michaelayoade/dotmac_erp@sha256:765921944154d4b311d9bddee32b839ddd7f75fe08b96e298ed0c254e341a827
+# descriptor image: ghcr.io/michaelayoade/dotmac_erp@sha256:765921944154d4b311d9bddee32b839ddd7f75fe08b96e298ed0c254e341a827
+# source revision:  42bf4f5f7c6ddbd347d2a05c25a57900ff6935cc
 # manifest digest:  sha256:cf1c33e9cfab4d17dfeac8b5ca1187f5b215f81328a8614dc148617d627c9a0e
 # ============================================================================
 
@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:db32c9bf171394c82cbbf0beafd8fed6226022a38c31518e6636e5c10bded7b6"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:765921944154d4b311d9bddee32b839ddd7f75fe08b96e298ed0c254e341a827"
     command:
       - alembic
       - upgrade
@@ -87,7 +87,7 @@ services:
     restart: "no"
 
   app:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:db32c9bf171394c82cbbf0beafd8fed6226022a38c31518e6636e5c10bded7b6"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:765921944154d4b311d9bddee32b839ddd7f75fe08b96e298ed0c254e341a827"
     command:
       - gunicorn
       - -c
@@ -157,7 +157,7 @@ services:
       io.dotmac.health.live.path: /health/live
 
   beat:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:db32c9bf171394c82cbbf0beafd8fed6226022a38c31518e6636e5c10bded7b6"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:765921944154d4b311d9bddee32b839ddd7f75fe08b96e298ed0c254e341a827"
     command:
       - celery
       - -A
@@ -209,7 +209,7 @@ services:
     restart: unless-stopped
 
   worker:
-    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:db32c9bf171394c82cbbf0beafd8fed6226022a38c31518e6636e5c10bded7b6"
+    image: "ghcr.io/michaelayoade/dotmac_erp@sha256:765921944154d4b311d9bddee32b839ddd7f75fe08b96e298ed0c254e341a827"
     command:
       - python
       - -m
