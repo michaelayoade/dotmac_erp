@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import mimetypes
 import re
 import tempfile
 import uuid
@@ -187,6 +188,62 @@ class FileUploadConfig:
     def effective_s3_prefix(self) -> str:
         """Return the S3 key prefix to use."""
         return self.s3_prefix or _derive_s3_prefix(self.base_dir)
+
+
+# Filename-extension aliases that share one media type in
+# CONTENT_TYPE_EXTENSIONS. Deriving extensions from media types alone
+# would reject a ".jpeg" file when only ".jpg" was derived.
+_EXTENSION_ALIASES: dict[str, frozenset[str]] = {
+    ".jpg": frozenset({".jpeg"}),
+    ".tif": frozenset({".tiff"}),
+    ".htm": frozenset({".html"}),
+}
+
+
+def policy_from_upload_config(config: FileUploadConfig) -> FilePolicy:
+    """Build the dotmac-files policy for a legacy upload config.
+
+    Legacy ``FileUploadService.validate`` treats an empty
+    ``allowed_extensions`` as "no extension check", but
+    ``dotmac_files.FilePolicy`` refuses an empty set — so staging helpers
+    that mapped the config across verbatim raised ``ValueError`` for
+    every file in families whose config declares content types only
+    (finance attachments, discipline documents). Derive the extension
+    set from the allowed media types in that case, preserving which
+    files are admissible.
+    """
+    extensions = frozenset(config.allowed_extensions)
+    if not extensions:
+        derived = {
+            ext
+            for media, ext in CONTENT_TYPE_EXTENSIONS.items()
+            if media in config.allowed_content_types
+        }
+        for ext in tuple(derived):
+            derived |= _EXTENSION_ALIASES.get(ext, frozenset())
+        extensions = frozenset(derived)
+    return FilePolicy(
+        max_bytes=config.max_size_bytes,
+        allowed_extensions=extensions,
+        allowed_media_types=frozenset(config.allowed_content_types),
+    )
+
+
+def resolve_declared_media_type(
+    original_filename: str | None, content_type: str | None
+) -> str:
+    """The declared media type for ``prepare_upload``.
+
+    An explicit content type wins. Backfills and other non-HTTP callers
+    often have no recorded content type; guessing from the filename
+    keeps the declaration honest (``prepare_upload`` still verifies the
+    bytes against the policy) instead of declaring ``""``, which the
+    policy always rejects.
+    """
+    if content_type:
+        return content_type.split(";", 1)[0].strip().lower()
+    guessed, _encoding = mimetypes.guess_type(original_filename or "")
+    return guessed or ""
 
 
 @dataclass
