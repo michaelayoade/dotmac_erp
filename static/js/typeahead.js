@@ -578,7 +578,11 @@
             });
         }
         window.addEventListener("resize", closeOpenTypeaheads);
-        window.addEventListener("scroll", closeOpenTypeaheads, true);
+        window.addEventListener("scroll", function (event) {
+            if (event.target instanceof Element &&
+                event.target.closest("[data-typeahead-open='true'] .typeahead-menu")) return;
+            closeOpenTypeaheads();
+        }, true);
         document.body.addEventListener("htmx:afterSwap", function (event) { initAll(event.target); });
     }
 
