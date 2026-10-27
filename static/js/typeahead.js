@@ -524,9 +524,10 @@
             }, 0);
         });
         toggle.addEventListener("click", function () {
+            const wasOpen = input.getAttribute("aria-expanded") === "true";
             input.focus();
-            if (input.getAttribute("aria-expanded") === "true") close();
-            else open("");
+            if (wasOpen) close();
+            else if (input.getAttribute("aria-expanded") !== "true") open("");
         });
         select.addEventListener("change", syncFromSelect);
         if (select.form) select.form.addEventListener("reset", function () { window.setTimeout(syncFromSelect, 0); });
