@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -250,7 +251,7 @@ def test_send_employee_access_invite_attaches_default_welcome_pack(
         db_session,
         person.organization_id,
         {
-            "s3_key": "hr_invites/org/welcome.pdf",
+            "s3_key": f"tenants/{person.organization_id}/files/{uuid4()}",
             "filename": "welcome.pdf",
             "content_type": "application/pdf",
             "file_size": 12,
@@ -258,19 +259,21 @@ def test_send_employee_access_invite_attaches_default_welcome_pack(
     )
     db_session.commit()
 
-    class _Storage:
-        def download(self, key):
-            assert key == "hr_invites/org/welcome.pdf"
-            return b"welcome pack"
+    readable = MagicMock()
+    readable.__enter__.return_value = readable
+    readable.__exit__.return_value = False
+    readable.read.return_value = b"welcome pack"
 
     def _fake_send_password_reset_email(**kwargs):
         captured.update(kwargs)
         return True
 
     monkeypatch.setattr(
-        "app.services.people.hr.invite_attachment.get_storage",
-        lambda: _Storage(),
+        "app.services.storage.get_dotmac_files_provider",
+        lambda: MagicMock(),
     )
+    monkeypatch.setattr("dotmac_files.download_target", lambda *a, **k: MagicMock())
+    monkeypatch.setattr("dotmac_files.open_object", lambda *a, **k: readable)
     monkeypatch.setattr(
         employee_module,
         "send_password_reset_email",
@@ -312,18 +315,10 @@ def test_send_employee_access_invite_continues_when_default_attachment_missing(
     )
     db_session.commit()
 
-    class _Storage:
-        def download(self, key):
-            raise FileNotFoundError(key)
-
     def _fake_send_password_reset_email(**kwargs):
         captured.update(kwargs)
         return True
 
-    monkeypatch.setattr(
-        "app.services.people.hr.invite_attachment.get_storage",
-        lambda: _Storage(),
-    )
     monkeypatch.setattr(
         employee_module,
         "send_password_reset_email",
