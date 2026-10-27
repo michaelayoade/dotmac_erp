@@ -43,7 +43,6 @@ from app.models.people.hr import (
     Gender as DependentGender,
 )
 from app.services.file_upload import FileUploadError, get_employee_document_upload
-from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -351,22 +350,7 @@ class EmployeeDocumentService:
                     fallback=f"employee-document-{document.document_id}",
                 ),
             )
-        storage = get_storage()
-        s3_key = document.file_path
-        if not s3_key.startswith("employee_documents/"):
-            s3_key = f"employee_documents/{s3_key}"
-        if not storage.exists(s3_key):
-            raise DocumentNotFoundError(f"Document {document_id} not found")
-        chunks, content_type, content_length = storage.stream(s3_key)
-        return ResolvedDocumentDownload(
-            chunks=chunks,
-            content_type=content_type or "application/octet-stream",
-            content_length=content_length,
-            filename=_safe_download_filename(
-                document.file_name,
-                fallback=f"employee-document-{document.document_id}",
-            ),
-        )
+        raise DocumentNotFoundError(f"Document {document_id} not found")
 
     def resolve_owned_document_download(
         self,

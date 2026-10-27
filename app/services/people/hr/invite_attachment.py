@@ -128,10 +128,10 @@ def delete_invite_attachment_object(
 def read_invite_attachment_bytes(
     db: Session, organization_id: uuid.UUID, metadata: dict[str, Any]
 ) -> bytes:
-    """Read invite attachment bytes, staged or legacy."""
+    """Read invite attachment bytes (staged files only)."""
     staged_id = staged_file_id(metadata)
     if staged_id is None:
-        return get_storage().download(str(metadata.get("s3_key") or ""))
+        raise FileNotFoundError("Invite attachment not found")
 
     from dotmac_files import download_target, open_object
 

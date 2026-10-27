@@ -30,7 +30,6 @@ from app.services.file_upload import (
     FileUploadError,
     get_hr_handbook_upload,
 )
-from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -457,7 +456,6 @@ class HRDocumentService:
             prepared.checksum_sha256.removeprefix("sha256:"),
         )
 
-    @staticmethod
     def _document_storage_key(document: HRDocument) -> str:
         """Resolve a domain-owned opaque reference to the handbook S3 prefix."""
         key = document.file_path.removeprefix("s3://")
@@ -519,18 +517,7 @@ class HRDocumentService:
 
             return _chunks(), target.detected_media_type, target.size_bytes
 
-        key = self._document_storage_key(document)
-        try:
-            storage = get_storage()
-            if not storage.exists(key):
-                raise HRDocumentFileNotFoundError("Document object was not found")
-            return storage.stream(key)
-        except HRDocumentFileNotFoundError:
-            raise
-        except Exception as exc:
-            raise HRDocumentStorageUnavailableError(
-                "Document storage is temporarily unavailable"
-            ) from exc
+        raise HRDocumentFileNotFoundError("Document object was not found")
 
     # =========================================================================
     # Acknowledgment Management
