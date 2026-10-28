@@ -524,9 +524,10 @@
             }, 0);
         });
         toggle.addEventListener("click", function () {
+            const wasOpen = input.getAttribute("aria-expanded") === "true";
             input.focus();
-            if (input.getAttribute("aria-expanded") === "true") close();
-            else open("");
+            if (wasOpen) close();
+            else if (input.getAttribute("aria-expanded") !== "true") open("");
         });
         select.addEventListener("change", syncFromSelect);
         if (select.form) select.form.addEventListener("reset", function () { window.setTimeout(syncFromSelect, 0); });
@@ -577,7 +578,11 @@
             });
         }
         window.addEventListener("resize", closeOpenTypeaheads);
-        window.addEventListener("scroll", closeOpenTypeaheads, true);
+        window.addEventListener("scroll", function (event) {
+            if (event.target instanceof Element &&
+                event.target.closest("[data-typeahead-open='true'] .typeahead-menu")) return;
+            closeOpenTypeaheads();
+        }, true);
         document.body.addEventListener("htmx:afterSwap", function (event) { initAll(event.target); });
     }
 
