@@ -44,7 +44,7 @@ processors:
         value: dotmac-erp
         action: upsert
       - key: dotmac.release
-        value: bc3b2cb76d70
+        value: 5081d3089968
         action: upsert
       - key: service.name
         value: dotmac-erp
