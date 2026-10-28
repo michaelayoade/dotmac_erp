@@ -452,14 +452,10 @@ def download_document(
     db: Session = Depends(get_db_with_org),
 ):
     """Download a document from a disciplinary case."""
-    import re
-
-    from fastapi.responses import StreamingResponse
 
     from app.services.people.discipline.attachment_service import (
         DisciplineAttachmentService,
     )
-    from app.services.storage import get_storage
 
     service = DisciplineAttachmentService(db)
     document = service.get_document(org_id, document_id)
@@ -478,29 +474,7 @@ def download_document(
     if staged is not None:
         return staged
 
-    s3_key = document.file_path
-    if not s3_key.startswith("discipline/"):
-        s3_key = f"discipline/{s3_key}"
-
-    storage = get_storage()
-    if not storage.exists(s3_key):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    chunks, content_type, content_length = storage.stream(s3_key)
-    safe_name = re.sub(
-        r'[\\x00-\\x1f\\x7f"\\\\]', "_", document.file_name or "document"
-    )
-    headers: dict[str, str] = {
-        "Content-Disposition": f'attachment; filename="{safe_name}"'
-    }
-    if content_length is not None:
-        headers["Content-Length"] = str(content_length)
-
-    return StreamingResponse(
-        chunks,
-        media_type=content_type or document.mime_type or "application/octet-stream",
-        headers=headers,
-    )
+    raise HTTPException(status_code=404, detail="File not found")
 
 
 @router.delete(

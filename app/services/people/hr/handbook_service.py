@@ -30,7 +30,6 @@ from app.services.file_upload import (
     FileUploadError,
     get_hr_handbook_upload,
 )
-from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -458,21 +457,6 @@ class HRDocumentService:
         )
 
     @staticmethod
-    def _document_storage_key(document: HRDocument) -> str:
-        """Resolve a domain-owned opaque reference to the handbook S3 prefix."""
-        key = document.file_path.removeprefix("s3://")
-        expected_prefix = f"hr_documents/{document.organization_id}/"
-        if key.startswith(expected_prefix):
-            return key
-
-        # Earlier S3 callers stored the prefix-relative reference. This is only
-        # reference normalization; no local-filesystem fallback remains.
-        legacy_prefix = f"{document.organization_id}/"
-        if key.startswith(legacy_prefix):
-            return f"hr_documents/{key}"
-        raise HRDocumentFileNotFoundError("Document object reference is invalid")
-
-    @staticmethod
     def _staged_file_id(document: HRDocument) -> UUID | None:
         """The staged file id for a post-cutover document, else None."""
         value = document.file_path or ""
@@ -519,18 +503,7 @@ class HRDocumentService:
 
             return _chunks(), target.detected_media_type, target.size_bytes
 
-        key = self._document_storage_key(document)
-        try:
-            storage = get_storage()
-            if not storage.exists(key):
-                raise HRDocumentFileNotFoundError("Document object was not found")
-            return storage.stream(key)
-        except HRDocumentFileNotFoundError:
-            raise
-        except Exception as exc:
-            raise HRDocumentStorageUnavailableError(
-                "Document storage is temporarily unavailable"
-            ) from exc
+        raise HRDocumentFileNotFoundError("Document object was not found")
 
     # =========================================================================
     # Acknowledgment Management

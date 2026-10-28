@@ -14,7 +14,6 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import (
-    FileResponse,
     HTMLResponse,
     Response,
     RedirectResponse,
@@ -1001,68 +1000,8 @@ class ExpenseClaimsWebMixin(ExpenseWebCommonMixin):
                 },
             )
 
-        org_prefix = f"expense_receipts/{org_id}/"
-        if receipt_url.startswith("expense_receipts/"):
-            if not receipt_url.lower().startswith(org_prefix.lower()):
-                logger.warning(
-                    "Receipt key org mismatch",
-                    extra={
-                        "claim_id": claim_id,
-                        "item_id": item_id,
-                        "organization_id": str(org_id),
-                        "receipt_url": receipt_url,
-                    },
-                )
-                return RedirectResponse(
-                    f"/expense/claims/{claim_id}?error=Receipt+file+is+unavailable",
-                    status_code=303,
-                )
-
-            storage = _web_facade().get_storage()
-            if not storage.exists(receipt_url):
-                return RedirectResponse(
-                    f"/expense/claims/{claim_id}?error=Receipt+not+found",
-                    status_code=303,
-                )
-
-            chunks, content_type, content_length = storage.stream(receipt_url)
-            filename = cls._UNSAFE_FILENAME_RE.sub("_", receipt_url.split("/")[-1])
-            headers: dict[str, str] = {
-                "Content-Disposition": f'inline; filename="{filename}"'
-            }
-            if content_length is not None:
-                headers["Content-Length"] = str(content_length)
-            return StreamingResponse(
-                chunks,
-                media_type=content_type or "application/octet-stream",
-                headers=headers,
-            )
-
-        try:
-            receipt_path = cls._resolve_claim_receipt_path(receipt_url)
-        except FileNotFoundError:
-            return RedirectResponse(
-                f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303
-            )
-        except Exception:
-            logger.warning(
-                "Invalid receipt path for claim item",
-                extra={
-                    "claim_id": claim_id,
-                    "item_id": item_id,
-                    "organization_id": str(org_id),
-                },
-            )
-            return RedirectResponse(
-                f"/expense/claims/{claim_id}?error=Receipt+file+is+unavailable",
-                status_code=303,
-            )
-
-        return FileResponse(
-            path=str(receipt_path),
-            media_type=cls._guess_media_type(receipt_path.name),
-            filename=receipt_path.name,
-            content_disposition_type="inline",
+        return RedirectResponse(
+            f"/expense/claims/{claim_id}?error=Receipt+not+found", status_code=303
         )
 
     @staticmethod

@@ -63,6 +63,19 @@ def test_resolve_declared_media_type_guesses_from_filename():
     assert resolve_declared_media_type("photo.jpg", "") == "image/jpeg"
 
 
+def test_resolve_declared_media_type_knows_ooxml_without_mime_db():
+    # Slim images have no /etc/mime.types, so mimetypes returns None for
+    # .docx/.xlsx there; the project's own map must answer first.
+    assert (
+        resolve_declared_media_type("cv.docx", None)
+        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert (
+        resolve_declared_media_type("sheet.xlsx", "")
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
 def test_resolve_declared_media_type_unknown_stays_empty():
     assert resolve_declared_media_type("blob", None) == ""
     assert resolve_declared_media_type(None, None) == ""

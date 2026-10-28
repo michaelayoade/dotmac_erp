@@ -239,9 +239,19 @@ def resolve_declared_media_type(
     keeps the declaration honest (``prepare_upload`` still verifies the
     bytes against the policy) instead of declaring ``""``, which the
     policy always rejects.
+
+    The project's own ``CONTENT_TYPE_EXTENSIONS`` map is consulted
+    before :mod:`mimetypes`: slim runtime images ship no
+    ``/etc/mime.types``, so the stdlib guesser returns ``None`` for
+    OOXML extensions (.docx/.xlsx) — exactly the legacy files backfills
+    exist to move.
     """
     if content_type:
         return content_type.split(";", 1)[0].strip().lower()
+    suffix = PurePosixPath(original_filename or "").suffix.lower()
+    for media, ext in CONTENT_TYPE_EXTENSIONS.items():
+        if ext == suffix:
+            return media
     guessed, _encoding = mimetypes.guess_type(original_filename or "")
     return guessed or ""
 
