@@ -55,7 +55,7 @@ def test_recalculate_flushes_pending_slip_link_and_scopes_query_to_tenant() -> N
             compile_kwargs={"literal_binds": True},
         )
     )
-    assert "salary_slips.organization_id" in compiled
+    assert "payroll.salary_slip.organization_id" in compiled
     assert str(organization_id) in compiled
-    assert "salary_slips.payroll_entry_id" in compiled
+    assert "payroll.salary_slip.payroll_entry_id" in compiled
     assert str(entry_id) in compiled
