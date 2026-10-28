@@ -900,6 +900,10 @@ class SalarySlipService:
         if not slip or slip.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Salary slip not found")
 
+        from app.services.people.payroll.run_totals import lock_linked_run
+
+        lock_linked_run(db, org_id, slip.payroll_entry_id)
+        db.refresh(slip, attribute_names=["status"])
         if slip.status != SalarySlipStatus.DRAFT:
             raise HTTPException(
                 status_code=400, detail="Only draft slips can be edited"
@@ -1264,6 +1268,9 @@ class SalarySlipService:
         slip.total_deduction_functional = total_deduction * exchange_rate
         slip.net_pay_functional = net_pay * exchange_rate
 
+        from app.services.people.payroll.run_totals import refresh_linked_run_totals
+
+        refresh_linked_run_totals(db, org_id, slip.payroll_entry_id)
         db.flush()
 
         return slip

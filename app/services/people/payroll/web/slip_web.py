@@ -1030,13 +1030,21 @@ class SlipWebService:
                 status_code=303,
             )
 
+        from app.services.people.payroll.run_totals import lock_linked_run
+
+        lock_linked_run(db, org_id, slip.payroll_entry_id)
+        db.refresh(slip, attribute_names=["status"])
         if slip.status != SalarySlipStatus.DRAFT:
             return RedirectResponse(
                 url=f"/people/payroll/slips/{slip_id}?saved=1", status_code=303
             )
 
         try:
+            from app.services.people.payroll.run_totals import refresh_linked_run_totals
+
+            entry_id = slip.payroll_entry_id
             db.delete(slip)
+            refresh_linked_run_totals(db, org_id, entry_id)
             db.commit()
         except Exception:
             db.rollback()
