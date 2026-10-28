@@ -43,6 +43,9 @@ from app.services.people.payroll.employment_type_classification import (
     classify_payroll_employment_type,
 )
 from app.services.people.payroll.paye_calculator import PAYEBreakdown, PAYECalculator
+from app.services.people.payroll.payroll_totals import (
+    recalculate_payroll_entry_totals,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1266,7 +1269,43 @@ class SalarySlipService:
 
         db.flush()
 
+        if slip.payroll_entry_id:
+            recalculate_payroll_entry_totals(
+                db,
+                org_id,
+                slip.payroll_entry_id,
+            )
+
         return slip
+
+    @staticmethod
+    def delete_salary_slip(
+        db: Session,
+        organization_id: UUID,
+        slip_id: UUID,
+    ) -> None:
+        """Delete a draft slip and keep its payroll-run totals synchronized."""
+        org_id = coerce_uuid(organization_id)
+        s_id = coerce_uuid(slip_id)
+        slip = db.scalar(
+            select(SalarySlip).where(
+                SalarySlip.organization_id == org_id,
+                SalarySlip.slip_id == s_id,
+            )
+        )
+        if not slip:
+            raise HTTPException(status_code=404, detail="Salary slip not found")
+        if slip.status != SalarySlipStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail="Only draft slips can be deleted",
+            )
+
+        entry_id = slip.payroll_entry_id
+        db.delete(slip)
+        db.flush()
+        if entry_id:
+            recalculate_payroll_entry_totals(db, org_id, entry_id)
 
     @staticmethod
     def _evaluate_formula(

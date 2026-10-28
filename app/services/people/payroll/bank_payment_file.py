@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 
 from app.models.people.payroll.salary_slip import SalarySlip
 from app.services.finance.banking.bank_upload import BankUploadResult, PaymentItem
@@ -38,6 +39,26 @@ class PayrollBankFileUnresolved(ValueError):
         return (
             "Payroll payment file blocked: one or more bank codes could not be resolved"
         )
+
+
+class PayrollBankFileTotalMismatch(ValueError):
+    """The payment batch does not equal the payroll run's authorized total."""
+
+    def __str__(self) -> str:
+        return (
+            "Payroll payment file blocked: salary slip total does not match "
+            "the payroll run total"
+        )
+
+
+def require_run_total_matches_items(
+    items: Sequence[PaymentItem],
+    run_total: Decimal | None,
+) -> None:
+    """Refuse export when payment items and the stored run total diverge."""
+    payment_total = sum((item.amount for item in items), Decimal("0"))
+    if payment_total != (run_total or Decimal("0")):
+        raise PayrollBankFileTotalMismatch
 
 
 def require_resolved_bank_codes(result: BankUploadResult) -> BankUploadResult:

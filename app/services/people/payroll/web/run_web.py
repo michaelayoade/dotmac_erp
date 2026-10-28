@@ -992,8 +992,10 @@ class RunWebService:
         )
         from app.services.people.payroll.bank_payment_file import (
             PayrollBankFileIncomplete,
+            PayrollBankFileTotalMismatch,
             PayrollBankFileUnresolved,
             payment_items_for_slips,
+            require_run_total_matches_items,
             require_resolved_bank_codes,
         )
 
@@ -1033,7 +1035,10 @@ class RunWebService:
         # Get all salary slips for this entry
         slips = db.scalars(
             select(SalarySlip)
-            .where(SalarySlip.payroll_entry_id == e_id)
+            .where(
+                SalarySlip.organization_id == org_id,
+                SalarySlip.payroll_entry_id == e_id,
+            )
             .where(SalarySlip.net_pay > 0)
             .order_by(SalarySlip.employee_name)
         ).all()
@@ -1050,7 +1055,8 @@ class RunWebService:
                 payroll_month=entry.payroll_month,
                 payroll_year=entry.payroll_year,
             )
-        except PayrollBankFileIncomplete as exc:
+            require_run_total_matches_items(payment_items, entry.total_net_pay)
+        except (PayrollBankFileIncomplete, PayrollBankFileTotalMismatch) as exc:
             return RedirectResponse(
                 url=f"/people/payroll/runs/{entry_id}?error={quote(str(exc))}",
                 status_code=303,

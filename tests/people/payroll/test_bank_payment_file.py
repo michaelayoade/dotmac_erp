@@ -10,8 +10,10 @@ import pytest
 from app.services.finance.banking.bank_upload import BankUploadResult
 from app.services.people.payroll.bank_payment_file import (
     PayrollBankFileIncomplete,
+    PayrollBankFileTotalMismatch,
     PayrollBankFileUnresolved,
     payment_items_for_slips,
+    require_run_total_matches_items,
     require_resolved_bank_codes,
 )
 
@@ -65,6 +67,17 @@ def test_complete_slips_are_all_mapped_without_partial_omission() -> None:
     assert len(items) == len(slips) == 2
     assert all(item.amount == Decimal("125000.00") for item in items)
     assert all(item.narration == "Salary 8/2026" for item in items)
+
+
+def test_payment_items_must_equal_the_stored_payroll_run_total() -> None:
+    items = payment_items_for_slips(
+        [_slip(), _slip()], payroll_month=8, payroll_year=2026
+    )
+
+    require_run_total_matches_items(items, Decimal("250000.00"))
+
+    with pytest.raises(PayrollBankFileTotalMismatch):
+        require_run_total_matches_items(items, Decimal("125000.00"))
 
 
 def test_an_unresolved_bank_code_refuses_the_generated_file_without_leaking_detail() -> (

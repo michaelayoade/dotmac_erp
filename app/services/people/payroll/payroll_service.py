@@ -45,6 +45,9 @@ from app.services.people.payroll.eligibility import (
     is_employee_payroll_eligible_for_period,
     payroll_employee_eligibility_clause,
 )
+from app.services.people.payroll.payroll_totals import (
+    recalculate_payroll_entry_totals,
+)
 from app.services.people.payroll_reporting import calculate_active_monthly_net_average
 from app.services.people.payroll.salary_slip_service import (
     SalarySlipInput,
@@ -959,6 +962,7 @@ class PayrollService:
     ) -> PayrollEntry:
         """Submit payroll entry for approval."""
         entry = self.get_payroll_entry(org_id, entry_id)
+        self._update_entry_totals(entry)
         slips = list(entry.salary_slips or [])
         if not slips:
             raise PayrollServiceError("No salary slips found for this payroll entry")
@@ -1213,23 +1217,11 @@ class PayrollService:
         return list(self.db.scalars(query).all())
 
     def _update_entry_totals(self, entry: PayrollEntry) -> None:
-        slips = list(
-            self.db.scalars(
-                select(SalarySlip).where(SalarySlip.payroll_entry_id == entry.entry_id)
-            ).all()
-        )
-        entry.employee_count = len(slips)
-        entry.total_gross_pay = sum(
-            ((s.gross_pay or Decimal("0")) for s in slips),
-            Decimal("0"),
-        )
-        entry.total_deductions = sum(
-            ((s.total_deduction or Decimal("0")) for s in slips),
-            Decimal("0"),
-        )
-        entry.total_net_pay = sum(
-            ((s.net_pay or Decimal("0")) for s in slips),
-            Decimal("0"),
+        recalculate_payroll_entry_totals(
+            self.db,
+            entry.organization_id,
+            entry.entry_id,
+            entry=entry,
         )
 
     # =========================================================================

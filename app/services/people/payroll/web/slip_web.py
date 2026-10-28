@@ -1036,7 +1036,7 @@ class SlipWebService:
             )
 
         try:
-            db.delete(slip)
+            salary_slip_service.delete_salary_slip(db, org_id, s_id)
             db.commit()
         except Exception:
             db.rollback()
