@@ -101,6 +101,7 @@ class MockPayrollEntry:
         created_by_id: uuid.UUID = None,
     ):
         self.entry_id = uuid.uuid4()
+        self.currency_code = "NGN"
         self.organization_id = organization_id
         self.entry_number = f"PR-2026-{uuid.uuid4().hex[:5]}"
         self.status = status
