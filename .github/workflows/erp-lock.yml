@@ -3,17 +3,19 @@
 #
 # ── THIS WORKFLOW'S ONE PENDING MOVEMENT ────────────────────────────────────
 #
-# `ALLOWED_MOVEMENTS` is a CLOSED, one-shot allowlist: `dotmac-files`
-# 0.1.0a6 -> 0.1.0a7. Every other Forgejo pin stays frozen (see
+# `ALLOWED_MOVEMENTS` is a CLOSED, one-shot allowlist: `dotmac-numbering`
+# 0.1.0a2 -> 0.1.0a4. Every other Forgejo pin stays frozen (see
 # `IMMUTABLE_PINS`), and the whole-lock drift check refuses any change to
 # their entries. After the resolved pair is applied, a re-dispatch fails the
-# old-version check. This replaces the spent `dotmac-files` 0.1.0a5 ->
-# 0.1.0a6 movement, which is already applied on main.
+# old-version check. This replaces the spent `dotmac-files` 0.1.0a6 ->
+# 0.1.0a7 movement, which is already applied on main.
 # The wheel filename and SHA-256 require independent review in
 # `RELEASED_WHEEL_DIGESTS`; `acquire` rejects changed bytes before uploading
-# the bundle. Starter's module-release verification record for tag
-# dotmac-files-v0.1.0a7 (tag object 25f1d9bd7c, publisher/verifier run
-# 39211782120) binds the reviewed wheel digest.
+# the bundle. Protected module-release run 40805356385 for tag
+# dotmac-numbering-v0.1.0a4 (tag object
+# 75983c2fe612a72789ec21c675a445f7e2a580d0, source
+# f4c8c25f9647c2441ab06a0e588e1e51b6ed036c) binds the reviewed wheel digest.
+# The Starter App record and consumer acceptance are separate steps.
 # Keep wheel and sdist: Poetry 2.4.1 reads metadata from any parseable wheel
 # without a platform compatibility check. Merely offering the sdist alongside
 # it does not execute its backend.
@@ -98,11 +100,11 @@ on:
           names a tree nobody reviewed.
         required: true
         type: string
-      dotmac_files_version:
+      dotmac_numbering_version:
         description: >-
-          The dotmac-files version to move to. The only value this workflow
-          accepts is 0.1.0a7; anything else is refused by name. The source
-          manifest must still declare 0.1.0a6.
+          The dotmac-numbering version to move to. The only value this workflow
+          accepts is 0.1.0a4; anything else is refused by name. The source
+          manifest must still declare 0.1.0a2.
         required: true
         type: string
 
@@ -123,7 +125,7 @@ jobs:
       - name: Refuse anything but an exact commit and the one allowed movement
         env:
           REF: ${{ inputs.ref }}
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          NUMBERING_VERSION: ${{ inputs.dotmac_numbering_version }}
         run: |
           set -euo pipefail
           # A 40-hex ref is the only input that cannot mean something
@@ -133,8 +135,8 @@ jobs:
             echo "::error::ref must be a full 40-character commit SHA, got '${REF}'"
             exit 1
           fi
-          if [ "${FILES_VERSION}" != "0.1.0a7" ]; then
-            echo "::error::dotmac_files_version must be 0.1.0a7, got '${FILES_VERSION}'"
+          if [ "${NUMBERING_VERSION}" != "0.1.0a4" ]; then
+            echo "::error::dotmac_numbering_version must be 0.1.0a4, got '${NUMBERING_VERSION}'"
             exit 1
           fi
 
@@ -184,9 +186,9 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Move the files pin, and refuse a tree that would misdirect the credential
+      - name: Move the numbering pin, and refuse a tree that would misdirect the credential
         env:
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          NUMBERING_VERSION: ${{ inputs.dotmac_numbering_version }}
         run: |
           set -euo pipefail
           # `set-versions` refuses unless the ref's OWN tree declares the
@@ -197,10 +199,10 @@ jobs:
           # configure the resolver.
           python scripts/erp_lock.py set-versions \
             --manifest work/pyproject.toml \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-numbering=${NUMBERING_VERSION}"
           python scripts/erp_lock.py manifest-guard \
             --manifest work/pyproject.toml --checkout work \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-numbering=${NUMBERING_VERSION}"
 
       - name: There is a credential to resolve with
         env:
@@ -223,7 +225,7 @@ jobs:
       - name: Download the closed bundle from the private index
         env:
           TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          NUMBERING_VERSION: ${{ inputs.dotmac_numbering_version }}
         run: |
           set -euo pipefail
           # The netrc exists for the length of this ONE step. curl offers it
@@ -240,7 +242,7 @@ jobs:
           python scripts/erp_lock.py acquire \
             --manifest work/pyproject.toml \
             --lock work/poetry.lock \
-            --movement "dotmac-files=${FILES_VERSION}" \
+            --movement "dotmac-numbering=${NUMBERING_VERSION}" \
             --out /tmp/bundle
 
       - name: The bundle carries no credential out of this job
@@ -324,9 +326,9 @@ jobs:
       - name: Install the repository-pinned, importable Poetry
         uses: ./.github/actions/setup-poetry
 
-      - name: Move the files pin, and refuse a tree that would misdirect the credential
+      - name: Move the numbering pin, and refuse a tree that would misdirect the credential
         env:
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          NUMBERING_VERSION: ${{ inputs.dotmac_numbering_version }}
         run: |
           set -euo pipefail
           # Re-derived here rather than carried from `acquire` as an
@@ -334,10 +336,10 @@ jobs:
           # judged.
           python scripts/erp_lock.py set-versions \
             --manifest work/pyproject.toml \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-numbering=${NUMBERING_VERSION}"
           python scripts/erp_lock.py manifest-guard \
             --manifest work/pyproject.toml --checkout work \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-numbering=${NUMBERING_VERSION}"
 
       - name: This job holds no credential, and says so before it resolves
         run: |
@@ -370,7 +372,7 @@ jobs:
             --directory /tmp/bundle > /tmp/mirror.log 2>&1 &
           for _ in $(seq 1 50); do
             if curl -sS -o /dev/null --fail \
-              "http://127.0.0.1:${MIRROR_PORT}/simple/dotmac-files/"; then
+              "http://127.0.0.1:${MIRROR_PORT}/simple/dotmac-numbering/"; then
               echo "the bundle is being served on 127.0.0.1:${MIRROR_PORT}"
               exit 0
             fi
@@ -408,7 +410,7 @@ jobs:
           python scripts/erp_lock.py off-index-lock \
             --lock /tmp/poetry.lock.before
 
-      - name: Resolve the files pin, with no way to ask for more
+      - name: Resolve the numbering pin, with no way to ask for more
         working-directory: work
         env:
           POETRY_CONFIG_DIR: /tmp/poetry-config
@@ -437,10 +439,10 @@ jobs:
           set -euo pipefail
           poetry check --lock
 
-      - name: Only files moved, and only version, files and dependencies
+      - name: Only numbering moved, and only version, files and dependencies
         run: |
           set -euo pipefail
-          # The drift gate covers the WHOLE lock. Only `dotmac-files` may
+          # The drift gate covers the WHOLE lock. Only `dotmac-numbering` may
           # differ, and only in `version`, `files` and `dependencies`.
           # `dotmac-files`, `dotmac-tax`, and every other entry remain identical.
           # `dependencies` is permitted here because a version move can raise
@@ -476,13 +478,13 @@ jobs:
 
       - name: The lock's hashes are the bytes the index published
         env:
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          NUMBERING_VERSION: ${{ inputs.dotmac_numbering_version }}
         run: |
           set -euo pipefail
           python scripts/erp_lock.py verify \
             --lock work/poetry.lock \
             --digests /tmp/bundle/digests.json \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-numbering=${NUMBERING_VERSION}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -521,7 +523,7 @@ jobs:
       - name: Assemble the evidence — the manifest and the lock, bound together
         env:
           REF: ${{ inputs.ref }}
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          NUMBERING_VERSION: ${{ inputs.dotmac_numbering_version }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -541,7 +543,7 @@ jobs:
             --lock /tmp/pair/poetry.lock \
             --credential-proof /tmp/bundle/credential-scan.ok \
             --coordinate "ref=${REF}" \
-            --coordinate "dotmac_files_version=${FILES_VERSION}" \
+            --coordinate "dotmac_numbering_version=${NUMBERING_VERSION}" \
             --coordinate "repository=${REPOSITORY}" \
             --coordinate "workflow_run=${RUN_ID}" \
             --coordinate "run_attempt=${RUN_ATTEMPT}" \
@@ -549,7 +551,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: erp-lock-${{ inputs.dotmac_files_version }}
+          name: erp-lock-${{ inputs.dotmac_numbering_version }}
           path: /tmp/evidence
           if-no-files-found: error
 

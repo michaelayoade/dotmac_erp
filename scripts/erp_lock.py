@@ -1,11 +1,11 @@
 """The refusals `.github/workflows/erp-lock.yml` needs, out of the YAML.
 
-ERP's pending one-shot movement is `dotmac-files` 0.1.0a6 -> 0.1.0a7.
+ERP's pending one-shot movement is `dotmac-numbering` 0.1.0a2 -> 0.1.0a4.
 Every other Forgejo pin stays frozen at its declared version (see
 `IMMUTABLE_PINS`); their entries are immutable under the whole-lock drift
 check. Once the resolved pair is applied, a re-dispatch against that tree
-fails the old-version check. This replaces the spent `dotmac-kernel`
-0.1.0a98 -> 0.1.0a105 movement, already applied on main. All of these packages use the same
+fails the old-version check. This replaces the spent `dotmac-files`
+0.1.0a6 -> 0.1.0a7 movement, already applied on main. All of these packages use the same
 PRIVATE Forgejo index that
 `dotmac_vendor_control_plane`'s `kernel-lock.yml` / `scripts/kernel_lock.py`
 resolve `dotmac-kernel` against, and a lock entry for a privately-published
@@ -20,7 +20,7 @@ have refused outright (see
 ## The closed allowlist of movements
 
 `ALLOWED_MOVEMENTS` names exactly one move. A caller cannot ask this module to
-move `dotmac-tax`, move `dotmac-files` to another version, or move a third
+move `dotmac-files`, move `dotmac-numbering` to another version, or move another
 package at all. Extending the allowlist is a reviewed edit to this file,
 not a workflow input.
 
@@ -40,7 +40,7 @@ and every other off-index form is refused exactly as upstream refuses it.
 
 ## The subjects
 
-* `set-versions` — move the files pin in the manifest, refusing unless the ref's
+* `set-versions` — move the numbering pin in the manifest, refusing unless the ref's
   OWN tree declares the exact allowed OLD version, exactly
   once, and refusing again unless the rewrite lands on the exact allowed NEW
   version, exactly once — enumerated across every dependency surface Poetry
@@ -98,29 +98,30 @@ import dependency_normalisation
 #: never a workflow input. After this move is applied, a re-dispatch fails
 #: the refusal check against the currently declared version by design.
 ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {
-    "dotmac-files": ("0.1.0a6", "0.1.0a7"),
+    "dotmac-numbering": ("0.1.0a2", "0.1.0a4"),
 }
 
-#: Private pins frozen throughout this one-shot move. `dotmac-kernel` joins
-#: imports and tax here now that its own movement has landed. Every other
+#: Private pins frozen throughout this one-shot move. `dotmac-files` joins
+#: kernel, imports and tax here now that its own movement has landed. Every other
 #: lock entry is held identical by the whole-lock drift check regardless.
 IMMUTABLE_PINS = {
+    "dotmac-files": "0.1.0a7",
     "dotmac-imports": "0.2.0a1",
     "dotmac-kernel": "0.1.0a105",
     "dotmac-tax": "0.1.0a4",
 }
 
-#: Verified wheel, pinned independently of the index response. Starter's
-#: module-release verification record for tag dotmac-files-v0.1.0a7 (tag
-#: object 25f1d9bd7c3d15b102e008a368e5dad88b452308, peeled to source
-#: d94ff7edb8a8cfc28c709b40a1b9f87ea38d16c9; publisher/verifier run
-#: 39211782120) supplies this exact filename and SHA-256.
+#: Verified wheel, pinned independently of the index response. Protected
+#: module-release run 40805356385 for tag dotmac-numbering-v0.1.0a4 (tag
+#: object 75983c2fe612a72789ec21c675a445f7e2a580d0, peeled to source
+#: f4c8c25f9647c2441ab06a0e588e1e51b6ed036c) supplies this exact filename
+#: and SHA-256. The Starter App record remains a separate acceptance step.
 RELEASED_WHEEL_DIGESTS = {
     (
-        "dotmac-files",
-        "0.1.0a7",
-        "dotmac_files-0.1.0a7-py3-none-any.whl",
-    ): "47640e4a56c4c2f131393719d4415a1699ec2a27794e6a63e9d7da5aac50f6dc",
+        "dotmac-numbering",
+        "0.1.0a4",
+        "dotmac_numbering-0.1.0a4-py3-none-any.whl",
+    ): "9014fff10759288e8d71a3f750d52dfbb95fdb9a7e130d3f3ddfe9861eea591d",
 }
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
@@ -152,7 +153,7 @@ INDEX_USERNAME = "ci-reader"
 CREDENTIAL_ENV = "FORGEJO_CREDENTIAL"
 
 #: The package this workflow exists to move. Everything else in the lock,
-#: including `dotmac-tax`, is required to be identical. Files may change
+#: including `dotmac-tax`, is required to be identical. Numbering may change
 #: `version`,
 #: `files` and `dependencies` — `dependencies` ONLY because a version move can
 #: legitimately shift the moved package's own floor on a transitive
@@ -759,7 +760,7 @@ def manifest_problems(
     """Everything about this manifest that would misdirect the credential.
 
     `target_versions` is the NEW version expected for each moved package,
-    e.g. `{"dotmac-files": "0.1.0a7"}`.
+    e.g. `{"dotmac-numbering": "0.1.0a4"}`.
     """
 
     problems: list[str] = []
