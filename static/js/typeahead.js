@@ -38,11 +38,21 @@
             popup.style.left = `${left}px`;
             popup.style.width = `${width}px`;
             popup.style.top = `${rect.bottom + gutter}px`;
+            // A transformed ancestor (such as an animated modal) makes fixed
+            // coordinates relative to that ancestor instead of the viewport.
+            // Measure the rendered menu and convert the correction to CSS pixels.
+            let rendered = popup.getBoundingClientRect();
+            const scaleX = rendered.width / popup.offsetWidth || 1;
+            const scaleY = rendered.height / popup.offsetHeight || 1;
+            popup.style.width = `${width / scaleX}px`;
+            rendered = popup.getBoundingClientRect();
             const availableBelow = window.innerHeight - rect.bottom - viewportGutter;
             const availableAbove = rect.top - viewportGutter;
-            if (popup.offsetHeight > availableBelow && availableAbove > availableBelow) {
-                popup.style.top = `${Math.max(viewportGutter, rect.top - popup.offsetHeight - gutter)}px`;
-            }
+            const top = rendered.height > availableBelow && availableAbove > availableBelow
+                ? Math.max(viewportGutter, rect.top - rendered.height - gutter)
+                : rect.bottom + gutter;
+            popup.style.left = `${left + (left - rendered.left) / scaleX}px`;
+            popup.style.top = `${rect.bottom + gutter + (top - rendered.top) / scaleY}px`;
         });
     }
 
