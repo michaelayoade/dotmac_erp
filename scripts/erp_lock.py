@@ -1,11 +1,14 @@
 """The refusals `.github/workflows/erp-lock.yml` needs, out of the YAML.
 
-ERP's pending one-shot movement is `dotmac-files` 0.1.0a6 -> 0.1.0a7.
-Every other Forgejo pin stays frozen at its declared version (see
+ERP's pending one-shot change is an ADDITION: `dotmac-payroll` 0.1.0a2, the
+package's first lock entry, from source `forgejo`, with the fixed manifest spec
+`ADDITION_SPEC_LINES` (including `python = ">=3.12"`, because payroll a2
+requires Python >=3.12 and ERP declares >=3.11,<3.13; ERP's range is not
+narrowed). Every other Forgejo pin stays frozen at its declared version (see
 `IMMUTABLE_PINS`); their entries are immutable under the whole-lock drift
 check. Once the resolved pair is applied, a re-dispatch against that tree
-fails the old-version check. This replaces the spent `dotmac-kernel`
-0.1.0a98 -> 0.1.0a105 movement, already applied on main. All of these packages use the same
+fails the already-present check. This replaces the spent `dotmac-files`
+0.1.0a6 -> 0.1.0a7 movement, already applied on main. All of these packages use the same
 PRIVATE Forgejo index that
 `dotmac_vendor_control_plane`'s `kernel-lock.yml` / `scripts/kernel_lock.py`
 resolve `dotmac-kernel` against, and a lock entry for a privately-published
@@ -19,10 +22,11 @@ have refused outright (see
 
 ## The closed allowlist of movements
 
-`ALLOWED_MOVEMENTS` names exactly one move. A caller cannot ask this module to
-move `dotmac-tax`, move `dotmac-files` to another version, or move a third
-package at all. Extending the allowlist is a reviewed edit to this file,
-not a workflow input.
+`ALLOWED_MOVEMENTS` is empty (the spent Files movement was removed) and
+`ALLOWED_ADDITIONS` names exactly one addition. A caller cannot ask this module
+to move `dotmac-tax`, move `dotmac-files` or `dotmac-numbering`, add a second
+package, or add this one at another version, source or digest. Extending the
+allowlist is a reviewed edit to this file, not a workflow input.
 
 ## The one accommodation ERP's own manifest needs
 
@@ -40,11 +44,11 @@ and every other off-index form is refused exactly as upstream refuses it.
 
 ## The subjects
 
-* `set-versions` — move the files pin in the manifest, refusing unless the ref's
-  OWN tree declares the exact allowed OLD version, exactly
-  once, and refusing again unless the rewrite lands on the exact allowed NEW
-  version, exactly once — enumerated across every dependency surface Poetry
-  and PEP 621 / PEP 735 accept.
+* `set-versions` — insert the fixed payroll declaration into the manifest,
+  refusing unless the ref's OWN tree declares no payroll at all (on any
+  dependency surface Poetry and PEP 621 / PEP 735 accept), and refusing again
+  unless the rewrite lands on exactly that one declaration, byte-for-byte the
+  fixed spec.
 * `manifest-guard` — the ref under resolution supplies the manifest; refuses
   anything that would misdirect `FORGEJO_READ_TOKEN` or hand the resolver a
   dependency form it does not recognise.
@@ -61,10 +65,11 @@ and every other off-index form is refused exactly as upstream refuses it.
   name, repository, tag, and resolved commit — see `off_index_lock_problems`.
 * `verify` — the lock's hashes for the moved package are the bytes the index
   published.
-* `drift` — the whole lock outside the moved entry must be identical;
-  that entry may differ only in `version`, `files`, and `dependencies`
-  — and `dependencies` is bounded separately, by `wheel-dependencies`, to
-  names the acquired wheel's own `Requires-Dist` actually declares.
+* `drift` — the whole lock outside the added entry must be identical, the
+  lock's `python-versions` included; the added entry must be new (absent
+  before, exactly one after, the allowed version/source/files) — and its
+  `dependencies` are bounded separately, by `wheel-dependencies`, to names
+  the acquired wheel's own `Requires-Dist` actually declares.
 * `evidence` — the manifest/lock PAIR, bound to each other and to the run, with
   a credential scan that refuses rather than passes when there is nothing
   configured to look for.
@@ -92,36 +97,85 @@ import dependency_normalisation
 
 # ── the closed allowlist of movements ───────────────────────────────────────
 
-#: The ONLY movements this workflow may perform. A version outside this table
-#: — on either side of the move — is refused BY NAME, not silently
-#: coerced or ignored. Extending this table is a reviewed diff to this file,
-#: never a workflow input. After this move is applied, a re-dispatch fails
-#: the refusal check against the currently declared version by design.
-ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {
-    "dotmac-files": ("0.1.0a6", "0.1.0a7"),
+#: Movements of an EXISTING pin (`name -> (old, new)`). Empty: the Files
+#: a6 -> a7 movement is spent and applied on main. Extending this table is a
+#: reviewed diff to this file, never a workflow input.
+ALLOWED_MOVEMENTS: dict[str, tuple[str, str]] = {}
+
+
+@dataclass(frozen=True)
+class Addition:
+    """A closed, one-shot ADDITION of a package the lock does not yet carry."""
+
+    version: str
+    source: str
+    python: str
+    wheel: str
+    sha256: str
+
+    @property
+    def spec_line(self) -> str:
+        return (
+            f'{{version = "{self.version}", source = "{self.source}", '
+            f'python = "{self.python}"}}'
+        )
+
+    @property
+    def spec(self) -> dict[str, str]:
+        return {"version": self.version, "source": self.source, "python": self.python}
+
+
+#: The ONLY additions this workflow may perform. Payroll a2 requires Python
+#: >=3.12; ERP declares >=3.11,<3.13 and that range is NOT narrowed, so the
+#: manifest spec carries a `python` marker. Starter's module-release
+#: verification record for tag dotmac-payroll-v0.1.0a2 (protected release run
+#: 41226687556) supplies this exact filename and SHA-256. After the resolved
+#: pair is applied a re-dispatch is refused: the package is already present.
+ALLOWED_ADDITIONS: dict[str, Addition] = {
+    "dotmac-payroll": Addition(
+        version="0.1.0a2",
+        source="forgejo",
+        python=">=3.12",
+        wheel="dotmac_payroll-0.1.0a2-py3-none-any.whl",
+        sha256="ae059ee2a6095d7964a49a50fa92abc0d7a95e5b7bf888f062bacbd4373821cb",
+    ),
 }
 
-#: Private pins frozen throughout this one-shot move. `dotmac-kernel` joins
-#: imports and tax here now that its own movement has landed. Every other
-#: lock entry is held identical by the whole-lock drift check regardless.
+#: Every package this run may change, by either kind, and the version each
+#: must land on.
+PENDING_PACKAGES = frozenset(ALLOWED_MOVEMENTS) | frozenset(ALLOWED_ADDITIONS)
+PENDING_TARGETS: dict[str, str] = {
+    **{name: pair[1] for name, pair in ALLOWED_MOVEMENTS.items()},
+    **{name: addition.version for name, addition in ALLOWED_ADDITIONS.items()},
+}
+
+#: Private pins frozen throughout this one-shot addition. `dotmac-files`
+#: (a7) and `dotmac-numbering` (a2) join imports, kernel and tax now that
+#: Files' own movement has landed. Every other lock entry is held identical by
+#: the whole-lock drift check regardless.
 IMMUTABLE_PINS = {
+    "dotmac-files": "0.1.0a7",
     "dotmac-imports": "0.2.0a1",
     "dotmac-kernel": "0.1.0a105",
+    "dotmac-numbering": "0.1.0a2",
     "dotmac-tax": "0.1.0a4",
 }
 
-#: Verified wheel, pinned independently of the index response. Starter's
-#: module-release verification record for tag dotmac-files-v0.1.0a7 (tag
-#: object 25f1d9bd7c3d15b102e008a368e5dad88b452308, peeled to source
-#: d94ff7edb8a8cfc28c709b40a1b9f87ea38d16c9; publisher/verifier run
-#: 39211782120) supplies this exact filename and SHA-256.
+#: Verified wheels, pinned independently of the index response.
 RELEASED_WHEEL_DIGESTS = {
-    (
-        "dotmac-files",
-        "0.1.0a7",
-        "dotmac_files-0.1.0a7-py3-none-any.whl",
-    ): "47640e4a56c4c2f131393719d4415a1699ec2a27794e6a63e9d7da5aac50f6dc",
+    ("dotmac-payroll", "0.1.0a2", ALLOWED_ADDITIONS["dotmac-payroll"].wheel): (
+        ALLOWED_ADDITIONS["dotmac-payroll"].sha256
+    ),
 }
+
+#: Where the fixed addition line goes: immediately after the (frozen) Tax pin
+#: in `[tool.poetry.dependencies]`. Matched exactly once or refused.
+ADDITION_ANCHOR = re.compile(
+    r'^dotmac-tax = \{version = "'
+    + re.escape(IMMUTABLE_PINS["dotmac-tax"])
+    + r'", source = "forgejo"\}$',
+    re.MULTILINE,
+)
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
 #: because ERP itself carries two: `pyproject.toml`'s `[[tool.poetry.source]]`
@@ -162,7 +216,7 @@ CREDENTIAL_ENV = "FORGEJO_CREDENTIAL"
 #: `Requires-Dist` — never left unchecked. `source`, `extras`, `optional`,
 #: `groups`, `python-versions`, `description` and anything new stay held to
 #: the same identity as every other package.
-MUTABLE_PACKAGES = frozenset(ALLOWED_MOVEMENTS)
+MUTABLE_PACKAGES = PENDING_PACKAGES
 MUTABLE_FIELDS = frozenset({"version", "files", "dependencies"})
 
 #: The two files a consumer must apply TOGETHER. The lock's content-hash is
@@ -448,6 +502,64 @@ def replace_version(text: str, package: str, version: str) -> str:
             "rather than guessing which one the pin is."
         )
     return edited
+
+
+def addition_problems(manifest: dict[str, Any]) -> list[str]:
+    """BEFORE the edit: no addition may be declared anywhere already."""
+
+    problems: list[str] = []
+    for package in sorted(ALLOWED_ADDITIONS):
+        locations = declarations_of(manifest, package)
+        if locations:
+            problems.append(
+                f"{package} is already declared at {', '.join(locations)}; this "
+                "one-shot addition is spent and cannot be re-dispatched"
+            )
+    return problems
+
+
+def added_declaration_problems(manifest: dict[str, Any]) -> list[str]:
+    """AFTER the edit: exactly one declaration, exactly the fixed spec."""
+
+    problems: list[str] = []
+    for package, addition in sorted(ALLOWED_ADDITIONS.items()):
+        locations = declarations_of(manifest, package)
+        if locations != [f"tool.poetry.dependencies.{package}"]:
+            problems.append(
+                f"{package}: expected exactly one declaration in "
+                f"tool.poetry.dependencies, found {locations or 'none'}"
+            )
+            continue
+        spec = manifest["tool"]["poetry"]["dependencies"][package]
+        if spec != addition.spec:
+            problems.append(
+                f"{package}: declared {spec!r}, the only allowed spec is "
+                f"{addition.spec!r} (the python marker is required: ERP's own "
+                "Python range is not narrowed)"
+            )
+    return problems
+
+
+def add_declarations(text: str) -> str:
+    """Insert each fixed addition line after the frozen Tax pin, or refuse."""
+
+    for package, addition in sorted(ALLOWED_ADDITIONS.items()):
+        matches = ADDITION_ANCHOR.findall(text)
+        if len(matches) != 1:
+            raise Refusal(
+                f"expected exactly one frozen dotmac-tax line to anchor the "
+                f"{package} addition on, matched {len(matches)}. Refusing "
+                "rather than guessing where it goes."
+            )
+        line = f"{package} = {addition.spec_line}"
+        anchor = matches[0]
+        text = text.replace(
+            anchor,
+            f"{anchor}\n\n# Added by the closed erp-lock addition lane; python "
+            f"marker keeps ERP's own range intact.\n{line}",
+            1,
+        )
+    return text
 
 
 # ── declaration enumeration: every surface, for both directions ────────────
@@ -759,7 +871,7 @@ def manifest_problems(
     """Everything about this manifest that would misdirect the credential.
 
     `target_versions` is the NEW version expected for each moved package,
-    e.g. `{"dotmac-files": "0.1.0a7"}`.
+    e.g. `{"dotmac-payroll": "0.1.0a2"}`.
     """
 
     problems: list[str] = []
@@ -792,6 +904,7 @@ def manifest_problems(
 
     problems += dependency_problems(manifest)
     problems += movement_problems(manifest, IMMUTABLE_PINS)
+    problems += added_declaration_problems(manifest)
 
     if "requires-plugins" in manifest.get("tool", {}).get("poetry", {}):
         problems.append(
@@ -1037,6 +1150,14 @@ def acquisition_plan(
     for package in ALLOWED_MOVEMENTS:
         if package not in plan:
             raise Refusal(f"no {package} dependency bound to {INDEX_SOURCE_NAME!r}")
+    for package in ALLOWED_ADDITIONS:
+        if any(entry.get("name") == package for entry in lock.get("package", [])):
+            raise Refusal(
+                f"the lock already carries {package}; this one-shot addition is "
+                "spent and cannot be re-dispatched"
+            )
+        if package not in target_versions:
+            raise Refusal(f"no {package} addition requested")
     plan.update(target_versions)
     return plan
 
@@ -1251,7 +1372,7 @@ def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
         offered = wheel_only_problems([(package, version, list(wanted))])
         if offered:
             raise Refusal(offered[0])
-        if package in ALLOWED_MOVEMENTS:
+        if package in PENDING_PACKAGES:
             expected = artifact_names(package, version)
             if set(wanted) != expected:
                 raise Refusal(
@@ -1262,7 +1383,7 @@ def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
             target = files_dir / filename
             fetch(url, target)
             digest = sha256_hex(target.read_bytes())
-            if package in ALLOWED_MOVEMENTS and filename.endswith(".whl"):
+            if package in PENDING_PACKAGES and filename.endswith(".whl"):
                 expected_digest = RELEASED_WHEEL_DIGESTS.get(
                     (package, version, filename)
                 )
@@ -1278,7 +1399,7 @@ def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
                     )
             digests[filename] = digest
 
-        if package in ALLOWED_MOVEMENTS:
+        if package in PENDING_PACKAGES:
             wheel_names = parseable_wheels(wanted)
             if wheel_names:
                 requires = wheel_requires_dist(files_dir / sorted(wheel_names)[0])
@@ -1456,6 +1577,48 @@ def _moved_entry_problems(
     return problems
 
 
+def _added_entry_problems(
+    package: str,
+    addition: Addition,
+    old: dict[tuple[str, str], dict[str, Any]],
+    new: dict[tuple[str, str], dict[str, Any]],
+) -> list[str]:
+    old_entries = [key for key in old if key[0] == package]
+    new_entries = {key: value for key, value in new.items() if key[0] == package}
+    if old_entries:
+        return [
+            f"the lock already carries {package} {old_entries[0][1]}; this "
+            "one-shot addition is spent and cannot be re-dispatched"
+        ]
+    if len(new_entries) != 1:
+        return [f"expected exactly one new {package} entry, found {len(new_entries)}"]
+    ((key, entry),) = new_entries.items()
+    problems: list[str] = []
+    if key[1] != addition.version:
+        problems.append(
+            f"{package} resolved {key[1]!r}, the only allowed addition is "
+            f"{addition.version!r}"
+        )
+    source = entry.get("source")
+    if not isinstance(source, dict):
+        problems.append(f"{package} has no source table in the resolved lock")
+    else:
+        if source.get("url") != LOCK_INDEX_URL:
+            problems.append(
+                f"{package} resolved from {source.get('url')!r}, not {LOCK_INDEX_URL!r}"
+            )
+        if source.get("reference") != addition.source:
+            problems.append(
+                f"{package} resolved from source {source.get('reference')!r}, "
+                f"not {addition.source!r}"
+            )
+    if entry.get("groups") != ["main"]:
+        problems.append(
+            f"{package} is in groups {entry.get('groups')!r}, expected ['main']"
+        )
+    return problems
+
+
 def drift_problems(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
     """Everything outside the moved pin that is not identical."""
 
@@ -1487,8 +1650,10 @@ def drift_problems(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
         if fields:
             problems.append(f"{key[0]} {key[1]} changed {', '.join(fields)}")
 
-    for package in sorted(MUTABLE_PACKAGES):
+    for package in sorted(ALLOWED_MOVEMENTS):
         problems += _moved_entry_problems(package, old, new)
+    for package, addition in sorted(ALLOWED_ADDITIONS.items()):
+        problems += _added_entry_problems(package, addition, old, new)
 
     old_meta = before.get("metadata", {})
     new_meta = after.get("metadata", {})
@@ -1647,29 +1812,29 @@ def _report(subject: str, problems: list[str]) -> int:
 
 def _parse_movement_args(values: list[str]) -> dict[str, str]:
     """`--movement name=version` (repeatable) -> a dict, refusing any name not
-    in `ALLOWED_MOVEMENTS` and any value that is not that movement's `new`."""
+    in the closed allowlists and any value that is not that entry's target."""
 
     result: dict[str, str] = {}
     for item in values:
         if "=" not in item:
             raise Refusal(f"--movement must be name=version, got {item!r}")
         name, version = item.split("=", 1)
-        if name not in ALLOWED_MOVEMENTS:
+        if name not in PENDING_TARGETS:
             raise Refusal(
-                f"{name} is not an allowed movement; the only allowed "
-                f"movements are {sorted(ALLOWED_MOVEMENTS)}"
+                f"{name} is not an allowed change; the only allowed packages "
+                f"are {sorted(PENDING_TARGETS)}"
             )
-        _old, new = ALLOWED_MOVEMENTS[name]
-        if version != new:
+        if name in result:
+            raise Refusal(f"{name} was given more than once")
+        if version != PENDING_TARGETS[name]:
             raise Refusal(
-                f"{name} version {version!r} is not an allowed movement; the "
-                f"only allowed movement for {name} is "
-                f"{ALLOWED_MOVEMENTS[name][0]!r} -> {new!r}"
+                f"{name} version {version!r} is not allowed; the only allowed "
+                f"version for {name} is {PENDING_TARGETS[name]!r}"
             )
         result[name] = version
-    if set(result) != set(ALLOWED_MOVEMENTS):
+    if set(result) != set(PENDING_TARGETS):
         raise Refusal(
-            f"expected a --movement for each of {sorted(ALLOWED_MOVEMENTS)}, "
+            f"expected a --movement for each of {sorted(PENDING_TARGETS)}, "
             f"got {sorted(result)}"
         )
     return result
@@ -1748,7 +1913,9 @@ def _run(args: argparse.Namespace) -> int:
         target_versions = _parse_movement_args(args.movements)
         old_versions = {name: pair[0] for name, pair in ALLOWED_MOVEMENTS.items()}
         text = args.manifest.read_text(encoding="utf-8")
-        before_problems = movement_problems(tomllib.loads(text), old_versions)
+        before_problems = movement_problems(
+            tomllib.loads(text), old_versions
+        ) + addition_problems(tomllib.loads(text))
         if before_problems:
             for problem in before_problems:
                 print(
@@ -1757,8 +1924,13 @@ def _run(args: argparse.Namespace) -> int:
                 )
             return 1
         for package, version in sorted(target_versions.items()):
-            text = replace_version(text, package, version)
-        after_problems = movement_problems(tomllib.loads(text), target_versions)
+            if package in ALLOWED_MOVEMENTS:
+                text = replace_version(text, package, version)
+        text = add_declarations(text)
+        after_problems = movement_problems(
+            tomllib.loads(text),
+            {k: v for k, v in target_versions.items() if k in ALLOWED_MOVEMENTS},
+        ) + added_declaration_problems(tomllib.loads(text))
         if after_problems:
             for problem in after_problems:
                 print(
@@ -1856,7 +2028,7 @@ def _run(args: argparse.Namespace) -> int:
     if args.command == "wheel-dependencies":
         lock = _load_toml(args.lock)
         problems: list[str] = []
-        for package in sorted(ALLOWED_MOVEMENTS):
+        for package in sorted(PENDING_PACKAGES):
             requires_file = args.requires_dir / f"{package}.json"
             if not requires_file.exists():
                 problems.append(
