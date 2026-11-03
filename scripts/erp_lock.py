@@ -132,13 +132,12 @@ RELEASED_WHEEL_DIGESTS = {
 }
 
 #: Reviewed sdist digest for the moved package, pinned independently of the
-#: index response exactly as the wheel above is. The digest below is the one
-#: the merged main `poetry.lock` already records for the 0.1.0a7 sdist (the
-#: spent lane's reviewed output); a reviewer should cross-check it against
-#: Starter's module-release verification record for the same tag. A moved
-#: package whose sdist has NO entry here is refused by `moved_artifacts`
-#: before any fetch: an unpinned sdist is bytes this workflow would accept
-#: from the index on trust.
+#: index response exactly as the wheel above is. Provenance: Starter's
+#: module-release run 39211782120 (source commit d94ff7ed), whose verify-job
+#: log records "dotmac_files-0.1.0a7.tar.gz: sha256 c8f7a61b... identical to
+#: the original build". A moved package whose sdist has NO entry here is
+#: refused by `moved_artifacts` before any fetch: an unpinned sdist is bytes
+#: this workflow would accept from the index on trust.
 RELEASED_SDIST_DIGESTS = {
     (
         "dotmac-files",
@@ -146,11 +145,6 @@ RELEASED_SDIST_DIGESTS = {
         "dotmac_files-0.1.0a7.tar.gz",
     ): "c8f7a61bc7198cb7397ac1dcd0caa13e1874445152f7f0bfedb9e85d0e8c78d4",
 }
-
-#: The reviewed dependency-bundle policy, read from the TRUSTED tooling
-#: checkout (the workspace root, `github.sha`) -- never from the candidate
-#: checkout, which could edit it to name itself as trusted.
-POLICY_PATH = Path(".github") / "dependency-bundle-policy.json"
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
 #: because ERP itself carries two: `pyproject.toml`'s `[[tool.poetry.source]]`
@@ -1013,9 +1007,11 @@ def fetch(url: str, target: Path) -> None:
         text=True,
     )
     if completed.returncode != 0:
+        target.unlink(missing_ok=True)
         raise Refusal(f"curl failed for {url}: {completed.stderr.strip()}")
     problems = transfer_problems(url, completed.stdout.strip())
     if problems:
+        target.unlink(missing_ok=True)
         raise Refusal(problems[0])
 
 
@@ -1047,6 +1043,15 @@ def classify_original(
     nothing itself.
     """
 
+    # The policy must come from the TRUSTED checkout, never from the candidate
+    # tree under classification, which could edit it to name itself trusted.
+    resolved_policy = policy_path.resolve()
+    resolved_work = work.resolve()
+    if resolved_policy == resolved_work or resolved_work in resolved_policy.parents:
+        raise Refusal(
+            "the policy path resolves inside the candidate checkout; it must "
+            "be read from the trusted tooling checkout"
+        )
     try:
         policy = dependency_bundle.load_policy(policy_path)
         if (

@@ -993,9 +993,9 @@ def test_a_moved_sdist_digest_that_is_not_a_sha256_is_refused(
         moved_artifacts(FILES, TARGETS[FILES])
 
 
-def test_the_reviewed_moved_digests_are_the_ones_main_already_locks() -> None:
-    """The spent lane's merged output is the reviewed source of the pinned
-    digests; a reviewer cross-checks them against Starter's release record."""
+def test_the_reviewed_moved_digests_are_consistent_with_main_lock() -> None:
+    """Lock consistency only, NOT provenance: provenance is Starter release
+    run 39211782120 (see the comment on `RELEASED_SDIST_DIGESTS`)."""
 
     lock = tomllib.loads((ROOT / "poetry.lock").read_text())
     entry = next(p for p in lock["package"] if p["name"] == FILES)
@@ -2127,10 +2127,51 @@ def test_every_action_is_pinned_by_commit() -> None:
 
 
 def test_it_is_dispatch_only() -> None:
-    text = WORKFLOW.read_text()
-    assert "workflow_dispatch:" in text
-    for trigger in ("\n  push:", "\n  pull_request:", "\n  schedule:"):
-        assert trigger not in text, trigger
+    import yaml
+
+    loaded = yaml.safe_load(WORKFLOW.read_text())
+    # YAML 1.1 parses the top-level `on` key as boolean True.
+    triggers = loaded[True] if True in loaded else loaded["on"]
+    assert set(triggers) == {"workflow_dispatch"}
+
+
+@pytest.mark.parametrize(("returncode", "stdout"), [(22, ""), (0, "404"), (0, "302")])
+def test_fetch_leaves_no_partial_file_on_a_failed_transfer(
+    returncode: int, stdout: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "artifact.whl"
+
+    def _run(argv: list[str], **_kw: Any) -> subprocess.CompletedProcess[str]:
+        target.write_bytes(b"partial")
+        return subprocess.CompletedProcess(argv, returncode, stdout, "boom")
+
+    monkeypatch.setattr(subprocess, "run", _run)
+    with pytest.raises(Refusal):
+        erp_lock.fetch("https://registry.dotmac.io/x", target)
+    assert not target.exists()
+
+
+def test_fetch_keeps_the_file_of_a_successful_transfer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "artifact.whl"
+
+    def _ok(argv: list[str], **_kw: Any) -> subprocess.CompletedProcess[str]:
+        target.write_bytes(b"whole")
+        return subprocess.CompletedProcess(argv, 0, "200", "")
+
+    monkeypatch.setattr(subprocess, "run", _ok)
+    erp_lock.fetch("https://registry.dotmac.io/x", target)
+    assert target.read_bytes() == b"whole"
+
+
+def test_a_policy_inside_the_candidate_checkout_is_refused(tmp_path: Path) -> None:
+    repo, sha = _bound_repo(tmp_path)
+    inside = repo / "dependency-bundle-policy.json"
+    inside.write_text(POLICY.read_text())
+    with pytest.raises(Refusal, match="inside the candidate checkout"):
+        classify_original(repo, sha, inside)
+    classify_original(repo, sha, POLICY)
 
 
 def test_only_the_allowed_version_is_named_as_valid_in_the_dispatch_gate() -> None:
