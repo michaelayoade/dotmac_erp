@@ -250,6 +250,54 @@ class TestMobileViewport:
         category.press("Enter")
         assert category.input_value()
 
+    @pytest.mark.parametrize("width", [320, 375])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/finance/ap/invoices/new",
+            "/finance/ar/invoices/new",
+            "/finance/quotes/new",
+            "/finance/ar/credit-notes/new",
+        ],
+    )
+    def test_financial_line_fields_fit_and_selects_open_on_mobile(
+        self, authenticated_page, base_url, path, width
+    ):
+        """Editable line controls fit phone widths and native selects accept focus."""
+        authenticated_page.set_viewport_size({"width": width, "height": 667})
+        response = authenticated_page.goto(f"{base_url}{path}")
+        assert response is not None and response.status == 200
+
+        table = authenticated_page.locator("table.mobile-form-table").first
+        expect(table).to_be_visible()
+        row = table.locator("tbody tr").first
+        expect(row).to_be_visible()
+
+        wrapper = authenticated_page.locator(".mobile-form-table-wrap").first
+        assert not wrapper.evaluate(
+            "element => element.scrollWidth > element.clientWidth + 1"
+        )
+
+        totals = authenticated_page.locator(".mobile-form-totals").first
+        expect(totals).to_be_visible()
+        totals_bounds = totals.bounding_box()
+        assert totals_bounds is not None
+        assert totals_bounds["x"] >= 0
+        assert totals_bounds["x"] + totals_bounds["width"] <= width + 1
+
+        for control in row.locator("input:not([type='hidden']), select, button").all():
+            if not control.is_visible():
+                continue
+            control.scroll_into_view_if_needed()
+            bounds = control.bounding_box()
+            assert bounds is not None
+            assert bounds["x"] >= 0
+            assert bounds["x"] + bounds["width"] <= width + 1
+
+        select = row.locator("select").first
+        select.click()
+        expect(select).to_be_focused()
+
 
 # =============================================================================
 # Tablet Viewport Tests

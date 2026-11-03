@@ -414,7 +414,7 @@
 
         <!-- Credit Note Lines -->
         <div class="form-card">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="section-title">Credit Note Lines</h2>
                     <p class="section-subtitle">Items to credit</p>
@@ -425,8 +425,8 @@
                 </button>
             </div>
 
-            <div class="mt-8 overflow-x-auto -mx-2 px-2">
-                <table class="lines-table min-w-[900px]">
+            <div class="mobile-form-table-wrap mt-8 overflow-x-auto -mx-2 px-2">
+                <table class="lines-table mobile-form-table min-w-[900px]">
                     <thead>
                         <tr>
                             <th scope="col" style="width: 20%">Revenue Account</th>
@@ -441,7 +441,7 @@
                     <tbody>
                         <template x-for="(line, index) in form.lines" :key="index">
                             <tr>
-                                <td>
+                                <td data-mobile-label="Revenue Account">
                                     <select aria-label="Revenue account" x-model="line.revenue_account_id"
                                             required
                                             class="table-input">
@@ -457,14 +457,14 @@
                                         {% endfor %}
                                     </select>
                                 </td>
-                                <td>
+                                <td data-mobile-label="Description">
                                     <input aria-label="Description" type="text"
                                            x-model="line.description"
                                            required
                                            placeholder="Description"
                                            class="table-input">
                                 </td>
-                                <td>
+                                <td data-mobile-label="Quantity">
                                     <input aria-label="Quantity" type="number"
                                            x-model.number="line.quantity"
                                            @input="calculateLineAmount(index)"
@@ -473,7 +473,7 @@
                                            step="0.01"
                                            class="table-input text-right">
                                 </td>
-                                <td>
+                                <td data-mobile-label="Unit Price">
                                     <input aria-label="Unit price" type="number"
                                            x-model.number="line.unit_price"
                                            @input="calculateLineAmount(index)"
@@ -482,7 +482,7 @@
                                            step="0.01"
                                            class="table-input text-right">
                                 </td>
-                                <td>
+                                <td data-mobile-label="Tax Code">
                                     <select aria-label="Tax code" x-model="line.tax_code_id"
                                             @change="calculateLineAmount(index)"
                                             class="table-input">
@@ -498,10 +498,10 @@
                                         {% endfor %}
                                     </select>
                                 </td>
-                                <td>
+                                <td data-mobile-label="Amount">
                                     <div class="amount-display" x-text="formatCurrency(line.amount + (line.tax_amount || 0))"></div>
                                 </td>
-                                <td class="text-right">
+                                <td class="text-right" data-mobile-action>
                                     <button type="button"
                                             @click="removeLine(index)"
                                             x-show="form.lines.length > 1"
@@ -517,7 +517,7 @@
 
             <!-- Totals -->
             <div class="mt-8 flex justify-end">
-                <div class="w-80 totals-section">
+                <div class="mobile-form-totals w-full sm:w-80 totals-section">
                     <div class="total-row">
                         <span class="total-label">Subtotal</span>
                         <span class="total-value" x-text="formatCurrency(subtotal)"></span>

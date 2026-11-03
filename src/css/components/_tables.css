@@ -122,4 +122,95 @@
         transition: all 0.2s ease;
     }
     .table-action-btn:hover { color: var(--ink); background: var(--parchment-dark); }
+
+    /* Editable line tables become labeled cards on phones. Desktop tables stay intact. */
+    @media (max-width: 639px) {
+        .mobile-form-table-wrap.overflow-x-auto,
+        .mobile-form-table-wrap.table-container {
+            overflow: visible;
+            margin-left: 0;
+            margin-right: 0;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        .mobile-form-table-wrap.table-container {
+            border: 0;
+            background: transparent;
+        }
+
+        table.mobile-form-table,
+        .mobile-form-table tbody,
+        .mobile-form-table tbody tr,
+        .mobile-form-table tbody td {
+            display: block;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .mobile-form-table thead {
+            display: none;
+        }
+
+        .mobile-form-table tbody tr {
+            margin-bottom: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-xl);
+            background: var(--card-bg);
+        }
+
+        .mobile-form-table tbody td {
+            padding: 0.5rem 0;
+            border: 0;
+            text-align: left;
+        }
+
+        .mobile-form-table tbody td[data-mobile-label]::before {
+            content: attr(data-mobile-label);
+            display: block;
+            margin-bottom: 0.25rem;
+            color: var(--ink-muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .mobile-form-table tbody td[data-mobile-action] {
+            text-align: right;
+        }
+
+        .mobile-form-table tbody td input:not([type="hidden"]):not([type="checkbox"]),
+        .mobile-form-table tbody td select,
+        .mobile-form-table tbody td textarea,
+        .mobile-form-table tbody td .table-input {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            font-size: 16px;
+        }
+
+        .mobile-form-totals .total-row,
+        .mobile-form-totals .total-label {
+            flex-wrap: wrap;
+        }
+
+        .mobile-form-totals .total-label,
+        .mobile-form-totals .total-value {
+            min-width: 0;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        .mobile-form-totals .total-value {
+            margin-left: auto;
+        }
+
+        .mobile-form-totals .total-label .form-select {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            margin: 0.25rem 0 0;
+            font-size: 16px;
+        }
+    }
 }
