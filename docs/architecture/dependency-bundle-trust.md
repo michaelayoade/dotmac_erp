@@ -106,7 +106,11 @@ commit of the ref that was dispatched — which can be any branch in this
 same repository — not protected `main`. `.github/workflows/erp-lock.yml`
 (and any future analogous workflow) treats `github.sha` as if it were
 necessarily a trusted, human-reviewed tooling checkout, while the run holds
-`secrets.FORGEJO_READ_TOKEN`. Concretely: an operator (or anyone who can
+`secrets.FORGEJO_READ_TOKEN` (the repository secret; since the E1 binding,
+`erp-lock.yml`'s `acquire` job instead reads the environment secret
+`FORGEJO_BUNDLE_READ_TOKEN` from `forgejo-registry-read-main`, whose deployment
+branch policy admits `main` only -- the description below is the threat that
+binding addresses for that workflow). Concretely: an operator (or anyone who can
 push a branch and has `workflow_dispatch` access) can push a branch whose
 `scripts/erp_lock.py` or `.github/workflows/erp-lock.yml` is modified, and
 dispatch that workflow against that branch. `erp-lock.yml`'s `acquire` job
@@ -129,7 +133,7 @@ that verifies it and materialises it as a local index — never reaching
 `registry.dotmac.io` itself, and never holding the read credential.
 
 **Fairness to the current shape:** `erp-lock.yml`'s credential
-(`secrets.FORGEJO_READ_TOKEN` / the `FORGEJO_CREDENTIAL` env var it becomes)
+(now `secrets.FORGEJO_BUNDLE_READ_TOKEN` / the `FORGEJO_CREDENTIAL` env var it becomes)
 is held ONLY inside the `acquire` job — four steps, all inside that one job
 (the pre-flight token-presence check, the netrc-based `curl` acquisition
 step, the credential-scan-during-acquisition step, and the final
@@ -749,39 +753,18 @@ duplication debt" above already lists.
   `erp_lock` — was NOT a legitimate difference and was converged onto
   `erp_lock`'s stricter, exact-match behaviour; see "The plan digest"
   above.)
-- **Lock-package source validation.** `erp_lock.acquisition_plan`'s
-  lock-side loop includes a package in its plan by checking ONLY
-  `source.reference == "forgejo"` — it never checks `source.type` or
-  `source.url`. `dependency_bundle._lock_packages` requires all three
-  fields to agree, refusing a lock entry whose `reference` matches but
-  whose `type`/`url` do not. The STRICTER behaviour is the objectively
-  correct one — keying on one field alone is exactly the spoofable
-  shortcut this module exists to refuse elsewhere — but it is NOT
-  converged onto `erp_lock.py` in this branch: doing so means tightening
-  `acquisition_plan`, which is credentialed acquisition-workflow logic
-  outside this branch's bounds (the only permitted `erp_lock.py` changes
-  are the import-only ones "Named duplication debt" lists). This is a
-  real, tracked, currently-unfixed gap in `erp_lock.py`, named explicitly
-  in `_lock_packages`' own docstring and proven with a planted vector in
-  `test_lock_packages_is_stricter_than_erp_locks_acquisition_plan` — it
-  needs an explicitly authorised follow-up change to `erp_lock.py` itself,
-  not a silent carry-forward.
-
-  **This is retirement-coupled debt, not a permanent specification of the
-  weaker behaviour**, and the test above is a TWO-DIRECTIONAL RATCHET: it
-  fails if the asymmetry widens (either side's check changes in a way that
-  moves either of its assertions) exactly as much as if the asymmetry
-  disappears (`acquisition_plan` is tightened to also require `type` and
-  `url`, so it would then refuse the same malformed `dotmac-kernel` vector
-  the test currently asserts it silently accepts). A future authorised
-  change that tightens `acquisition_plan` MUST make this test fail — that
-  failure is the signal to delete the test's debt-tracking assertion, this
-  paragraph, and the "NOT converged" language in `_lock_packages`'s
-  docstring together, in the same change. Tightening `acquisition_plan`
-  while leaving this test green (by loosening or deleting it first, or by
-  updating it quietly) would let the gap close without record; a test that
-  stays red until the corresponding documentation catches up is the
-  correct outcome, not a build failure to route around.
+- **Lock-package source validation — CONVERGED (no longer a divergence).**
+  `erp_lock` used to include a lock package in its credentialed
+  acquisition plan by checking only `source.reference == "forgejo"`, while
+  `dependency_bundle._lock_packages` required `type`, `reference` and `url`
+  to agree. That gap is closed: `erp_lock classify` and `erp_lock acquire`
+  classify the ORIGINAL same-commit manifest and lock through
+  `dependency_bundle.extract_dependency_surface_at_commit` (policy read from
+  the trusted checkout), so a forgejo-referenced entry with a wrong `type`
+  or `url` is refused by the one owner. The former two-directional ratchet
+  was retired in the same change as the repair and replaced by
+  `test_erp_lock_classifies_forgejo_lock_entries_through_lock_packages`,
+  which requires both sides to refuse the planted vectors.
 - **The off-index policy allowlist.** The body-similarity detector cannot
   see duplicated CONSTANTS at all:
   `.github/dependency-bundle-policy.json`'s
@@ -816,3 +799,33 @@ other repository that briefly held that name after a rename, and a rename
 of THIS repository does not, by itself, invalidate an otherwise-correct
 policy binding (though the `full_name` check would still need updating to
 match).
+
+## E1: credentialed acquisition-plan binding (erp-lock)
+
+`erp-lock.yml`'s `acquire` job is bound three ways, none of which qualifies
+the credential by itself (token identity, capability and the other repository
+secret consumers are tracked separately in the debt register):
+
+1. **Source binding.** `classify` (before `set-versions`) and `acquire`
+   classify the original manifest and lock at the exact commit through
+   `dependency_bundle`, then apply the one reviewed movement. Each package
+   may carry only its exact `{filename: sha256}` set: the lock's own files for
+   unchanged packages, the reviewed wheel and sdist digests
+   (`RELEASED_WHEEL_DIGESTS`, `RELEASED_SDIST_DIGESTS`) for the moved one.
+   Missing, extra, duplicate and replaced artifacts are refused straight after
+   each fetch, before anything is written for the bundle.
+2. **Environment binding.** `acquire` (only) declares
+   `environment: forgejo-registry-read-main`, the policy's `environment_name`
+   and `dependency_bundle.REQUIRED_ENVIRONMENT_NAME`, and reads
+   `FORGEJO_BUNDLE_READ_TOKEN`. The environment must restrict deployment
+   branches to the single branch rule `main` (custom policy, no tag rules,
+   "protected branches only" off, admin bypass off). `resolve` and `attest`
+   carry no environment and no secret.
+3. **In-workflow main check.** `protected-main` stays as a second layer; it is
+   authored by the dispatched branch and is not the control.
+
+Still open (not part of this binding): the repository secret
+`FORGEJO_READ_TOKEN` remains consumed by `ci.yml`,
+`deployment-conformance.yml`, `release-hardened.yml` and the Dockerfiles; the
+producer and binder workflows named in the policy do not exist yet; the old
+secret is not deleted or revoked; ruleset admin bypass on `main` stands.

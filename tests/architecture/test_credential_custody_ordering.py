@@ -20,16 +20,16 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "erp-lock.yml"
 REQUIRED_GATE_SHELL = "/bin/bash --noprofile --norc -p -eo pipefail {0}"
-ALLOWED_SECRET_EXPRESSION = "${{ secrets.FORGEJO_READ_TOKEN }}"
+ALLOWED_SECRET_EXPRESSION = "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"
 CREDENTIAL_REFERENCE = re.compile(
-    r"secrets\s*(?:\.\s*FORGEJO_READ_TOKEN(?![A-Za-z0-9_])|\[\s*(?:'FORGEJO_READ_TOKEN'|"
-    r'"FORGEJO_READ_TOKEN")\s*\])',
+    r"secrets\s*(?:\.\s*FORGEJO_BUNDLE_READ_TOKEN(?![A-Za-z0-9_])|\[\s*(?:'FORGEJO_BUNDLE_READ_TOKEN'|"
+    r'"FORGEJO_BUNDLE_READ_TOKEN")\s*\])',
     re.IGNORECASE,
 )
 # GitHub Actions expression contexts and secret names are both
 # case-insensitive on reference (https://docs.github.com/en/actions/reference/
-# security/secrets): `${{ Secrets.FORGEJO_READ_TOKEN }}` names the exact same
-# secret as `${{ secrets.FORGEJO_READ_TOKEN }}`. Both patterns above therefore
+# security/secrets): `${{ Secrets.FORGEJO_BUNDLE_READ_TOKEN }}` names the exact same
+# secret as `${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}`. Both patterns above therefore
 # normalise casing rather than trusting the spelling on the page.
 SECRET_CONTEXT_REFERENCE = re.compile(r"\bsecrets\b", re.IGNORECASE)
 
@@ -65,7 +65,7 @@ def parse_jobs(text: str) -> dict[str, Mapping[str, object]]:
 
     if _has_unsupported_secret_reference(text):
         raise AssertionError(
-            "only the literal FORGEJO_READ_TOKEN secret reference is supported"
+            "only the literal FORGEJO_BUNDLE_READ_TOKEN secret reference is supported"
         )
     workflow = _load_workflow(text)
     jobs = _mapping(workflow.get("jobs"), "workflow jobs")
@@ -327,10 +327,10 @@ def is_refusal_gate(step: Mapping[str, object]) -> bool:
     recogniser that is wrong about nothing beats a broad one that is wrong
     about something. It also proves nothing about the surrounding job or
     repository: this is defence in depth over a step's own shell text, not
-    a substitute for GitHub-enforced credential custody (a protected
-    environment gating the secret itself is still required and is a
-    known, separate closure step -- its absence here is not this guard's
-    gap to close).
+    a substitute for GitHub-enforced credential custody (the
+    GitHub environment `forgejo-registry-read-main` gating the secret is
+    declared on the acquire job and asserted in test_erp_lock_workflow.py;
+    its live settings are a Michael-owned admin step, not provable here).
     """
     if not _step_metadata_is_safe(step):
         return False
@@ -422,7 +422,7 @@ def _post_steps_env(env_key: str) -> str:
     result = text.replace(
         "  resolve:\n",
         f"    {env_key}:\n"
-        "      LEAKED_TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}\n"
+        "      LEAKED_TOKEN: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}\n"
         "  resolve:\n",
     )
     assert result != text
@@ -452,7 +452,7 @@ def test_acquire_anchor_reused_as_resolve_job_env_is_named() -> None:
     text = """jobs:
   acquire:
     env: &credential
-      TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}
+      TOKEN: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
     steps: []
   resolve:
     env: *credential
@@ -499,7 +499,7 @@ def test_any_other_secret_context_reference_fails_closed(expression: str) -> Non
 def test_literal_bracket_reference_outside_acquire_is_named() -> None:
     text = WORKFLOW.read_text().replace(
         "  resolve:\n",
-        "  resolve:\n    env:\n      SNEAKY: ${{ secrets['FORGEJO_READ_TOKEN'] }}\n",
+        "  resolve:\n    env:\n      SNEAKY: ${{ secrets['FORGEJO_BUNDLE_READ_TOKEN'] }}\n",
     )
     assert "resolve" in jobs_referencing_credential(parse_jobs(text))
     assert any(
@@ -509,16 +509,16 @@ def test_literal_bracket_reference_outside_acquire_is_named() -> None:
 
 @pytest.mark.parametrize("suffix", ["_V2", "_STAGING"])
 def test_similarly_named_secret_is_not_the_one_allowed_reference(suffix: str) -> None:
-    """`secrets.FORGEJO_READ_TOKEN_V2` and `secrets.FORGEJO_READ_TOKEN_STAGING`
+    """`secrets.FORGEJO_BUNDLE_READ_TOKEN_V2` and `secrets.FORGEJO_BUNDLE_READ_TOKEN_STAGING`
     name a DIFFERENT secret than the one this workflow is allowed to hold.
     Design break condition: the dot branch's right-hand identifier boundary
     (`(?![A-Za-z0-9_])`) is what refuses these -- delete that lookahead and
-    the pattern matches the `FORGEJO_READ_TOKEN` prefix of the longer name,
+    the pattern matches the `FORGEJO_BUNDLE_READ_TOKEN` prefix of the longer name,
     silently treating an unrelated secret as the allowed one. The bracket
     branch never needed this fix: `]` is already a boundary the identifier
     cannot extend past.
     """
-    name = f"FORGEJO_READ_TOKEN{suffix}"
+    name = f"FORGEJO_BUNDLE_READ_TOKEN{suffix}"
     assert not has_credential_reference(f"${{{{ secrets.{name} }}}}")
     text = f"""jobs:
   acquire:
@@ -532,21 +532,21 @@ def test_similarly_named_secret_is_not_the_one_allowed_reference(suffix: str) ->
 
 def test_case_insensitive_reference_to_the_allowed_secret_is_recognised() -> None:
     """GitHub resolves the `secrets` context and a secret's name
-    case-insensitively on reference, so `${{ Secrets.FORGEJO_READ_TOKEN }}`
-    and `${{ SECRETS.forgejo_read_token }}` name the exact same secret as
+    case-insensitively on reference, so `${{ Secrets.FORGEJO_BUNDLE_READ_TOKEN }}`
+    and `${{ SECRETS.forgejo_bundle_read_token }}` name the exact same secret as
     the canonical spelling. Design break condition: without `re.IGNORECASE`
     on `CREDENTIAL_REFERENCE`, a differently-cased reference to the
     ALLOWED secret would not be recognised as that reference at all --
     which would make `credential_env_var`/`_contains_credential` blind to
     a real credential use, not merely picky about spelling.
     """
-    assert has_credential_reference("${{ Secrets.FORGEJO_READ_TOKEN }}")
-    assert has_credential_reference("${{ SECRETS.forgejo_read_token }}")
+    assert has_credential_reference("${{ Secrets.FORGEJO_BUNDLE_READ_TOKEN }}")
+    assert has_credential_reference("${{ SECRETS.forgejo_bundle_read_token }}")
 
 
 def test_mixed_case_suffixed_secret_still_fails_closed() -> None:
     """Layers the case-insensitivity gap on top of the identifier-boundary
-    bypass: `${{ Secrets.FORGEJO_READ_TOKEN_V2 }}` differs from the
+    bypass: `${{ Secrets.FORGEJO_BUNDLE_READ_TOKEN_V2 }}` differs from the
     allowed secret both in casing and in the trailing `_V2`. Design break
     condition: this is caught by the SAME right-hand identifier boundary
     that closes the plain-lowercase suffix bypass, now applied
@@ -555,11 +555,11 @@ def test_mixed_case_suffixed_secret_still_fails_closed() -> None:
     backstop cannot see a differently-cased `Secrets` context reference
     either, so this exact combination would bypass both checks at once.
     """
-    assert not has_credential_reference("${{ Secrets.FORGEJO_READ_TOKEN_V2 }}")
+    assert not has_credential_reference("${{ Secrets.FORGEJO_BUNDLE_READ_TOKEN_V2 }}")
     text = """jobs:
   acquire:
     env:
-      TOKEN: ${{ Secrets.FORGEJO_READ_TOKEN_V2 }}
+      TOKEN: ${{ Secrets.FORGEJO_BUNDLE_READ_TOKEN_V2 }}
     steps: []
 """
     with pytest.raises(AssertionError, match=r"only the literal"):
@@ -593,7 +593,7 @@ def test_unexpected_alias_and_defanged_gate_fail() -> None:
     gate = gate_indices(steps)[0]
     synthetic = {
         "name": "Synthetic preflight with an unexpected alias",
-        "env": {"UNEXPECTED_ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"UNEXPECTED_ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "run": "echo preflight",
     }
     assert credential_env_var(synthetic) == "UNEXPECTED_ALIAS"
@@ -605,7 +605,7 @@ def test_unexpected_alias_and_defanged_gate_fail() -> None:
     defanged["run"] = commands_of(steps[gate]).replace("exit 1", "echo no-refusal")
     assert gate_refusal_problems([*steps[:gate], defanged, *steps[gate + 1 :]])
     nested = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  if false; then\n    exit 1\n  fi\nfi',
     }
@@ -663,7 +663,7 @@ def test_nested_shell_control_flow_is_not_a_proven_refusal_gate(
     and this plant is the latter.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": shell_body,
     }
@@ -683,7 +683,7 @@ def test_outer_else_inverts_the_refusal_and_is_rejected() -> None:
     specifically knows what `else` means.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  echo present\nelse\n  exit 1\nfi',
     }
@@ -703,7 +703,7 @@ def test_outer_elif_inverts_the_refusal_and_is_rejected() -> None:
     parametrized case with it.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "$ALIAS" ]; then\n'
@@ -726,7 +726,7 @@ def test_direct_exit_with_no_alternative_branch_is_the_positive_control() -> Non
     everything.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\nfi',
     }
@@ -738,7 +738,7 @@ def test_nonempty_parameter_expansion_is_not_an_empty_check() -> None:
     credential is missing, so it cannot serve as a refusal gate.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "${ALIAS:-present}" ]; then\n  exit 1\nfi',
     }
@@ -748,7 +748,7 @@ def test_nonempty_parameter_expansion_is_not_an_empty_check() -> None:
 def test_unbraced_fallback_suffix_is_not_an_empty_check() -> None:
     """The `:-` fallback is valid only inside the braced parameter form."""
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS:-" ]; then\n  exit 1\nfi',
     }
@@ -766,7 +766,7 @@ def test_exit_zero_before_exit_one_is_rejected() -> None:
     final line says.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 0\n  exit 1\nfi',
     }
@@ -784,7 +784,7 @@ def test_heredoc_payload_exit_is_rejected() -> None:
     it never has to decide that the middle line is "just data".
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": "if [ -z \"$ALIAS\" ]; then\n  cat <<'EOF'\nexit 1\nEOF\nfi",
     }
@@ -801,7 +801,7 @@ def test_backgrounded_exit_is_rejected() -> None:
     accepted as the grammar's final statement.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1 &\nfi',
     }
@@ -819,7 +819,7 @@ def test_statement_after_the_exit_is_rejected() -> None:
     after the exit -- reachable or not -- go unnoticed.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\n  echo "still here"\nfi',
     }
@@ -877,11 +877,11 @@ def test_the_real_gates_exact_shape_is_accepted() -> None:
     negative test above for the wrong reason.
     """
     step = {
-        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then\n'
-            '  echo "::error::FORGEJO_READ_TOKEN is unset or empty in this repository."\n'
+            '  echo "::error::FORGEJO_BUNDLE_READ_TOKEN is unset or empty in this repository."\n'
             '  echo "::error::Its owner is OpenBao secret/dotmac/forgejo/'
             'read-token#value;"\n'
             '  echo "::error::this workflow consumes the projection, it does not'
@@ -904,7 +904,7 @@ def test_blank_lines_between_statements_are_tolerated() -> None:
     swallowing something that should have disqualified the body.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "$ALIAS" ]; then\n'
@@ -932,7 +932,7 @@ def test_fused_use_then_check_step_is_not_credited_as_a_gate() -> None:
     use-then-check step be credited as its own gate.
     """
     step = {
-        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": (
             'curl -H "Authorization: Bearer ${FORGEJO_CREDENTIAL}" '
@@ -959,7 +959,7 @@ def test_fused_use_then_check_step_is_named_by_ordering_problems() -> None:
     """
     fused = {
         "name": "Download and check",
-        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": (
             'curl -H "Authorization: Bearer ${FORGEJO_CREDENTIAL}" '
@@ -972,7 +972,7 @@ def test_fused_use_then_check_step_is_named_by_ordering_problems() -> None:
     }
     real_gate = {
         "name": "There is a credential to resolve with",
-        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"FORGEJO_CREDENTIAL": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": (
             'if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then\n'
@@ -998,7 +998,7 @@ def test_preamble_set_option_line_is_admitted() -> None:
     on its own terms, not by being loosened to fit it after the fact.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'set -euo pipefail\nif [ -z "$ALIAS" ]; then\n  exit 1\nfi',
     }
@@ -1026,7 +1026,7 @@ def test_preamble_refuses_variable_display_tracing_and_noexec(
     broad token-shape grammar makes each of these plants pass as a gate.
     """
     step = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": f'{preamble}\nif [ -z "$ALIAS" ]; then\n  exit 1\nfi',
     }
@@ -1060,14 +1060,14 @@ def test_real_workflow_gate_with_exact_preamble_is_admitted() -> None:
 def test_gate_refuses_untrusted_step_metadata(metadata: Mapping[str, object]) -> None:
     metadata_env = _mapping(metadata.get("env", {}), "metadata env")
     baseline = {
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}"},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}"},
         "shell": REQUIRED_GATE_SHELL,
         "run": 'if [ -z "$ALIAS" ]; then\n  exit 1\nfi',
     }
     assert is_refusal_gate(baseline)
     step = {
         **baseline,
-        "env": {"ALIAS": "${{ secrets.FORGEJO_READ_TOKEN }}", **metadata_env},
+        "env": {"ALIAS": "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}", **metadata_env},
         **{key: value for key, value in metadata.items() if key != "env"},
     }
     assert credential_env_var(step) == "ALIAS"
@@ -1082,8 +1082,8 @@ def test_gate_requires_exact_secret_expression() -> None:
     }
     assert is_refusal_gate(baseline)
     for expression in (
-        "${{ Secrets.FORGEJO_READ_TOKEN }}",
-        "${{ secrets.FORGEJO_READ_TOKEN || 'present' }}",
+        "${{ Secrets.FORGEJO_BUNDLE_READ_TOKEN }}",
+        "${{ secrets.FORGEJO_BUNDLE_READ_TOKEN || 'present' }}",
     ):
         mutated = {**baseline, "env": {"ALIAS": expression}}
         assert credential_env_var(mutated) == "ALIAS"

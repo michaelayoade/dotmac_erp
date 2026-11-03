@@ -34,11 +34,25 @@
 # It is `workflow_dispatch` only. Nothing schedules it and no push triggers
 # it: a lock move is an authored act.
 #
+# ── THE CREDENTIAL IS RELEASED ONLY TO PROTECTED MAIN ───────────────────────
+#
+# `acquire` (and only `acquire`) runs in the GitHub environment
+# `forgejo-registry-read-main`, whose deployment-branch policy admits the
+# branch `main` alone, and the credential is the environment secret
+# `FORGEJO_BUNDLE_READ_TOKEN` -- not the broader repository secret. GitHub
+# evaluates that policy BEFORE the secret is released, so a dispatch from any
+# other branch is refused with no credential in reach. The in-workflow
+# `protected-main` step below stays as a second layer: a workflow-local check
+# is authored by the dispatched branch and cannot be the only control. The
+# environment must exist, configured, BEFORE this workflow merges (GitHub
+# auto-creates an unprotected environment on first use otherwise).
+# `resolve` and `attest` hold no environment and no secret.
+#
 # ── THE CREDENTIAL AND THE RESOLVER NEVER SHARE A JOB ────────────────────────
 #
 # Poetry can execute an sdist build backend during resolution when a
 # candidate's packaged metadata is insufficient (GHSA-73h3-mf4w-8647). While
-# that runs in the same job as `FORGEJO_READ_TOKEN`, the credential is in that
+# that runs in the same job as `FORGEJO_BUNDLE_READ_TOKEN`, the credential is in that
 # code's reach: its environment, its `.netrc`, its process tree. No guard on
 # the manifest closes that, because the executing code is a PUBLISHED
 # package's, not the manifest's.
@@ -119,6 +133,7 @@ jobs:
   # ── THE ONLY JOB THAT HOLDS THE CREDENTIAL WHILE FETCHING ─────────────────
   acquire:
     runs-on: ubuntu-latest
+    environment: forgejo-registry-read-main
     steps:
       - name: Refuse anything but an exact commit and the one allowed movement
         env:
@@ -184,6 +199,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Classify the ORIGINAL manifest and lock at the exact commit, with the
+      # reviewed policy from the trusted checkout, BEFORE any edit. Refuses a
+      # lock entry with a wrong type or url, a duplicate, a manifest/lock
+      # disagreement and an unadmitted off-index form; derives the exact
+      # artifact set `acquire` will hold the index to.
+      - name: Classify the original manifest and lock before moving anything
+        env:
+          REF: ${{ inputs.ref }}
+          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+        run: |
+          set -euo pipefail
+          python scripts/erp_lock.py classify \
+            --repo work --ref "${REF}" \
+            --policy .github/dependency-bundle-policy.json \
+            --movement "dotmac-files=${FILES_VERSION}"
+
       - name: Move the files pin, and refuse a tree that would misdirect the credential
         env:
           FILES_VERSION: ${{ inputs.dotmac_files_version }}
@@ -204,7 +235,7 @@ jobs:
 
       - name: There is a credential to resolve with
         env:
-          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
         # Bash requires GNU long options before short options; the reverse
         # order exits 2 before this credential-presence check can run.
         shell: /bin/bash --noprofile --norc -p -eo pipefail {0}
@@ -213,16 +244,17 @@ jobs:
           # Deliberately AFTER the manifest guard: no step holds the
           # credential until the untrusted manifest has been judged.
           if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then
-            echo "::error::FORGEJO_READ_TOKEN is unset or empty in this repository."
+            echo "::error::FORGEJO_BUNDLE_READ_TOKEN is unset or empty in the forgejo-registry-read-main environment."
             echo "::error::Its owner is OpenBao secret/dotmac/forgejo/read-token#value;"
-            echo "::error::this workflow consumes the projection, it does not fetch it."
+            echo "::error::this workflow consumes the environment secret, it does not fetch it."
             exit 1
           fi
           echo "the credential is present"
 
       - name: Download the closed bundle from the private index
         env:
-          TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}
+          TOKEN: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
+          REF: ${{ inputs.ref }}
           FILES_VERSION: ${{ inputs.dotmac_files_version }}
         run: |
           set -euo pipefail
@@ -238,14 +270,14 @@ jobs:
             "registry.dotmac.io" "ci-reader" "${TOKEN}" >> "${HOME}/.netrc"
 
           python scripts/erp_lock.py acquire \
-            --manifest work/pyproject.toml \
-            --lock work/poetry.lock \
+            --repo work --ref "${REF}" \
+            --policy .github/dependency-bundle-policy.json \
             --movement "dotmac-files=${FILES_VERSION}" \
             --out /tmp/bundle
 
       - name: The bundle carries no credential out of this job
         env:
-          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
         run: |
           set -euo pipefail
           # The bundle is package bytes, wheel-derived Requires-Dist and an
@@ -260,7 +292,7 @@ jobs:
 
       - name: Record secret-free credential attestation
         env:
-          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
         run: |
           set -euo pipefail
           python scripts/erp_lock.py credential-scan \
