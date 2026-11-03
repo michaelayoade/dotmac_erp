@@ -4,6 +4,7 @@
 {% block report_title %}Trial Balance{% endblock %}
 {% block report_meta %}
 <p class="meta-line">As at {{ as_of_date if as_of_date else 'Current Date' }}</p>
+<p class="meta-line">Basis: {{ 'Cash' if is_cash_basis else 'Accrual' }}</p>
 {% if period_name %}<p class="meta-line">Period: {{ period_name }}</p>{% endif %}
 {% endblock %}
 

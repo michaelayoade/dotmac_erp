@@ -174,7 +174,16 @@ def export_trial_balance_csv(
 ) -> str:
     """Export trial balance as CSV."""
     ctx = trial_balance_context(db, organization_id, as_of_date, basis=basis)
-    headers = ["Category", "Account Code", "Account Name", "Debit", "Credit"]
+    headers = [
+        "As Of Date",
+        "Basis",
+        "Category",
+        "Account Code",
+        "Account Name",
+        "Debit",
+        "Credit",
+    ]
+    basis_label = "Cash" if ctx["is_cash_basis"] else "Accrual"
     rows: list[list[str]] = []
     for section_name, section_key in [
         ("Assets", "assets"),
@@ -186,6 +195,8 @@ def export_trial_balance_csv(
         for item in ctx.get(section_key, []):
             rows.append(
                 [
+                    ctx["as_of_date_iso"],
+                    basis_label,
                     section_name,
                     item["account_code"],
                     item["account_name"],
@@ -193,5 +204,15 @@ def export_trial_balance_csv(
                     str(item["credit_raw"]),
                 ]
             )
-    rows.append(["", "", "TOTAL", ctx["total_debit"], ctx["total_credit"]])
+    rows.append(
+        [
+            ctx["as_of_date_iso"],
+            basis_label,
+            "",
+            "",
+            "TOTAL",
+            ctx["total_debit"],
+            ctx["total_credit"],
+        ]
+    )
     return _build_csv(headers, rows)

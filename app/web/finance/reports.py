@@ -7,6 +7,7 @@ HTML template routes for financial reports and analytics.
 from __future__ import annotations
 
 import io
+from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import (
@@ -24,6 +25,7 @@ from app.services.finance.rpt.async_exports import (
     queue_general_ledger_export,
 )
 from app.services.finance.rpt.web import reports_web_service
+from app.services.formatters import parse_date
 from app.templates import templates
 from app.web.deps import (
     get_db_for_org,
@@ -103,16 +105,17 @@ def export_trial_balance(
 ) -> StreamingResponse:
     """Export trial balance as CSV or PDF."""
     org_id = str(auth.organization_id)
+    report_date = (parse_date(as_of_date) or date.today()).isoformat()
     suffix = "_cash_basis" if basis == "cash" else ""
     if fmt == "pdf":
         pdf = reports_web_service.export_trial_balance_pdf(
             org_id, db, as_of_date, basis=basis
         )
-        return _pdf_response(pdf, f"trial_balance{suffix}.pdf")
+        return _pdf_response(pdf, f"trial_balance_{report_date}{suffix}.pdf")
     csv = reports_web_service.export_trial_balance_csv(
         org_id, db, as_of_date, basis=basis
     )
-    return _csv_response(csv, f"trial_balance{suffix}.csv")
+    return _csv_response(csv, f"trial_balance_{report_date}{suffix}.csv")
 
 
 @router.get("/income-statement", response_class=HTMLResponse)
