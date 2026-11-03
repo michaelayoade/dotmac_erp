@@ -5549,6 +5549,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
     min-width: max-content;
 }
 
+.max-w-11 {
+    max-width: 2.75rem;
+}
+
 .max-w-12 {
     max-width: 3rem;
 }
@@ -5937,6 +5941,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
 .grid-cols-\[minmax\(0\2c 1fr\)_5rem\] {
     grid-template-columns: minmax(0,1fr) 5rem;
+}
+
+.flex-row {
+    flex-direction: row;
 }
 
 .flex-col {
@@ -13883,6 +13891,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
         min-width: 200px;
     }
 
+    .sm\:max-w-\[180px\] {
+        max-width: 180px;
+    }
+
     .sm\:max-w-lg {
         max-width: 32rem;
     }
@@ -14031,6 +14043,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
         padding-right: 1.5rem;
     }
 
+    .sm\:py-6 {
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
+    }
+
     .sm\:pb-6 {
         padding-bottom: 1.5rem;
     }
@@ -14163,6 +14180,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
     .md\:max-w-sm {
         max-width: 24rem;
+    }
+
+    .md\:flex-none {
+        flex: none;
     }
 
     .md\:translate-x-0 {
