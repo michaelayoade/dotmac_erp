@@ -209,6 +209,47 @@ class TestMobileViewport:
             if modal.count() > 0:
                 expect(modal.first).to_be_visible()
 
+    @pytest.mark.parametrize("width", [320, 375])
+    def test_new_expense_claim_fields_fit_and_category_select_works(
+        self, authenticated_page, base_url, width
+    ):
+        """Expense item controls stay reachable and the category can be selected."""
+        authenticated_page.set_viewport_size({"width": width, "height": 667})
+        response = authenticated_page.goto(f"{base_url}/people/self/expenses")
+        assert response is not None and response.status == 200
+
+        authenticated_page.locator("button.coin-button").click()
+        modal = authenticated_page.get_by_role("dialog", name="New Expense Claim")
+        expect(modal).to_be_visible()
+
+        item = modal.locator("[data-expense-item]").first
+        category = item.locator("[data-item-category]")
+        if category.locator("option").count() < 2:
+            pytest.skip("No expense categories configured for this account")
+
+        for selector in ("#new-claim-modal-body", ".self-expense-item-list"):
+            has_horizontal_overflow = modal.locator(selector).evaluate(
+                "element => element.scrollWidth > element.clientWidth + 1"
+            )
+            assert not has_horizontal_overflow
+
+        for control in (
+            category,
+            item.locator("[data-expense-description]"),
+            item.locator("[data-item-amount]"),
+            item.locator("[data-remove-item]"),
+        ):
+            control.scroll_into_view_if_needed()
+            bounds = control.bounding_box()
+            assert bounds is not None
+            assert bounds["x"] >= 0
+            assert bounds["x"] + bounds["width"] <= width + 1
+
+        category.click()
+        category.press("ArrowDown")
+        category.press("Enter")
+        assert category.input_value()
+
 
 # =============================================================================
 # Tablet Viewport Tests
