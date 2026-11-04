@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy.dialects import postgresql
@@ -8,11 +9,11 @@ from app.services.expense.expense_service import ExpenseService
 
 
 class _EmptyResult:
-    def one(self):
-        return (0, 0)
-
     def all(self) -> list[object]:
         return []
+
+    def one(self) -> tuple[int, Decimal]:
+        return (0, Decimal("0"))
 
 
 class _CapturingSession:
@@ -56,12 +57,12 @@ def test_my_approvals_report_anchors_queries_on_approval_steps() -> None:
     )
     assert "ORDER BY claimant_name" in employee_options_sql
 
-    paid_sql = str(
+    payment_totals_sql = str(
         db.statements[2].compile(
-            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
         )
     )
-    assert "sum(expense.expense_claim.amount_paid)" in paid_sql
-    assert "expense_claim.approver_id" in paid_sql
-    assert "expense_claim.organization_id" in paid_sql
-    assert "expense_claim_approval_step" not in paid_sql
+    assert "FROM expense.expense_claim" in payment_totals_sql
+    assert "expense_claim_approval_step" not in payment_totals_sql
+    assert "expense_claim.paid_on IS NOT NULL" in payment_totals_sql

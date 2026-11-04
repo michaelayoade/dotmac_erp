@@ -13,9 +13,12 @@ def upgrade() -> None:
     connection = op.get_bind()
     connection.execute(
         sa.text("""
-        INSERT INTO permissions (id, key, description, is_active, created_at, updated_at)
+        INSERT INTO permissions (
+            id, key, description, is_active, created_at, updated_at
+        )
         VALUES (gen_random_uuid(), 'expense:limits:reset',
-                'Manually restore an approver''s expense allowance', true, NOW(), NOW())
+                'Manually restore an approver''s expense allowance',
+                true, NOW(), NOW())
         ON CONFLICT (key) DO NOTHING
     """)
     )
@@ -27,7 +30,7 @@ def upgrade() -> None:
         SELECT gen_random_uuid(), r.id, p.id FROM roles r CROSS JOIN permissions p
         WHERE r.name IN ('admin', 'expense_reviewer') AND r.is_active
           AND p.key = 'expense:limits:reset' AND p.is_active
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (role_id, permission_id) DO NOTHING
     """)
     )
 

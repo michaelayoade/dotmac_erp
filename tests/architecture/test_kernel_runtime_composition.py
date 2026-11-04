@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import subprocess
 from copy import deepcopy
 from pathlib import Path
 
@@ -16,6 +18,17 @@ ACTION = (
     "michaelayoade/dotmac_starter_mt/.github/actions/verify-composition-observations"
 )
 PRODUCT = "erp"
+
+
+def test_dependency_manifest_evidence_uses_git_bytes_not_checkout_line_endings():
+    record = json.loads(RECORD.read_text(encoding="utf-8"))
+    observation = next(
+        item for item in record["observations"] if item["id"] == "dependency-manifest"
+    )
+    git_bytes = subprocess.check_output(["git", "show", ":pyproject.toml"], cwd=ROOT)
+    digest = hashlib.sha256(git_bytes).hexdigest()
+    assert observation["source_blob_sha256"] == digest
+    assert observation["extract_sha256"] == digest
 
 
 def _load_record() -> dict[str, object]:
