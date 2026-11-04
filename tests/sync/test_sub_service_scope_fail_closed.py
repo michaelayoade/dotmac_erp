@@ -15,6 +15,8 @@ from app.api.sync.dotmac_sub import (
     require_sub_material_read_scope,
     require_sub_material_scope,
     require_sub_po_scope,
+    require_sub_supplier_write_scope,
+    require_sub_supplier_read_scope,
 )
 
 
@@ -30,6 +32,8 @@ from app.api.sync.dotmac_sub import (
         require_sub_expense_scope,
         require_sub_expense_payment_scope,
         require_sub_po_scope,
+        require_sub_supplier_write_scope,
+        require_sub_supplier_read_scope,
     ),
 )
 @pytest.mark.parametrize("scopes", (None, []))
@@ -66,6 +70,7 @@ def test_selfcare_bootstrap_key_has_complete_integration_scope_set():
         "sub:attendance:read",
         "sub:attendance:write",
         "sub:po:write",
+        "sub:suppliers:write",
         "sub:ap:write",
         "sub:expense:write",
         "sub:expense:pay",
