@@ -132,13 +132,14 @@
     </a>
 
     {% block body %}
+    {% set authenticated = user and user.is_authenticated %}
     <div class="relative">
         <header class="sticky top-0 z-40 border-b border-slate-200/70 bg-white dark:border-slate-800/70 dark:bg-slate-900">
-            <div class="mx-auto flex max-w-5xl gap-3 px-4 py-4 sm:px-6 sm:py-6 md:items-center md:justify-between {% if user and user.is_authenticated %}flex-row items-center{% else %}flex-col md:flex-row{% endif %}">
-                <a href="/" class="flex min-w-0 items-center gap-3 {% if user and user.is_authenticated %}flex-1 md:flex-none{% endif %}">
+            <div class="mx-auto flex max-w-5xl gap-3 px-4 py-4 sm:px-6 sm:py-6 md:items-center md:justify-between {% if authenticated %}flex-row items-center{% else %}flex-col md:flex-row{% endif %}">
+                <a href="/" class="flex min-w-0 items-center gap-3 {% if authenticated %}flex-1 md:flex-none{% endif %}">
                     {% if brand_logo_url %}
                         <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
-                             class="h-11 w-auto flex-shrink-0 rounded-xl object-contain shadow-lg shadow-primary-500/20 {% if user and user.is_authenticated %}max-w-11 sm:max-w-[180px]{% else %}max-w-[180px]{% endif %}"
+                             class="h-11 w-auto flex-shrink-0 rounded-xl object-contain shadow-lg shadow-primary-500/20 {% if authenticated %}max-w-11 sm:max-w-[180px]{% else %}max-w-[180px]{% endif %}"
                              loading="lazy"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <div class="hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-sm font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
@@ -158,7 +159,7 @@
                         </p>
                     </div>
                 </a>
-                <div class="flex flex-shrink-0 items-center gap-3 text-sm {% if user and user.is_authenticated %}ml-auto justify-end{% endif %}">
+                <div class="flex flex-shrink-0 items-center gap-3 text-sm {% if authenticated %}ml-auto justify-end{% endif %}">
                     {% if user and user.is_authenticated %}
                         <!-- Authenticated User Menu -->
                         {% include "partials/_module_launcher.html" %}
