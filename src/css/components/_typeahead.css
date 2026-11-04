@@ -110,10 +110,18 @@
         z-index: 40;
     }
 
+    .typeahead-results.is-portaled {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        pointer-events: none;
+    }
+
     .typeahead-menu,
     .typeahead-status {
         position: fixed;
         z-index: 80;
+        pointer-events: auto;
         min-width: 14rem;
         max-height: min(20rem, 45vh);
         overflow-y: auto;

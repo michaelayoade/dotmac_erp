@@ -2,6 +2,7 @@
     "use strict";
 
     const initializedSelects = new WeakSet();
+    const portaledResults = new Map();
     let controlSequence = 0;
 
     function dispatchValueEvents(element) {
@@ -26,33 +27,51 @@
         results.appendChild(status);
     }
 
+    function showResults(input, results, owner) {
+        if (!portaledResults.has(results)) {
+            portaledResults.set(results, { input: input, owner: owner, host: results.parentNode });
+            results.classList.add("is-portaled");
+            document.body.appendChild(results);
+        }
+        input.setAttribute("aria-expanded", "true");
+        owner.dataset.typeaheadOpen = "true";
+        positionResults(input, results);
+    }
+
+    function hideResults(input, results, owner) {
+        results.replaceChildren();
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+        owner.dataset.typeaheadOpen = "false";
+        const portal = portaledResults.get(results);
+        if (portal) {
+            portaledResults.delete(results);
+            results.classList.remove("is-portaled");
+            if (portal.host.isConnected) portal.host.appendChild(results);
+            else results.remove();
+        }
+    }
+
     function positionResults(input, results) {
         window.requestAnimationFrame(function () {
             const popup = results.querySelector(".typeahead-menu, .typeahead-status");
-            if (!popup || input.getAttribute("aria-expanded") !== "true") return;
+            if (!popup || input.getAttribute("aria-expanded") !== "true" || !input.isConnected) return;
             const rect = input.getBoundingClientRect();
             const gutter = 4;
             const viewportGutter = 8;
-            const width = Math.max(rect.width, 224);
+            const width = Math.min(Math.max(rect.width, 224), window.innerWidth - viewportGutter * 2);
             const left = Math.max(viewportGutter, Math.min(rect.left, window.innerWidth - width - viewportGutter));
             popup.style.left = `${left}px`;
             popup.style.width = `${width}px`;
-            popup.style.top = `${rect.bottom + gutter}px`;
-            // A transformed ancestor (such as an animated modal) makes fixed
-            // coordinates relative to that ancestor instead of the viewport.
-            // Measure the rendered menu and convert the correction to CSS pixels.
-            let rendered = popup.getBoundingClientRect();
-            const scaleX = rendered.width / popup.offsetWidth || 1;
-            const scaleY = rendered.height / popup.offsetHeight || 1;
-            popup.style.width = `${width / scaleX}px`;
-            rendered = popup.getBoundingClientRect();
-            const availableBelow = window.innerHeight - rect.bottom - viewportGutter;
-            const availableAbove = rect.top - viewportGutter;
-            const top = rendered.height > availableBelow && availableAbove > availableBelow
-                ? Math.max(viewportGutter, rect.top - rendered.height - gutter)
-                : rect.bottom + gutter;
-            popup.style.left = `${left + (left - rendered.left) / scaleX}px`;
-            popup.style.top = `${rect.bottom + gutter + (top - rendered.top) / scaleY}px`;
+            popup.style.maxHeight = "";
+            const menuHeight = popup.offsetHeight;
+            const availableBelow = Math.max(0, window.innerHeight - rect.bottom - gutter - viewportGutter);
+            const availableAbove = Math.max(0, rect.top - gutter - viewportGutter);
+            const openAbove = menuHeight > availableBelow && availableAbove > availableBelow;
+            popup.style.maxHeight = `${openAbove ? availableAbove : availableBelow}px`;
+            popup.style.top = openAbove
+                ? `${Math.max(viewportGutter, rect.top - popup.offsetHeight - gutter)}px`
+                : `${rect.bottom + gutter}px`;
         });
     }
 
@@ -84,10 +103,7 @@
         let lastHiddenValue = hidden.value || "";
 
         function close() {
-            results.replaceChildren();
-            input.setAttribute("aria-expanded", "false");
-            input.removeAttribute("aria-activedescendant");
-            container.dataset.typeaheadOpen = "false";
+            hideResults(input, results, container);
             activeIndex = -1;
         }
 
@@ -126,8 +142,7 @@
             results.replaceChildren();
             if (!items.length) {
                 createStatus(results, "No matching options");
-                input.setAttribute("aria-expanded", "true");
-                positionResults(input, results);
+                showResults(input, results, container);
                 return;
             }
             const menu = document.createElement("div");
@@ -147,18 +162,14 @@
                 menu.appendChild(option);
             });
             results.appendChild(menu);
-            input.setAttribute("aria-expanded", "true");
-            container.dataset.typeaheadOpen = "true";
-            positionResults(input, results);
+            showResults(input, results, container);
         }
 
         function fetchResults(query) {
             if (request) request.abort();
             request = new AbortController();
             createStatus(results, "Loading options…");
-            input.setAttribute("aria-expanded", "true");
-            container.dataset.typeaheadOpen = "true";
-            positionResults(input, results);
+            showResults(input, results, container);
             const separator = url.includes("?") ? "&" : "?";
             fetch(`${url}${separator}q=${encodeURIComponent(query)}&limit=${limit}`, {
                 signal: request.signal,
@@ -191,9 +202,7 @@
                 close();
                 if (query) {
                     createStatus(results, `Type ${minChars} or more characters`);
-                    input.setAttribute("aria-expanded", "true");
-                    container.dataset.typeaheadOpen = "true";
-                    positionResults(input, results);
+                    showResults(input, results, container);
                 }
                 return;
             }
@@ -362,10 +371,7 @@
         }
 
         function close() {
-            results.replaceChildren();
-            input.setAttribute("aria-expanded", "false");
-            input.removeAttribute("aria-activedescendant");
-            wrapper.dataset.typeaheadOpen = "false";
+            hideResults(input, results, wrapper);
             activeIndex = -1;
         }
 
@@ -410,9 +416,7 @@
             results.replaceChildren();
             if (!visibleItems.length) {
                 createStatus(results, "No matching options");
-                input.setAttribute("aria-expanded", "true");
-                wrapper.dataset.typeaheadOpen = "true";
-                positionResults(input, results);
+                showResults(input, results, wrapper);
                 return;
             }
             const menu = document.createElement("div");
@@ -436,9 +440,7 @@
                 menu.appendChild(option);
             });
             results.appendChild(menu);
-            input.setAttribute("aria-expanded", "true");
-            wrapper.dataset.typeaheadOpen = "true";
-            positionResults(input, results);
+            showResults(input, results, wrapper);
         }
 
         function localItems(query) {
@@ -453,9 +455,7 @@
             if (request) request.abort();
             request = new AbortController();
             createStatus(results, "Loading options…");
-            input.setAttribute("aria-expanded", "true");
-            wrapper.dataset.typeaheadOpen = "true";
-            positionResults(input, results);
+            showResults(input, results, wrapper);
             const separator = remoteUrl.includes("?") ? "&" : "?";
             fetch(`${remoteUrl}${separator}q=${encodeURIComponent(query)}&limit=${limit}`, {
                 signal: request.signal,
@@ -485,9 +485,7 @@
             if (remoteUrl) {
                 if (value.length < minChars) {
                     createStatus(results, `Type ${minChars} or more characters`);
-                    input.setAttribute("aria-expanded", "true");
-                    wrapper.dataset.typeaheadOpen = "true";
-                    positionResults(input, results);
+                    showResults(input, results, wrapper);
                     return;
                 }
                 timer = window.setTimeout(function () { fetchRemote(value); }, 250);
@@ -569,6 +567,12 @@
                 const select = target && (target.matches("select") ? target : target.closest("select"));
                 if (select) select.dispatchEvent(new Event("typeahead:sync"));
             });
+            portaledResults.forEach(function (portal, results) {
+                if (!portal.owner.isConnected) {
+                    portaledResults.delete(results);
+                    results.remove();
+                }
+            });
         });
         observer.observe(document.body, {
             childList: true,
@@ -577,22 +581,28 @@
             attributeFilter: ["selected", "disabled", "hidden", "style", "class"],
         });
         document.addEventListener("pointerdown", function (event) {
-            const activeContainer = event.target.closest("[data-typeahead-open='true']");
+            const portal = Array.from(portaledResults.entries()).find(function (entry) {
+                return entry[0].contains(event.target);
+            });
+            const activeContainer = portal
+                ? portal[1].owner
+                : event.target.closest("[data-typeahead-open='true']");
             document.querySelectorAll("[data-typeahead-open='true']").forEach(function (container) {
                 if (container !== activeContainer) container.dispatchEvent(new Event("typeahead:close"));
             });
         });
-        function closeOpenTypeaheads() {
-            document.querySelectorAll("[data-typeahead-open='true']").forEach(function (container) {
-                container.dispatchEvent(new Event("typeahead:close"));
+        function repositionOpenTypeaheads() {
+            portaledResults.forEach(function (portal, results) {
+                if (!portal.owner.isConnected) {
+                    portaledResults.delete(results);
+                    results.remove();
+                } else {
+                    positionResults(portal.input, results);
+                }
             });
         }
-        window.addEventListener("resize", closeOpenTypeaheads);
-        window.addEventListener("scroll", function (event) {
-            if (event.target instanceof Element &&
-                event.target.closest("[data-typeahead-open='true'] .typeahead-menu")) return;
-            closeOpenTypeaheads();
-        }, true);
+        window.addEventListener("resize", repositionOpenTypeaheads);
+        window.addEventListener("scroll", repositionOpenTypeaheads, true);
         document.body.addEventListener("htmx:afterSwap", function (event) { initAll(event.target); });
     }
 
