@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import ast
 import base64
+import difflib
 import io
 import json
 import os
@@ -49,6 +50,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import erp_lock  # noqa: E402
 from erp_lock import (  # noqa: E402
+    ALLOWED_ADDITIONS,
     ALLOWED_MOVEMENTS,
     ARTIFACT_ORIGIN,
     IMMUTABLE_PINS,
@@ -60,6 +62,9 @@ from erp_lock import (  # noqa: E402
     RELEASED_SDIST_DIGESTS,
     RELEASED_WHEEL_DIGESTS,
     Refusal,
+    add_declarations,
+    added_declaration_problems,
+    addition_problems,
     acquire,
     approved_artifact_url,
     artifact_belongs_to,
@@ -81,7 +86,6 @@ from erp_lock import (  # noqa: E402
     pair_binding,
     point_at_mirror,
     protected_main_problems,
-    replace_version,
     restore_index_url,
     set_content_hash,
     sha256_hex,
@@ -93,12 +97,17 @@ from erp_lock import (  # noqa: E402
     wheel_requires_dist,
 )
 
-TARGETS = {name: pair[1] for name, pair in ALLOWED_MOVEMENTS.items()}
-OLDS = {name: pair[0] for name, pair in ALLOWED_MOVEMENTS.items()}
-FILES, TAX = "dotmac-files", "dotmac-tax"
+PAYROLL = "dotmac-payroll"
+ADDITION = ALLOWED_ADDITIONS[PAYROLL]
+TARGETS = {PAYROLL: ADDITION.version}
+FILES, TAX, NUMBERING = "dotmac-files", "dotmac-tax", "dotmac-numbering"
+FILES_FROZEN_VERSION = "0.1.0a7"
+NUMBERING_FROZEN_VERSION = "0.1.0a2"
 TAX_VERSION = "0.1.0a4"
 KERNEL_FROZEN, KERNEL_FROZEN_VERSION = "dotmac-kernel", "0.1.0a105"
 IMPORTS_FROZEN, IMPORTS_FROZEN_VERSION = "dotmac-imports", "0.2.0a1"
+PAYROLL_SPEC = {"version": "0.1.0a2", "source": "forgejo", "python": ">=3.12"}
+PAYROLL_WHEEL_SHA = "ae059ee2a6095d7964a49a50fa92abc0d7a95e5b7bf888f062bacbd4373821cb"
 
 # ── fixtures for the lock comparison ────────────────────────────────────────
 
@@ -107,7 +116,15 @@ _INDEX_SOURCE = {
     "url": LOCK_INDEX_URL,
     "reference": INDEX_SOURCE_NAME,
 }
-ATTRS, FILES_ENTRY, IMPORTS_ENTRY, TAX_ENTRY, KERNEL_ENTRY = 0, 1, 2, 3, 4
+(
+    ATTRS,
+    FILES_ENTRY,
+    IMPORTS_ENTRY,
+    TAX_ENTRY,
+    KERNEL_ENTRY,
+    NUMBERING_ENTRY,
+    PAYROLL_ENTRY,
+) = range(7)
 
 
 def _package(name: str, version: str, **extra: Any) -> dict[str, Any]:
@@ -122,7 +139,7 @@ def _package(name: str, version: str, **extra: Any) -> dict[str, Any]:
             {
                 "file": (
                     next(f for f in artifact_names(name, version) if f.endswith(".whl"))
-                    if name == FILES and version == TARGETS[FILES]
+                    if name == PAYROLL and version == TARGETS[PAYROLL]
                     else f"{name.replace('-', '_')}-{version}-py3-none-any.whl"
                 ),
                 "hash": f"sha256:{name}-whl",
@@ -152,22 +169,31 @@ def _before() -> dict[str, Any]:
     return _lock(
         [
             _package("attrs", "24.2.0"),
-            _package(FILES, OLDS[FILES], source=_INDEX_SOURCE),
+            _package(FILES, FILES_FROZEN_VERSION, source=_INDEX_SOURCE),
             _package(IMPORTS_FROZEN, IMPORTS_FROZEN_VERSION, source=_INDEX_SOURCE),
             _package(TAX, TAX_VERSION, source=_INDEX_SOURCE),
             _package(KERNEL_FROZEN, KERNEL_FROZEN_VERSION, source=_INDEX_SOURCE),
+            _package(NUMBERING, NUMBERING_FROZEN_VERSION, source=_INDEX_SOURCE),
         ],
         "content-hash-before",
     )
 
 
+def _added_entry(**extra: Any) -> dict[str, Any]:
+    return _package(
+        PAYROLL,
+        TARGETS[PAYROLL],
+        source=_INDEX_SOURCE,
+        **{"python-versions": ">=3.12", **extra},
+    )
+
+
 def _after() -> dict[str, Any]:
-    """The only clean shape: files and the content-hash moved; the rest did not."""
+    """The only clean shape: payroll appeared and the content-hash moved; the
+    rest did not."""
 
     resolved = _before()
-    resolved["package"][FILES_ENTRY] = _package(
-        FILES, TARGETS[FILES], source=_INDEX_SOURCE
-    )
+    resolved["package"].append(_added_entry())
     resolved["metadata"]["content-hash"] = "content-hash-after"
     return resolved
 
@@ -178,10 +204,10 @@ def _plant(index: int, field: str, value: Any) -> dict[str, Any]:
     return resolved
 
 
-# ── the near-miss: only the named package moved ─────────────────────────────
+# ── the near-miss: only the named package was added ─────────────────────────
 
 
-def test_a_resolution_that_moved_only_files_is_accepted() -> None:
+def test_a_resolution_that_added_only_payroll_is_accepted() -> None:
     """SENSITIVITY. A gate that refuses everything proves nothing."""
 
     assert drift_problems(_before(), _after()) == []
@@ -223,57 +249,35 @@ def test_every_other_field_of_an_unrelated_entry_is_compared(
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("field", "value", "needle"),
     [
-        ("source", _ELSEWHERE),
-        ("extras", {"surprise": ["anything"]}),
-        ("optional", True),
-        ("groups", ["main", "dev"]),
-        ("python-versions", ">=3.13"),
-        ("description", "quietly rewritten"),
+        ("source", _ELSEWHERE, "elsewhere.example"),
+        ("source", {**_INDEX_SOURCE, "reference": "pypi"}, "'pypi'"),
+        ("source", None, "no source table"),
+        ("groups", ["main", "dev"], "groups"),
+        ("version", "0.1.0a3", "0.1.0a3"),
     ],
 )
-def test_metadata_drift_on_moved_entry_is_refused(field: str, value: Any) -> None:
-    """The moved entry is not a blank cheque. Dependencies are bounded
-    separately against the acquired wheel's own metadata."""
+def test_the_added_entry_is_not_a_blank_cheque(
+    field: str, value: Any, needle: str
+) -> None:
+    """The added entry must be the allowed version, from the allowed source,
+    in the main group. Dependencies are bounded separately against the
+    acquired wheel's own metadata."""
 
-    resolved = _plant(FILES_ENTRY, field, value)
-    package = FILES
-    named = [p for p in drift_problems(_before(), resolved) if package in p]
-    assert named, f"a changed `{field}` on {package} was not named"
-    assert any(field in p for p in named), named
+    resolved = _plant(PAYROLL_ENTRY, field, value)
+    named = [p for p in drift_problems(_before(), resolved) if PAYROLL in p]
+    assert any(needle in p for p in named), named
 
 
-def test_moved_entry_may_still_move_its_version_and_files() -> None:
-    """SENSITIVITY the other way. Refusing a moved `files` list would refuse
-    every real run."""
+def test_the_added_entry_may_carry_its_own_dependencies_and_python_range() -> None:
+    """SENSITIVITY the other way. A brand-new entry necessarily has its own
+    `dependencies`, hashes and (>=3.12) python range."""
 
     resolved = _after()
-    package = FILES
-    resolved["package"][FILES_ENTRY]["files"] = [
-        {
-            "file": f"{package.replace('-', '_')}-{TARGETS[package]}-py3-none-any.whl",
-            "hash": "sha256:new",
-        }
-    ]
+    resolved["package"][PAYROLL_ENTRY]["dependencies"] = {"dotmac-kernel": ">=0.1.0a99"}
+    resolved["package"][PAYROLL_ENTRY]["markers"] = 'python_version >= "3.12"'
     assert drift_problems(_before(), resolved) == []
-
-
-def test_moved_entry_may_also_change_its_dependencies_table() -> None:
-    """Unlike `kernel_lock.py`'s KERNEL_MUTABLE_FIELDS (which holds even the
-    kernel's own `dependencies` immutable), point 7 of this workflow's brief
-    explicitly permits `dependencies` to differ on the moved package — a
-    version move can legitimately raise the moved package's own floor on a
-    transitive dependency. `drift_problems` alone does not bound WHAT it may
-    say; `wheel_dependency_problems` does, in the resolver job, against the
-    acquired wheel's own Requires-Dist (proven separately above)."""
-
-    resolved = _plant(FILES_ENTRY, "dependencies", {"dotmac-kernel": ">=0.1.0a99"})
-    package = FILES
-    assert not any(
-        package in p and "dependencies" in p
-        for p in drift_problems(_before(), resolved)
-    )
 
 
 def test_an_added_or_removed_package_is_named() -> None:
@@ -293,15 +297,53 @@ def test_an_unchanged_content_hash_is_a_refusal() -> None:
     assert any("content-hash" in p for p in problems), problems
 
 
-def test_files_must_move() -> None:
-    """The workflow cannot emit an unchanged files entry."""
+def test_payroll_must_appear() -> None:
+    """The workflow cannot emit a lock that never gained the addition."""
 
-    resolved = _after()
-    resolved["package"][FILES_ENTRY] = _package(
-        FILES, OLDS[FILES], source=_INDEX_SOURCE
-    )
+    resolved = _before()
+    resolved["metadata"]["content-hash"] = "content-hash-after"
     problems = drift_problems(_before(), resolved)
-    assert any(FILES in p and "did not move" in p for p in problems), problems
+    assert any(PAYROLL in p and "exactly one new" in p for p in problems), problems
+
+
+def test_a_second_payroll_entry_is_refused() -> None:
+    resolved = _after()
+    resolved["package"].append(_package(PAYROLL, "0.1.0a3", source=_INDEX_SOURCE))
+    problems = drift_problems(_before(), resolved)
+    assert any(PAYROLL in p and "exactly one new" in p for p in problems), problems
+
+
+def test_payroll_already_in_the_lock_is_a_redispatch_and_is_refused() -> None:
+    """THE ONE-SHOT. Once the pair is applied, the same lane refuses."""
+
+    applied = _after()
+    reresolved = _after()
+    reresolved["metadata"]["content-hash"] = "content-hash-again"
+    problems = drift_problems(applied, reresolved)
+    assert any(PAYROLL in p and "already carries" in p for p in problems), problems
+
+
+def test_any_other_new_entry_is_refused_alongside_payroll() -> None:
+    resolved = _after()
+    resolved["package"].append(_package("left-pad", "1.0.0"))
+    problems = drift_problems(_before(), resolved)
+    assert any("left-pad" in p and "appeared" in p for p in problems), problems
+
+
+def test_a_different_new_entry_instead_of_payroll_is_refused() -> None:
+    resolved = _before()
+    resolved["package"].append(_package("left-pad", "1.0.0"))
+    resolved["metadata"]["content-hash"] = "content-hash-after"
+    problems = drift_problems(_before(), resolved)
+    assert any("left-pad" in p for p in problems), problems
+    assert any(PAYROLL in p and "exactly one new" in p for p in problems), problems
+
+
+def test_a_changed_lock_python_versions_is_refused() -> None:
+    resolved = _after()
+    resolved["metadata"]["python-versions"] = ">=3.12,<3.13"
+    problems = drift_problems(_before(), resolved)
+    assert any("python-versions" in p and "metadata" in p for p in problems), problems
 
 
 @pytest.mark.parametrize("field", ["version", "files", "dependencies", "source"])
@@ -359,54 +401,60 @@ def test_kernel_pin_is_a105_on_both_sides_even_if_identical() -> None:
     assert any("after lock must pin" in p and KERNEL_FROZEN in p for p in problems)
 
 
-# ── the closed allowlist of movements ────────────────────────────────────────
+# ── the closed allowlist ─────────────────────────────────────────────────────
 
 
-def test_the_allowlist_names_exactly_the_decided_movement() -> None:
-    assert ALLOWED_MOVEMENTS == {
-        FILES: ("0.1.0a6", "0.1.0a7"),
-    }
+def test_the_allowlist_names_exactly_the_decided_addition() -> None:
+    assert ALLOWED_MOVEMENTS == {}
+    assert set(ALLOWED_ADDITIONS) == {PAYROLL}
+    assert ADDITION.spec == PAYROLL_SPEC
+    assert ADDITION.wheel_sha256 == PAYROLL_WHEEL_SHA
+    assert ADDITION.sdist_sha256 == (
+        "a87b557bff8ae18d655d387d4d696430cadc619f49a7dc1f2dfa7d7a755ec932"
+    )
     assert IMMUTABLE_PINS == {
+        FILES: FILES_FROZEN_VERSION,
         IMPORTS_FROZEN: IMPORTS_FROZEN_VERSION,
         KERNEL_FROZEN: KERNEL_FROZEN_VERSION,
+        NUMBERING: NUMBERING_FROZEN_VERSION,
         TAX: TAX_VERSION,
     }
     expected_released_wheels = {
         (
-            FILES,
-            TARGETS[FILES],
-            "dotmac_files-0.1.0a7-py3-none-any.whl",
-        ): "47640e4a56c4c2f131393719d4415a1699ec2a27794e6a63e9d7da5aac50f6dc"
+            PAYROLL,
+            TARGETS[PAYROLL],
+            "dotmac_payroll-0.1.0a2-py3-none-any.whl",
+        ): PAYROLL_WHEEL_SHA
     }
     assert expected_released_wheels == RELEASED_WHEEL_DIGESTS
     assert {
         (
-            FILES,
-            TARGETS[FILES],
-            "dotmac_files-0.1.0a7.tar.gz",
-        ): "c8f7a61bc7198cb7397ac1dcd0caa13e1874445152f7f0bfedb9e85d0e8c78d4"
+            PAYROLL,
+            TARGETS[PAYROLL],
+            "dotmac_payroll-0.1.0a2.tar.gz",
+        ): "a87b557bff8ae18d655d387d4d696430cadc619f49a7dc1f2dfa7d7a755ec932"
     } == RELEASED_SDIST_DIGESTS
 
 
-def test_a_third_package_is_refused_by_name() -> None:
+def test_a_second_package_is_refused_by_name() -> None:
     with pytest.raises(Refusal, match="dotmac-kernel"):
         erp_lock._parse_movement_args(  # noqa: SLF001
             [
-                f"dotmac-files={TARGETS[FILES]}",
+                f"{PAYROLL}={TARGETS[PAYROLL]}",
                 "dotmac-kernel=0.1.0a106",
             ]
         )
 
 
-def test_an_unlisted_version_of_a_listed_package_is_refused_by_name() -> None:
-    with pytest.raises(Refusal, match="0.1.0a8"):
-        erp_lock._parse_movement_args(["dotmac-files=0.1.0a8"])  # noqa: SLF001
+def test_an_unlisted_version_of_payroll_is_refused_by_name() -> None:
+    with pytest.raises(Refusal, match="0.1.0a3"):
+        erp_lock._parse_movement_args([f"{PAYROLL}=0.1.0a3"])  # noqa: SLF001
 
 
-def test_a_tax_movement_is_refused() -> None:
-    with pytest.raises(Refusal, match="dotmac-tax"):
+def test_a_files_movement_is_refused() -> None:
+    with pytest.raises(Refusal, match=FILES):
         erp_lock._parse_movement_args(  # noqa: SLF001
-            [f"dotmac-files={TARGETS[FILES]}", "dotmac-tax=0.1.0a5"]
+            [f"{PAYROLL}={TARGETS[PAYROLL]}", f"{FILES}=0.1.0a8"]
         )
 
 
@@ -415,23 +463,27 @@ def test_a_missing_movement_is_refused() -> None:
         erp_lock._parse_movement_args([])  # noqa: SLF001
 
 
-def test_the_one_allowed_movement_is_accepted() -> None:
+def test_the_one_allowed_addition_is_accepted() -> None:
     """SENSITIVITY. The real dispatch shape must not be refused."""
 
     result = erp_lock._parse_movement_args(  # noqa: SLF001
-        [f"dotmac-files={TARGETS[FILES]}"]
+        [f"{PAYROLL}={TARGETS[PAYROLL]}"]
     )
     assert result == TARGETS
 
 
-# ── declarations_of / movement_problems: every surface, exactly once ───────
+# ── declarations_of / addition checks: every surface ────────────────────────
 
 
 def _manifest(**overrides: Any) -> dict[str, Any]:
     poetry: dict[str, Any] = {
         "dependencies": {
             "python": ">=3.11,<3.13",
-            FILES: {"version": OLDS[FILES], "source": INDEX_SOURCE_NAME},
+            FILES: {"version": FILES_FROZEN_VERSION, "source": INDEX_SOURCE_NAME},
+            NUMBERING: {
+                "version": NUMBERING_FROZEN_VERSION,
+                "source": INDEX_SOURCE_NAME,
+            },
             IMPORTS_FROZEN: {
                 "version": IMPORTS_FROZEN_VERSION,
                 "source": INDEX_SOURCE_NAME,
@@ -460,21 +512,29 @@ def _manifest(**overrides: Any) -> dict[str, Any]:
     return {"tool": {"poetry": poetry}}
 
 
-def test_the_repositorys_own_manifest_declares_one_admitted_files_pin() -> None:
-    """NON-VACUITY, against the two real files."""
+def _manifest_with_payroll(spec: Any = None) -> dict[str, Any]:
+    manifest = _manifest()
+    manifest["tool"]["poetry"]["dependencies"][PAYROLL] = (
+        dict(PAYROLL_SPEC) if spec is None else spec
+    )
+    return manifest
+
+
+def test_the_repositorys_own_manifest_pins_the_frozen_set() -> None:
+    """NON-VACUITY, against the real file: the frozen pins are declared
+    exactly once at their frozen versions, and payroll is either not yet
+    declared (the input) or declared as the fixed spec (the output)."""
 
     with (ROOT / "pyproject.toml").open("rb") as handle:
         manifest = tomllib.load(handle)
-    # Preparation may land before the hosted pair. Only the exact input or
-    # exact output is admitted here; set-versions still requires OLDS, so
-    # dispatch after adoption fails closed under the one-shot guard.
-    assert any(movement_problems(manifest, pins) == [] for pins in (OLDS, TARGETS))
     assert movement_problems(manifest, IMMUTABLE_PINS) == []
+    assert (
+        addition_problems(manifest) == [] or added_declaration_problems(manifest) == []
+    )
 
 
 def test_manifest_guard_refuses_a_kernel_version_change() -> None:
-    manifest = _manifest()
-    manifest["tool"]["poetry"]["dependencies"][FILES]["version"] = TARGETS[FILES]
+    manifest = _manifest_with_payroll()
     manifest["tool"]["poetry"]["dependencies"][KERNEL_FROZEN]["version"] = "0.1.0a106"
     problems = manifest_problems(manifest, TARGETS)
     assert any(KERNEL_FROZEN in p and KERNEL_FROZEN_VERSION in p for p in problems), (
@@ -483,59 +543,172 @@ def test_manifest_guard_refuses_a_kernel_version_change() -> None:
 
 
 def test_manifest_guard_refuses_a_tax_version_change() -> None:
-    manifest = _manifest()
-    manifest["tool"]["poetry"]["dependencies"][FILES]["version"] = TARGETS[FILES]
+    manifest = _manifest_with_payroll()
     manifest["tool"]["poetry"]["dependencies"][TAX]["version"] = "0.1.0a5"
     problems = manifest_problems(manifest, TARGETS)
     assert any(TAX in p and TAX_VERSION in p for p in problems), problems
 
 
-def test_a_second_declaration_of_a_moved_package_is_refused() -> None:
+@pytest.mark.parametrize(
+    ("package", "version"),
+    [(FILES, "0.1.0a8"), (FILES, "0.1.0a6"), (NUMBERING, "0.1.0a4")],
+)
+def test_manifest_guard_refuses_a_files_or_numbering_version_change(
+    package: str, version: str
+) -> None:
+    manifest = _manifest_with_payroll()
+    manifest["tool"]["poetry"]["dependencies"][package]["version"] = version
+    problems = manifest_problems(manifest, TARGETS)
+    assert any(package in p and version in p for p in problems), problems
+
+
+def test_a_second_declaration_of_an_added_package_is_refused() -> None:
     """THE PLANT. Two declarations mean guessing which one is the pin."""
 
-    manifest = _manifest()
-    manifest["tool"]["poetry"]["group"]["dev"]["dependencies"][FILES] = OLDS[FILES]
-    problems = movement_problems(manifest, OLDS)
-    assert any(FILES in p and "expected exactly one" in p for p in problems), problems
+    manifest = _manifest_with_payroll()
+    manifest["tool"]["poetry"]["group"]["dev"]["dependencies"][PAYROLL] = "0.1.0a2"
+    problems = added_declaration_problems(manifest)
+    assert any(PAYROLL in p and "exactly one" in p for p in problems), problems
 
 
-def test_a_wrong_declared_version_is_refused() -> None:
-    manifest = _manifest()
-    manifest["tool"]["poetry"]["dependencies"][FILES]["version"] = "0.1.0a3"
-    problems = movement_problems(manifest, OLDS)
-    assert any(FILES in p and "0.1.0a3" in p for p in problems), problems
+def test_payroll_already_declared_is_a_redispatch_and_is_refused() -> None:
+    problems = addition_problems(_manifest_with_payroll())
+    assert any(PAYROLL in p and "already declared" in p for p in problems), problems
+
+
+def test_a_clean_manifest_without_payroll_may_receive_the_addition() -> None:
+    assert addition_problems(_manifest()) == []
 
 
 def test_declarations_of_finds_a_pep508_form_too() -> None:
-    manifest = {"project": {"dependencies": [f"{FILES} (=={OLDS[FILES]})"]}}
-    assert declarations_of(manifest, FILES) == ["project.dependencies[0]"]
+    manifest = {"project": {"dependencies": [f"{PAYROLL} (=={ADDITION.version})"]}}
+    assert declarations_of(manifest, PAYROLL) == ["project.dependencies[0]"]
+    assert addition_problems(manifest), "a PEP 508 payroll must also be refused"
 
 
-# ── the edit: before-check, rewrite, after-check ────────────────────────────
-
-
-def test_the_edit_moves_exactly_the_pin_in_the_real_manifest() -> None:
-    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    for package, version in TARGETS.items():
-        text = replace_version(text, package, version)
-    manifest = tomllib.loads(text)
-    assert (
-        manifest["tool"]["poetry"]["dependencies"][FILES]["version"] == TARGETS[FILES]
+@pytest.mark.parametrize(
+    "spec",
+    [
+        {"version": "0.1.0a2", "source": "forgejo"},  # missing python marker
+        {"version": "0.1.0a2", "source": "forgejo", "python": ">=3.11"},
+        {"version": "0.1.0a2", "source": "forgejo", "python": ">=3.12,<3.13"},
+        {"version": "0.1.0a3", "source": "forgejo", "python": ">=3.12"},
+        {"version": "0.1.0a2", "source": "pypi", "python": ">=3.12"},
+        {"version": "0.1.0a2", "python": ">=3.12"},  # no source
+        {**PAYROLL_SPEC, "extras": ["x"]},
+        "0.1.0a2",  # bare constraint
+    ],
+)
+def test_a_wrong_payroll_spec_is_refused_and_a_missing_marker_in_particular(
+    spec: Any,
+) -> None:
+    problems = added_declaration_problems(_manifest_with_payroll(spec))
+    assert any(PAYROLL in p and "the only allowed spec" in p for p in problems), (
+        problems
     )
-    assert manifest["tool"]["poetry"]["dependencies"][TAX]["version"] == TAX_VERSION
+    assert manifest_problems(_manifest_with_payroll(spec), TARGETS), "guard passed"
+
+
+def test_the_fixed_payroll_spec_is_accepted_by_the_guard() -> None:
+    manifest = _manifest_with_payroll()
+    assert added_declaration_problems(manifest) == []
     assert manifest_problems(manifest, TARGETS) == []
+
+
+def test_the_guard_refuses_a_manifest_that_never_gained_payroll() -> None:
+    problems = manifest_problems(_manifest(), TARGETS)
+    assert any(PAYROLL in p for p in problems), problems
+
+
+# ── the edit: before-check, insertion, after-check ──────────────────────────
+
+
+def _edited_real_manifest() -> str:
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    manifest = tomllib.loads(text)
+    if declarations_of(manifest, PAYROLL):
+        return text  # the pair has been applied; the edit target already holds it
+    return add_declarations(text)
+
+
+def test_the_edit_adds_exactly_the_fixed_declaration_to_the_real_manifest() -> None:
+    manifest = tomllib.loads(_edited_real_manifest())
+    deps = manifest["tool"]["poetry"]["dependencies"]
+    assert deps[PAYROLL] == PAYROLL_SPEC
+    assert deps[TAX]["version"] == TAX_VERSION
+    assert deps[FILES]["version"] == FILES_FROZEN_VERSION
+    assert deps[NUMBERING]["version"] == NUMBERING_FROZEN_VERSION
+    assert declarations_of(manifest, PAYROLL) == [f"tool.poetry.dependencies.{PAYROLL}"]
+    assert manifest["tool"]["poetry"]["dependencies"]["python"] == ">=3.11,<3.13"
+    assert manifest_problems(manifest, TARGETS) == []
+
+
+def test_the_edit_leaves_every_other_line_untouched() -> None:
+    original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    if declarations_of(tomllib.loads(original), PAYROLL):
+        pytest.skip("pair already applied")
+    edited = add_declarations(original)
+    ops = [
+        op
+        for op in difflib.SequenceMatcher(
+            None, original.splitlines(), edited.splitlines()
+        ).get_opcodes()
+        if op[0] != "equal"
+    ]
+    assert [op[0] for op in ops] == ["insert"], ops
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        'dotmac-imports = { version = "1" }\ndotmac-imports = { version = "2" }\n',
-        "nothing here declares it\n",
+        "nothing here has the anchor\n",
+        'dotmac-tax = {version = "0.1.0a4", source = "forgejo"}\n'
+        'dotmac-tax = {version = "0.1.0a4", source = "forgejo"}\n',
+        'dotmac-tax = {version = "0.1.0a5", source = "forgejo"}\n',
     ],
 )
-def test_the_edit_refuses_anything_but_one_declaration(text: str) -> None:
+def test_the_edit_refuses_anything_but_one_anchor(text: str) -> None:
     with pytest.raises(Refusal):
-        replace_version(text, FILES, TARGETS[FILES])
+        add_declarations(text)
+
+
+def _run_set_versions(
+    tmp_path: Path, text: str, version: str = TARGETS[PAYROLL]
+) -> tuple[int, str]:
+    manifest = tmp_path / "pyproject.toml"
+    manifest.write_text(text, encoding="utf-8")
+    code = erp_lock.main(
+        [
+            "set-versions",
+            "--manifest",
+            str(manifest),
+            "--movement",
+            f"{PAYROLL}={version}",
+        ]
+    )
+    return code, manifest.read_text(encoding="utf-8")
+
+
+def test_set_versions_adds_payroll_to_the_real_manifest(tmp_path: Path) -> None:
+    original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    if declarations_of(tomllib.loads(original), PAYROLL):
+        pytest.skip("pair already applied")
+    code, written = _run_set_versions(tmp_path, original)
+    assert code == 0
+    assert tomllib.loads(written)["tool"]["poetry"]["dependencies"][PAYROLL] == (
+        PAYROLL_SPEC
+    )
+
+
+def test_set_versions_refuses_a_redispatch_and_leaves_the_file_alone(
+    tmp_path: Path,
+) -> None:
+    original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    if not declarations_of(tomllib.loads(original), PAYROLL):
+        original = add_declarations(original)
+    code, written = _run_set_versions(tmp_path, original)
+    assert code == 1
+    assert written == original
 
 
 # ── manifest-guard: ERP's own legitimate git dependency is accommodated ─────
@@ -546,26 +719,12 @@ def test_the_repositorys_own_manifest_passes_the_guard_after_the_edit() -> None:
     (`dotmac-integration-client`) that the upstream guard would refuse
     unmodified — this must still pass, by name, not by weakening the rule."""
 
-    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    for package, version in TARGETS.items():
-        text = replace_version(text, package, version)
-    manifest = tomllib.loads(text)
+    manifest = tomllib.loads(_edited_real_manifest())
     assert manifest_problems(manifest, TARGETS) == []
 
 
 def test_a_synthetic_clean_manifest_passes() -> None:
-    manifest = _manifest(
-        dependencies={
-            **_manifest()["tool"]["poetry"]["dependencies"],
-            FILES: {"version": TARGETS[FILES], "source": INDEX_SOURCE_NAME},
-            TAX: {"version": TAX_VERSION, "source": INDEX_SOURCE_NAME},
-            KERNEL_FROZEN: {
-                "version": KERNEL_FROZEN_VERSION,
-                "source": INDEX_SOURCE_NAME,
-            },
-        }
-    )
-    assert manifest_problems(manifest, TARGETS) == []
+    assert manifest_problems(_manifest_with_payroll(), TARGETS) == []
 
 
 def test_an_off_index_dependency_NOT_on_the_allowlist_is_still_refused() -> None:
@@ -840,9 +999,10 @@ def _git(repo: Path, *argv: str) -> str:
 def _bound_repo(
     tmp_path: Path,
     *,
-    files_version: str = OLDS[FILES],
+    files_version: str = FILES_FROZEN_VERSION,
     files_source: str | None = None,
     extra_lock: str = "",
+    include_payroll: bool = False,
 ) -> tuple[Path, str]:
     """A real git repository whose ONE commit carries a manifest and lock."""
 
@@ -852,13 +1012,15 @@ def _bound_repo(
         'python = ">=3.11,<3.13"\n'
         f'{FILES} = {{version = "{files_version}", source = "forgejo"}}\n'
         f'{TAX} = {{version = "{TAX_VERSION}", source = "forgejo"}}\n\n'
-        f'[[tool.poetry.source]]\nname = "forgejo"\nurl = "{MANIFEST_INDEX_URL}"\n'
+        + (f"{PAYROLL} = {ADDITION.spec_line}\n\n" if include_payroll else "")
+        + f'[[tool.poetry.source]]\nname = "forgejo"\nurl = "{MANIFEST_INDEX_URL}"\n'
         'priority = "explicit"\n'
     )
     lock = (
         _lock_entry(FILES, files_version, files_source)
         + "\n"
         + _lock_entry(TAX, TAX_VERSION)
+        + (_lock_entry(PAYROLL, TARGETS[PAYROLL]) if include_payroll else "")
         + extra_lock
         + '\n[metadata]\nlock-version = "2.1"\npython-versions = ">=3.11,<3.13"\n'
         'content-hash = "' + "0" * 64 + '"\n'
@@ -876,20 +1038,20 @@ def _bound_repo(
 
 @pytest.fixture
 def reviewed_moved_artifacts(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
-    """Reviewed digests for the moved pair that the fake index can reproduce."""
+    """Reviewed digests for the added pair that the fake index can reproduce."""
 
-    wheel = _wheel_name(FILES, TARGETS[FILES])
-    sdist = _sdist_name(FILES, TARGETS[FILES])
+    wheel = _wheel_name(PAYROLL, TARGETS[PAYROLL])
+    sdist = _sdist_name(PAYROLL, TARGETS[PAYROLL])
     digests = {wheel: _artifact_digest(wheel), sdist: _artifact_digest(sdist)}
     monkeypatch.setattr(
         erp_lock,
         "RELEASED_WHEEL_DIGESTS",
-        {(FILES, TARGETS[FILES], wheel): digests[wheel]},
+        {(PAYROLL, TARGETS[PAYROLL], wheel): digests[wheel]},
     )
     monkeypatch.setattr(
         erp_lock,
         "RELEASED_SDIST_DIGESTS",
-        {(FILES, TARGETS[FILES], sdist): digests[sdist]},
+        {(PAYROLL, TARGETS[PAYROLL], sdist): digests[sdist]},
     )
     return digests
 
@@ -900,9 +1062,13 @@ def test_the_bundle_closes_over_moved_and_unchanged_exact_identities(
     repo, sha = _bound_repo(tmp_path)
     surface = classify_original(repo, sha, POLICY)
     plan, expected = expected_artifacts(surface, TARGETS)
-    assert plan == {FILES: TARGETS[FILES], TAX: TAX_VERSION}
-    # moved: the reviewed wheel and sdist, NOT the old lock entry's files
-    assert expected[FILES] == reviewed_moved_artifacts
+    assert plan == {
+        FILES: FILES_FROZEN_VERSION,
+        PAYROLL: TARGETS[PAYROLL],
+        TAX: TAX_VERSION,
+    }
+    # added: the reviewed wheel and sdist
+    assert expected[PAYROLL] == reviewed_moved_artifacts
     # unchanged: exactly the lock's own filenames and hashes
     assert expected[TAX] == {
         _wheel_name(TAX, TAX_VERSION): _hex(_wheel_name(TAX, TAX_VERSION)),
@@ -940,17 +1106,17 @@ def test_a_manifest_and_lock_that_disagree_are_refused_before_movement(
     tmp_path: Path,
 ) -> None:
     repo, _ = _bound_repo(tmp_path)
-    lock = (repo / "poetry.lock").read_text().replace(OLDS[FILES], "0.1.0a5")
+    lock = (repo / "poetry.lock").read_text().replace(FILES_FROZEN_VERSION, "0.1.0a5")
     (repo / "poetry.lock").write_text(lock)
     _git(repo, "commit", "-qam", "disagree", "--no-gpg-sign")
     with pytest.raises(Refusal, match="manifest and lock disagree"):
         classify_original(repo, _git(repo, "rev-parse", "HEAD"), POLICY)
 
 
-def test_the_movement_is_not_applicable_to_a_tree_already_past_it(
+def test_the_addition_is_not_applicable_to_a_tree_that_already_has_it(
     tmp_path: Path, reviewed_moved_artifacts: dict[str, str]
 ) -> None:
-    repo, sha = _bound_repo(tmp_path, files_version=TARGETS[FILES])
+    repo, sha = _bound_repo(tmp_path, include_payroll=True)
     surface = classify_original(repo, sha, POLICY)
     with pytest.raises(Refusal, match="spent or not applicable"):
         expected_artifacts(surface, TARGETS)
@@ -970,44 +1136,41 @@ def test_a_duplicate_file_in_one_lock_entry_is_refused(tmp_path: Path) -> None:
         expected_artifacts(surface, TARGETS)
 
 
-def test_a_moved_sdist_with_no_reviewed_digest_is_refused(
+def test_an_added_sdist_with_no_reviewed_digest_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(erp_lock, "RELEASED_SDIST_DIGESTS", {})
     with pytest.raises(Refusal, match=r"no reviewed release digest.*sdist"):
-        moved_artifacts(FILES, TARGETS[FILES])
+        moved_artifacts(PAYROLL, TARGETS[PAYROLL])
     repo, sha = _bound_repo(tmp_path)
     surface = classify_original(repo, sha, POLICY)
     with pytest.raises(Refusal, match="sdist"):
         expected_artifacts(surface, TARGETS)
 
 
-def test_a_moved_sdist_digest_that_is_not_a_sha256_is_refused(
+def test_an_added_sdist_digest_that_is_not_a_sha256_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sdist = _sdist_name(FILES, TARGETS[FILES])
+    sdist = _sdist_name(PAYROLL, TARGETS[PAYROLL])
     monkeypatch.setattr(
-        erp_lock, "RELEASED_SDIST_DIGESTS", {(FILES, TARGETS[FILES], sdist): "nope"}
+        erp_lock,
+        "RELEASED_SDIST_DIGESTS",
+        {(PAYROLL, TARGETS[PAYROLL], sdist): "nope"},
     )
     with pytest.raises(Refusal, match="64-hex"):
-        moved_artifacts(FILES, TARGETS[FILES])
+        moved_artifacts(PAYROLL, TARGETS[PAYROLL])
 
 
-def test_the_reviewed_moved_digests_are_consistent_with_main_lock() -> None:
-    """Lock consistency only, NOT provenance: provenance is Starter release
-    run 39211782120 (see the comment on `RELEASED_SDIST_DIGESTS`)."""
-
-    lock = tomllib.loads((ROOT / "poetry.lock").read_text())
-    entry = next(p for p in lock["package"] if p["name"] == FILES)
-    if entry["version"] != TARGETS[FILES]:
-        pytest.skip("main no longer locks the moved version")
-    locked = {f["file"]: f["hash"].removeprefix("sha256:") for f in entry["files"]}
-    assert moved_artifacts(FILES, TARGETS[FILES]) == locked
+def test_the_reviewed_added_digests_are_the_closed_release_pair() -> None:
+    assert moved_artifacts(PAYROLL, TARGETS[PAYROLL]) == {
+        "dotmac_payroll-0.1.0a2-py3-none-any.whl": PAYROLL_WHEEL_SHA,
+        "dotmac_payroll-0.1.0a2.tar.gz": (
+            "a87b557bff8ae18d655d387d4d696430cadc619f49a7dc1f2dfa7d7a755ec932"
+        ),
+    }
 
 
-def test_the_repositorys_real_tree_classifies_and_its_movement_is_spent() -> None:
-    """Main enables no dispatch: the real tree classifies cleanly, and the
-    one-shot movement refuses because main is already past it."""
+def test_the_repositorys_real_tree_classifies_for_the_closed_addition() -> None:
 
     sys.path.insert(0, str(ROOT / "scripts"))
     import dependency_bundle as db
@@ -1016,63 +1179,63 @@ def test_the_repositorys_real_tree_classifies_and_its_movement_is_spent() -> Non
     surface = db.extract_dependency_surface(
         ROOT, db.load_permitted_off_index_dependencies(policy)
     )
-    assert FILES in {p.name for p in surface.lock_packages}
-    with pytest.raises(Refusal, match="spent or not applicable"):
-        expected_artifacts(surface, TARGETS)
+    plan, expected = expected_artifacts(surface, TARGETS)
+    assert plan[PAYROLL] == TARGETS[PAYROLL]
+    assert expected[PAYROLL] == moved_artifacts(PAYROLL, TARGETS[PAYROLL])
 
 
 @pytest.mark.parametrize(
     ("filename", "expected"),
     [
-        ("dotmac_files-0.1.0a7-py3-none-any.whl", True),
-        ("dotmac_files-0.1.0a7.tar.gz", True),
-        ("dotmac_files-0.1.0a70.tar.gz", False),
-        ("dotmac_files_extra-0.1.0a7.tar.gz", False),
-        ("dotmac_files-0.1.0a6.tar.gz", False),
+        ("dotmac_payroll-0.1.0a2-py3-none-any.whl", True),
+        ("dotmac_payroll-0.1.0a2.tar.gz", True),
+        ("dotmac_payroll-0.1.0a20.tar.gz", False),
+        ("dotmac_payroll_extra-0.1.0a2.tar.gz", False),
+        ("dotmac_payroll-0.1.0a1.tar.gz", False),
     ],
 )
 def test_an_artifact_is_matched_to_its_exact_version(
     filename: str, expected: bool
 ) -> None:
-    assert artifact_belongs_to(filename, FILES, TARGETS[FILES]) is expected
+    assert artifact_belongs_to(filename, PAYROLL, TARGETS[PAYROLL]) is expected
 
 
 def test_native_artifact_pair_is_exactly_the_reviewed_wheel_and_sdist() -> None:
-    assert artifact_names(FILES, TARGETS[FILES]) == {
-        "dotmac_files-0.1.0a7-py3-none-any.whl",
-        "dotmac_files-0.1.0a7.tar.gz",
+    assert artifact_names(PAYROLL, TARGETS[PAYROLL]) == {
+        "dotmac_payroll-0.1.0a2-py3-none-any.whl",
+        "dotmac_payroll-0.1.0a2.tar.gz",
     }
 
 
 @pytest.mark.parametrize(
     "replacement",
-    [None, "dotmac_files-0.1.0a7-cp312-cp312-manylinux_2_35_x86_64.whl"],
+    [None, "dotmac_payroll-0.1.0a2-cp312-cp312-manylinux_2_35_x86_64.whl"],
 )
 def test_hash_verification_refuses_a_missing_or_altered_native_wheel(
     replacement: str | None,
 ) -> None:
-    version = TARGETS[FILES]
-    entry = _package(FILES, version, source=_INDEX_SOURCE)
+    version = TARGETS[PAYROLL]
+    entry = _package(PAYROLL, version, source=_INDEX_SOURCE)
     wheel = next(item for item in entry["files"] if item["file"].endswith(".whl"))
     if replacement is None:
         entry["files"].remove(wheel)
     else:
         wheel["file"] = replacement
-    assert hash_problems(_lock([entry], "hash"), {}, {FILES: version})
+    assert hash_problems(_lock([entry], "hash"), {}, {PAYROLL: version})
 
 
 def test_the_lock_must_name_the_bytes_that_were_downloaded() -> None:
-    version = TARGETS[FILES]
-    names = sorted(artifact_names(FILES, version))
+    version = TARGETS[PAYROLL]
+    names = sorted(artifact_names(PAYROLL, version))
     digests = {names[0]: "a" * 64, names[1]: "b" * 64}
-    lock = _lock([_package(FILES, version, source=_INDEX_SOURCE)], "hash")
+    lock = _lock([_package(PAYROLL, version, source=_INDEX_SOURCE)], "hash")
     for item in lock["package"][0]["files"]:
         item["hash"] = f"sha256:{digests[item['file']]}"
-    assert hash_problems(lock, digests, {FILES: version}) == []
+    assert hash_problems(lock, digests, {PAYROLL: version}) == []
 
     swapped = json.loads(json.dumps(lock))
     swapped["package"][0]["files"][0]["hash"] = "sha256:not-the-bytes"
-    assert hash_problems(swapped, digests, {FILES: version})
+    assert hash_problems(swapped, digests, {PAYROLL: version})
 
 
 # ── wheel-only: unchanged mechanism, reproven against ERP's own lock ───────
@@ -1108,10 +1271,11 @@ def test_a_fully_wheel_available_resolution_is_admitted() -> None:
                 "files": [{"file": "anyio-4.14.2-py3-none-any.whl"}],
             },
             {
-                "name": FILES,
-                "version": TARGETS[FILES],
+                "name": PAYROLL,
+                "version": TARGETS[PAYROLL],
                 "files": [
-                    {"file": f} for f in sorted(artifact_names(FILES, TARGETS[FILES]))
+                    {"file": f}
+                    for f in sorted(artifact_names(PAYROLL, TARGETS[PAYROLL]))
                 ],
             },
         ]
@@ -1360,7 +1524,7 @@ def _generated(tmp_path: Path) -> Path:
         lock,
         {
             "ref": "a" * 40,
-            "dotmac_files_version": TARGETS[FILES],
+            "dotmac_payroll_version": TARGETS[PAYROLL],
             "workflow_run": "123",
         },
         proof,
@@ -1441,11 +1605,11 @@ def _artifact_bytes(filename: str, *, replaced: bool = False) -> bytes:
     if filename.endswith(".whl"):
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w") as archive:
-            info = zipfile.ZipInfo("dotmac_files-0.1.0a7.dist-info/METADATA")
+            info = zipfile.ZipInfo("dotmac_payroll-0.1.0a2.dist-info/METADATA")
             info.date_time = (2026, 1, 1, 0, 0, 0)
             archive.writestr(
                 info,
-                "Metadata-Version: 2.1\nName: dotmac-files\nVersion: 0.1.0a7\n"
+                "Metadata-Version: 2.1\nName: dotmac-payroll\nVersion: 0.1.0a2\n"
                 "Requires-Dist: dotmac-kernel (>=0.1.0a98)\n"
                 + ("Requires-Dist: replaced\n" if replaced else ""),
             )
@@ -1506,21 +1670,23 @@ def test_the_bundle_refuses_a_release_with_no_published_artifacts(
     _fake_index(monkeypatch, {FILES: []})
     with pytest.raises(Refusal, match="is not published on the index"):
         acquire(
-            {FILES: TARGETS[FILES]},
+            {FILES: FILES_FROZEN_VERSION},
             tmp_path / "bundle",
-            {FILES: _expected_for(FILES, TARGETS[FILES])},
+            {FILES: _expected_for(FILES, FILES_FROZEN_VERSION)},
         )
 
 
 def test_a_package_with_no_bound_artifact_set_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _fake_index(monkeypatch, {FILES: sorted(_expected_for(FILES, TARGETS[FILES]))})
+    _fake_index(
+        monkeypatch, {FILES: sorted(_expected_for(FILES, FILES_FROZEN_VERSION))}
+    )
     with pytest.raises(Refusal, match="no expected artifact set"):
-        acquire({FILES: TARGETS[FILES]}, tmp_path / "bundle", {})
+        acquire({FILES: FILES_FROZEN_VERSION}, tmp_path / "bundle", {})
 
 
-def test_the_bundle_records_requires_dist_for_a_moved_package(
+def test_the_bundle_records_requires_dist_for_the_added_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     reviewed_moved_artifacts: dict[str, str],
@@ -1530,11 +1696,13 @@ def test_the_bundle_records_requires_dist_for_a_moved_package(
     while the credential is still in hand, and recorded for the credential-
     free job to compare against."""
 
-    _fake_index(monkeypatch, {FILES: sorted(reviewed_moved_artifacts)})
+    _fake_index(monkeypatch, {PAYROLL: sorted(reviewed_moved_artifacts)})
     out = tmp_path / "bundle"
-    digests = acquire({FILES: TARGETS[FILES]}, out, {FILES: reviewed_moved_artifacts})
+    digests = acquire(
+        {PAYROLL: TARGETS[PAYROLL]}, out, {PAYROLL: reviewed_moved_artifacts}
+    )
     assert digests == reviewed_moved_artifacts
-    requires = json.loads((out / "requires" / f"{FILES}.json").read_text())
+    requires = json.loads((out / "requires" / f"{PAYROLL}.json").read_text())
     assert requires == ["dotmac-kernel (>=0.1.0a98)"]
 
 
@@ -1596,53 +1764,53 @@ def test_a_duplicate_index_entry_is_refused(
         acquire({TAX: TAX_VERSION}, tmp_path / "bundle", {TAX: expected})
 
 
-def test_acquire_refuses_a_replaced_moved_wheel_before_bundle_metadata(
+def test_acquire_refuses_a_replaced_added_wheel_before_bundle_metadata(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     reviewed_moved_artifacts: dict[str, str],
 ) -> None:
-    wheel = _wheel_name(FILES, TARGETS[FILES])
+    wheel = _wheel_name(PAYROLL, TARGETS[PAYROLL])
     _fake_index(
         monkeypatch,
-        {FILES: sorted(reviewed_moved_artifacts)},
+        {PAYROLL: sorted(reviewed_moved_artifacts)},
         replaced=frozenset({wheel}),
     )
     out = tmp_path / "bundle"
     with pytest.raises(Refusal, match="does not match the bound digest"):
-        acquire({FILES: TARGETS[FILES]}, out, {FILES: reviewed_moved_artifacts})
+        acquire({PAYROLL: TARGETS[PAYROLL]}, out, {PAYROLL: reviewed_moved_artifacts})
     assert not (out / "digests.json").exists()
-    assert not (out / "requires" / f"{FILES}.json").exists()
+    assert not (out / "requires" / f"{PAYROLL}.json").exists()
 
 
-def test_acquire_refuses_a_moved_sdist_with_a_bad_digest(
+def test_acquire_refuses_an_added_sdist_with_a_bad_digest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     reviewed_moved_artifacts: dict[str, str],
 ) -> None:
-    sdist = _sdist_name(FILES, TARGETS[FILES])
+    sdist = _sdist_name(PAYROLL, TARGETS[PAYROLL])
     monkeypatch.setattr(
         erp_lock,
         "RELEASED_SDIST_DIGESTS",
-        {(FILES, TARGETS[FILES], sdist): "0" * 64},
+        {(PAYROLL, TARGETS[PAYROLL], sdist): "0" * 64},
     )
-    expected = moved_artifacts(FILES, TARGETS[FILES])
+    expected = moved_artifacts(PAYROLL, TARGETS[PAYROLL])
     assert expected[sdist] == "0" * 64
-    _fake_index(monkeypatch, {FILES: sorted(expected)})
+    _fake_index(monkeypatch, {PAYROLL: sorted(expected)})
     out = tmp_path / "bundle"
     with pytest.raises(Refusal, match="does not match the bound digest"):
-        acquire({FILES: TARGETS[FILES]}, out, {FILES: expected})
+        acquire({PAYROLL: TARGETS[PAYROLL]}, out, {PAYROLL: expected})
     assert not (out / "digests.json").exists()
 
 
 @pytest.mark.parametrize(
     "offered",
     [
-        ["dotmac_files-0.1.0a7.tar.gz"],
+        ["dotmac_payroll-0.1.0a2.tar.gz"],
         [
-            "dotmac_files-0.1.0a7-cp312-cp312-manylinux_2_35_x86_64.whl",
-            "dotmac_files-0.1.0a7.tar.gz",
+            "dotmac_payroll-0.1.0a2-cp312-cp312-manylinux_2_35_x86_64.whl",
+            "dotmac_payroll-0.1.0a2.tar.gz",
         ],
-        ["dotmac_files-0.1.0a7-py3-none-any.whl"],
+        ["dotmac_payroll-0.1.0a2-py3-none-any.whl"],
     ],
 )
 def test_acquire_refuses_a_missing_or_altered_native_artifact_pair(
@@ -1651,12 +1819,12 @@ def test_acquire_refuses_a_missing_or_altered_native_artifact_pair(
     monkeypatch: pytest.MonkeyPatch,
     reviewed_moved_artifacts: dict[str, str],
 ) -> None:
-    _fake_index(monkeypatch, {FILES: offered})
+    _fake_index(monkeypatch, {PAYROLL: offered})
     with pytest.raises(Refusal):
         acquire(
-            {FILES: TARGETS[FILES]},
+            {PAYROLL: TARGETS[PAYROLL]},
             tmp_path / "bundle",
-            {FILES: reviewed_moved_artifacts},
+            {PAYROLL: reviewed_moved_artifacts},
         )
     assert not (tmp_path / "bundle" / "digests.json").exists()
 
@@ -2181,8 +2349,8 @@ def test_only_the_allowed_version_is_named_as_valid_in_the_dispatch_gate() -> No
 
     text = WORKFLOW.read_text()
     acquire_job = _jobs()["acquire"][0]
-    assert TARGETS[FILES] in acquire_job
-    assert TARGETS[FILES] in text
+    assert TARGETS[PAYROLL] in acquire_job
+    assert TARGETS[PAYROLL] in text
     assert "dotmac_tax_version" not in text
     assert "dotmac-tax=${TAX_VERSION}" not in text
 
