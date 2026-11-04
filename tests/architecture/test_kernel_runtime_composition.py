@@ -25,7 +25,7 @@ def test_dependency_manifest_evidence_uses_git_bytes_not_checkout_line_endings()
     observation = next(
         item for item in record["observations"] if item["id"] == "dependency-manifest"
     )
-    git_bytes = subprocess.check_output(["git", "show", ":pyproject.toml"], cwd=ROOT)
+    git_bytes = subprocess.check_output(["git", "show", ":pyproject.toml"], cwd=ROOT)  # noqa: S607 - fixed read-only Git command
     digest = hashlib.sha256(git_bytes).hexdigest()
     assert observation["source_blob_sha256"] == digest
     assert observation["extract_sha256"] == digest
