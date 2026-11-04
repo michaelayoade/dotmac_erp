@@ -8,6 +8,9 @@ from app.services.expense.expense_service import ExpenseService
 
 
 class _EmptyResult:
+    def one(self):
+        return (0, 0)
+
     def all(self) -> list[object]:
         return []
 
@@ -31,8 +34,8 @@ def test_my_approvals_report_anchors_queries_on_approval_steps() -> None:
         use_default_date_range=False,
     )
 
-    assert len(db.statements) == 2
-    for statement in db.statements:
+    assert len(db.statements) == 3
+    for statement in db.statements[:2]:
         sql = str(
             statement.compile(
                 dialect=postgresql.dialect(),
@@ -52,3 +55,13 @@ def test_my_approvals_report_anchors_queries_on_approval_steps() -> None:
         )
     )
     assert "ORDER BY claimant_name" in employee_options_sql
+
+    paid_sql = str(
+        db.statements[2].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "sum(expense.expense_claim.amount_paid)" in paid_sql
+    assert "expense_claim.approver_id" in paid_sql
+    assert "expense_claim.organization_id" in paid_sql
+    assert "expense_claim_approval_step" not in paid_sql
