@@ -727,7 +727,23 @@ class ExpenseApprovalService:
             if desig_limit:
                 return desig_limit
 
-        return None
+        from app.models.rbac import PersonRole
+
+        return self.db.scalar(
+            select(ExpenseApproverLimit.max_approval_amount)
+            .join(
+                PersonRole,
+                PersonRole.role_id == ExpenseApproverLimit.scope_id,
+            )
+            .where(
+                ExpenseApproverLimit.organization_id == organization_id,
+                ExpenseApproverLimit.is_active == True,
+                ExpenseApproverLimit.scope_type == "ROLE",
+                PersonRole.person_id == employee.person_id,
+            )
+            .order_by(ExpenseApproverLimit.created_at.desc())
+            .limit(1)
+        )
 
     def _get_escalation_approvers(
         self,

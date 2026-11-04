@@ -68,7 +68,7 @@
                         <th scope="col" class="text-right">Weekly Budget</th>
                         <th scope="col" class="text-right">Max Per Claim</th>
                         <th scope="col">Last Activity</th>
-                        <th scope="col">Last Reset</th>
+                        <th scope="col">Resets in selected period</th>
                         <th scope="col"></th>
                     </tr>
                 </thead>
@@ -97,11 +97,12 @@
                             {% endif %}
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">
-                            {% if approver.last_reset_at %}
-                                {{ approver.last_reset_at.strftime('%Y-%m-%d %H:%M UTC') }}
-                            {% else %}
-                                Never
-                            {% endif %}
+                            <details>
+                                <summary>{{ approver.period_resets | length }} reset(s)</summary>
+                                {% for reset in approver.period_resets %}
+                                <p>{{ reset.reset_at.strftime('%Y-%m-%d %H:%M UTC') }} — {{ 'Automatic' if reset.reset_reason == 'Scheduled weekly budget reset' else 'Manual' }}: {{ reset.reset_reason }} (reviewer {{ reset.reviewed_by_id }})</p>
+                                {% else %}<p>No resets in this period.</p>{% endfor %}
+                            </details>
                         </td>
                         <td class="text-right">
                             <a class="btn btn-sm btn-primary" href="{{ approver.review_url }}">Review</a>

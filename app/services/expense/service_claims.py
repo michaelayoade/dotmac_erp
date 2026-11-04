@@ -938,6 +938,32 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 approved_amounts,
             )
 
+            if approver_id is None:
+                raise ExpenseServiceError(
+                    "Approver must be linked to an employee record"
+                )
+            proposed_amount = sum(
+                (
+                    corrections_map.get(str(item.item_id), {}).get(
+                        "approved_amount",
+                        approved_amounts_map.get(
+                            str(item.item_id), item.claimed_amount
+                        ),
+                    )
+                    for item in claim.items
+                ),
+                Decimal("0"),
+            )
+            from app.services.expense.limit_service import ExpenseLimitService
+
+            ExpenseLimitService(self.db, self.ctx).check_approver_weekly_budget(
+                org_id,
+                approver_id,
+                max(
+                    proposed_amount - (claim.advance_adjusted or Decimal("0")),
+                    Decimal("0"),
+                ),
+            )
             if (
                 approver_id is not None
                 and isinstance(claim, ExpenseClaim)
@@ -1718,14 +1744,16 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.MARK_PAID):
             return claim
         try:
-            # Skip budget re-validation when called after a completed
-            # Paystack transfer — the money has already left and the
-            # budget was checked at approval time and again before
-            # the transfer was initiated.
-            if not skip_budget_check and claim.approver_id is not None:
+            # Completed provider transfers settle a commitment checked before
+            # initiation. Never reject recording money that has already moved.
+            if claim.approver_id is None:
+                raise ExpenseServiceError(
+                    "Payment requires an approver with a weekly budget"
+                )
+            if not skip_budget_check:
                 payment_as_of = datetime.combine(
                     payment_date or date.today(),
-                    datetime.min.time(),
+                    datetime.max.time(),
                     tzinfo=UTC,
                 )
                 self._validate_approver_weekly_budget(

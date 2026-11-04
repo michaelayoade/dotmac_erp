@@ -47,223 +47,49 @@ def _make_employee(employee_id, *, person_id=None, grade_id=None, designation_id
 
 
 class TestWeeklyBudgetCheck:
-    def test_passes_when_within_budget(self, org_id, approver_id):
+    @pytest.mark.parametrize(
+        "amount,committed,blocked",
+        [
+            ("3000", "0", False),
+            ("3001", "0", True),
+            ("2000", "2000", True),
+        ],
+    )
+    def test_paid_balance_gate(self, org_id, approver_id, amount, committed, blocked):
         db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        db.scalar.return_value = Decimal("150000")
-
         svc = ExpenseLimitService(db)
-        limit_id = uuid4()
         with (
             patch.object(
                 svc,
                 "_get_approver_weekly_budget",
-                return_value=(Decimal("500000"), limit_id),
+                return_value=(Decimal("200000"), uuid4()),
             ),
-            patch.object(svc, "get_latest_weekly_reset", return_value=None),
+            patch.object(
+                svc,
+                "get_approver_weekly_budget_balance",
+                return_value=SimpleNamespace(
+                    budget=Decimal("200000"), used=Decimal("197000"), usage_label="week"
+                ),
+            ),
+            patch.object(svc, "_committed_transfers", return_value=Decimal(committed)),
         ):
-            svc.check_approver_weekly_budget(
-                org_id,
-                approver_id,
-                Decimal("100000"),
-                approval_at=datetime(2026, 2, 24, 12, 0, tzinfo=UTC),
+            if blocked:
+                with pytest.raises(ApproverWeeklyBudgetExhaustedError):
+                    svc.check_approver_weekly_budget(
+                        org_id, approver_id, Decimal(amount)
+                    )
+            else:
+                svc.check_approver_weekly_budget(org_id, approver_id, Decimal(amount))
+
+    def test_future_reset_is_excluded(self, org_id, approver_id):
+        svc = ExpenseLimitService(MagicMock())
+        as_of = datetime(2026, 11, 1, 12, tzinfo=UTC)
+        with patch.object(svc, "get_latest_weekly_reset", return_value=None) as reset:
+            start, _ = svc._get_weekly_budget_window(
+                org_id, approver_id, uuid4(), as_of=as_of
             )
-
-    def test_weekly_usage_reads_paid_claims_from_claim_record(
-        self, org_id, approver_id
-    ):
-        db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        captured = {}
-
-        def _scalar(query):
-            captured["query"] = query
-            return Decimal("150000")
-
-        db.scalar.side_effect = _scalar
-
-        svc = ExpenseLimitService(db)
-        limit_id = uuid4()
-        with (
-            patch.object(
-                svc,
-                "_get_approver_weekly_budget",
-                return_value=(Decimal("500000"), limit_id),
-            ),
-            patch.object(svc, "get_latest_weekly_reset", return_value=None),
-        ):
-            svc.check_approver_weekly_budget(
-                org_id,
-                approver_id,
-                Decimal("100000"),
-                approval_at=datetime(2026, 2, 24, 12, 0, tzinfo=UTC),
-            )
-
-        sql = str(captured["query"])
-        assert "expense_claim.paid_on" in sql
-        assert "expense_claim_action" not in sql
-
-    def test_weekly_balance_reads_paid_claims_from_current_window(
-        self, org_id, approver_id
-    ):
-        db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        captured = {}
-
-        def _scalar(query):
-            captured["query"] = query
-            return Decimal("150000")
-
-        db.scalar.side_effect = _scalar
-
-        svc = ExpenseLimitService(db)
-        limit_id = uuid4()
-        with (
-            patch.object(
-                svc,
-                "_get_approver_weekly_budget",
-                return_value=(Decimal("500000"), limit_id),
-            ),
-            patch.object(svc, "get_latest_weekly_reset", return_value=None),
-        ):
-            balance = svc.get_approver_weekly_budget_balance(
-                org_id,
-                approver_id,
-                as_of=datetime(2026, 2, 24, 12, 0, tzinfo=UTC),
-            )
-
-        assert balance is not None
-        assert balance.used == Decimal("150000")
-        assert balance.remaining == Decimal("350000")
-        assert balance.usage_label == "This week starting 2026-02-23"
-        sql = str(captured["query"].compile(compile_kwargs={"literal_binds": True}))
-        assert "'PAID'" in sql
-        assert "expense_claim.status" in sql
-        assert "expense_claim.paid_on >= " in sql
-        assert "expense_claim_action" not in sql
-
-    def test_no_manual_reset_uses_current_week_window(self, org_id, approver_id):
-        db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        captured = {}
-
-        def _scalar(query):
-            captured["query"] = query
-            return Decimal("150000")
-
-        db.scalar.side_effect = _scalar
-
-        svc = ExpenseLimitService(db)
-        limit_id = uuid4()
-        with (
-            patch.object(
-                svc,
-                "_get_approver_weekly_budget",
-                return_value=(Decimal("500000"), limit_id),
-            ),
-            patch.object(svc, "get_latest_weekly_reset", return_value=None) as reset,
-        ):
-            svc.check_approver_weekly_budget(
-                org_id,
-                approver_id,
-                Decimal("100000"),
-                approval_at=datetime(2026, 2, 24, 12, 0, tzinfo=UTC),
-            )
-
-        sql = str(captured["query"])
-        assert reset.call_args.kwargs["from_datetime"] == datetime(
-            2026, 2, 23, 0, 0, tzinfo=UTC
-        )
-        assert "expense_claim.paid_on >= " in sql
-
-    def test_manual_reset_narrows_current_week_window(self, org_id, approver_id):
-        db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        captured = {}
-
-        def _scalar(query):
-            captured["query"] = query
-            return Decimal("150000")
-
-        db.scalar.side_effect = _scalar
-
-        svc = ExpenseLimitService(db)
-        limit_id = uuid4()
-        reset_event = SimpleNamespace(reset_at=datetime(2026, 2, 23, 9, 0, tzinfo=UTC))
-        with (
-            patch.object(
-                svc,
-                "_get_approver_weekly_budget",
-                return_value=(Decimal("500000"), limit_id),
-            ),
-            patch.object(svc, "get_latest_weekly_reset", return_value=reset_event),
-        ):
-            svc.check_approver_weekly_budget(
-                org_id,
-                approver_id,
-                Decimal("100000"),
-                approval_at=datetime(2026, 2, 24, 12, 0, tzinfo=UTC),
-            )
-
-        sql = str(captured["query"])
-        assert "expense_claim.paid_on >= " in sql
-
-    def test_old_reset_before_current_week_is_ignored(self, org_id, approver_id):
-        db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        captured = {}
-
-        def _scalar(query):
-            captured["query"] = query
-            return Decimal("150000")
-
-        db.scalar.side_effect = _scalar
-
-        svc = ExpenseLimitService(db)
-        limit_id = uuid4()
-        with (
-            patch.object(
-                svc,
-                "_get_approver_weekly_budget",
-                return_value=(Decimal("500000"), limit_id),
-            ),
-            patch.object(svc, "get_latest_weekly_reset", return_value=None) as reset,
-        ):
-            svc.check_approver_weekly_budget(
-                org_id,
-                approver_id,
-                Decimal("100000"),
-                approval_at=datetime(2026, 2, 24, 12, 0, tzinfo=UTC),
-            )
-
-        sql = str(captured["query"])
-        assert reset.call_args.kwargs["from_datetime"] == datetime(
-            2026, 2, 23, 0, 0, tzinfo=UTC
-        )
-        assert "expense_claim.paid_on >= " in sql
-
-    def test_raises_when_exceeded(self, org_id, approver_id):
-        db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        db.scalar.return_value = Decimal("490000")
-
-        svc = ExpenseLimitService(db)
-        limit_id = uuid4()
-        with (
-            patch.object(
-                svc,
-                "_get_approver_weekly_budget",
-                return_value=(Decimal("500000"), limit_id),
-            ),
-            patch.object(svc, "get_latest_weekly_reset", return_value=None),
-        ):
-            with pytest.raises(ApproverWeeklyBudgetExhaustedError):
-                svc.check_approver_weekly_budget(
-                    org_id,
-                    approver_id,
-                    Decimal("20000"),
-                    approval_at=datetime(2026, 2, 24, 12, 0, tzinfo=UTC),
-                )
+        assert start == datetime(2026, 10, 26, tzinfo=UTC)
+        assert reset.call_args.kwargs["to_datetime"] == as_of
 
 
 class TestWeeklyReset:

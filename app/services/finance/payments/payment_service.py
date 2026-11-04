@@ -1264,6 +1264,29 @@ class PaymentService:
                     detail=f"Cannot initiate transfer - claim status is '{locked_claim.status.value}'",
                 )
 
+        if intent.source_type == "EXPENSE_CLAIM" and intent.source_id:
+            from app.services.expense.limit_service import ExpenseLimitService
+
+            if (
+                intent.currency_code != locked_claim.currency_code
+                or Decimal(intent.amount) != locked_claim.net_payable_amount
+            ):
+                raise ValueError(
+                    "Transfer amount or currency no longer matches the approved claim"
+                )
+            if locked_claim.approver_id is None:
+                raise ValueError("Payment requires an approver with a weekly budget")
+            ExpenseLimitService(self.db).check_approver_weekly_budget(
+                self.organization_id,
+                locked_claim.approver_id,
+                Decimal(intent.amount),
+                exclude_intent_id=intent.intent_id,
+            )
+            # Persisted with the transfer result; the approver lock is held until then.
+            # Unknown provider outcomes retain this commitment via INDETERMINATE.
+            intent.status = PaymentIntentStatus.PROCESSING
+            self.db.flush()
+
         # Amount in kobo - use round to avoid truncation
         amount_kobo = int(
             (Decimal(intent.amount) * Decimal("100")).to_integral_value(
