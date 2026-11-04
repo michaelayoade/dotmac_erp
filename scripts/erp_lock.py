@@ -46,10 +46,17 @@ and every other off-index form is refused exactly as upstream refuses it.
   version, exactly once — enumerated across every dependency surface Poetry
   and PEP 621 / PEP 735 accept.
 * `manifest-guard` — the ref under resolution supplies the manifest; refuses
-  anything that would misdirect `FORGEJO_READ_TOKEN` or hand the resolver a
+  anything that would misdirect `FORGEJO_BUNDLE_READ_TOKEN` or hand the resolver a
   dependency form it does not recognise.
+* `classify` — classify the ORIGINAL same-commit manifest and lock through
+  `dependency_bundle` (policy from the trusted checkout), before any movement
+  is applied, and derive the exact artifact set the bundle may carry. This
+  module is an adapter over that owner; it classifies nothing itself.
 * `acquire` — download the closed bundle from the private index, in the only
-  job that holds the credential. Runs no Poetry and no package code.
+  job that holds the credential. Runs no Poetry and no package code. Every
+  file is hashed straight after its fetch and compared with the bound
+  identity (unchanged: the lock's own; moved: the reviewed wheel and sdist
+  digests); a missing, extra, duplicate or replaced artifact is refused.
 * `mirror-manifest` / `restore` — point the manifest at the local bundle for a
   secret-free resolution, then restore the real URL and recompute the lock's
   content-hash.
@@ -88,6 +95,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
+import dependency_bundle
 import dependency_normalisation
 
 # ── the closed allowlist of movements ───────────────────────────────────────
@@ -121,6 +129,21 @@ RELEASED_WHEEL_DIGESTS = {
         "0.1.0a7",
         "dotmac_files-0.1.0a7-py3-none-any.whl",
     ): "47640e4a56c4c2f131393719d4415a1699ec2a27794e6a63e9d7da5aac50f6dc",
+}
+
+#: Reviewed sdist digest for the moved package, pinned independently of the
+#: index response exactly as the wheel above is. Provenance: Starter's
+#: module-release run 39211782120 (source commit d94ff7ed), whose verify-job
+#: log records "dotmac_files-0.1.0a7.tar.gz: sha256 c8f7a61b... identical to
+#: the original build". A moved package whose sdist has NO entry here is
+#: refused by `moved_artifacts` before any fetch: an unpinned sdist is bytes
+#: this workflow would accept from the index on trust.
+RELEASED_SDIST_DIGESTS = {
+    (
+        "dotmac-files",
+        "0.1.0a7",
+        "dotmac_files-0.1.0a7.tar.gz",
+    ): "c8f7a61bc7198cb7397ac1dcd0caa13e1874445152f7f0bfedb9e85d0e8c78d4",
 }
 
 #: The private Forgejo PyPI index this workflow resolves against. Two forms
@@ -364,6 +387,7 @@ RECOGNISED_GROUP_KEYS = frozenset({"dependencies", "include-groups", "optional"}
 
 _PLAIN_CONSTRAINT = re.compile(r"^[0-9A-Za-z .,!*+<>=^~|-]+$")
 _EXACT_VERSION = re.compile(r"^[0-9]+(\.[0-9]+)*((a|b|rc|\.post|\.dev)[0-9]+)?$")
+_SHA256_HEX = re.compile(r"\A[0-9a-f]{64}\Z")
 _DIRECT_REFERENCE = re.compile(r"@\s*[A-Za-z][A-Za-z0-9+.-]*:")
 _PEP508_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
@@ -983,9 +1007,11 @@ def fetch(url: str, target: Path) -> None:
         text=True,
     )
     if completed.returncode != 0:
+        target.unlink(missing_ok=True)
         raise Refusal(f"curl failed for {url}: {completed.stderr.strip()}")
     problems = transfer_problems(url, completed.stdout.strip())
     if problems:
+        target.unlink(missing_ok=True)
         raise Refusal(problems[0])
 
 
@@ -1002,43 +1028,126 @@ def artifact_belongs_to(filename: str, package: str, version: str) -> bool:
     )
 
 
-def acquisition_plan(
-    manifest: dict[str, Any], lock: dict[str, Any], target_versions: dict[str, str]
-) -> dict[str, str]:
-    """Which private packages the bundle must CLOSE over, and at which
-    version. See `kernel_lock.acquisition_plan` for the full reasoning."""
+def classify_original(
+    work: Path, ref: str, policy_path: Path
+) -> dependency_bundle.DependencySurface:
+    """Classify the ORIGINAL same-commit manifest and lock, before any
+    movement is applied.
 
+    Every byte comes from `ref`'s own git tree (never `work`'s working tree,
+    which `set-versions` edits afterwards), the off-index allowlist comes from
+    the reviewed policy in the trusted checkout, and every refusal
+    `dependency_bundle` owns -- a forgejo lock entry with a wrong `type` or
+    `url`, a duplicate identity, a manifest/lock disagreement, an unadmitted
+    off-index form -- surfaces here as a `Refusal`. `erp_lock` classifies
+    nothing itself.
+    """
+
+    # The policy must come from the TRUSTED checkout, never from the candidate
+    # tree under classification, which could edit it to name itself trusted.
+    resolved_policy = policy_path.resolve()
+    resolved_work = work.resolve()
+    if resolved_policy == resolved_work or resolved_work in resolved_policy.parents:
+        raise Refusal(
+            "the policy path resolves inside the candidate checkout; it must "
+            "be read from the trusted tooling checkout"
+        )
+    try:
+        policy = dependency_bundle.load_policy(policy_path)
+        if (
+            policy.get("environment_name")
+            != dependency_bundle.REQUIRED_ENVIRONMENT_NAME
+        ):
+            raise Refusal("policy environment_name is not the required environment")
+        pins = dependency_bundle.load_permitted_off_index_dependencies(policy)
+        surface = dependency_bundle.extract_dependency_surface_at_commit(
+            work, ref, pins
+        )
+        dependency_bundle.planned_artifacts(surface)
+    except dependency_bundle.DependencyBundleError as error:
+        raise Refusal(
+            f"the original manifest/lock at {ref} is refused: {error}"
+        ) from error
+    return surface
+
+
+def moved_artifacts(package: str, version: str) -> dict[str, str]:
+    """The exact reviewed `{filename: sha256}` of a moved package: one wheel
+    and one sdist, each with a reviewed digest. No digest, no movement."""
+
+    names = artifact_names(package, version)
+    expected: dict[str, str] = {}
+    for filename in sorted(names):
+        table = (
+            RELEASED_WHEEL_DIGESTS
+            if filename.endswith(".whl")
+            else RELEASED_SDIST_DIGESTS
+        )
+        digest = table.get((package, version, filename))
+        if digest is None:
+            raise Refusal(
+                f"no reviewed release digest for {package} {version} "
+                f"{'wheel' if filename.endswith('.whl') else 'sdist'} {filename}"
+            )
+        if not _SHA256_HEX.fullmatch(digest):
+            raise Refusal(f"the reviewed digest for {filename} is not a 64-hex SHA-256")
+        expected[filename] = digest
+    return expected
+
+
+def expected_artifacts(
+    surface: dependency_bundle.DependencySurface, target_versions: dict[str, str]
+) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    """`(plan, expected)` for the closed bundle.
+
+    `plan` maps each private package to the version the bundle closes over;
+    `expected` maps its normalised name to the EXACT `{filename: sha256}` set
+    it may contain. Unchanged packages take their identities from
+    `planned_artifacts` (the lock's own files and hashes); a moved package is
+    replaced, after classification, by its reviewed wheel and sdist digests.
+    """
+
+    planned = dependency_bundle.planned_artifacts(surface)
+    expected: dict[str, dict[str, str]] = {}
+    seen_files: dict[str, str] = {}
+    for artifact in planned:
+        if artifact.filename in seen_files:
+            raise Refusal(
+                f"{artifact.filename} is planned for both "
+                f"{seen_files[artifact.filename]} and "
+                f"{artifact.package_normalised_name}"
+            )
+        seen_files[artifact.filename] = artifact.package_normalised_name
+        expected.setdefault(artifact.package_normalised_name, {})[artifact.filename] = (
+            artifact.sha256
+        )
     plan: dict[str, str] = {}
-    for table, deps in _poetry_constraint_tables(manifest):
-        for name, spec in sorted(deps.items()):
-            if not isinstance(spec, dict):
-                continue
-            if spec.get("source") != INDEX_SOURCE_NAME:
-                continue
-            version = spec.get("version")
-            if not isinstance(version, str) or not _EXACT_VERSION.fullmatch(version):
-                raise Refusal(
-                    f"{table}.{name} resolves from {INDEX_SOURCE_NAME!r} with "
-                    f"the constraint {version!r}. The offline bundle can only "
-                    "be closed around exact pins; a range would need this "
-                    "module to decide what it resolves to."
-                )
-            plan[name] = version
-
-    for entry in lock.get("package", []):
-        source = entry.get("source", {})
-        if not isinstance(source, dict):
-            continue
-        if source.get("reference") != INDEX_SOURCE_NAME:
-            continue
-        name = str(entry.get("name"))
-        plan.setdefault(name, str(entry.get("version")))
-
-    for package in ALLOWED_MOVEMENTS:
-        if package not in plan:
+    for pkg in surface.lock_packages:
+        if len(pkg.files) != len({f["file"] for f in pkg.files}):
+            raise Refusal(f"{pkg.name} lists a file more than once in the lock")
+        plan[pkg.name] = pkg.version
+        expected.setdefault(pkg.normalised_name, {})
+    for package, (old, new) in ALLOWED_MOVEMENTS.items():
+        current = next(
+            (
+                p
+                for p in surface.lock_packages
+                if p.normalised_name == _normalised(package)
+            ),
+            None,
+        )
+        if current is None:
             raise Refusal(f"no {package} dependency bound to {INDEX_SOURCE_NAME!r}")
-    plan.update(target_versions)
-    return plan
+        if current.version != old:
+            raise Refusal(
+                f"{package} is locked at {current.version!r}, not {old!r}; "
+                "this one-shot movement is spent or not applicable"
+            )
+        if target_versions.get(package) != new:
+            raise Refusal(f"no allowed target version supplied for {package}")
+        plan[current.name] = new
+        expected[current.normalised_name] = moved_artifacts(package, new)
+    return plan, expected
 
 
 def artifact_names(package: str, version: str) -> set[str]:
@@ -1222,10 +1331,18 @@ def lock_wheel_problems(lock: dict[str, Any]) -> list[str]:
     )
 
 
-def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
+def acquire(
+    plan: dict[str, str], out: Path, expected: dict[str, dict[str, str]]
+) -> dict[str, str]:
     """Download the closed bundle and lay it out as a local PEP 503 index.
     Runs in the ONLY job that holds the credential, and runs no Poetry and no
-    package code: `curl`, `sha256`, and writing HTML."""
+    package code: `curl`, `sha256`, and writing HTML.
+
+    `expected` is the exact `{filename: sha256}` set each package may carry
+    (see `expected_artifacts`). A missing, extra or duplicate index entry is
+    refused before any fetch, and every fetched file is hashed and compared
+    straight after its own fetch, before the next one and before anything is
+    written for the bundle."""
 
     files_dir = out / "files"
     simple_dir = out / "simple"
@@ -1233,6 +1350,9 @@ def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
     digests: dict[str, str] = {}
 
     for package, version in sorted(plan.items()):
+        want = expected.get(_normalised(package))
+        if want is None:
+            raise Refusal(f"no expected artifact set for {package} {version}")
         page = out / "pages" / f"{package}.html"
         fetch(f"{LOCK_INDEX_URL}/{package}/", page)
         wanted: dict[str, str] = {}
@@ -1240,6 +1360,11 @@ def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
             url = approved_artifact_url(href, f"{LOCK_INDEX_URL}/{package}/")
             filename = url.rsplit("/", 1)[-1]
             if artifact_belongs_to(filename, package, version):
+                if filename in wanted:
+                    raise Refusal(
+                        f"the index lists {filename} for {package} {version} "
+                        "more than once"
+                    )
                 wanted[filename] = url
         if not wanted:
             raise Refusal(
@@ -1251,31 +1376,24 @@ def acquire(plan: dict[str, str], out: Path) -> dict[str, str]:
         offered = wheel_only_problems([(package, version, list(wanted))])
         if offered:
             raise Refusal(offered[0])
-        if package in ALLOWED_MOVEMENTS:
-            expected = artifact_names(package, version)
-            if set(wanted) != expected:
-                raise Refusal(
-                    f"the index publishes {sorted(wanted)} for {package} "
-                    f"{version}; this workflow pins the pair {sorted(expected)}"
-                )
+        missing = sorted(set(want) - set(wanted))
+        extra = sorted(set(wanted) - set(want))
+        if missing or extra:
+            raise Refusal(
+                f"the index publishes {sorted(wanted)} for {package} {version}; "
+                f"the bound artifact set is {sorted(want)} "
+                f"(missing {missing}, unexpected {extra})"
+            )
         for filename, url in sorted(wanted.items()):
             target = files_dir / filename
             fetch(url, target)
             digest = sha256_hex(target.read_bytes())
-            if package in ALLOWED_MOVEMENTS and filename.endswith(".whl"):
-                expected_digest = RELEASED_WHEEL_DIGESTS.get(
-                    (package, version, filename)
+            if digest != want[filename]:
+                target.unlink(missing_ok=True)
+                raise Refusal(
+                    f"{package} {version} {filename} sha256 {digest} does not "
+                    f"match the bound digest {want[filename]}"
                 )
-                if expected_digest is None:
-                    raise Refusal(
-                        f"no reviewed release digest for {package} {version} "
-                        f"wheel {filename}"
-                    )
-                if digest != expected_digest:
-                    raise Refusal(
-                        f"{package} {version} wheel {filename} sha256 {digest} "
-                        f"does not match reviewed release digest {expected_digest}"
-                    )
             digests[filename] = digest
 
         if package in ALLOWED_MOVEMENTS:
@@ -1688,9 +1806,16 @@ def _build_parser() -> argparse.ArgumentParser:
     guard.add_argument("--checkout", type=Path, required=True)
     guard.add_argument("--movement", action="append", default=[], dest="movements")
 
+    classify = subcommands.add_parser("classify")
+    classify.add_argument("--repo", type=Path, required=True)
+    classify.add_argument("--ref", required=True)
+    classify.add_argument("--policy", type=Path, required=True)
+    classify.add_argument("--movement", action="append", default=[], dest="movements")
+
     fetch_bundle = subcommands.add_parser("acquire")
-    fetch_bundle.add_argument("--manifest", type=Path, required=True)
-    fetch_bundle.add_argument("--lock", type=Path, required=True)
+    fetch_bundle.add_argument("--repo", type=Path, required=True)
+    fetch_bundle.add_argument("--ref", required=True)
+    fetch_bundle.add_argument("--policy", type=Path, required=True)
     fetch_bundle.add_argument(
         "--movement", action="append", default=[], dest="movements"
     )
@@ -1777,14 +1902,22 @@ def _run(args: argparse.Namespace) -> int:
             checkout_problems(args.checkout)
             + manifest_problems(_load_toml(args.manifest), target_versions),
         )
+    if args.command == "classify":
+        target_versions = _parse_movement_args(args.movements)
+        surface = classify_original(args.repo, args.ref, args.policy)
+        plan, expected = expected_artifacts(surface, target_versions)
+        print(
+            f"classified {len(plan)} private packages and "
+            f"{sum(len(files) for files in expected.values())} bound artifacts"
+        )
+        return 0
     if args.command == "acquire":
         target_versions = _parse_movement_args(args.movements)
-        plan = acquisition_plan(
-            _load_toml(args.manifest), _load_toml(args.lock), target_versions
-        )
+        surface = classify_original(args.repo, args.ref, args.policy)
+        plan, expected = expected_artifacts(surface, target_versions)
         for package, version in sorted(plan.items()):
             print(f"bundling {package} {version}")
-        digests = acquire(plan, args.out)
+        digests = acquire(plan, args.out, expected)
         for name, digest in sorted(digests.items()):
             print(f"{name}  {digest}")
         return 0
