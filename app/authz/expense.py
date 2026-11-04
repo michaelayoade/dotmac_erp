@@ -29,8 +29,9 @@ EXPENSE_PERMISSION_DEFINITIONS: tuple[tuple[str, str], ...] = (
     ("expense:policies:manage", "Manage expense policies"),
     (
         "expense:limits:review",
-        "Review approver decisions and reset weekly budgets",
+        "Review approver decisions and budget history",
     ),
+    ("expense:limits:reset", "Manually restore an approver's expense allowance"),
     ("expense:advances:read", "View all cash advances"),
     ("expense:advances:read_own", "View own cash advances"),
     ("expense:advances:create", "Request cash advances"),

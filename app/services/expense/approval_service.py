@@ -698,7 +698,7 @@ class ExpenseApprovalService:
                 ExpenseApproverLimit.scope_id == employee.employee_id,
             )
         )
-        if emp_limit:
+        if emp_limit is not None:
             return emp_limit
 
         # Check grade-based limit
@@ -711,7 +711,7 @@ class ExpenseApprovalService:
                     ExpenseApproverLimit.scope_id == employee.grade_id,
                 )
             )
-            if grade_limit:
+            if grade_limit is not None:
                 return grade_limit
 
         # Check designation-based limit
@@ -724,7 +724,7 @@ class ExpenseApprovalService:
                     ExpenseApproverLimit.scope_id == employee.designation_id,
                 )
             )
-            if desig_limit:
+            if desig_limit is not None:
                 return desig_limit
 
         from app.models.rbac import PersonRole

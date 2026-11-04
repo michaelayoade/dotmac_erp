@@ -586,6 +586,7 @@ def reset_weekly_approver_budgets() -> dict:
                         approver_id=employee.employee_id,
                         reviewed_by_id=employee.person_id,
                         reset_reason="Scheduled weekly budget reset",
+                        reset_kind="AUTOMATIC",
                         reviewed_from=previous_week_start,
                         reviewed_to=previous_week_end,
                     )

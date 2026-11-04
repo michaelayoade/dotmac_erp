@@ -93,6 +93,7 @@ EXPENSE_ROLE_GRANTS: dict[str, tuple[str, ...]] = {
         "expense:claims:read",
         "expense:policies:read",
         "expense:limits:review",
+        "expense:limits:reset",
         "expense:reports:read",
     ),
     "expense_reimburser": (

@@ -36,7 +36,6 @@ from app.models.expense.expense_claim_action import (
 )
 from app.models.expense.limit_rule import (
     ExpenseApproverLimit,
-    ExpenseApproverLimitReset,
 )
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -1347,22 +1346,11 @@ class ExpenseLimitWebService:
                 if limit_id
                 else None
             )
-            reset_query = select(ExpenseApproverLimitReset).where(
-                ExpenseApproverLimitReset.organization_id == org_id,
-                ExpenseApproverLimitReset.approver_id == approver_id,
-            )
-            if parsed_from:
-                reset_query = reset_query.where(
-                    func.date(ExpenseApproverLimitReset.reset_at) >= parsed_from
-                )
-            if parsed_to:
-                reset_query = reset_query.where(
-                    func.date(ExpenseApproverLimitReset.reset_at) <= parsed_to
-                )
-            period_resets = list(
-                db.scalars(
-                    reset_query.order_by(ExpenseApproverLimitReset.reset_at)
-                ).all()
+            period_resets = service.get_reset_history(
+                org_id,
+                approver_id,
+                from_date=parsed_from,
+                to_date=parsed_to,
             )
             activity_row = activity_map.get(approver_id)
             approved_count = (
@@ -1531,6 +1519,13 @@ class ExpenseLimitWebService:
                 "weekly_budget": budget_amount,
                 "limit_id": str(limit_id) if limit_id else None,
                 "last_reset": latest_reset,
+                "can_reset_budget": auth.has_permission("expense:limits:reset"),
+                "reset_history_entries": service.get_reset_history(
+                    org_id,
+                    approver_id,
+                    from_date=parsed_from,
+                    to_date=parsed_to,
+                ),
             }
         )
         return templates.TemplateResponse(
@@ -1545,6 +1540,12 @@ class ExpenseLimitWebService:
         form_data: dict[str, object],
     ) -> RedirectResponse:
         """Create manual budget reset for one approver."""
+        if not auth.has_permission("expense:limits:reset"):
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=403, detail="Expense budget reset permission is required"
+            )
         org_id = coerce_uuid(auth.organization_id)
         service = ExpenseLimitService(db)
 

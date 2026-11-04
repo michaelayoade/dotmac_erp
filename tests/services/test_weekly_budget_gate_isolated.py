@@ -1,68 +1,28 @@
-"""Exercise the production budget methods without booting private platform packages."""
+"""Exercise the real budget gate and its payment/reset query boundaries."""
 
-import ast
 from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from app.services.expense.limit_service import ExpenseLimitServiceError
 
 
 def production_methods():
-    path = Path(__file__).parents[2] / "app/services/expense/limit_service.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    cls = next(
-        n
-        for n in tree.body
-        if isinstance(n, ast.ClassDef) and n.name == "ExpenseLimitService"
-    )
-    names = {
-        "check_approver_weekly_budget",
-        "_weekly_paid_usage",
-        "_get_weekly_budget_window",
-    }
-    methods = [
-        n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in names
-    ]
-    # Import the actual ORM models above, but avoid importing the service's host runtime.
-    for node in methods:
-        node.body = [n for n in node.body if not isinstance(n, ast.ImportFrom)]
-    from sqlalchemy import func, or_, select
-    from app.models.expense import ExpenseClaim, ExpenseClaimStatus
-    from app.models.expense.expense_claim_action import (
-        ExpenseClaimAction,
-        ExpenseClaimActionStatus,
-        ExpenseClaimActionType,
-    )
+    from app.services.expense.limit_service import ExpenseLimitService
 
-    namespace = dict(
-        globals(),
-        func=func,
-        or_=or_,
-        select=select,
-        ExpenseClaim=ExpenseClaim,
-        ExpenseClaimStatus=ExpenseClaimStatus,
-        ExpenseClaimAction=ExpenseClaimAction,
-        ExpenseClaimActionStatus=ExpenseClaimActionStatus,
-        ExpenseClaimActionType=ExpenseClaimActionType,
-        ExpenseLimitServiceError=ValueError,
-        ApproverWeeklyBudgetExhaustedError=lambda **kw: ValueError("exhausted"),
+    return SimpleNamespace(
+        **{
+            name: getattr(ExpenseLimitService, name)
+            for name in (
+                "check_approver_weekly_budget",
+                "_weekly_paid_usage",
+                "_get_weekly_budget_window",
+            )
+        }
     )
-    from app.models.people.hr.employee import Employee
-
-    namespace["Employee"] = Employee
-    exec(  # noqa: S102 - executes only selected functions from this repository
-        compile(
-            ast.fix_missing_locations(ast.Module(body=methods, type_ignores=[])),
-            str(path),
-            "exec",
-        ),
-        namespace,
-    )
-    return SimpleNamespace(**{name: namespace[name] for name in names})
 
 
 @pytest.mark.parametrize(
@@ -80,7 +40,7 @@ def test_197k_paid_leaves_only_3k(amount, committed, blocked):
         _committed_transfers=lambda *a: Decimal(committed),
     )
     if blocked:
-        with pytest.raises(ValueError, match="exhausted"):
+        with pytest.raises(ExpenseLimitServiceError, match="exhausted"):
             methods.check_approver_weekly_budget(svc, uuid4(), uuid4(), Decimal(amount))
     else:
         methods.check_approver_weekly_budget(svc, uuid4(), uuid4(), Decimal(amount))
@@ -88,7 +48,7 @@ def test_197k_paid_leaves_only_3k(amount, committed, blocked):
 
 def test_missing_budget_blocks():
     svc = SimpleNamespace(db=MagicMock(), _get_approver_weekly_budget=lambda *a: None)
-    with pytest.raises(ValueError, match="No weekly budget"):
+    with pytest.raises(ExpenseLimitServiceError, match="No weekly budget"):
         production_methods().check_approver_weekly_budget(
             svc, uuid4(), uuid4(), Decimal("1")
         )
@@ -131,4 +91,4 @@ def test_same_day_reset_uses_payment_action_time():
         datetime(2026, 10, 29, tzinfo=UTC),
     )
     sql = str(svc.db.scalar.call_args.args[0])
-    assert "EXISTS" in sql and "created_at >=" in sql
+    assert "paid_at >=" in sql and "paid_at IS NULL" in sql

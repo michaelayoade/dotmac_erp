@@ -1,18 +1,24 @@
 import uuid
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
 
 from app.api.idempotency import build_request_hash, check_or_reserve_idempotency
 from app.models.expense import (
+    ExpenseApproverLimit,
+    ExpenseApproverLimitReset,
     ExpenseClaim,
     ExpenseClaimAction,
     ExpenseClaimActionStatus,
     ExpenseClaimActionType,
     ExpenseClaimStatus,
 )
+from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.person import Person
+from app.models.finance.payments.payment_intent import PaymentIntent
 from app.services.expense import ExpenseService
 from app.services.finance.platform.idempotency import IdempotencyService
 
@@ -31,6 +37,54 @@ def _new_claim(org_id: uuid.UUID, status: ExpenseClaimStatus) -> ExpenseClaim:
         net_payable_amount=Decimal("10000"),
         advance_adjusted=Decimal("0"),
     )
+
+
+def _configured_approver(db_session, org_id):
+    for table in (
+        Employee.__table__,
+        ExpenseApproverLimit.__table__,
+        ExpenseApproverLimitReset.__table__,
+        PaymentIntent.__table__,
+    ):
+        for column in table.columns:
+            if column.server_default is not None and "gen_random_uuid" in str(
+                column.server_default.arg
+            ):
+                column.server_default = None
+        table.create(db_session.get_bind(), checkfirst=True)
+    person = Person(
+        id=uuid.uuid4(),
+        organization_id=org_id,
+        first_name="Test",
+        last_name="Approver",
+        email=f"idem-{uuid.uuid4().hex}@example.com",
+    )
+    employee = Employee(
+        employee_id=uuid.uuid4(),
+        organization_id=org_id,
+        person_id=person.id,
+        employee_code=f"IDEM-{uuid.uuid4().hex[:8]}",
+        date_of_joining=date.today(),
+        status=EmployeeStatus.ACTIVE,
+    )
+    db_session.add_all(
+        [
+            person,
+            employee,
+            ExpenseApproverLimit(
+                approver_limit_id=uuid.uuid4(),
+                organization_id=org_id,
+                scope_type="EMPLOYEE",
+                scope_id=employee.employee_id,
+                max_approval_amount=Decimal("200000"),
+                weekly_approval_budget=Decimal("200000"),
+                currency_code="NGN",
+                is_active=True,
+            ),
+        ]
+    )
+    db_session.flush()
+    return employee.employee_id
 
 
 def test_idempotency_replay(db_session):
@@ -95,16 +149,25 @@ def test_idempotency_conflict(db_session):
     assert exc.value.status_code == 409
 
 
-def test_double_approve_is_idempotent(db_session):
+def test_double_approve_is_idempotent(db_session, monkeypatch):
     org_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
     claim = _new_claim(org_id, ExpenseClaimStatus.SUBMITTED)
+    approver_id = _configured_approver(db_session, org_id)
+    monkeypatch.setattr(
+        "app.services.expense.approval_service.ExpenseApprovalService.process_approval_decision",
+        lambda *args, **kwargs: SimpleNamespace(is_complete=True),
+    )
     db_session.add(claim)
     db_session.commit()
 
     svc = ExpenseService(db_session)
-    first = svc.approve_claim(org_id, claim.claim_id)
+    first = svc.approve_claim(
+        org_id, claim.claim_id, approver_id=approver_id, send_notification=False
+    )
     db_session.commit()
-    second = svc.approve_claim(org_id, claim.claim_id)
+    second = svc.approve_claim(
+        org_id, claim.claim_id, approver_id=approver_id, send_notification=False
+    )
     db_session.commit()
 
     assert first.status == ExpenseClaimStatus.APPROVED
@@ -125,6 +188,7 @@ def test_double_approve_is_idempotent(db_session):
 def test_double_mark_paid_is_idempotent(db_session):
     org_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
     claim = _new_claim(org_id, ExpenseClaimStatus.APPROVED)
+    claim.approver_id = _configured_approver(db_session, org_id)
     db_session.add(claim)
     db_session.commit()
 

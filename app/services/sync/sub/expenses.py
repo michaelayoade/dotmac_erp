@@ -1102,6 +1102,8 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 detail="Expense claim must be submitted before manager approval",
             )
         try:
+            from app.services.expense.limit_service import ExpenseLimitServiceError
+
             claim = service.approve_claim(
                 org_id,
                 claim.claim_id,
@@ -1111,7 +1113,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
                 actor_id=approver.person_id,
                 approval_source=ExpenseClaimApprovalSource.TRUSTED_SUB_MANAGER,
             )
-        except ExpenseServiceError as exc:
+        except (ExpenseServiceError, ExpenseLimitServiceError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return SubExpenseClaimTransitionResponse(
             claim_id=claim.claim_id,
@@ -1219,6 +1221,7 @@ class _ExpenseSyncMixin(_SubSyncBase):
         data: SubExpensePaymentPayload,
     ) -> SubExpensePaymentResponse:
         """Create or reuse an intent and execute one manager-authorized payout."""
+        from app.services.expense.limit_service import ExpenseLimitServiceError
         from app.services.finance.payments import PaymentService
         from app.services.finance.payments.payment_service import (
             TransferOutcomeUnknown,
@@ -1271,6 +1274,8 @@ class _ExpenseSyncMixin(_SubSyncBase):
                     intent=intent,
                     paystack_config=config,
                 )
+            except ExpenseLimitServiceError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
             except TransferOutcomeUnknown:
                 # The payment owner has already persisted INDETERMINATE. Return
                 # that fact as an accepted command so Sub never auto-retries a

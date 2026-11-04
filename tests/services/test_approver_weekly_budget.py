@@ -95,15 +95,30 @@ class TestWeeklyBudgetCheck:
 class TestWeeklyReset:
     def test_reset_created_for_approver(self, org_id, approver_id, reviewer_person_id):
         db = MagicMock()
-        db.get.return_value = _make_employee(approver_id)
-        db.scalar.return_value = 4
+        db.scalar.side_effect = [
+            SimpleNamespace(name="Expense Reviewer"),
+            _make_employee(approver_id),
+            SimpleNamespace(currency_code="NGN"),
+            4,
+        ]
 
         svc = ExpenseLimitService(db)
         limit_id = uuid4()
-        with patch.object(
-            svc,
-            "_get_approver_weekly_budget",
-            return_value=(Decimal("500000"), limit_id),
+        with (
+            patch.object(
+                svc,
+                "get_approver_weekly_budget_balance",
+                return_value=SimpleNamespace(
+                    used=Decimal("197000"),
+                    committed=Decimal("1000"),
+                    remaining=Decimal("302000"),
+                ),
+            ),
+            patch.object(
+                svc,
+                "_get_approver_weekly_budget",
+                return_value=(Decimal("500000"), limit_id),
+            ),
         ):
             reset = svc.create_weekly_budget_reset(
                 org_id,
@@ -116,6 +131,12 @@ class TestWeeklyReset:
         db.flush.assert_called_once()
         assert reset.approver_id == approver_id
         assert reset.approver_limit_id == limit_id
+        assert reset.reviewer_name_snapshot == "Expense Reviewer"
+        assert reset.remaining_before_reset == Decimal("302000")
+        assert reset.remaining_after_reset == Decimal("499000")
+        assert reset.remaining_after_reset - reset.remaining_before_reset == Decimal(
+            "197000"
+        )
 
     def test_reset_requires_budget_configuration(
         self, org_id, approver_id, reviewer_person_id

@@ -70,6 +70,7 @@ def test_mark_paid_validates_budget_using_paid_event():
 
     with (
         patch.object(svc, "_validate_approver_weekly_budget") as mock_weekly_budget,
+        patch.object(svc, "has_payment_in_flight", return_value=False),
     ):
         svc.mark_paid(
             org_id,

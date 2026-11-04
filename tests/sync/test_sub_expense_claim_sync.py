@@ -22,12 +22,14 @@ from sqlalchemy import select
 
 from app.models.expense import (
     ExpenseApproverLimit,
+    ExpenseApproverLimitReset,
     ExpenseCategory,
     ExpenseClaim,
     ExpenseClaimStatus,
     ExpenseLimitRule,
 )
 from app.models.finance.common.attachment import Attachment
+from app.models.finance.payments.payment_intent import PaymentIntent
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.position import Position
@@ -61,6 +63,8 @@ def _ensure_hr_tables(engine) -> None:
         Position.__table__,
         PositionAssignment.__table__,
         ExpenseApproverLimit.__table__,
+        ExpenseApproverLimitReset.__table__,
+        PaymentIntent.__table__,
         ExpenseLimitRule.__table__,
         Attachment.__table__,
         OrgBankDirectory.__table__,
@@ -138,6 +142,19 @@ def manager(db_session, org_id):
         status=EmployeeStatus.ACTIVE,
     )
     db_session.add(employee)
+    db_session.flush()
+    db_session.add(
+        ExpenseApproverLimit(
+            approver_limit_id=uuid.uuid4(),
+            organization_id=org_id,
+            scope_type="EMPLOYEE",
+            scope_id=employee.employee_id,
+            max_approval_amount=Decimal("100000"),
+            weekly_approval_budget=Decimal("200000"),
+            currency_code="NGN",
+            is_active=True,
+        )
+    )
     db_session.flush()
     return employee
 

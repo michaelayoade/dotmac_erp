@@ -122,6 +122,7 @@ def _make_claim(
         claim_id=claim_id or uuid.uuid4(),
         organization_id=org_id or _org_id(),
         claim_number="EXP-001",
+        currency_code="NGN",
         status=status,
         net_payable_amount=Decimal("50000.00"),
         total_approved_amount=Decimal("50000.00"),
@@ -135,7 +136,7 @@ def _make_claim(
         created_by_id=uuid.uuid4(),
         reimbursement_journal_id=None,
         employee_id=uuid.uuid4(),
-        approver_id=approver_id,
+        approver_id=approver_id or uuid.uuid4(),
         recipient_bank_code="058",
         recipient_bank_name="GTBank",
         recipient_account_number="0123456789",
@@ -212,11 +213,13 @@ def _patch_expense_mark_paid(db: MagicMock):
         payment_date=None,
         send_notification: bool = True,
         skip_budget_check: bool = False,
+        paid_at=None,
     ):
         claim = db.get.return_value
         if claim is not None:
             claim.status = ExpenseClaimStatus.PAID
             claim.paid_on = payment_date
+            claim.paid_at = paid_at
             claim.payment_reference = payment_reference
         return claim
 
@@ -235,11 +238,42 @@ def _patch_expense_mark_paid(db: MagicMock):
 class TestInitiateExpenseTransfer:
     """Tests for PaymentService.initiate_expense_transfer()."""
 
+    @pytest.fixture(autouse=True)
+    def budget_gate(self):
+        with patch(
+            "app.services.expense.limit_service.ExpenseLimitService.check_approver_weekly_budget"
+        ) as gate:
+            yield gate
+
     def _svc(self, db: MagicMock, org_id: uuid.UUID) -> PaymentService:
         svc = PaymentService.__new__(PaymentService)
         svc.db = db
         svc.organization_id = org_id
         return svc
+
+    def test_exhausted_budget_prevents_any_provider_call(self, budget_gate):
+        from app.services.expense.limit_service import ExpenseLimitServiceError
+
+        org_id = _org_id()
+        db = MagicMock()
+        claim = _make_claim(org_id=org_id)
+        db.scalar.return_value = claim
+        intent = _make_intent(org_id=org_id, source_id=claim.claim_id)
+        budget_gate.side_effect = ExpenseLimitServiceError("Weekly budget exhausted")
+        with patch(
+            "app.services.finance.payments.payment_service.PaystackClient"
+        ) as provider:
+            with pytest.raises(ExpenseLimitServiceError, match="exhausted"):
+                self._svc(db, org_id).initiate_expense_transfer(intent, _CFG)
+            provider.assert_not_called()
+        assert intent.status == PaymentIntentStatus.PENDING
+
+    def test_transfer_cannot_omit_expense_source(self, budget_gate):
+        org_id = _org_id()
+        intent = _make_intent(org_id=org_id, source_type="GENERAL")
+        with pytest.raises(HTTPException) as error:
+            self._svc(MagicMock(), org_id).initiate_expense_transfer(intent, _CFG)
+        assert error.value.status_code == 400
 
     # -- happy path: Paystack returns "pending" --
 
@@ -423,8 +457,8 @@ class TestInitiateExpenseTransfer:
         assert exc.value.status_code == 400
         assert "CANCELLED" in str(exc.value.detail)
 
-    def test_transfer_does_not_recheck_approver_budget(self) -> None:
-        """Approved claims should not be blocked at payout by approver budget usage."""
+    def test_transfer_rechecks_approver_budget(self, budget_gate) -> None:
+        """Approval does not bypass the final allowance check before money moves."""
         org_id = _org_id()
         db = MagicMock()
         approver_id = uuid.uuid4()
@@ -452,6 +486,13 @@ class TestInitiateExpenseTransfer:
         assert intent.status == PaymentIntentStatus.PROCESSING
         assert intent.transfer_code == "TRF_test_ok"
         assert intent.gateway_response is None
+        budget_gate.assert_called_once_with(
+            org_id,
+            approver_id,
+            intent.amount,
+            exclude_intent_id=intent.intent_id,
+            currency_code="NGN",
+        )
         paystack_client.initiate_transfer.assert_called_once()
         db.commit.assert_called()
         db.refresh.assert_called_with(intent)
@@ -1943,4 +1984,5 @@ class TestEdgeCases:
             payment_date=completed_at.date(),
             send_notification=False,
             skip_budget_check=True,
+            paid_at=completed_at,
         )
