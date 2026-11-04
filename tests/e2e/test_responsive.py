@@ -25,6 +25,63 @@ DESKTOP_VIEWPORT = {"width": 1280, "height": 720}
 class TestMobileViewport:
     """Tests for mobile viewport behavior."""
 
+    @pytest.mark.parametrize("width", [320, 375])
+    def test_root_profile_menu_stays_visible_with_wrapped_brand(
+        self, page, base_url, fresh_auth_tokens, width
+    ):
+        """The authenticated home header keeps its profile menu on screen."""
+        if not fresh_auth_tokens or not fresh_auth_tokens.get("access_token"):
+            pytest.skip("No authentication token available")
+
+        from urllib.parse import urlparse
+
+        parsed = urlparse(base_url)
+        page.context.add_cookies(
+            [
+                {
+                    "name": "access_token",
+                    "value": fresh_auth_tokens["access_token"],
+                    "domain": parsed.hostname or "localhost",
+                    "path": "/",
+                }
+            ]
+        )
+        page.set_viewport_size({"width": width, "height": 667})
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("networkidle")
+
+        trigger = page.get_by_test_id("root-profile-trigger")
+        brand_name = page.get_by_test_id("root-brand-name")
+        expect(trigger).to_be_visible()
+        initial_trigger_box = trigger.bounding_box()
+        assert initial_trigger_box is not None
+        right_before = initial_trigger_box["x"] + initial_trigger_box["width"]
+
+        brand_name.evaluate(
+            "(node) => { node.textContent = 'Dotmac Enterprise Resource Planning Services'; }"
+        )
+        assert brand_name.evaluate(
+            "(node) => { const range = document.createRange(); "
+            "range.selectNodeContents(node); return range.getClientRects().length > 1; }"
+        )
+        trigger_box = trigger.bounding_box()
+        assert trigger_box is not None
+        assert abs(trigger_box["x"] + trigger_box["width"] - right_before) <= 1
+        assert trigger_box["x"] >= width / 2
+        assert trigger_box["x"] + trigger_box["width"] <= width
+        assert page.locator("header").first.evaluate(
+            "(node) => node.scrollWidth <= window.innerWidth"
+        )
+
+        trigger.click()
+        menu = page.get_by_test_id("root-profile-dropdown")
+        expect(menu).to_be_visible()
+        expect(menu.locator('a[href="/profile"]')).to_be_visible()
+        menu_box = menu.bounding_box()
+        assert menu_box is not None
+        assert menu_box["x"] >= 0
+        assert menu_box["x"] + menu_box["width"] <= width
+
     def test_dashboard_mobile_layout(self, page, base_url, fresh_auth_tokens):
         """Test dashboard renders correctly on mobile."""
         if not fresh_auth_tokens or not fresh_auth_tokens.get("access_token"):
@@ -208,6 +265,95 @@ class TestMobileViewport:
             modal = page.locator(".modal, [role='dialog'], [x-show*='modal']")
             if modal.count() > 0:
                 expect(modal.first).to_be_visible()
+
+    @pytest.mark.parametrize("width", [320, 375])
+    def test_new_expense_claim_fields_fit_and_category_select_works(
+        self, authenticated_page, base_url, width
+    ):
+        """Expense item controls stay reachable and the category can be selected."""
+        authenticated_page.set_viewport_size({"width": width, "height": 667})
+        response = authenticated_page.goto(f"{base_url}/people/self/expenses")
+        assert response is not None and response.status == 200
+
+        authenticated_page.locator("button.coin-button").click()
+        modal = authenticated_page.get_by_role("dialog", name="New Expense Claim")
+        expect(modal).to_be_visible()
+
+        item = modal.locator("[data-expense-item]").first
+        category = item.locator("[data-item-category]")
+        if category.locator("option").count() < 2:
+            pytest.skip("No expense categories configured for this account")
+
+        for selector in ("#new-claim-modal-body", ".self-expense-item-list"):
+            has_horizontal_overflow = modal.locator(selector).evaluate(
+                "element => element.scrollWidth > element.clientWidth + 1"
+            )
+            assert not has_horizontal_overflow
+
+        for control in (
+            category,
+            item.locator("[data-expense-description]"),
+            item.locator("[data-item-amount]"),
+            item.locator("[data-remove-item]"),
+        ):
+            control.scroll_into_view_if_needed()
+            bounds = control.bounding_box()
+            assert bounds is not None
+            assert bounds["x"] >= 0
+            assert bounds["x"] + bounds["width"] <= width + 1
+
+        category.click()
+        category.press("ArrowDown")
+        category.press("Enter")
+        assert category.input_value()
+
+    @pytest.mark.parametrize("width", [320, 375])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/finance/ap/invoices/new",
+            "/finance/ar/invoices/new",
+            "/finance/quotes/new",
+            "/finance/ar/credit-notes/new",
+        ],
+    )
+    def test_financial_line_fields_fit_and_selects_open_on_mobile(
+        self, authenticated_page, base_url, path, width
+    ):
+        """Editable line controls fit phone widths and native selects accept focus."""
+        authenticated_page.set_viewport_size({"width": width, "height": 667})
+        response = authenticated_page.goto(f"{base_url}{path}")
+        assert response is not None and response.status == 200
+
+        table = authenticated_page.locator("table.mobile-form-table").first
+        expect(table).to_be_visible()
+        row = table.locator("tbody tr").first
+        expect(row).to_be_visible()
+
+        wrapper = authenticated_page.locator(".mobile-form-table-wrap").first
+        assert not wrapper.evaluate(
+            "element => element.scrollWidth > element.clientWidth + 1"
+        )
+
+        totals = authenticated_page.locator(".mobile-form-totals").first
+        expect(totals).to_be_visible()
+        totals_bounds = totals.bounding_box()
+        assert totals_bounds is not None
+        assert totals_bounds["x"] >= 0
+        assert totals_bounds["x"] + totals_bounds["width"] <= width + 1
+
+        for control in row.locator("input:not([type='hidden']), select, button").all():
+            if not control.is_visible():
+                continue
+            control.scroll_into_view_if_needed()
+            bounds = control.bounding_box()
+            assert bounds is not None
+            assert bounds["x"] >= 0
+            assert bounds["x"] + bounds["width"] <= width + 1
+
+        select = row.locator("select").first
+        select.click()
+        expect(select).to_be_focused()
 
 
 # =============================================================================

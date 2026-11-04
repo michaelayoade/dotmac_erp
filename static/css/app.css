@@ -2771,6 +2771,98 @@ video {
 
 .table-action-btn:hover { color: var(--ink); background: var(--parchment-dark); }
 
+/* Editable line tables become labeled cards on phones. Desktop tables stay intact. */
+
+@media (max-width: 639px) {
+        .mobile-form-table-wrap.overflow-x-auto,
+        .mobile-form-table-wrap.table-container {
+            overflow: visible;
+            margin-left: 0;
+            margin-right: 0;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        .mobile-form-table-wrap.table-container {
+            border: 0;
+            background: transparent;
+        }
+
+        table.mobile-form-table,
+        .mobile-form-table tbody,
+        .mobile-form-table tbody tr,
+        .mobile-form-table tbody td {
+            display: block;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .mobile-form-table thead {
+            display: none;
+        }
+
+        .mobile-form-table tbody tr {
+            margin-bottom: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-xl);
+            background: var(--card-bg);
+        }
+
+        .mobile-form-table tbody td {
+            padding: 0.5rem 0;
+            border: 0;
+            text-align: left;
+        }
+
+        .mobile-form-table tbody td[data-mobile-label]::before {
+            content: attr(data-mobile-label);
+            display: block;
+            margin-bottom: 0.25rem;
+            color: var(--ink-muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .mobile-form-table tbody td[data-mobile-action] {
+            text-align: right;
+        }
+
+        .mobile-form-table tbody td input:not([type="hidden"]):not([type="checkbox"]),
+        .mobile-form-table tbody td select,
+        .mobile-form-table tbody td textarea,
+        .mobile-form-table tbody td .table-input {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            font-size: 16px;
+        }
+
+        .mobile-form-totals .total-row,
+        .mobile-form-totals .total-label {
+            flex-wrap: wrap;
+        }
+
+        .mobile-form-totals .total-label,
+        .mobile-form-totals .total-value {
+            min-width: 0;
+            max-width: 100%;
+            overflow-wrap: anywhere;
+        }
+
+        .mobile-form-totals .total-value {
+            margin-left: auto;
+        }
+
+        .mobile-form-totals .total-label .form-select {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            margin: 0.25rem 0 0;
+            font-size: 16px;
+        }
+    }
+
 .empty-state {
         display: flex;
         flex-direction: column;
@@ -5457,6 +5549,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
     min-width: max-content;
 }
 
+.max-w-11 {
+    max-width: 2.75rem;
+}
+
 .max-w-12 {
     max-width: 3rem;
 }
@@ -5845,6 +5941,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
 .grid-cols-\[minmax\(0\2c 1fr\)_5rem\] {
     grid-template-columns: minmax(0,1fr) 5rem;
+}
+
+.flex-row {
+    flex-direction: row;
 }
 
 .flex-col {
@@ -13771,6 +13871,14 @@ a.stat-hero-link:active { transform: scale(0.98); }
         width: 11rem;
     }
 
+    .sm\:w-80 {
+        width: 20rem;
+    }
+
+    .sm\:w-96 {
+        width: 24rem;
+    }
+
     .sm\:w-auto {
         width: auto;
     }
@@ -13781,6 +13889,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
     .sm\:min-w-\[200px\] {
         min-width: 200px;
+    }
+
+    .sm\:max-w-\[180px\] {
+        max-width: 180px;
     }
 
     .sm\:max-w-lg {
@@ -13931,6 +14043,11 @@ a.stat-hero-link:active { transform: scale(0.98); }
         padding-right: 1.5rem;
     }
 
+    .sm\:py-6 {
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
+    }
+
     .sm\:pb-6 {
         padding-bottom: 1.5rem;
     }
@@ -14063,6 +14180,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
 
     .md\:max-w-sm {
         max-width: 24rem;
+    }
+
+    .md\:flex-none {
+        flex: none;
     }
 
     .md\:translate-x-0 {

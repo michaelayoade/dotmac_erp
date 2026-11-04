@@ -32,6 +32,94 @@
     .dark .self-expense-claim-modal .field-help {
         color: rgba(148, 163, 184, 0.78);
     }
+
+    @media (max-width: 639px) {
+        #new-claim-modal-shell {
+            min-height: 100dvh;
+            padding: 0;
+        }
+
+        #new-claim-modal-panel {
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            max-height: 100dvh;
+            border-radius: 0;
+            overflow: visible;
+        }
+
+        #new-claim-modal-body {
+            flex: 1;
+            min-height: 0;
+            max-height: none;
+            padding: 1rem;
+        }
+
+        .self-expense-claim-modal,
+        .self-expense-claim-modal > div {
+            min-width: 0;
+        }
+
+        .self-expense-item-list {
+            overflow: visible;
+            border: 0;
+        }
+
+        .self-expense-item-table,
+        .self-expense-item-table tbody,
+        .self-expense-item-table tr,
+        .self-expense-item-table td {
+            display: block;
+            width: 100%;
+        }
+
+        .self-expense-item-table thead {
+            display: none;
+        }
+
+        .self-expense-item-table tr {
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--input-border);
+            border-radius: 0.75rem;
+        }
+
+        .self-expense-item-table td {
+            padding: 0.75rem;
+            text-align: left;
+        }
+
+        .self-expense-item-table td + td {
+            padding-top: 0;
+        }
+
+        .self-expense-item-table .form-label {
+            position: static;
+            width: auto;
+            height: auto;
+            margin: 0 0 0.25rem;
+            overflow: visible;
+            clip: auto;
+            white-space: normal;
+        }
+
+        .self-expense-item-table .form-select,
+        .self-expense-item-table .form-input {
+            min-width: 0;
+            max-width: 100%;
+            font-size: 16px;
+        }
+
+        .self-expense-claim-actions,
+        .self-expense-claim-buttons {
+            align-items: stretch;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        .self-expense-claim-buttons .btn {
+            width: 100%;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -177,9 +265,9 @@
     {% endif %}
 
     <div x-show="showClaimModal" x-trap="showClaimModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showClaimModal = false" aria-modal="true" role="dialog" aria-labelledby="new-claim-modal-title">
-    <div class="flex min-h-screen items-center justify-center px-4 py-10">
+    <div id="new-claim-modal-shell" class="flex min-h-screen items-center justify-center px-4 py-10">
         <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" @click="showClaimModal = false"></div>
-        <div class="relative w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900">
+        <div id="new-claim-modal-panel" class="relative w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900">
             <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
                 <div>
                     <h2 id="new-claim-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">New Expense Claim</h2>
@@ -192,7 +280,7 @@
                     </svg>
                 </button>
             </div>
-            <div class="max-h-[75vh] overflow-y-auto px-6 py-5">
+            <div id="new-claim-modal-body" class="max-h-[75vh] overflow-y-auto px-6 py-5">
                 <form id="expense-claim-form" method="post" action="/people/self/expenses/claims" enctype="multipart/form-data" class="self-expense-claim-modal grid gap-4 sm:grid-cols-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     {% if claim_expiry_days and claim_expiry_days > 0 %}
@@ -232,8 +320,8 @@
                             </div>
                             <button type="button" id="add-expense-item" class="btn btn-secondary btn-sm">Add Item</button>
                         </div>
-                        <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                        <div class="self-expense-item-list mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                            <table class="self-expense-item-table min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                                     <tr>
                                         <th class="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">#</th>
@@ -367,12 +455,12 @@
 	                        </select>
 	                        <p id="vehicle_hint" class="field-help mt-1 text-xs">Assign this claim to a fleet vehicle for reporting</p>
 	                    </div>
-                    <div class="sm:col-span-2 flex items-center justify-between">
+                    <div class="self-expense-claim-actions sm:col-span-2 flex items-center justify-between gap-4">
                         <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                             <input type="checkbox" name="submit_now" class="rounded border-slate-300 dark:border-slate-600 text-teal-600 focus:ring-teal-500">
                             Submit for approval
                         </label>
-                        <div class="flex items-center gap-3">
+                        <div class="self-expense-claim-buttons flex items-center gap-3">
                             <button type="button" class="btn btn-secondary" @click="showClaimModal = false">Cancel</button>
                             <button type="submit" class="btn btn-primary">Create Claim</button>
                         </div>
@@ -389,7 +477,7 @@
         <td class="px-3 py-3 text-sm font-medium text-slate-700 dark:text-slate-300" data-item-number></td>
         <td class="px-3 py-3 align-top">
             <input type="hidden" name="item_key" value="__KEY__">
-            <label class="sr-only" for="category_id___KEY__">Category</label>
+            <label class="form-label sr-only" for="category_id___KEY__">Category <span class="text-rose-500">*</span></label>
             <select name="category_id___KEY__" id="category_id___KEY__" class="form-select w-full" required data-item-category>
                 <option value="" selected disabled>Select category...</option>
                 {% for cat in categories %}
@@ -403,7 +491,7 @@
             </select>
         </td>
         <td class="px-3 py-3 align-top">
-            <label class="sr-only" for="description___KEY__">Description</label>
+            <label class="form-label sr-only" for="description___KEY__">Description <span class="text-rose-500">*</span></label>
             <input type="text" name="description___KEY__" id="description___KEY__"
                    class="form-input w-full min-w-[220px]" required maxlength="500"
                    aria-describedby="description___KEY___counter"
@@ -413,8 +501,8 @@
             </p>
         </td>
         <td class="px-3 py-3 align-top">
-            <label class="sr-only" for="claimed_amount___KEY__">Amount</label>
-            <input type="number" step="0.01" name="claimed_amount___KEY__" id="claimed_amount___KEY__" class="form-input w-full min-w-[140px] text-right" required data-item-amount>
+            <label class="form-label sr-only" for="claimed_amount___KEY__">Amount <span class="text-rose-500">*</span></label>
+            <input type="number" step="0.01" name="claimed_amount___KEY__" id="claimed_amount___KEY__" class="form-input w-full min-w-[140px] text-right" inputmode="decimal" required data-item-amount>
         </td>
         <td class="px-3 py-3 text-center align-top">
             <button type="button" class="text-sm font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" data-remove-item>Remove</button>

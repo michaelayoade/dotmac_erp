@@ -132,38 +132,39 @@
     </a>
 
     {% block body %}
+    {% set authenticated = user and user.is_authenticated %}
     <div class="relative">
         <header class="sticky top-0 z-40 border-b border-slate-200/70 bg-white dark:border-slate-800/70 dark:bg-slate-900">
-            <div class="mx-auto flex max-w-5xl flex-col gap-4 px-6 py-6 md:flex-row md:items-center md:justify-between">
-                <a href="/" class="flex items-center gap-3">
+            <div class="mx-auto flex max-w-5xl gap-3 px-4 py-4 sm:px-6 sm:py-6 md:items-center md:justify-between {% if authenticated %}flex-row items-center{% else %}flex-col md:flex-row{% endif %}">
+                <a href="/" class="flex min-w-0 items-center gap-3 {% if authenticated %}flex-1 md:flex-none{% endif %}">
                     {% if brand_logo_url %}
                         <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
-                             class="h-11 w-auto max-w-[180px] rounded-xl object-contain shadow-lg shadow-primary-500/20"
+                             class="h-11 w-auto flex-shrink-0 rounded-xl object-contain shadow-lg shadow-primary-500/20 {% if authenticated %}max-w-11 sm:max-w-[180px]{% else %}max-w-[180px]{% endif %}"
                              loading="lazy"
                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <div class="hidden h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-sm font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
+                        <div class="hidden h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-sm font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
                             {{ brand_mark }}
                         </div>
                     {% else %}
-                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-sm font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
+                        <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-sm font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
                             {{ brand_mark }}
                         </div>
                     {% endif %}
-                    <div>
+                    <div class="min-w-0 break-words">
                         <p class="text-xs font-semibold uppercase tracking-[0.24em] text-primary-600 dark:text-primary-400">
                             {{ brand_tagline }}
                         </p>
-                        <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white font-display">
+                        <p data-testid="root-brand-name" class="mt-1 text-lg font-semibold text-slate-900 dark:text-white font-display">
                             {{ brand_name }}
                         </p>
                     </div>
                 </a>
-                <div class="flex items-center gap-3 text-sm">
+                <div class="flex flex-shrink-0 items-center gap-3 text-sm {% if authenticated %}ml-auto justify-end{% endif %}">
                     {% if user and user.is_authenticated %}
                         <!-- Authenticated User Menu -->
                         {% include "partials/_module_launcher.html" %}
-                        <div x-data="{ open: false }" class="relative">
-                            <button @click="open = !open" @click.outside="open = false"
+                        <div x-data="{ open: false }" @click.outside="open = false" class="relative flex-shrink-0">
+                            <button type="button" @click="open = !open" aria-label="User menu" aria-haspopup="true" :aria-expanded="open.toString()" data-testid="root-profile-trigger"
                                     class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-700">
                                 <div class="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-600 text-xs font-semibold text-white">
                                     {{ user.initials | default("U", true) }}
@@ -180,7 +181,8 @@
                                  x-transition:leave="transition ease-in duration-100"
                                  x-transition:leave-start="opacity-100 scale-100"
                                  x-transition:leave-end="opacity-0 scale-95"
-                                 class="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
+                                 data-testid="root-profile-dropdown"
+                                 class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800">
                                 <a href="/dashboard" class="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">
                                     {{ icon_svg("home", "h-4 w-4") }}
                                     Dashboard
