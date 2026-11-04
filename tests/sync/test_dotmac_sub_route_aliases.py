@@ -38,6 +38,8 @@ def test_sub_sync_router_covers_every_phase5_transport() -> None:
         ("GET", "/sync/sub/inventory/meta/categories"),
         ("GET", "/sync/sub/inventory/meta/warehouses"),
         ("GET", "/sync/sub/inventory/serials/available"),
+        ("POST", "/sync/sub/suppliers"),
+        ("GET", "/sync/sub/suppliers/{source_vendor_id}"),
     }
     actual = {
         (method, route.path)
