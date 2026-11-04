@@ -736,7 +736,7 @@
 
         <!-- Invoice Lines -->
         <div class="form-card form-card-lines fade-up delay-2">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="section-title">Invoice Lines</h2>
                     <p class="section-subtitle">Add expense items to this invoice</p>
@@ -748,7 +748,7 @@
             </div>
 
             {# Bulk apply tax to all lines #}
-            <div class="mt-4 flex items-center gap-3">
+            <div class="mt-4 flex flex-wrap items-center gap-3">
                 <label class="text-xs font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">Apply tax to all lines:</label>
                 <select aria-label="Apply tax to all lines:" @change="applyTaxToAllLines($event.target.value); $event.target.value = ''" class="form-select form-select-sm bulk-tax-select max-w-[240px]">
                     <option value="">Select tax code...</option>
@@ -760,8 +760,8 @@
                 <span class="text-xs text-slate-400 dark:text-slate-500">Use "Inclusive" if vendor quoted VAT-inclusive prices</span>
             </div>
 
-            <div class="line-table-wrap mt-4 -mx-2 px-2 overflow-x-auto">
-                <table class="lines-table min-w-[1100px]">
+            <div class="line-table-wrap mobile-form-table-wrap mt-4 -mx-2 px-2 overflow-x-auto">
+                <table class="lines-table mobile-form-table min-w-[1100px]">
                     <thead>
                         <tr>
                             <th scope="col" style="width: 20%">Item</th>
@@ -777,7 +777,7 @@
                     <tbody>
                         <template x-for="(line, index) in form.lines" :key="index">
                             <tr :class="{ 'line-row-open': line.item_open }">
-                                <td class="line-item-cell" :data-open="line.item_open ? 'true' : 'false'">
+                                <td class="line-item-cell" data-mobile-label="Item" :data-open="line.item_open ? 'true' : 'false'">
                                     <div class="relative" @click.outside="line.item_open = false">
                                         <div class="relative">
                                             <input aria-label="Search item..." type="text"
@@ -819,7 +819,7 @@
                                         </div>
                                     </div>
                                 </td>
-                                <td>
+                                <td data-mobile-label="Expense Account">
                                     <select aria-label="Expense account" x-model="line.expense_account_id"
                                             required
                                             class="table-input">
@@ -831,14 +831,14 @@
                                         {% endfor %}
                                     </select>
                                 </td>
-                                <td>
+                                <td data-mobile-label="Description">
                                     <input aria-label="Line description" type="text"
                                            x-model="line.description"
                                            required
                                            placeholder="Line description"
                                            class="table-input">
                                 </td>
-                                <td>
+                                <td data-mobile-label="Quantity">
                                     <input aria-label="Quantity" type="number"
                                            x-model.number="line.quantity"
                                            @input="calculateLineAmount(index)"
@@ -847,7 +847,7 @@
                                            step="0.01"
                                            class="table-input text-right">
                                 </td>
-                                <td>
+                                <td data-mobile-label="Unit Price">
                                     <input aria-label="Unit price" type="number"
                                            x-model.number="line.unit_price"
                                            @input="calculateLineAmount(index)"
@@ -856,7 +856,7 @@
                                            step="0.01"
                                            class="table-input text-right">
                                 </td>
-                                <td>
+                                <td data-mobile-label="Tax Code">
                                     <select aria-label="Tax code" x-model="line.tax_code_id"
                                             @change="calculateLineAmount(index)"
                                             class="table-input">
@@ -868,13 +868,13 @@
                                         {% endfor %}
                                     </select>
                                 </td>
-                                <td>
+                                <td data-mobile-label="Amount">
                                     <div class="amount-display" x-text="formatCurrency(line.amount)"></div>
                                     <div x-show="line.tax_amount > 0" class="text-xs text-[var(--ink-muted)] mt-1">
                                         Tax: <span x-text="formatCurrency(line.tax_amount)"></span>
                                     </div>
                                 </td>
-                                <td class="text-right">
+                                <td class="text-right" data-mobile-action>
                                     <button type="button"
                                             @click="removeLine(index)"
                                             x-show="form.lines.length > 1"
@@ -954,7 +954,7 @@
 
             <!-- Totals -->
             <div class="mt-8 flex justify-end">
-                <div class="w-80 totals-section">
+                <div class="mobile-form-totals w-full sm:w-80 totals-section">
                     <div class="total-row">
                         <span class="total-label">Subtotal</span>
                         <span class="total-value" x-text="formatCurrency(subtotal)"></span>

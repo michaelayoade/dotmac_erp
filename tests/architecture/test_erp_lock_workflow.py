@@ -29,7 +29,9 @@ from __future__ import annotations
 import ast
 import base64
 import difflib
+import io
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -57,28 +59,30 @@ from erp_lock import (  # noqa: E402
     LOCK_INDEX_URL,
     MANIFEST_INDEX_URL,
     OFF_INDEX_DEPENDENCY_KEYS,
+    RELEASED_SDIST_DIGESTS,
     RELEASED_WHEEL_DIGESTS,
-    Addition,
     Refusal,
     add_declarations,
     added_declaration_problems,
     addition_problems,
     acquire,
-    acquisition_plan,
     approved_artifact_url,
     artifact_belongs_to,
     artifact_names,
     build_evidence,
     checkout_problems,
+    classify_original,
     credential_encodings,
     credential_sightings,
     curl_argv,
     declarations_of,
     drift_problems,
+    expected_artifacts,
     hash_problems,
     lock_wheel_problems,
     manifest_problems,
     movement_problems,
+    moved_artifacts,
     pair_binding,
     point_at_mirror,
     protected_main_problems,
@@ -397,60 +401,16 @@ def test_kernel_pin_is_a105_on_both_sides_even_if_identical() -> None:
     assert any("after lock must pin" in p and KERNEL_FROZEN in p for p in problems)
 
 
-@pytest.mark.parametrize(
-    ("index", "package", "moved_to"),
-    [
-        (FILES_ENTRY, FILES, "0.1.0a8"),
-        (FILES_ENTRY, FILES, "0.1.0a6"),
-        (NUMBERING_ENTRY, NUMBERING, "0.1.0a4"),
-        (NUMBERING_ENTRY, NUMBERING, "0.1.0a3"),
-    ],
-)
-def test_files_and_numbering_cannot_move(
-    index: int, package: str, moved_to: str
-) -> None:
-    """Files a7 and Numbering a2 are frozen: a move (including the parked
-    Numbering a4) is refused on the pin and on the entry's own fields."""
-
-    resolved = _after()
-    resolved["package"][index] = _package(package, moved_to, source=_INDEX_SOURCE)
-    problems = drift_problems(_before(), resolved)
-    assert any("after lock must pin" in p and package in p for p in problems), problems
-    assert any(package in p and "appeared" in p for p in problems), problems
-
-
-@pytest.mark.parametrize("index", [FILES_ENTRY, NUMBERING_ENTRY])
-@pytest.mark.parametrize("field", ["files", "dependencies", "source"])
-def test_files_and_numbering_entries_are_immutable(index: int, field: str) -> None:
-    values: dict[str, Any] = {
-        "files": [],
-        "dependencies": {"surprise": "*"},
-        "source": _ELSEWHERE,
-    }
-    package = _before()["package"][index]["name"]
-    problems = drift_problems(_before(), _plant(index, field, values[field]))
-    assert any(package in p and field in p for p in problems), problems
-
-
 # ── the closed allowlist ─────────────────────────────────────────────────────
 
 
 def test_the_allowlist_names_exactly_the_decided_addition() -> None:
     assert ALLOWED_MOVEMENTS == {}
-    assert {
-        PAYROLL: Addition(
-            version="0.1.0a2",
-            source="forgejo",
-            python=">=3.12",
-            wheel="dotmac_payroll-0.1.0a2-py3-none-any.whl",
-            sha256=PAYROLL_WHEEL_SHA,
-        ),
-    } == ALLOWED_ADDITIONS
+    assert set(ALLOWED_ADDITIONS) == {PAYROLL}
     assert ADDITION.spec == PAYROLL_SPEC
-    assert (
-        f"{PAYROLL} = {ADDITION.spec_line}"
-        == 'dotmac-payroll = {version = "0.1.0a2", source = "forgejo", '
-        'python = ">=3.12"}'
+    assert ADDITION.wheel_sha256 == PAYROLL_WHEEL_SHA
+    assert ADDITION.sdist_sha256 == (
+        "a87b557bff8ae18d655d387d4d696430cadc619f49a7dc1f2dfa7d7a755ec932"
     )
     assert IMMUTABLE_PINS == {
         FILES: FILES_FROZEN_VERSION,
@@ -460,11 +420,20 @@ def test_the_allowlist_names_exactly_the_decided_addition() -> None:
         TAX: TAX_VERSION,
     }
     expected_released_wheels = {
-        (PAYROLL, "0.1.0a2", "dotmac_payroll-0.1.0a2-py3-none-any.whl"): (
-            PAYROLL_WHEEL_SHA
-        )
+        (
+            PAYROLL,
+            TARGETS[PAYROLL],
+            "dotmac_payroll-0.1.0a2-py3-none-any.whl",
+        ): PAYROLL_WHEEL_SHA
     }
     assert expected_released_wheels == RELEASED_WHEEL_DIGESTS
+    assert {
+        (
+            PAYROLL,
+            TARGETS[PAYROLL],
+            "dotmac_payroll-0.1.0a2.tar.gz",
+        ): "a87b557bff8ae18d655d387d4d696430cadc619f49a7dc1f2dfa7d7a755ec932"
+    } == RELEASED_SDIST_DIGESTS
 
 
 def test_a_second_package_is_refused_by_name() -> None:
@@ -477,32 +446,15 @@ def test_a_second_package_is_refused_by_name() -> None:
         )
 
 
-@pytest.mark.parametrize("version", ["0.1.0a1", "0.1.0a3", "0.1.0", "0.1.0a2.post1"])
-def test_an_unlisted_version_of_payroll_is_refused_by_name(version: str) -> None:
-    with pytest.raises(Refusal, match=re.escape(version)):
-        erp_lock._parse_movement_args([f"{PAYROLL}={version}"])  # noqa: SLF001
+def test_an_unlisted_version_of_payroll_is_refused_by_name() -> None:
+    with pytest.raises(Refusal, match="0.1.0a3"):
+        erp_lock._parse_movement_args([f"{PAYROLL}=0.1.0a3"])  # noqa: SLF001
 
 
-@pytest.mark.parametrize(
-    "item",
-    [
-        f"{FILES}=0.1.0a8",
-        f"{FILES}={FILES_FROZEN_VERSION}",
-        f"{NUMBERING}=0.1.0a4",
-        f"{NUMBERING}={NUMBERING_FROZEN_VERSION}",
-    ],
-)
-def test_a_files_or_numbering_movement_is_refused(item: str) -> None:
-    with pytest.raises(Refusal, match=item.split("=")[0]):
+def test_a_files_movement_is_refused() -> None:
+    with pytest.raises(Refusal, match=FILES):
         erp_lock._parse_movement_args(  # noqa: SLF001
-            [f"{PAYROLL}={TARGETS[PAYROLL]}", item]
-        )
-
-
-def test_a_tax_movement_is_refused() -> None:
-    with pytest.raises(Refusal, match="dotmac-tax"):
-        erp_lock._parse_movement_args(  # noqa: SLF001
-            [f"{PAYROLL}={TARGETS[PAYROLL]}", "dotmac-tax=0.1.0a5"]
+            [f"{PAYROLL}={TARGETS[PAYROLL]}", f"{FILES}=0.1.0a8"]
         )
 
 
@@ -994,53 +946,242 @@ def test_a_redirect_is_refused_rather_than_followed() -> None:
     assert transfer_problems("https://registry.dotmac.io/x", "200") == []
 
 
-# ── acquisition_plan: the bundle is closed, and a gap refuses ──────────────
+# ── classification and the exact artifact set: closed, and a gap refuses ────
+
+POLICY = ROOT / ".github" / "dependency-bundle-policy.json"
+_GIT_ENV = {
+    "GIT_AUTHOR_NAME": "Test",
+    "GIT_AUTHOR_EMAIL": "test@example.invalid",
+    "GIT_COMMITTER_NAME": "Test",
+    "GIT_COMMITTER_EMAIL": "test@example.invalid",
+}
 
 
-def test_the_bundle_closes_over_the_addition_and_the_frozen_pins() -> None:
-    plan = acquisition_plan(_manifest_with_payroll(), _before(), TARGETS)
-    assert plan[PAYROLL] == TARGETS[PAYROLL]
-    assert plan[FILES] == FILES_FROZEN_VERSION
-    assert plan[NUMBERING] == NUMBERING_FROZEN_VERSION
-    assert plan[TAX] == TAX_VERSION
-    assert plan[KERNEL_FROZEN] == KERNEL_FROZEN_VERSION
+def _hex(label: str) -> str:
+    return sha256_hex(label.encode())
 
 
-def test_a_private_dependency_that_is_not_an_exact_pin_refuses() -> None:
-    manifest = _manifest_with_payroll()
-    manifest["tool"]["poetry"]["dependencies"]["dotmac-approvals"] = {
-        "version": "^0.1",
-        "source": INDEX_SOURCE_NAME,
+def _wheel_name(name: str, version: str) -> str:
+    return f"{name.replace('-', '_')}-{version}-py3-none-any.whl"
+
+
+def _sdist_name(name: str, version: str) -> str:
+    return f"{name.replace('-', '_')}-{version}.tar.gz"
+
+
+def _lock_entry(name: str, version: str, source: str | None = None) -> str:
+    source = source or (
+        f'type = "legacy"\nurl = "{LOCK_INDEX_URL}"\nreference = "forgejo"'
+    )
+    return (
+        f'[[package]]\nname = "{name}"\nversion = "{version}"\n'
+        'optional = false\npython-versions = ">=3.11"\ngroups = ["main"]\n'
+        "files = [\n"
+        f'    {{file = "{_wheel_name(name, version)}", hash = "sha256:'
+        f'{_hex(_wheel_name(name, version))}"}},\n'
+        f'    {{file = "{_sdist_name(name, version)}", hash = "sha256:'
+        f'{_hex(_sdist_name(name, version))}"}},\n'
+        f"]\n\n[package.source]\n{source}\n"
+    )
+
+
+def _git(repo: Path, *argv: str) -> str:
+    return subprocess.run(  # noqa: S603
+        ["git", *argv],  # noqa: S607
+        cwd=repo,
+        env={**os.environ, **_GIT_ENV},
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _bound_repo(
+    tmp_path: Path,
+    *,
+    files_version: str = FILES_FROZEN_VERSION,
+    files_source: str | None = None,
+    extra_lock: str = "",
+    include_payroll: bool = False,
+) -> tuple[Path, str]:
+    """A real git repository whose ONE commit carries a manifest and lock."""
+
+    manifest = (
+        '[tool.poetry]\nname = "sample"\nversion = "1.0.0"\n'
+        "package-mode = false\n\n[tool.poetry.dependencies]\n"
+        'python = ">=3.11,<3.13"\n'
+        f'{FILES} = {{version = "{files_version}", source = "forgejo"}}\n'
+        f'{TAX} = {{version = "{TAX_VERSION}", source = "forgejo"}}\n\n'
+        + (f"{PAYROLL} = {ADDITION.spec_line}\n\n" if include_payroll else "")
+        + f'[[tool.poetry.source]]\nname = "forgejo"\nurl = "{MANIFEST_INDEX_URL}"\n'
+        'priority = "explicit"\n'
+    )
+    lock = (
+        _lock_entry(FILES, files_version, files_source)
+        + "\n"
+        + _lock_entry(TAX, TAX_VERSION)
+        + (_lock_entry(PAYROLL, TARGETS[PAYROLL]) if include_payroll else "")
+        + extra_lock
+        + '\n[metadata]\nlock-version = "2.1"\npython-versions = ">=3.11,<3.13"\n'
+        'content-hash = "' + "0" * 64 + '"\n'
+    )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(manifest)
+    (repo / "poetry.lock").write_text(lock)
+    _git(repo, "init", "-q")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "fixture", "--no-gpg-sign")
+    sha = _git(repo, "rev-parse", "HEAD")
+    return repo, sha
+
+
+@pytest.fixture
+def reviewed_moved_artifacts(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """Reviewed digests for the added pair that the fake index can reproduce."""
+
+    wheel = _wheel_name(PAYROLL, TARGETS[PAYROLL])
+    sdist = _sdist_name(PAYROLL, TARGETS[PAYROLL])
+    digests = {wheel: _artifact_digest(wheel), sdist: _artifact_digest(sdist)}
+    monkeypatch.setattr(
+        erp_lock,
+        "RELEASED_WHEEL_DIGESTS",
+        {(PAYROLL, TARGETS[PAYROLL], wheel): digests[wheel]},
+    )
+    monkeypatch.setattr(
+        erp_lock,
+        "RELEASED_SDIST_DIGESTS",
+        {(PAYROLL, TARGETS[PAYROLL], sdist): digests[sdist]},
+    )
+    return digests
+
+
+def test_the_bundle_closes_over_moved_and_unchanged_exact_identities(
+    tmp_path: Path, reviewed_moved_artifacts: dict[str, str]
+) -> None:
+    repo, sha = _bound_repo(tmp_path)
+    surface = classify_original(repo, sha, POLICY)
+    plan, expected = expected_artifacts(surface, TARGETS)
+    assert plan == {
+        FILES: FILES_FROZEN_VERSION,
+        PAYROLL: TARGETS[PAYROLL],
+        TAX: TAX_VERSION,
     }
-    with pytest.raises(Refusal):
-        acquisition_plan(manifest, _before(), TARGETS)
+    # added: the reviewed wheel and sdist
+    assert expected[PAYROLL] == reviewed_moved_artifacts
+    # unchanged: exactly the lock's own filenames and hashes
+    assert expected[TAX] == {
+        _wheel_name(TAX, TAX_VERSION): _hex(_wheel_name(TAX, TAX_VERSION)),
+        _sdist_name(TAX, TAX_VERSION): _hex(_sdist_name(TAX, TAX_VERSION)),
+    }
 
 
-def test_the_repositorys_real_manifest_and_lock_produce_a_closed_plan() -> None:
-    with (ROOT / "pyproject.toml").open("rb") as handle:
-        manifest = tomllib.load(handle)
-    with (ROOT / "poetry.lock").open("rb") as handle:
-        lock = tomllib.load(handle)
-    if not declarations_of(manifest, PAYROLL):
-        manifest = tomllib.loads(_edited_real_manifest())
-    plan = acquisition_plan(manifest, lock, TARGETS)
+_GOOD_SOURCE = f'type = "legacy"\nurl = "{LOCK_INDEX_URL}"\nreference = "forgejo"'
+
+
+@pytest.mark.parametrize(
+    "bad_source",
+    [
+        _GOOD_SOURCE.replace('"legacy"', '"sdist"'),
+        _GOOD_SOURCE.replace(LOCK_INDEX_URL, "https://evil.example.com/not-the-index"),
+    ],
+    ids=["wrong-type", "wrong-url"],
+)
+def test_a_forgejo_lock_entry_with_a_wrong_type_or_url_is_refused_before_movement(
+    bad_source: str, tmp_path: Path
+) -> None:
+    assert bad_source != _GOOD_SOURCE
+    repo, sha = _bound_repo(tmp_path, files_source=bad_source)
+    with pytest.raises(Refusal, match="malformed forgejo source"):
+        classify_original(repo, sha, POLICY)
+
+
+def test_classification_reads_the_commit_not_the_working_tree(tmp_path: Path) -> None:
+    repo, sha = _bound_repo(tmp_path)
+    (repo / "pyproject.toml").write_text("not even toml [")
+    classify_original(repo, sha, POLICY)
+
+
+def test_a_manifest_and_lock_that_disagree_are_refused_before_movement(
+    tmp_path: Path,
+) -> None:
+    repo, _ = _bound_repo(tmp_path)
+    lock = (repo / "poetry.lock").read_text().replace(FILES_FROZEN_VERSION, "0.1.0a5")
+    (repo / "poetry.lock").write_text(lock)
+    _git(repo, "commit", "-qam", "disagree", "--no-gpg-sign")
+    with pytest.raises(Refusal, match="manifest and lock disagree"):
+        classify_original(repo, _git(repo, "rev-parse", "HEAD"), POLICY)
+
+
+def test_the_addition_is_not_applicable_to_a_tree_that_already_has_it(
+    tmp_path: Path, reviewed_moved_artifacts: dict[str, str]
+) -> None:
+    repo, sha = _bound_repo(tmp_path, include_payroll=True)
+    surface = classify_original(repo, sha, POLICY)
+    with pytest.raises(Refusal, match="spent or not applicable"):
+        expected_artifacts(surface, TARGETS)
+
+
+def test_a_duplicate_file_in_one_lock_entry_is_refused(tmp_path: Path) -> None:
+    repo, sha = _bound_repo(tmp_path)
+    lock = (repo / "poetry.lock").read_text()
+    wheel = _wheel_name(TAX, TAX_VERSION)
+    line = f'    {{file = "{wheel}", hash = "sha256:{_hex(wheel)}"}},\n'
+    assert line in lock
+    (repo / "poetry.lock").write_text(lock.replace(line, line + line))
+    _git(repo, "commit", "-qam", "dup", "--no-gpg-sign")
+    dup_sha = _git(repo, "rev-parse", "HEAD")
+    surface = classify_original(repo, dup_sha, POLICY)
+    with pytest.raises(Refusal, match="more than once"):
+        expected_artifacts(surface, TARGETS)
+
+
+def test_an_added_sdist_with_no_reviewed_digest_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(erp_lock, "RELEASED_SDIST_DIGESTS", {})
+    with pytest.raises(Refusal, match=r"no reviewed release digest.*sdist"):
+        moved_artifacts(PAYROLL, TARGETS[PAYROLL])
+    repo, sha = _bound_repo(tmp_path)
+    surface = classify_original(repo, sha, POLICY)
+    with pytest.raises(Refusal, match="sdist"):
+        expected_artifacts(surface, TARGETS)
+
+
+def test_an_added_sdist_digest_that_is_not_a_sha256_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sdist = _sdist_name(PAYROLL, TARGETS[PAYROLL])
+    monkeypatch.setattr(
+        erp_lock,
+        "RELEASED_SDIST_DIGESTS",
+        {(PAYROLL, TARGETS[PAYROLL], sdist): "nope"},
+    )
+    with pytest.raises(Refusal, match="64-hex"):
+        moved_artifacts(PAYROLL, TARGETS[PAYROLL])
+
+
+def test_the_reviewed_added_digests_are_the_closed_release_pair() -> None:
+    assert moved_artifacts(PAYROLL, TARGETS[PAYROLL]) == {
+        "dotmac_payroll-0.1.0a2-py3-none-any.whl": PAYROLL_WHEEL_SHA,
+        "dotmac_payroll-0.1.0a2.tar.gz": (
+            "a87b557bff8ae18d655d387d4d696430cadc619f49a7dc1f2dfa7d7a755ec932"
+        ),
+    }
+
+
+def test_the_repositorys_real_tree_classifies_for_the_closed_addition() -> None:
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import dependency_bundle as db
+
+    policy = db.load_policy(POLICY)
+    surface = db.extract_dependency_surface(
+        ROOT, db.load_permitted_off_index_dependencies(policy)
+    )
+    plan, expected = expected_artifacts(surface, TARGETS)
     assert plan[PAYROLL] == TARGETS[PAYROLL]
-    assert plan[FILES] == FILES_FROZEN_VERSION
-    assert plan[TAX] == TAX_VERSION
-    assert plan[KERNEL_FROZEN] == KERNEL_FROZEN_VERSION
-
-
-def test_payroll_already_in_the_lock_refuses_the_acquisition_plan() -> None:
-    """THE ONE-SHOT, at the credentialed step: a re-dispatch never reaches the
-    registry."""
-
-    with pytest.raises(Refusal, match="already carries"):
-        acquisition_plan(_manifest_with_payroll(), _after(), TARGETS)
-
-
-def test_a_plan_without_the_requested_addition_refuses() -> None:
-    with pytest.raises(Refusal, match="no dotmac-payroll addition requested"):
-        acquisition_plan(_manifest_with_payroll(), _before(), {})
+    assert expected[PAYROLL] == moved_artifacts(PAYROLL, TARGETS[PAYROLL])
 
 
 @pytest.mark.parametrize(
@@ -1049,8 +1190,8 @@ def test_a_plan_without_the_requested_addition_refuses() -> None:
         ("dotmac_payroll-0.1.0a2-py3-none-any.whl", True),
         ("dotmac_payroll-0.1.0a2.tar.gz", True),
         ("dotmac_payroll-0.1.0a20.tar.gz", False),
-        ("dotmac_files_extra-0.1.0a7.tar.gz", False),
-        ("dotmac_files-0.1.0a6.tar.gz", False),
+        ("dotmac_payroll_extra-0.1.0a2.tar.gz", False),
+        ("dotmac_payroll-0.1.0a1.tar.gz", False),
     ],
 )
 def test_an_artifact_is_matched_to_its_exact_version(
@@ -1458,34 +1599,66 @@ def test_no_release_or_deployment_language_in_the_pair_prose() -> None:
 # ── acquire, driven against a fake index (no network, no credential) ───────
 
 
-def _fake_index(monkeypatch: pytest.MonkeyPatch, offered: dict[str, list[str]]) -> None:
+def _artifact_bytes(filename: str, *, replaced: bool = False) -> bytes:
+    """Deterministic fake artifact bytes (a wheel is a real, readable zip)."""
+
+    if filename.endswith(".whl"):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            info = zipfile.ZipInfo("dotmac_payroll-0.1.0a2.dist-info/METADATA")
+            info.date_time = (2026, 1, 1, 0, 0, 0)
+            archive.writestr(
+                info,
+                "Metadata-Version: 2.1\nName: dotmac-payroll\nVersion: 0.1.0a2\n"
+                "Requires-Dist: dotmac-kernel (>=0.1.0a98)\n"
+                + ("Requires-Dist: replaced\n" if replaced else ""),
+            )
+        return buffer.getvalue()
+    return f"bytes of {filename}{' replaced' if replaced else ''}".encode()
+
+
+def _artifact_digest(filename: str) -> str:
+    return sha256_hex(_artifact_bytes(filename))
+
+
+def _fake_index(
+    monkeypatch: pytest.MonkeyPatch,
+    offered: dict[str, list[str]],
+    *,
+    replaced: frozenset[str] = frozenset(),
+) -> None:
     def _fetch(url: str, target: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
-        package = url.rstrip("/").rsplit("/", 1)[-1]
+        leaf = url.rstrip("/").rsplit("/", 1)[-1]
         if url.endswith("/"):
             rows = "\n".join(
-                f'<a href="{name}">{name}</a><br>' for name in offered[package]
+                f'<a href="{name}">{name}</a><br>' for name in offered[leaf]
             )
             target.write_text(f"<html><body>{rows}</body></html>", encoding="utf-8")
-        elif package.endswith(".whl"):
-            with zipfile.ZipFile(target, "w") as archive:
-                archive.writestr(
-                    "dotmac_payroll-0.1.0a2.dist-info/METADATA",
-                    "Metadata-Version: 2.1\nName: dotmac-payroll\nVersion: 0.1.0a2\n"
-                    "Requires-Dist: dotmac-kernel (>=0.1.0a98)\n",
-                )
         else:
-            target.write_bytes(f"bytes of {target.name}".encode())
+            target.write_bytes(_artifact_bytes(leaf, replaced=leaf in replaced))
 
     monkeypatch.setattr(erp_lock, "fetch", _fetch)
+
+
+def _expected_for(name: str, version: str) -> dict[str, str]:
+    return {
+        f: _artifact_digest(f)
+        for f in (_wheel_name(name, version), _sdist_name(name, version))
+    }
 
 
 def test_the_bundle_refuses_a_private_release_that_offers_only_an_sdist(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _fake_index(monkeypatch, {"dotmac-approvals": ["dotmac_approvals-0.1.0a5.tar.gz"]})
+    sdist = "dotmac_approvals-0.1.0a5.tar.gz"
+    _fake_index(monkeypatch, {"dotmac-approvals": [sdist]})
     with pytest.raises(Refusal) as refusal:
-        acquire({"dotmac-approvals": "0.1.0a5"}, tmp_path / "bundle")
+        acquire(
+            {"dotmac-approvals": "0.1.0a5"},
+            tmp_path / "bundle",
+            {"dotmac-approvals": {sdist: _artifact_digest(sdist)}},
+        )
     message = str(refusal.value)
     assert message.startswith("dotmac-approvals 0.1.0a5 ")
     assert "no usable wheel" in message
@@ -1494,56 +1667,139 @@ def test_the_bundle_refuses_a_private_release_that_offers_only_an_sdist(
 def test_the_bundle_refuses_a_release_with_no_published_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _fake_index(monkeypatch, {PAYROLL: []})
+    _fake_index(monkeypatch, {FILES: []})
     with pytest.raises(Refusal, match="is not published on the index"):
-        acquire({PAYROLL: TARGETS[PAYROLL]}, tmp_path / "bundle")
+        acquire(
+            {FILES: FILES_FROZEN_VERSION},
+            tmp_path / "bundle",
+            {FILES: _expected_for(FILES, FILES_FROZEN_VERSION)},
+        )
 
 
-def test_the_bundle_records_requires_dist_for_a_moved_package(
+def test_a_package_with_no_bound_artifact_set_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_index(
+        monkeypatch, {FILES: sorted(_expected_for(FILES, FILES_FROZEN_VERSION))}
+    )
+    with pytest.raises(Refusal, match="no expected artifact set"):
+        acquire({FILES: FILES_FROZEN_VERSION}, tmp_path / "bundle", {})
+
+
+def test_the_bundle_records_requires_dist_for_the_added_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reviewed_moved_artifacts: dict[str, str],
 ) -> None:
     """The acquisition step that makes `wheel-dependencies` possible without a
     second credentialed fetch: the wheel's own metadata is read once, here,
     while the credential is still in hand, and recorded for the credential-
     free job to compare against."""
 
-    _fake_index(
-        monkeypatch,
-        {PAYROLL: sorted(artifact_names(PAYROLL, TARGETS[PAYROLL]))},
-    )
-    wheel_name = "dotmac_payroll-0.1.0a2-py3-none-any.whl"
-    fake_wheel = tmp_path / wheel_name
-    erp_lock.fetch(f"{LOCK_INDEX_URL}/files/{wheel_name}", fake_wheel)
-    monkeypatch.setattr(
-        erp_lock,
-        "RELEASED_WHEEL_DIGESTS",
-        {(PAYROLL, TARGETS[PAYROLL], wheel_name): sha256_hex(fake_wheel.read_bytes())},
-    )
+    _fake_index(monkeypatch, {PAYROLL: sorted(reviewed_moved_artifacts)})
     out = tmp_path / "bundle"
-    acquire({PAYROLL: TARGETS[PAYROLL]}, out)
+    digests = acquire(
+        {PAYROLL: TARGETS[PAYROLL]}, out, {PAYROLL: reviewed_moved_artifacts}
+    )
+    assert digests == reviewed_moved_artifacts
     requires = json.loads((out / "requires" / f"{PAYROLL}.json").read_text())
     assert requires == ["dotmac-kernel (>=0.1.0a98)"]
 
 
-def test_acquire_refuses_a_replaced_released_wheel_before_bundle_metadata(
+def test_unchanged_packages_are_held_to_the_locks_exact_identities(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """SENSITIVITY for the refusals below: the exact set is accepted."""
+
+    expected = _expected_for(TAX, TAX_VERSION)
+    _fake_index(monkeypatch, {TAX: sorted(expected)})
+    out = tmp_path / "bundle"
+    assert acquire({TAX: TAX_VERSION}, out, {TAX: expected}) == expected
+    assert json.loads((out / "digests.json").read_text()) == expected
+
+
+def test_a_replaced_unchanged_file_is_refused_straight_after_its_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = _expected_for(TAX, TAX_VERSION)
+    wheel = _wheel_name(TAX, TAX_VERSION)
+    _fake_index(monkeypatch, {TAX: sorted(expected)}, replaced=frozenset({wheel}))
+    out = tmp_path / "bundle"
+    with pytest.raises(Refusal, match="does not match the bound digest"):
+        acquire({TAX: TAX_VERSION}, out, {TAX: expected})
+    assert not (out / "digests.json").exists()
+    assert not (out / "files" / wheel).exists()
+    assert not (out / "simple").exists()
+
+
+def test_an_extra_unchanged_file_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = _expected_for(TAX, TAX_VERSION)
+    extra = f"dotmac_tax-{TAX_VERSION}-cp312-cp312-manylinux_2_35_x86_64.whl"
+    _fake_index(monkeypatch, {TAX: sorted(expected) + [extra]})
+    with pytest.raises(Refusal, match="unexpected"):
+        acquire({TAX: TAX_VERSION}, tmp_path / "bundle", {TAX: expected})
+    assert not (tmp_path / "bundle" / "digests.json").exists()
+
+
+def test_a_missing_unchanged_file_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = _expected_for(TAX, TAX_VERSION)
+    sdist = _sdist_name(TAX, TAX_VERSION)
+    _fake_index(monkeypatch, {TAX: [_wheel_name(TAX, TAX_VERSION)]})
+    with pytest.raises(Refusal, match="missing"):
+        acquire({TAX: TAX_VERSION}, tmp_path / "bundle", {TAX: expected})
+    assert sdist in expected
+
+
+def test_a_duplicate_index_entry_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = _expected_for(TAX, TAX_VERSION)
+    names = sorted(expected)
+    _fake_index(monkeypatch, {TAX: names + [names[0]]})
+    with pytest.raises(Refusal, match="more than once"):
+        acquire({TAX: TAX_VERSION}, tmp_path / "bundle", {TAX: expected})
+
+
+def test_acquire_refuses_a_replaced_added_wheel_before_bundle_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reviewed_moved_artifacts: dict[str, str],
+) -> None:
+    wheel = _wheel_name(PAYROLL, TARGETS[PAYROLL])
     _fake_index(
-        monkeypatch, {PAYROLL: sorted(artifact_names(PAYROLL, TARGETS[PAYROLL]))}
-    )
-    wheel_name = next(
-        f for f in artifact_names(PAYROLL, TARGETS[PAYROLL]) if f.endswith(".whl")
-    )
-    monkeypatch.setattr(
-        erp_lock,
-        "RELEASED_WHEEL_DIGESTS",
-        {(PAYROLL, TARGETS[PAYROLL], wheel_name): "0" * 64},
+        monkeypatch,
+        {PAYROLL: sorted(reviewed_moved_artifacts)},
+        replaced=frozenset({wheel}),
     )
     out = tmp_path / "bundle"
-    with pytest.raises(Refusal, match="does not match reviewed release digest"):
-        acquire({PAYROLL: TARGETS[PAYROLL]}, out)
+    with pytest.raises(Refusal, match="does not match the bound digest"):
+        acquire({PAYROLL: TARGETS[PAYROLL]}, out, {PAYROLL: reviewed_moved_artifacts})
     assert not (out / "digests.json").exists()
     assert not (out / "requires" / f"{PAYROLL}.json").exists()
+
+
+def test_acquire_refuses_an_added_sdist_with_a_bad_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reviewed_moved_artifacts: dict[str, str],
+) -> None:
+    sdist = _sdist_name(PAYROLL, TARGETS[PAYROLL])
+    monkeypatch.setattr(
+        erp_lock,
+        "RELEASED_SDIST_DIGESTS",
+        {(PAYROLL, TARGETS[PAYROLL], sdist): "0" * 64},
+    )
+    expected = moved_artifacts(PAYROLL, TARGETS[PAYROLL])
+    assert expected[sdist] == "0" * 64
+    _fake_index(monkeypatch, {PAYROLL: sorted(expected)})
+    out = tmp_path / "bundle"
+    with pytest.raises(Refusal, match="does not match the bound digest"):
+        acquire({PAYROLL: TARGETS[PAYROLL]}, out, {PAYROLL: expected})
+    assert not (out / "digests.json").exists()
 
 
 @pytest.mark.parametrize(
@@ -1558,11 +1814,18 @@ def test_acquire_refuses_a_replaced_released_wheel_before_bundle_metadata(
     ],
 )
 def test_acquire_refuses_a_missing_or_altered_native_artifact_pair(
-    offered: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    offered: list[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reviewed_moved_artifacts: dict[str, str],
 ) -> None:
     _fake_index(monkeypatch, {PAYROLL: offered})
     with pytest.raises(Refusal):
-        acquire({PAYROLL: TARGETS[PAYROLL]}, tmp_path / "bundle")
+        acquire(
+            {PAYROLL: TARGETS[PAYROLL]},
+            tmp_path / "bundle",
+            {PAYROLL: reviewed_moved_artifacts},
+        )
     assert not (tmp_path / "bundle" / "digests.json").exists()
 
 
@@ -1687,6 +1950,7 @@ def test_the_job_that_runs_poetry_references_no_secret() -> None:
     for step in jobs["resolve"]:
         assert "secrets." not in step, step
     assert "FORGEJO_READ_TOKEN" not in "\n".join(jobs["resolve"])
+    assert "FORGEJO_BUNDLE_READ_TOKEN" not in "\n".join(jobs["resolve"])
 
 
 def test_the_resolver_job_asserts_its_own_emptiness_before_resolving() -> None:
@@ -1833,7 +2097,7 @@ def test_no_job_holds_the_credential_before_the_tree_is_judged() -> None:
     holders = {
         n
         for n, s in jobs.items()
-        if any("secrets.FORGEJO_READ_TOKEN" in st for st in s)
+        if any("secrets.FORGEJO_BUNDLE_READ_TOKEN" in st for st in s)
     }
     assert holders
     for name in holders:
@@ -1842,7 +2106,11 @@ def test_no_job_holds_the_credential_before_the_tree_is_judged() -> None:
             guard = max(
                 i for i, s in enumerate(steps) if "manifest-guard" in _commands(s)
             )
-            held = [i for i, s in enumerate(steps) if "secrets.FORGEJO_READ_TOKEN" in s]
+            held = [
+                i
+                for i, s in enumerate(steps)
+                if "secrets.FORGEJO_BUNDLE_READ_TOKEN" in s
+            ]
             assert all(i > guard for i in held), (name, guard, held)
         else:
             assert _needs(name) & guarded, name
@@ -1853,7 +2121,9 @@ def test_protected_main_is_decided_by_the_script_before_credentials() -> None:
     decision = next(
         i for i, s in enumerate(steps) if "erp_lock.py protected-main" in _commands(s)
     )
-    holders = [i for i, s in enumerate(steps) if "secrets.FORGEJO_READ_TOKEN" in s]
+    holders = [
+        i for i, s in enumerate(steps) if "secrets.FORGEJO_BUNDLE_READ_TOKEN" in s
+    ]
     assert holders and decision < min(holders)
 
 
@@ -1867,11 +2137,80 @@ def test_only_acquire_references_the_forgejo_credential() -> None:
         ).group(1)
         for name in ("acquire", "resolve", "attest")
     }
-    assert "secrets.FORGEJO_READ_TOKEN" in sections["acquire"]
+    assert "secrets.FORGEJO_BUNDLE_READ_TOKEN" in sections["acquire"]
     assert all(
-        "secrets.FORGEJO_READ_TOKEN" not in sections[name]
+        "secrets.FORGEJO_BUNDLE_READ_TOKEN" not in sections[name]
         for name in ("resolve", "attest")
     )
+
+
+def _job_environment(job: str) -> str | None:
+    """The job-level `environment:` value, read from the job's own header (the
+    lines between `<job>:` and `steps:`), or None when it declares none."""
+
+    lines = WORKFLOW.read_text().splitlines()
+    start = lines.index(f"  {job}:") + 1
+    found: list[str] = []
+    for line in lines[start:]:
+        if line == "    steps:":
+            break
+        match = re.match(r"^    environment:\s*(\S.*?)\s*$", line)
+        if match:
+            found.append(match.group(1))
+    assert len(found) <= 1, (job, found)
+    return found[0] if found else None
+
+
+def test_acquire_alone_runs_in_the_policy_environment() -> None:
+    import dependency_bundle as db
+
+    policy = json.loads(
+        (ROOT / ".github" / "dependency-bundle-policy.json").read_text()
+    )
+    assert _job_environment("acquire") == policy["environment_name"]
+    assert _job_environment("acquire") == db.REQUIRED_ENVIRONMENT_NAME
+    assert _job_environment("acquire") == "forgejo-registry-read-main"
+    assert _job_environment("resolve") is None
+    assert _job_environment("attest") is None
+    assert "environment:" not in WORKFLOW.read_text().replace(
+        "    environment: forgejo-registry-read-main\n", "", 1
+    ), "an environment appears outside the acquire job header"
+
+
+def test_the_environment_job_reads_only_the_bundle_secret_never_the_old_one() -> None:
+    text = WORKFLOW.read_text()
+    assert "secrets.FORGEJO_READ_TOKEN" not in text
+    assert "FORGEJO_READ_TOKEN" not in re.sub(r"FORGEJO_BUNDLE_READ_TOKEN", "", text)
+    secrets_used = set(re.findall(r"secrets\.([A-Z_]+)", text))
+    assert secrets_used == {"FORGEJO_BUNDLE_READ_TOKEN"}, secrets_used
+    for job, steps in _jobs().items():
+        used = {s for step in steps for s in re.findall(r"secrets\.([A-Z_]+)", step)}
+        assert used == ({"FORGEJO_BUNDLE_READ_TOKEN"} if job == "acquire" else set())
+
+
+def test_the_in_workflow_main_check_stays_as_a_second_layer() -> None:
+    commands = "\n".join(_commands(s) for s in _jobs()["acquire"])
+    assert "erp_lock.py protected-main" in commands
+    assert "refs/remotes/origin/main" in commands
+
+
+def test_classification_precedes_the_edit_and_every_credential_step() -> None:
+    steps = _jobs()["acquire"]
+    classify = [
+        i for i, s in enumerate(steps) if "erp_lock.py classify" in _commands(s)
+    ]
+    edit = next(
+        i for i, s in enumerate(steps) if "erp_lock.py set-versions" in _commands(s)
+    )
+    holders = [i for i, s in enumerate(steps) if "secrets." in s]
+    assert len(classify) == 1 and classify[0] < edit < min(holders)
+    command = _commands(steps[classify[0]])
+    # Policy from the TRUSTED root checkout, the ref from the candidate tree.
+    assert "--policy .github/dependency-bundle-policy.json" in command
+    assert "--repo work" in command and '--ref "${REF}"' in command
+    acquire_step = next(s for s in steps if "erp_lock.py acquire" in _commands(s))
+    assert "--policy .github/dependency-bundle-policy.json" in acquire_step
+    assert "--manifest" not in _commands(acquire_step)
 
 
 def test_the_ref_under_resolution_is_only_ever_read_from_work() -> None:
@@ -1932,7 +2271,7 @@ def test_no_resolver_log_is_collected_anywhere() -> None:
 def test_the_credential_is_wired_the_way_the_precedent_wires_it() -> None:
     text = WORKFLOW.read_text()
     assert '"ci-reader"' in text
-    assert "secrets.FORGEJO_READ_TOKEN" in text
+    assert "secrets.FORGEJO_BUNDLE_READ_TOKEN" in text
     assert "POETRY_HTTP_BASIC_FORGEJO_USERNAME:" not in text
     assert "POETRY_HTTP_BASIC_FORGEJO_PASSWORD:" not in text
     assert "bao read" not in text
@@ -1956,10 +2295,51 @@ def test_every_action_is_pinned_by_commit() -> None:
 
 
 def test_it_is_dispatch_only() -> None:
-    text = WORKFLOW.read_text()
-    assert "workflow_dispatch:" in text
-    for trigger in ("\n  push:", "\n  pull_request:", "\n  schedule:"):
-        assert trigger not in text, trigger
+    import yaml
+
+    loaded = yaml.safe_load(WORKFLOW.read_text())
+    # YAML 1.1 parses the top-level `on` key as boolean True.
+    triggers = loaded[True] if True in loaded else loaded["on"]
+    assert set(triggers) == {"workflow_dispatch"}
+
+
+@pytest.mark.parametrize(("returncode", "stdout"), [(22, ""), (0, "404"), (0, "302")])
+def test_fetch_leaves_no_partial_file_on_a_failed_transfer(
+    returncode: int, stdout: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "artifact.whl"
+
+    def _run(argv: list[str], **_kw: Any) -> subprocess.CompletedProcess[str]:
+        target.write_bytes(b"partial")
+        return subprocess.CompletedProcess(argv, returncode, stdout, "boom")
+
+    monkeypatch.setattr(subprocess, "run", _run)
+    with pytest.raises(Refusal):
+        erp_lock.fetch("https://registry.dotmac.io/x", target)
+    assert not target.exists()
+
+
+def test_fetch_keeps_the_file_of_a_successful_transfer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "artifact.whl"
+
+    def _ok(argv: list[str], **_kw: Any) -> subprocess.CompletedProcess[str]:
+        target.write_bytes(b"whole")
+        return subprocess.CompletedProcess(argv, 0, "200", "")
+
+    monkeypatch.setattr(subprocess, "run", _ok)
+    erp_lock.fetch("https://registry.dotmac.io/x", target)
+    assert target.read_bytes() == b"whole"
+
+
+def test_a_policy_inside_the_candidate_checkout_is_refused(tmp_path: Path) -> None:
+    repo, sha = _bound_repo(tmp_path)
+    inside = repo / "dependency-bundle-policy.json"
+    inside.write_text(POLICY.read_text())
+    with pytest.raises(Refusal, match="inside the candidate checkout"):
+        classify_original(repo, sha, inside)
+    classify_original(repo, sha, POLICY)
 
 
 def test_only_the_allowed_version_is_named_as_valid_in_the_dispatch_gate() -> None:

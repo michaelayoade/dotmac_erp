@@ -31,6 +31,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import tomllib
 import urllib.parse
 import zipfile
 from pathlib import Path
@@ -4067,92 +4068,45 @@ def test_the_version_regex_divergence_is_named_not_a_bug() -> None:
     assert erp_lock._EXACT_VERSION.fullmatch(stacked_suffix_version) is None
 
 
-def test_lock_packages_is_stricter_than_erp_locks_acquisition_plan() -> None:
-    """TWO-DIRECTIONAL RATCHET, not a permanent specification of the WEAKER
-    behaviour.
+def test_erp_lock_classifies_forgejo_lock_entries_through_lock_packages(
+    tmp_path: Path,
+) -> None:
+    """CONVERGENCE (retires the former two-directional ratchet).
 
-    NOT converged (tracked as a real, security-relevant gap in
-    erp_lock.acquisition_plan, out of scope for this branch to fix):
-    erp_lock's lock-side loop includes a package by checking ONLY
-    `source.reference == "forgejo"`, never `type` or `url`. This module's
-    _lock_packages requires all three to agree, refusing a mismatched
-    combination. A lock entry with the right `reference` but a WRONG url
-    is refused here and silently trusted there.
+    `erp_lock` no longer keys its credentialed acquisition plan on
+    `source.reference == "forgejo"` alone: it classifies the original
+    same-commit manifest and lock through `dependency_bundle` and applies
+    `_lock_packages`' stricter rule. A forgejo-referenced lock entry with a
+    WRONG `type` or `url` is refused on BOTH sides, and the clean tree is
+    admitted on both, so neither side can drift looser or stricter without
+    this test failing."""
 
-    This test must fail in BOTH directions, not just one:
+    clean = _project_root(tmp_path / "clean", BASE_PYPROJECT, BASE_LOCK)
+    clean_sha = _init_real_git_repo(clean)
+    erp_lock.classify_original(clean, clean_sha, REAL_POLICY_PATH)
 
-    - If the asymmetry WIDENS (`_lock_packages` gets even stricter, or
-      `acquisition_plan` gets even looser, in a way that changes either
-      assertion below), this test fails and says so.
-    - If the asymmetry DISAPPEARS (an authorised, in-scope change tightens
-      `erp_lock.acquisition_plan` to also require `type` and `url` to
-      agree), the second assertion below fails, because a converged
-      `acquisition_plan` would then refuse the same malformed
-      `dotmac-kernel` entry instead of silently including it at
-      `"0.1.0a1"`. That failure is CORRECT and expected: convergence must
-      be done in the same change that deletes this test's debt-tracking
-      assertion (and this docstring's "NOT converged" paragraph, and the
-      matching entry in
-      `docs/architecture/dependency-bundle-trust.md`'s "Named divergences
-      from erp_lock.py" section) — never by quietly loosening or removing
-      this test first and leaving the debt undocumented, and never by
-      leaving this test red because the gap was closed by hand elsewhere.
-      A tightened `acquisition_plan` that leaves this test passing
-      unchanged would mean the test stopped proving anything; it must
-      break instead, on purpose, as the signal to finish the retirement.
-    """
-
-    lock = {
-        "package": [
-            {
-                "name": "dotmac-files",
-                "version": "0.1.0a5",
-                "source": {
-                    "type": "legacy",
-                    "reference": "forgejo",
-                    "url": erp_lock.LOCK_INDEX_URL,
-                },
-            },
-            {
-                "name": "dotmac-tax",
-                "version": "0.1.0a4",
-                "source": {
-                    "type": "legacy",
-                    "reference": "forgejo",
-                    "url": erp_lock.LOCK_INDEX_URL,
-                },
-            },
-            {
-                "name": "dotmac-imports",
-                "version": "0.1.0a2",
-                "source": {
-                    "type": "legacy",
-                    "reference": "forgejo",
-                    "url": erp_lock.LOCK_INDEX_URL,
-                },
-            },
-            {
-                "name": "dotmac-kernel",
-                "version": "0.1.0a1",
-                "source": {
-                    "type": "sdist",
-                    "reference": "forgejo",
-                    "url": "https://evil.example.com/not-the-real-index",
-                },
-            },
-        ]
-    }
-    with pytest.raises(db.ManifestError, match="malformed forgejo source"):
-        db._lock_packages(lock)
-
-    manifest = {"tool": {"poetry": {"dependencies": {}}}}
-    # Fixture-only coupling: the lane's closed target is the payroll
-    # addition, which acquisition_plan requires the caller to name.
-    plan = erp_lock.acquisition_plan(manifest, lock, {"dotmac-payroll": "0.1.0a2"})
-    assert plan.get("dotmac-kernel") == "0.1.0a1", (
-        "erp_lock's acquisition_plan silently trusts the mismatched entry "
-        "-- this is the tracked gap, not an assertion that it should"
+    good_source = (
+        'type = "legacy"\n'
+        'url = "https://registry.dotmac.io/api/packages/dotmac/pypi/simple"\n'
+        'reference = "forgejo"'
     )
+    assert good_source in BASE_LOCK
+    malformed = {
+        "wrong-type": good_source.replace('"legacy"', '"sdist"'),
+        "wrong-url": good_source.replace(
+            "https://registry.dotmac.io/api/packages/dotmac/pypi/simple",
+            "https://evil.example.com/not-the-real-index",
+        ),
+    }
+    for label, bad_source in malformed.items():
+        lock_text = BASE_LOCK.replace(good_source, bad_source)
+        assert lock_text != BASE_LOCK, label
+        with pytest.raises(db.ManifestError, match="malformed forgejo source"):
+            db._lock_packages(tomllib.loads(lock_text))
+        root = _project_root(tmp_path / label, BASE_PYPROJECT, lock_text)
+        sha = _init_real_git_repo(root)
+        with pytest.raises(erp_lock.Refusal, match="malformed forgejo source"):
+            erp_lock.classify_original(root, sha, REAL_POLICY_PATH)
 
 
 # ── the live off-index policy, read from both real sources, must agree ───

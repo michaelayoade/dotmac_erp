@@ -820,26 +820,14 @@ def _forgejo_source_url(poetry: dict[str, Any]) -> str:
 def _lock_packages(lock: dict[str, Any]) -> list[LockPackage]:
     """Every `poetry.lock` `[[package]]` entry whose source is forgejo.
 
-    KNOWN, TRACKED, NOT-CONVERGED DIVERGENCE (finding 9) from
-    `erp_lock.acquisition_plan`'s lock-side loop: that function includes a
-    lock package in its plan by checking ONLY
-    `source.get("reference") == INDEX_SOURCE_NAME` — it never checks
-    `source.get("type")` or `source.get("url")`. A lock entry with
-    `reference = "forgejo"` but a WRONG `type` or `url` would be silently
-    trusted there. This function is stricter: it requires `type`,
-    `reference`, AND `url` to all agree with the canonical forgejo shape,
-    refusing a mismatched combination outright (see the `ManifestError`
-    below). The stricter behaviour is the CORRECT one — keying on one field
-    alone is exactly the spoofable shortcut this module exists to refuse
-    elsewhere. This is NOT converged onto `erp_lock.py` in this slice: doing
-    so means tightening `acquisition_plan`, which is credentialed
-    acquisition-workflow logic this branch's bounds keep out of scope
-    (see the module docstring's "named duplication debt" section). Tracked
-    here, and proven with a planted vector, in
-    `test_lock_packages_is_stricter_than_erp_locks_acquisition_plan` —
-    treat tightening `erp_lock.acquisition_plan` to match as a decided,
-    separate, authorised change, not something to do quietly inside a
-    "converge the duplicate" pass.
+    A forgejo-referenced entry must carry `type`, `reference` AND `url` that
+    all agree with the canonical forgejo shape; a mismatched combination is
+    refused outright, because keying on one field alone is the spoofable
+    shortcut this module exists to refuse. `erp_lock` no longer carries a
+    laxer lock-side loop of its own: its credentialed acquisition plan is
+    derived from this function's output (via
+    `extract_dependency_surface_at_commit`), proven in
+    `test_erp_lock_classifies_forgejo_lock_entries_through_lock_packages`.
     """
 
     packages_raw = lock.get("package", [])
