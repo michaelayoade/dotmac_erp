@@ -139,7 +139,7 @@ def test_sub_routes_delegate_only_to_source_neutral_ports() -> None:
         assert forbidden not in source
     assert "MaterialSupportService" in source
     assert "get_purchase_invoice_status" in source
-    assert source.count("@router.") == 28
+    assert source.count("@router.") == 30
     assert '"/purchase-orders/variations"' not in source
 
 
