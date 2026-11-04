@@ -108,7 +108,7 @@ def _declared_role_grants(
 
 
 def test_migration_is_a_frozen_copy_of_the_expense_seed_profile() -> None:
-    assert len(EXPENSE_PERMISSION_DEFINITIONS) == 35  # non-vacuity
+    assert len(EXPENSE_PERMISSION_DEFINITIONS) == 36  # non-vacuity
     assert tuple(EXPENSE_PERMISSIONS) == EXPENSE_PERMISSION_DEFINITIONS
     assert _seed_expense_role_grants() == EXPENSE_ROLE_GRANTS
     assert _seed_expense_payout_role_grants() == EXPENSE_PAYOUT_ROLE_GRANTS
@@ -117,21 +117,37 @@ def test_migration_is_a_frozen_copy_of_the_expense_seed_profile() -> None:
         for role, description in DEFAULT_ROLES
         if role in EXPENSE_BASELINE_ROLES
     } == EXPENSE_BASELINE_ROLES
-    assert migration.EXPENSE_PERMISSIONS == EXPENSE_PERMISSION_DEFINITIONS
+    current_without_reset = tuple(
+        (
+            code,
+            description
+            if code != "expense:limits:review"
+            else "Review approver decisions and reset weekly budgets",
+        )
+        for code, description in EXPENSE_PERMISSION_DEFINITIONS
+        if code != "expense:limits:reset"
+    )
+    assert current_without_reset == migration.EXPENSE_PERMISSIONS
     assert migration.EXPENSE_PAYOUT_PERMISSIONS == EXPENSE_PAYOUT_PERMISSION_DEFINITIONS
     assert {
         role: EXPENSE_BASELINE_ROLES[role] for role in migration.ROLE_DESCRIPTIONS
     } == migration.ROLE_DESCRIPTIONS
     assert {
-        role: EXPENSE_ROLE_GRANTS[role] for role in migration.ROLE_EXPENSE_GRANTS
+        role: tuple(
+            code for code in EXPENSE_ROLE_GRANTS[role] if code != "expense:limits:reset"
+        )
+        for role in migration.ROLE_EXPENSE_GRANTS
     } == migration.ROLE_EXPENSE_GRANTS
     assert {
         role: EXPENSE_PAYOUT_ROLE_GRANTS[role]
         for role in migration.ROLE_EXPENSE_PAYOUT_GRANTS
     } == migration.ROLE_EXPENSE_PAYOUT_GRANTS
-    assert (
-        _declared_role_grants(set(migration.ROLE_DESCRIPTIONS)) == migration.ROLE_GRANTS
-    )
+    assert {
+        role: tuple(code for code in codes if code != "expense:limits:reset")
+        for role, codes in _declared_role_grants(
+            set(migration.ROLE_DESCRIPTIONS)
+        ).items()
+    } == migration.ROLE_GRANTS
 
 
 def test_every_grant_references_a_declared_permission_and_role() -> None:

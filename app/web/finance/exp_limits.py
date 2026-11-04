@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 _require_policies_manage = require_web_permission("expense:policies:manage")
 _require_limits_review = require_web_permission("expense:limits:review")
+_require_limits_reset = require_web_permission("expense:limits:reset")
 
 router = APIRouter(tags=["expense-limits-web"])
 
@@ -336,7 +337,7 @@ def reviewer_approver_detail(
 async def reviewer_reset_approver_budget(
     request: Request,
     approver_id: UUID,
-    auth: WebAuthContext = Depends(_require_limits_review),
+    auth: WebAuthContext = Depends(_require_limits_reset),
     db: Session = Depends(get_db_for_org),
 ):
     """Reset consumed weekly budget for a single approver."""

@@ -425,6 +425,11 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Date,
         nullable=True,
     )
+    paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Observed payment time; NULL for legacy records without reliable timing",
+    )
 
     # Source-qualified intake correlation (last_synced_at is inherited).
     source_system: Mapped[str] = mapped_column(

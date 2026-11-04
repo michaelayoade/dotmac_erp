@@ -698,7 +698,7 @@ class ExpenseApprovalService:
                 ExpenseApproverLimit.scope_id == employee.employee_id,
             )
         )
-        if emp_limit:
+        if emp_limit is not None:
             return emp_limit
 
         # Check grade-based limit
@@ -711,7 +711,7 @@ class ExpenseApprovalService:
                     ExpenseApproverLimit.scope_id == employee.grade_id,
                 )
             )
-            if grade_limit:
+            if grade_limit is not None:
                 return grade_limit
 
         # Check designation-based limit
@@ -724,10 +724,26 @@ class ExpenseApprovalService:
                     ExpenseApproverLimit.scope_id == employee.designation_id,
                 )
             )
-            if desig_limit:
+            if desig_limit is not None:
                 return desig_limit
 
-        return None
+        from app.models.rbac import PersonRole
+
+        return self.db.scalar(
+            select(ExpenseApproverLimit.max_approval_amount)
+            .join(
+                PersonRole,
+                PersonRole.role_id == ExpenseApproverLimit.scope_id,
+            )
+            .where(
+                ExpenseApproverLimit.organization_id == organization_id,
+                ExpenseApproverLimit.is_active == True,
+                ExpenseApproverLimit.scope_type == "ROLE",
+                PersonRole.person_id == employee.person_id,
+            )
+            .order_by(ExpenseApproverLimit.created_at.desc())
+            .limit(1)
+        )
 
     def _get_escalation_approvers(
         self,

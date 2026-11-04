@@ -812,6 +812,7 @@ class ExpenseCategoriesReportsWebMixin(ExpenseWebCommonMixin):
                     "usage_label": budget_balance.usage_label,
                     "budget": budget_balance.budget,
                     "used": budget_balance.used,
+                    "committed": budget_balance.committed,
                     "remaining": budget_balance.remaining,
                     "last_reset_at": budget_balance.last_reset_at,
                 }

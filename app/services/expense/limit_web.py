@@ -1346,6 +1346,12 @@ class ExpenseLimitWebService:
                 if limit_id
                 else None
             )
+            period_resets = service.get_reset_history(
+                org_id,
+                approver_id,
+                from_date=parsed_from,
+                to_date=parsed_to,
+            )
             activity_row = activity_map.get(approver_id)
             approved_count = (
                 int(activity_row.approved_count or 0) if activity_row else 0
@@ -1377,6 +1383,7 @@ class ExpenseLimitWebService:
                     "name": display_name,
                     "limit_id": str(limit_id) if limit_id else None,
                     "weekly_budget": weekly_budget,
+                    "period_resets": period_resets,
                     "max_approval_amount": max_approval_amount,
                     "currency_code": currency_code,
                     "last_reset_at": latest_reset.reset_at if latest_reset else None,
@@ -1512,6 +1519,13 @@ class ExpenseLimitWebService:
                 "weekly_budget": budget_amount,
                 "limit_id": str(limit_id) if limit_id else None,
                 "last_reset": latest_reset,
+                "can_reset_budget": auth.has_permission("expense:limits:reset"),
+                "reset_history_entries": service.get_reset_history(
+                    org_id,
+                    approver_id,
+                    from_date=parsed_from,
+                    to_date=parsed_to,
+                ),
             }
         )
         return templates.TemplateResponse(
@@ -1526,6 +1540,12 @@ class ExpenseLimitWebService:
         form_data: dict[str, object],
     ) -> RedirectResponse:
         """Create manual budget reset for one approver."""
+        if not auth.has_permission("expense:limits:reset"):
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=403, detail="Expense budget reset permission is required"
+            )
         org_id = coerce_uuid(auth.organization_id)
         service = ExpenseLimitService(db)
 
@@ -1590,38 +1610,16 @@ class ExpenseLimitWebService:
                 "last_reset_at": None,
             }
 
-        now = datetime.now(UTC)
-
-        window_start, latest_reset = service._get_weekly_budget_window(
-            org_id,
-            limit.scope_id,
-            limit.approver_limit_id,
-            as_of=now,
-        )
-        usage_query = select(
-            func.coalesce(func.sum(ExpenseClaim.net_payable_amount), Decimal("0"))
-        ).where(
-            ExpenseClaim.organization_id == org_id,
-            ExpenseClaim.status == ExpenseClaimStatus.PAID,
-            ExpenseClaim.paid_on.isnot(None),
-            ExpenseClaim.paid_on >= window_start.date(),
-            ExpenseClaim.paid_on <= now.date(),
-            ExpenseClaim.approver_id == limit.scope_id,
-        )
-
-        used_amount = db.scalar(usage_query) or Decimal("0")
-        remaining_budget = base_budget - used_amount
-
+        balance = service.get_approver_weekly_budget_balance(org_id, limit.scope_id)
+        if balance is None:
+            return None
         return {
-            "usage_label": (
-                f"Since manual reset on {latest_reset.reset_at.date().isoformat()}"
-                if latest_reset
-                else f"This week starting {window_start.date().isoformat()}"
-            ),
-            "base_budget": base_budget,
-            "used_amount": used_amount,
-            "remaining_budget": remaining_budget,
-            "last_reset_at": latest_reset.reset_at if latest_reset else None,
+            "usage_label": balance.usage_label,
+            "base_budget": balance.budget,
+            "used_amount": balance.used,
+            "remaining_budget": balance.remaining,
+            "committed": balance.committed,
+            "last_reset_at": balance.last_reset_at,
         }
 
     @staticmethod

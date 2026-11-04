@@ -686,15 +686,32 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             .limit(limit)
         ).all()
 
+        # Payment totals have their own date basis and one row per claim.
+        paid_filters = [
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaim.approver_id == approver_id,
+            ExpenseClaim.status == ExpenseClaimStatus.PAID,
+            ExpenseClaim.paid_on.isnot(None),
+        ]
+        if start_date is not None:
+            paid_filters.append(ExpenseClaim.paid_on >= start_date)
+        if end_date is not None:
+            paid_filters.append(ExpenseClaim.paid_on <= end_date)
+        if employee_id is not None:
+            paid_filters.append(ExpenseClaim.employee_id == employee_id)
+        payment_totals = self.db.execute(
+            select(
+                func.count(ExpenseClaim.claim_id),
+                func.coalesce(func.sum(ExpenseClaim.amount_paid), Decimal("0")),
+            ).where(*paid_filters)
+        ).one()
         decisions = []
         approved_count = 0
         rejected_count = 0
         pending_count = 0
-        paid_count = 0
         approved_total = Decimal("0")
         rejected_total = Decimal("0")
         pending_total = Decimal("0")
-        paid_total = Decimal("0")
         for row in rows:
             action_type = row.action_type or "PENDING"
             claimed_amount = row.total_claimed_amount or Decimal("0")
@@ -709,9 +726,6 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             else:
                 pending_count += 1
                 pending_total += claimed_amount
-            if status_value == ExpenseClaimStatus.PAID.value:
-                paid_count += 1
-                paid_total += approved_amount
 
             claimant_name = row.claimant_name or "Unknown"
             decisions.append(
@@ -740,10 +754,10 @@ class ExpenseReportingMixin(ExpenseServiceBase):
             "approved_count": approved_count,
             "rejected_count": rejected_count,
             "pending_count": pending_count,
-            "paid_count": paid_count,
+            "paid_count": payment_totals[0],
             "approved_total": approved_total,
             "rejected_total": rejected_total,
             "pending_total": pending_total,
-            "paid_total": paid_total,
+            "paid_total": payment_totals[1],
             "employee_options": employee_options,
         }

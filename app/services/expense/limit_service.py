@@ -24,6 +24,7 @@ except ImportError:  # pragma: no cover
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import joinedload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.expense import (
     ExpenseApproverLimit,
@@ -155,6 +156,7 @@ class ApproverWeeklyBudgetBalance:
     remaining: Decimal
     window_start: datetime
     last_reset_at: datetime | None = None
+    committed: Decimal = Decimal("0")
 
 
 # =============================================================================
@@ -437,6 +439,8 @@ class ExpenseLimitService(ExpenseServiceBase):
         approver_limit_id: UUID,
         *,
         from_datetime: datetime | None = None,
+        to_datetime: datetime | None = None,
+        manual_only: bool = False,
     ) -> ExpenseApproverLimitReset | None:
         """Return the latest reset event for an approver and limit."""
         query = (
@@ -450,6 +454,10 @@ class ExpenseLimitService(ExpenseServiceBase):
         )
         if from_datetime is not None:
             query = query.where(ExpenseApproverLimitReset.reset_at >= from_datetime)
+        if manual_only:
+            query = query.where(ExpenseApproverLimitReset.reset_kind == "MANUAL")
+        if to_datetime is not None:
+            query = query.where(ExpenseApproverLimitReset.reset_at <= to_datetime)
         return self.db.scalar(query.limit(1))
 
     def create_weekly_budget_reset(
@@ -461,11 +469,33 @@ class ExpenseLimitService(ExpenseServiceBase):
         reset_reason: str,
         reviewed_from: date | None = None,
         reviewed_to: date | None = None,
+        reset_kind: str = "MANUAL",
     ) -> ExpenseApproverLimitReset:
-        """Create a manual weekly budget reset event for an approver."""
+        """Record a reset and its immutable before/after allowance evidence."""
         from app.models.people.hr.employee import Employee
+        from app.models.person import Person
 
-        approver = self.db.get(Employee, approver_id)
+        if reset_kind not in {"MANUAL", "AUTOMATIC"}:
+            raise ValueError("Invalid reset kind")
+        if not reset_reason.strip():
+            raise ValueError("Reset reason is required")
+        reviewer = self.db.scalar(
+            select(Person).where(
+                Person.organization_id == org_id,
+                Person.id == reviewed_by_id,
+            )
+        )
+        if reviewer is None:
+            raise ValueError("Reviewer not found in this organization")
+
+        approver = self.db.scalar(
+            select(Employee)
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == approver_id,
+            )
+            .with_for_update()
+        )
         if not approver:
             raise ValueError("Approver not found")
 
@@ -473,7 +503,21 @@ class ExpenseLimitService(ExpenseServiceBase):
         if budget_info is None:
             raise ValueError("Approver has no weekly budget configured")
 
-        _, limit_id = budget_info
+        budget, limit_id = budget_info
+        reset_at = datetime.now(UTC)
+        balance = self.get_approver_weekly_budget_balance(
+            org_id, approver_id, as_of=reset_at
+        )
+        if balance is None:
+            raise ValueError("Approver has no weekly budget configured")
+        limit = self.db.scalar(
+            select(ExpenseApproverLimit).where(
+                ExpenseApproverLimit.organization_id == org_id,
+                ExpenseApproverLimit.approver_limit_id == limit_id,
+            )
+        )
+        if limit is None:
+            raise ValueError("Approver budget configuration no longer exists")
 
         action_query = (
             select(func.count(ExpenseClaimAction.action_id))
@@ -500,6 +544,19 @@ class ExpenseLimitService(ExpenseServiceBase):
             )
 
         reviewed_claim_count = self.db.scalar(action_query) or 0
+        # Capture which legacy rows were already paid at this reset. This is
+        # evidence of their presence, not an invented historical payment time.
+        legacy_paid_claim_ids = list(
+            self.db.scalars(
+                select(ExpenseClaim.claim_id).where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.approver_id == approver_id,
+                    ExpenseClaim.status == ExpenseClaimStatus.PAID,
+                    ExpenseClaim.paid_on == reset_at.date(),
+                    ExpenseClaim.paid_at.is_(None),
+                )
+            ).all()
+        )
 
         reset = ExpenseApproverLimitReset(
             organization_id=org_id,
@@ -510,10 +567,79 @@ class ExpenseLimitService(ExpenseServiceBase):
             reviewed_from=reviewed_from,
             reviewed_to=reviewed_to,
             reviewed_claim_count=int(reviewed_claim_count),
+            reset_at=reset_at,
+            reset_kind=reset_kind,
+            budget_snapshot=budget,
+            currency_snapshot=limit.currency_code,
+            paid_before_reset=balance.used,
+            committed_at_reset=balance.committed,
+            remaining_before_reset=balance.remaining,
+            remaining_after_reset=(
+                budget - balance.committed
+                if reset_kind == "MANUAL"
+                else balance.remaining
+            ),
+            reviewer_name_snapshot=reviewer.name,
+            legacy_paid_claim_ids=[str(claim_id) for claim_id in legacy_paid_claim_ids],
         )
         self.db.add(reset)
         self.db.flush()
         return reset
+
+    def get_reset_history(
+        self,
+        org_id: UUID,
+        approver_id: UUID,
+        *,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> list[dict]:
+        """Return reset evidence and actual payment splits for the review period."""
+        from app.models.person import Person
+        from app.services.expense.reset_audit import reset_evidence
+
+        resets = (
+            select(ExpenseApproverLimitReset, Person.name_expr().label("reviewer_name"))
+            .outerjoin(
+                Person,
+                and_(
+                    Person.id == ExpenseApproverLimitReset.reviewed_by_id,
+                    Person.organization_id == org_id,
+                ),
+            )
+            .where(
+                ExpenseApproverLimitReset.organization_id == org_id,
+                ExpenseApproverLimitReset.approver_id == approver_id,
+            )
+        )
+        payments = select(
+            ExpenseClaim.claim_id,
+            ExpenseClaim.paid_on,
+            ExpenseClaim.paid_at,
+            ExpenseClaim.amount_paid,
+        ).where(
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaim.approver_id == approver_id,
+            ExpenseClaim.status == ExpenseClaimStatus.PAID,
+            ExpenseClaim.paid_on.isnot(None),
+        )
+        if from_date is not None:
+            resets = resets.where(
+                func.date(ExpenseApproverLimitReset.reset_at) >= from_date
+            )
+            payments = payments.where(ExpenseClaim.paid_on >= from_date)
+        if to_date is not None:
+            resets = resets.where(
+                func.date(ExpenseApproverLimitReset.reset_at) <= to_date
+            )
+            payments = payments.where(ExpenseClaim.paid_on <= to_date)
+        history = self.db.execute(
+            resets.order_by(ExpenseApproverLimitReset.reset_at)
+        ).all()
+        if not history:
+            return []
+        paid = list(self.db.execute(payments).all())
+        return [reset_evidence(reset, name, paid) for reset, name in history]
 
     # =========================================================================
     # Period Usage
@@ -1346,6 +1472,76 @@ class ExpenseLimitService(ExpenseServiceBase):
     # Approver Weekly Budget
     # =========================================================================
 
+    def _weekly_paid_usage(
+        self,
+        org_id: UUID,
+        approver_id: UUID,
+        window_start: datetime,
+        as_of: datetime,
+        known_legacy_before_reset: list[str] | None = None,
+    ) -> Decimal:
+        # Unknown historical times count conservatively on the reset day.
+        filters = [
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaim.approver_id == approver_id,
+            ExpenseClaim.status == ExpenseClaimStatus.PAID,
+            ExpenseClaim.paid_on >= window_start.date(),
+            ExpenseClaim.paid_on <= as_of.date(),
+        ]
+        if window_start.time() != datetime.min.time():
+            unknown_time: ColumnElement[bool] = ExpenseClaim.paid_at.is_(None)
+            if known_legacy_before_reset:
+                unknown_time = and_(
+                    unknown_time,
+                    ExpenseClaim.claim_id.not_in(
+                        [UUID(value) for value in known_legacy_before_reset]
+                    ),
+                )
+            filters.append(
+                or_(
+                    ExpenseClaim.paid_on > window_start.date(),
+                    ExpenseClaim.paid_at >= window_start,
+                    unknown_time,
+                )
+            )
+        return self.db.scalar(
+            select(
+                func.coalesce(func.sum(ExpenseClaim.amount_paid), Decimal("0"))
+            ).where(*filters)
+        ) or Decimal("0")
+
+    def _committed_transfers(
+        self, org_id: UUID, approver_id: UUID, exclude_intent_id: UUID | None = None
+    ) -> Decimal:
+        from app.models.finance.payments.payment_intent import (
+            PaymentIntent,
+            PaymentIntentStatus,
+            PaymentDirection,
+        )
+
+        filters = [
+            PaymentIntent.organization_id == org_id,
+            PaymentIntent.source_type == "EXPENSE_CLAIM",
+            PaymentIntent.direction == PaymentDirection.OUTBOUND,
+            PaymentIntent.status.in_(
+                [
+                    PaymentIntentStatus.PROCESSING,
+                    PaymentIntentStatus.INDETERMINATE,
+                    PaymentIntentStatus.COMPLETED,
+                ]
+            ),
+            ExpenseClaim.organization_id == org_id,
+            ExpenseClaim.approver_id == approver_id,
+            ExpenseClaim.status != ExpenseClaimStatus.PAID,
+        ]
+        if exclude_intent_id is not None:
+            filters.append(PaymentIntent.intent_id != exclude_intent_id)
+        return self.db.scalar(
+            select(func.coalesce(func.sum(PaymentIntent.amount), Decimal("0")))
+            .join(ExpenseClaim, ExpenseClaim.claim_id == PaymentIntent.source_id)
+            .where(*filters)
+        ) or Decimal("0")
+
     def check_approver_weekly_budget(
         self,
         org_id: UUID,
@@ -1353,106 +1549,95 @@ class ExpenseLimitService(ExpenseServiceBase):
         claim_amount: Decimal,
         *,
         approval_at: datetime | None = None,
+        exclude_intent_id: UUID | None = None,
+        currency_code: str | None = None,
     ) -> None:
-        """Check if approver has remaining budget for the current week."""
         from app.models.people.hr.employee import Employee
 
-        approver = self.db.get(Employee, approver_id)
-        if not approver:
-            return
-
+        # One lock per budget owner serializes payments across DIFFERENT claims.
+        approver = self.db.scalar(
+            select(Employee)
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == approver_id,
+            )
+            .with_for_update()
+        )
+        if approver is None:
+            raise ExpenseLimitServiceError("Approver must be linked to an employee")
         budget_info = self._get_approver_weekly_budget(org_id, approver)
         if budget_info is None:
-            return
-
-        budget, limit_id = budget_info
-        as_of = approval_at.astimezone(UTC) if approval_at else datetime.now(UTC)
-        window_start, latest_reset = self._get_weekly_budget_window(
-            org_id,
-            approver_id,
-            limit_id,
-            as_of=as_of,
+            raise ExpenseLimitServiceError("No weekly budget configured for approver")
+        if currency_code is not None:
+            budget_currency = self.db.scalar(
+                select(ExpenseApproverLimit.currency_code)
+                .where(
+                    ExpenseApproverLimit.organization_id == org_id,
+                    ExpenseApproverLimit.approver_limit_id == budget_info[1],
+                )
+                .with_for_update()
+            )
+            if budget_currency != currency_code:
+                raise ExpenseLimitServiceError(
+                    "Expense currency does not match the approver's weekly budget"
+                )
+        balance = self.get_approver_weekly_budget_balance(
+            org_id, approver_id, as_of=approval_at
         )
-
-        usage_query = select(
-            func.coalesce(func.sum(ExpenseClaim.net_payable_amount), Decimal("0"))
-        ).where(
-            ExpenseClaim.organization_id == org_id,
-            ExpenseClaim.approver_id == approver_id,
-            ExpenseClaim.status == ExpenseClaimStatus.PAID,
-            ExpenseClaim.paid_on.isnot(None),
-            ExpenseClaim.paid_on >= window_start.date(),
-            ExpenseClaim.paid_on <= as_of.date(),
-        )
-
-        used = self.db.scalar(usage_query) or Decimal("0")
-
-        period_label = (
-            f"since manual reset on {latest_reset.reset_at.date().isoformat()}"
-            if latest_reset is not None
-            else f"this week starting {window_start.date().isoformat()}"
-        )
-
-        if used + claim_amount > budget:
+        if balance is None:
+            raise ExpenseLimitServiceError("No weekly budget configured for approver")
+        if not balance.budget.is_finite() or balance.budget < 0:
+            raise ExpenseLimitServiceError("Approver weekly budget is invalid")
+        committed = self._committed_transfers(org_id, approver_id, exclude_intent_id)
+        if not claim_amount.is_finite() or claim_amount < 0:
+            raise ExpenseLimitServiceError("Invalid payment amount")
+        if balance.used + committed + claim_amount > balance.budget:
             raise ApproverWeeklyBudgetExhaustedError(
-                budget=budget,
-                used=used,
+                budget=balance.budget,
+                used=balance.used + committed,
                 claim_amount=claim_amount,
-                period_label=period_label,
+                period_label=balance.usage_label,
             )
 
     def get_approver_weekly_budget_balance(
-        self,
-        org_id: UUID,
-        approver_id: UUID,
-        *,
-        as_of: datetime | None = None,
+        self, org_id: UUID, approver_id: UUID, *, as_of: datetime | None = None
     ) -> ApproverWeeklyBudgetBalance | None:
-        """Return the approver's weekly budget usage based on paid claims only."""
         from app.models.people.hr.employee import Employee
 
-        approver = self.db.get(Employee, approver_id)
-        if not approver:
+        approver = self.db.scalar(
+            select(Employee).where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == approver_id,
+            )
+        )
+        if approver is None:
             return None
-
-        budget_info = self._get_approver_weekly_budget(org_id, approver)
-        if budget_info is None:
+        info = self._get_approver_weekly_budget(org_id, approver)
+        if info is None:
             return None
-
-        budget, limit_id = budget_info
-        as_of_dt = as_of.astimezone(UTC) if as_of else datetime.now(UTC)
-        window_start, latest_reset = self._get_weekly_budget_window(
+        budget, limit_id = info
+        now = as_of.astimezone(UTC) if as_of else datetime.now(UTC)
+        window, reset = self._get_weekly_budget_window(
+            org_id, approver_id, limit_id, as_of=now
+        )
+        used = self._weekly_paid_usage(
             org_id,
             approver_id,
-            limit_id,
-            as_of=as_of_dt,
+            window,
+            now,
+            reset.legacy_paid_claim_ids if reset else None,
         )
-
-        usage_query = select(
-            func.coalesce(func.sum(ExpenseClaim.net_payable_amount), Decimal("0"))
-        ).where(
-            ExpenseClaim.organization_id == org_id,
-            ExpenseClaim.approver_id == approver_id,
-            ExpenseClaim.status == ExpenseClaimStatus.PAID,
-            ExpenseClaim.paid_on.isnot(None),
-            ExpenseClaim.paid_on >= window_start.date(),
-            ExpenseClaim.paid_on <= as_of_dt.date(),
-        )
-
-        used = self.db.scalar(usage_query) or Decimal("0")
-        usage_label = (
-            f"Since manual reset on {latest_reset.reset_at.date().isoformat()}"
-            if latest_reset is not None
-            else f"This week starting {window_start.date().isoformat()}"
-        )
-
+        committed = self._committed_transfers(org_id, approver_id)
         return ApproverWeeklyBudgetBalance(
-            usage_label=usage_label,
+            usage_label=f"Since reset on {window.isoformat()}"
+            if reset
+            else f"This week starting {window.date()}",
             budget=budget,
             used=used,
-            remaining=budget - used,
-            window_start=window_start,
-            last_reset_at=latest_reset.reset_at if latest_reset else None,
+            remaining=budget - used - committed,
+            window_start=window,
+            last_reset_at=reset.reset_at if reset else None,
+            committed=committed,
         )
 
     def _get_weekly_budget_window(
@@ -1471,9 +1656,15 @@ class ExpenseLimitService(ExpenseServiceBase):
             approver_id,
             approver_limit_id,
             from_datetime=week_start,
+            to_datetime=current_time,
+            manual_only=True,
         )
-        if latest_reset is not None and latest_reset.reset_at > week_start:
-            return latest_reset.reset_at, latest_reset
+        if latest_reset is not None:
+            reset_at = latest_reset.reset_at
+            if reset_at.tzinfo is None:
+                reset_at = reset_at.replace(tzinfo=UTC)
+            if reset_at > week_start:
+                return reset_at, latest_reset
         return week_start, latest_reset
 
     def _get_approver_weekly_budget(
@@ -1495,12 +1686,17 @@ class ExpenseLimitService(ExpenseServiceBase):
                 select(
                     ExpenseApproverLimit.weekly_approval_budget,
                     ExpenseApproverLimit.approver_limit_id,
-                ).where(
+                )
+                .where(
                     ExpenseApproverLimit.organization_id == org_id,
                     ExpenseApproverLimit.is_active == True,
                     ExpenseApproverLimit.scope_type == scope_type,
                     ExpenseApproverLimit.scope_id == scope_id,
                     ExpenseApproverLimit.weekly_approval_budget.isnot(None),
+                )
+                .order_by(
+                    ExpenseApproverLimit.created_at.desc(),
+                    ExpenseApproverLimit.approver_limit_id,
                 )
             ).first()
             if row is None:
