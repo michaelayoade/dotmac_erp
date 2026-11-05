@@ -82,6 +82,5 @@ def test_mark_paid_validates_budget_using_paid_event():
 
     _, _, weekly_approver_id = mock_weekly_budget.call_args.args
     assert weekly_approver_id == approver_id
-    assert mock_weekly_budget.call_args.kwargs["approval_at"].date() == date(
-        2026, 4, 10
-    )
+    assert mock_weekly_budget.call_args.kwargs["approval_at"] == claim.paid_at
+    assert claim.paid_on == date(2026, 4, 10)

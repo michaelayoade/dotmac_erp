@@ -134,10 +134,10 @@ MODULE_SETTINGS_CONFIGS = [
         key="expense",
         title="Expense",
         description="Reimbursement and AP integration settings",
-        url="/settings/expense",
+        url="/admin/settings/expense",
         icon="receipt",
         page_title="Expense Settings",
-        template="settings/expense.html",
+        template="admin/settings/expense.html",
         setting_keys=[
             "expense_route_to_ap",
             "expense_claim_expiry_days",
@@ -184,7 +184,11 @@ class ModuleSettingsWebService:
     def get_hub_context(self, organization_id: uuid.UUID) -> dict[str, Any]:
         """Get context for settings hub page."""
         return {
-            "settings_sections": MODULE_SETTINGS_SECTIONS,
+            "settings_sections": [
+                section
+                for section in MODULE_SETTINGS_SECTIONS
+                if section.key != "expense"
+            ],
         }
 
     # ========== Support Settings ==========

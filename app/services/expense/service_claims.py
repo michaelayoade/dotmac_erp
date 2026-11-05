@@ -1736,6 +1736,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             )
             self.db.flush()
 
+        payment_event_at = paid_at or datetime.now(UTC)
         if payment_date is not None and payment_date > date.today():
             raise ExpenseServiceError("Payment date cannot be in the future")
         payable = claim.net_payable_amount or Decimal("0")
@@ -1775,22 +1776,17 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     raise ExpenseServiceError(
                         "A transfer is already pending for this expense"
                     )
-                payment_as_of = datetime.combine(
-                    payment_date or date.today(),
-                    datetime.max.time(),
-                    tzinfo=UTC,
-                )
                 self._validate_approver_weekly_budget(
                     org_id,
                     claim,
                     claim.approver_id,
-                    approval_at=payment_as_of,
+                    approval_at=payment_event_at,
                 )
 
             claim.status = ExpenseClaimStatus.PAID
             claim.amount_paid = payable
             claim.paid_on = payment_date or date.today()
-            claim.paid_at = paid_at or datetime.now(UTC)
+            claim.paid_at = payment_event_at
             claim.payment_reference = payment_reference
             self._stamp_status_change(claim, actor_id)
             if send_notification and claim.employee and claim.employee.work_email:

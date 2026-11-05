@@ -20,6 +20,8 @@
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-50 text-accent-600 dark:bg-accent-900/30 dark:text-accent-400 group-hover:bg-accent-100 dark:group-hover:bg-accent-900/50 transition-colors">
                     {% if section.icon == 'building-office' %}
                     {{ icon_svg("building", "h-6 w-6") }}
+                    {% elif section.icon == 'receipt' %}
+                    {{ icon_svg('receipt', 'h-6 w-6') }}
                     {% elif section.icon == 'swatch' %}
                     {{ icon_svg("color-swatch", "h-6 w-6") }}
                     {% elif section.icon == 'envelope' %}

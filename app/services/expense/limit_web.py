@@ -1173,27 +1173,6 @@ class ExpenseLimitWebService:
         }
         activity_approver_ids: list[UUID] = list(activity_map)
 
-        if not (parsed_from or parsed_to) and not activity_approver_ids:
-            context = base_context(request, auth, "Expense Reviewer", "limits-review")
-            context.update(
-                {
-                    "approvers": [],
-                    "filters": filters,
-                    "active_filters": active_filters,
-                    "filter_errors": {},
-                    "summary": {
-                        "approved_count": 0,
-                        "rejected_count": 0,
-                        "paid_count": 0,
-                        "paid_amount": Decimal("0"),
-                        "currency_code": "",
-                    },
-                }
-            )
-            return templates.TemplateResponse(
-                request, "expense/limits/reviewer_approvers.html", context
-            )
-
         paid_filters = [
             ExpenseClaim.organization_id == org_id,
             ExpenseClaim.approver_id.isnot(None),
@@ -1204,8 +1183,6 @@ class ExpenseLimitWebService:
             paid_filters.append(ExpenseClaim.paid_on >= parsed_from)
         if parsed_to:
             paid_filters.append(ExpenseClaim.paid_on <= parsed_to)
-        if not (parsed_from or parsed_to) and activity_approver_ids:
-            paid_filters.append(ExpenseClaim.approver_id.in_(activity_approver_ids))
 
         paid_amount_rows = db.execute(
             select(
@@ -1235,8 +1212,27 @@ class ExpenseLimitWebService:
             if row.approver_id is not None
         ]
 
+        from app.models.expense.limit_rule import ExpenseApproverLimitReset
+
+        reset_model = ExpenseApproverLimitReset
+        counts = select(
+            reset_model.approver_id,
+            func.count().filter(reset_model.reset_kind == "MANUAL"),
+            func.count().filter(reset_model.reset_kind == "AUTOMATIC"),
+        ).where(reset_model.organization_id == org_id)
+        if parsed_from:
+            counts = counts.where(func.date(reset_model.reset_at) >= parsed_from)
+        if parsed_to:
+            counts = counts.where(func.date(reset_model.reset_at) <= parsed_to)
+        reset_counts = {
+            approver_id: (manual, automatic)
+            for approver_id, manual, automatic in db.execute(
+                counts.group_by(reset_model.approver_id)
+            ).all()
+        }
+
         approver_ids: list[UUID] = list(
-            dict.fromkeys([*activity_approver_ids, *paid_approver_ids])
+            dict.fromkeys([*activity_approver_ids, *paid_approver_ids, *reset_counts])
         )
         if not approver_ids:
             context = base_context(request, auth, "Expense Reviewer", "limits-review")
@@ -1336,22 +1332,7 @@ class ExpenseLimitWebService:
                     )
                     or _settings.default_functional_currency_code
                 )
-            latest_reset = (
-                service.get_latest_weekly_reset(
-                    org_id,
-                    approver_id=employee.employee_id,
-                    approver_limit_id=limit_id,
-                    from_datetime=None,
-                )
-                if limit_id
-                else None
-            )
-            period_resets = service.get_reset_history(
-                org_id,
-                approver_id,
-                from_date=parsed_from,
-                to_date=parsed_to,
-            )
+            manual_resets, automatic_resets = reset_counts.get(approver_id, (0, 0))
             activity_row = activity_map.get(approver_id)
             approved_count = (
                 int(activity_row.approved_count or 0) if activity_row else 0
@@ -1383,10 +1364,11 @@ class ExpenseLimitWebService:
                     "name": display_name,
                     "limit_id": str(limit_id) if limit_id else None,
                     "weekly_budget": weekly_budget,
-                    "period_resets": period_resets,
+                    "manual_resets": manual_resets,
+                    "automatic_resets": automatic_resets,
+                    "reset_url": f"/expense/limits/reviewer/approvers/{employee.employee_id}?{urlencode({**review_params, 'tab': 'resets'})}",
                     "max_approval_amount": max_approval_amount,
                     "currency_code": currency_code,
-                    "last_reset_at": latest_reset.reset_at if latest_reset else None,
                     "approved_count": approved_count,
                     "rejected_count": rejected_count,
                     "paid_count": paid_count,
@@ -1409,6 +1391,12 @@ class ExpenseLimitWebService:
                 "summary": {
                     "approved_count": total_approved_count,
                     "rejected_count": total_rejected_count,
+                    "manual_resets": sum(
+                        cast(int, row["manual_resets"]) for row in approver_rows
+                    ),
+                    "automatic_resets": sum(
+                        cast(int, row["automatic_resets"]) for row in approver_rows
+                    ),
                     "paid_count": total_paid_count,
                     "paid_amount": total_paid_amount,
                     "currency_code": summary_currency_code,
@@ -1460,32 +1448,108 @@ class ExpenseLimitWebService:
             except ValueError:
                 parsed_to = None
 
-        week_start = service._start_of_week_utc(datetime.now(UTC)).date()
-        if parsed_from is None:
-            parsed_from = week_start
-        if parsed_to is None:
-            parsed_to = date.today()
+        tab = "resets" if request.query_params.get("tab") == "resets" else "activity"
+        include_automatic = request.query_params.get("kind") == "all"
+        try:
+            page = max(1, min(10000, int(request.query_params.get("page", "1"))))
+        except ValueError:
+            page = 1
+        decision_filters = []
+        paid_filters = []
+        if parsed_from:
+            decision_filters.append(
+                func.date(ExpenseClaimAction.created_at) >= parsed_from
+            )
+            paid_filters.append(ExpenseClaim.paid_on >= parsed_from)
+        if parsed_to:
+            decision_filters.append(
+                func.date(ExpenseClaimAction.created_at) <= parsed_to
+            )
+            paid_filters.append(ExpenseClaim.paid_on <= parsed_to)
+        paid_by_currency = db.execute(
+            select(ExpenseClaim.currency_code, func.sum(ExpenseClaim.amount_paid))
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.approver_id == approver_id,
+                ExpenseClaim.status == ExpenseClaimStatus.PAID,
+                *paid_filters,
+            )
+            .group_by(ExpenseClaim.currency_code)
+        ).all()
+        from app.models.expense.limit_rule import ExpenseApproverLimitReset
+
+        reset_model = ExpenseApproverLimitReset
+        manual_count_query = select(func.count()).where(
+            reset_model.organization_id == org_id,
+            reset_model.approver_id == approver_id,
+            reset_model.reset_kind == "MANUAL",
+        )
+        if parsed_from:
+            manual_count_query = manual_count_query.where(
+                func.date(reset_model.reset_at) >= parsed_from
+            )
+        if parsed_to:
+            manual_count_query = manual_count_query.where(
+                func.date(reset_model.reset_at) <= parsed_to
+            )
+        manual_reset_count = db.scalar(manual_count_query) or 0
+        history = (
+            service.get_reset_history(
+                org_id,
+                approver_id,
+                from_date=parsed_from,
+                to_date=parsed_to,
+                manual_only=not include_automatic,
+                offset=(page - 1) * 20,
+                limit=21,
+            )
+            if tab == "resets"
+            else []
+        )
+        filters = {
+            "from_date": parsed_from.isoformat() if parsed_from else "",
+            "to_date": parsed_to.isoformat() if parsed_to else "",
+        }
+        filter_query = urlencode(filters)
+        history_query = urlencode(
+            {
+                **filters,
+                "tab": "resets",
+                "kind": "all" if include_automatic else "manual",
+            }
+        )
 
         # Include both approvals and rejections executed by this approver.
-        actions = list(
-            db.execute(
-                select(ExpenseClaimAction, ExpenseClaim)
-                .join(
-                    ExpenseClaim,
-                    ExpenseClaim.claim_id == ExpenseClaimAction.claim_id,
-                )
-                .where(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.approver_id == approver_id,
-                    ExpenseClaimAction.action_type.in_(
-                        [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
-                    ),
-                    ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
-                    func.date(ExpenseClaimAction.created_at) >= parsed_from,
-                    func.date(ExpenseClaimAction.created_at) <= parsed_to,
-                )
-                .order_by(ExpenseClaimAction.created_at.desc())
-            ).all()
+        actions = (
+            list(
+                db.execute(
+                    select(ExpenseClaimAction, ExpenseClaim)
+                    .join(
+                        ExpenseClaim,
+                        ExpenseClaim.claim_id == ExpenseClaimAction.claim_id,
+                    )
+                    .where(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.approver_id == approver_id,
+                        ExpenseClaimAction.action_type.in_(
+                            [
+                                ExpenseClaimActionType.APPROVE,
+                                ExpenseClaimActionType.REJECT,
+                            ]
+                        ),
+                        ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                    )
+                    .where(*decision_filters)
+                    .order_by(
+                        ExpenseClaimAction.created_at.desc(),
+                        ExpenseClaimAction.action_id.desc(),
+                    )
+                    .offset((page - 1) * 20)
+                    .limit(21)
+                ).all()
+            )
+            if tab == "activity"
+            else []
         )
 
         budget_info = service._get_approver_weekly_budget(org_id, employee)
@@ -1511,21 +1575,21 @@ class ExpenseLimitWebService:
         context.update(
             {
                 "approver": employee,
-                "actions": actions,
-                "filters": {
-                    "from_date": parsed_from.isoformat(),
-                    "to_date": parsed_to.isoformat(),
-                },
+                "actions": actions[:20],
+                "filters": filters,
+                "filter_query": filter_query,
+                "review_tab": tab,
+                "include_automatic": include_automatic,
+                "page": page,
+                "has_next_page": len(history if tab == "resets" else actions) > 20,
+                "page_query": history_query if tab == "resets" else filter_query,
+                "manual_reset_count": manual_reset_count,
+                "paid_by_currency": paid_by_currency,
                 "weekly_budget": budget_amount,
                 "limit_id": str(limit_id) if limit_id else None,
                 "last_reset": latest_reset,
                 "can_reset_budget": auth.has_permission("expense:limits:reset"),
-                "reset_history_entries": service.get_reset_history(
-                    org_id,
-                    approver_id,
-                    from_date=parsed_from,
-                    to_date=parsed_to,
-                ),
+                "reset_history_entries": history[:20],
             }
         )
         return templates.TemplateResponse(

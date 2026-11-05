@@ -1,14 +1,14 @@
-{% extends "modules/base_modules.html" %}
+{% extends "admin/base_admin.html" %}
 {% from "components/macros.html" import icon_svg %}
 {% import "components/settings_macros.html" as settings_ui %}
 
 {% block page_title %}Expense Settings{% endblock %}
 
-{% block breadcrumbs %}
+{% block admin_breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <ol class="flex items-center gap-2">
         <li><a href="/" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Home</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/settings" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Settings</a></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/admin/settings/hub" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Settings</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Expense</span></li>
     </ol>
 </nav>
@@ -19,7 +19,33 @@
     {{ settings_ui.settings_header("Expense Settings", "Configure reimbursement workflows and AP integration.") }}
     {{ settings_ui.settings_messages(settings_saved|default(false), error, "Expense settings updated successfully.") }}
 
-    <form method="POST" action="/settings/expense" class="space-y-6">
+    <form method="POST" action="/admin/settings/expense/reset-schedule" class="admin-card p-6 space-y-4">
+        {{ request.state.csrf_form | safe }}
+        <h2 class="font-semibold">Weekly Budget Reset</h2>
+        <p class="text-sm">Active schedule: {{ weekdays[active_reset.weekday] }} at {{ active_reset.time }} ({{ active_reset.timezone }}).</p>
+        <p class="text-sm">Next reset: {{ next_reset_label }}</p>
+        {% if pending_reset_label %}<p class="text-sm">The saved schedule takes effect {{ pending_reset_label }}.</p>{% endif %}
+        {% if schedule_preview %}
+        <p class="text-sm">The proposed schedule takes effect {{ schedule_preview }}.</p>
+        {% endif %}
+        <div class="grid gap-4 sm:grid-cols-3">
+            <label class="form-label">Weekday
+                <select class="form-input" name="weekday">
+                    {% for day in weekdays %}<option value="{{ loop.index0 }}"{% if loop.index0 == reset_schedule.weekday %} selected{% endif %}>{{ day }}</option>{% endfor %}
+                </select>
+            </label>
+            <label class="form-label">Local time
+                <input class="form-input" type="time" name="time" value="{{ reset_schedule.time }}" required>
+            </label>
+            <label class="form-label">Time zone
+                <input class="form-input" name="timezone" value="{{ reset_schedule.timezone }}" placeholder="Africa/Lagos" required>
+            </label>
+        </div>
+        <button class="btn btn-secondary" name="schedule_action" value="preview">Preview schedule</button>
+        <button class="btn btn-primary" name="schedule_action" value="save">Save schedule</button>
+    </form>
+
+    <form method="POST" action="/admin/settings/expense" class="space-y-6">
         {{ request.state.csrf_form | safe }}
 
         <!-- AP Integration -->
@@ -144,7 +170,7 @@
             </div>
         </div>
 
-        {{ settings_ui.settings_actions() }}
+        {{ settings_ui.settings_actions(cancel_url="/admin/settings/hub") }}
     </form>
 </div>
 {% endblock %}
