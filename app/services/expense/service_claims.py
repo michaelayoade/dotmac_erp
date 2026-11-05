@@ -581,6 +581,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         skip_limit_check: bool = False,
         skip_receipt_validation: bool = False,
         notify_approvers: bool = True,
+        defer_approver_email: bool = False,
         actor_id: UUID | None = None,
         approval_source: ExpenseClaimApprovalSource = (
             ExpenseClaimApprovalSource.ERP_WORKFLOW
@@ -650,6 +651,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                         evaluation_result=evaluation_result,
                         eligible_approvers=evaluation_result.eligible_approvers,
                         notify_approvers=notify_approvers,
+                        defer_approver_email=defer_approver_email,
                         requires_approval=True,
                         actor_id=actor_id,
                         initialize_approval_chain=(
@@ -663,6 +665,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                         receipt_warnings=[evaluation_result.message, *receipt_warnings],
                         evaluation_result=evaluation_result,
                         notify_approvers=notify_approvers,
+                        defer_approver_email=defer_approver_email,
                         requires_approval=False,
                         actor_id=actor_id,
                         initialize_approval_chain=(
@@ -681,6 +684,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 receipt_warnings=receipt_warnings,
                 evaluation_result=evaluation_result,
                 notify_approvers=notify_approvers,
+                defer_approver_email=defer_approver_email,
                 requires_approval=False,
                 actor_id=actor_id,
                 initialize_approval_chain=(
@@ -708,6 +712,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         requires_approval: bool,
         actor_id: UUID | None = None,
         initialize_approval_chain: bool = True,
+        defer_approver_email: bool = False,
     ) -> SubmitClaimResult:
         from app.services.expense.approval_service import ExpenseApprovalService
 
@@ -738,7 +743,10 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         )
 
         if notify_approvers and current_approvers:
-            self._notify_approvers(claim, current_approvers)
+            if defer_approver_email:
+                self._notify_approvers(claim, current_approvers, send_email_now=False)
+            else:
+                self._notify_approvers(claim, current_approvers)
         self._notify_submission_confirmed(claim)
 
         try:
@@ -810,6 +818,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         self,
         claim: ExpenseClaim,
         approver_ids: list[UUID],
+        *,
+        send_email_now: bool = True,
     ) -> None:
         from app.models.people.hr.employee import Employee
         from app.services.expense.expense_notifications import (
@@ -826,14 +836,15 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             if not approver:
                 continue
             email_sent = False
-            try:
-                email_sent = email_service.notify_approval_needed(claim, approver)
-            except Exception as exc:
-                logger.exception(
-                    "Email notification failed for approver %s: %s",
-                    approver.employee_id,
-                    exc,
-                )
+            if send_email_now:
+                try:
+                    email_sent = email_service.notify_approval_needed(claim, approver)
+                except Exception as exc:
+                    logger.exception(
+                        "Email notification failed for approver %s: %s",
+                        approver.employee_id,
+                        exc,
+                    )
             if approver.person_id:
                 try:
                     notification = inapp_service.notify_expense_submitted(

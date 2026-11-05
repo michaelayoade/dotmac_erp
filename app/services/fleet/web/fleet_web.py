@@ -75,11 +75,6 @@ class FleetWebService:
     FUEL_LOG_ATTACHMENT_ENTITY_TYPE = "FLEET_FUEL_LOG"
     INCIDENT_ATTACHMENT_ENTITY_TYPE = "FLEET_INCIDENT"
     MAINTENANCE_ATTACHMENT_ENTITY_TYPE = "FLEET_MAINTENANCE"
-    MAINTENANCE_PROVIDER_OPTIONS = (
-        "Mr IDOWU (Idowu Orile Enterprise)",
-        "Mr JOSEPH (Joe Joe Automobile)",
-        "Mr ODE (OD Test Motors)",
-    )
 
     def __init__(self, db: Session):
         self.db = db
@@ -1139,7 +1134,6 @@ class FleetWebService:
                 "statuses": [s.value for s in MaintenanceStatus],
                 "selected_vehicle_id": vehicle_id,
                 "maintenance_attachment_max_size": self._maintenance_attachment_max_size_label(),
-                "maintenance_provider_options": self.MAINTENANCE_PROVIDER_OPTIONS,
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
@@ -1156,7 +1150,6 @@ class FleetWebService:
             "statuses": [s.value for s in MaintenanceStatus],
             "selected_vehicle_id": vehicle_id,
             "maintenance_attachment_max_size": self._maintenance_attachment_max_size_label(),
-            "maintenance_provider_options": self.MAINTENANCE_PROVIDER_OPTIONS,
         }
 
         return context
@@ -2105,7 +2098,23 @@ class FleetWebService:
                 status_code=400, detail=f"Unknown entity type: {entity_type}"
             )
 
+        submission_id = None
         try:
+            if entity_type == "maintenance" and form.get("maintenance_submission_id"):
+                submission_id = UUID(str(form["maintenance_submission_id"]))
+                if MaintenanceService(db, org_id).has_submission(submission_id):
+                    return RedirectResponse(url=cfg["list_url"], status_code=303)
+            if (
+                entity_type == "maintenance"
+                and submission_id is None
+                and (
+                    form.get("create_draft_invoice") == "1"
+                    or form.get("submit_reimbursement") == "1"
+                )
+            ):
+                raise ValueError(
+                    "Reload the maintenance form before creating financial records."
+                )
             if entity_type == "incident":
                 data["reported_by_id"] = self._resolve_active_employee_id_for_auth(
                     org_id, auth
@@ -2116,7 +2125,16 @@ class FleetWebService:
 
             schema = cfg["schema_cls"](**data)
             service = cfg["service_cls"](db, org_id)
-            record = service.create(schema)
+            record = (
+                service.create(schema, maintenance_id=submission_id)
+                if submission_id is not None
+                else service.create(schema)
+            )
+            if entity_type == "maintenance":
+                from app.services.fleet.maintenance_finance import create_draft_invoice
+
+                create_draft_invoice(db, org_id, record, form, auth, user_id)
+
             if entity_type == "fuel":
                 uploads = [
                     upload
@@ -2159,6 +2177,21 @@ class FleetWebService:
                         upload=upload,
                         uploaded_by=user_id,
                     )
+                if form.get("submit_reimbursement") == "1":
+                    from app.services.fleet.maintenance_finance import (
+                        submit_reimbursement,
+                    )
+
+                    if not auth.has_permission("expense:claims:submit"):
+                        raise ValueError(
+                            "You do not have permission to submit expense claims."
+                        )
+                    employee_id = self._resolve_active_employee_id_for_auth(
+                        org_id, auth
+                    )
+                    await submit_reimbursement(
+                        db, org_id, record, form, employee_id, user_id, uploads
+                    )
             elif entity_type == "document":
                 document_upload = form.get("document_file")
                 if (
@@ -2178,6 +2211,10 @@ class FleetWebService:
             )
             logger.debug("Fleet %s integrity error detail: %s", entity_type, exc)
             db.rollback()
+            if submission_id is not None and MaintenanceService(
+                db, org_id
+            ).has_submission(submission_id):
+                return RedirectResponse(url=cfg["list_url"], status_code=303)
             message = (
                 "Unable to save this record because one of the selected related "
                 "records is no longer available. Please refresh the form and try again."

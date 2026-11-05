@@ -75,8 +75,8 @@
                         <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ "{:,.0f}".format(record.next_service_odometer) ~ ' km' if record.next_service_odometer else '-' }}</dd>
                     </div>
                     <div>
-                        <dt class="text-xs text-slate-500 dark:text-slate-400">Technician</dt>
-                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ record.technician_name or '-' }}</dd>
+                        <dt class="text-xs text-slate-500 dark:text-slate-400">Supplier / Garage</dt>
+                        <dd class="text-sm font-medium text-slate-900 dark:text-white">{{ (record.supplier.trading_name or record.supplier.legal_name) if record.supplier else (record.technician_name or '-') }}</dd>
                     </div>
                 </dl>
             </div>
@@ -107,7 +107,11 @@
                     {% endif %}
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Invoice Number</dt>
-                        <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ record.invoice_number or '-' }}</dd>
+                        <dd class="text-sm font-mono text-slate-900 dark:text-white">{% if record.invoice_id and auth.has_permission("ap:invoices:read") %}
+                            <a class="text-link" href="/finance/ap/invoices/{{ record.invoice_id }}">View supplier invoice</a>
+                            {% else %}
+                            {{ record.invoice_number or '-' }}
+                            {% endif %}</dd>
                     </div>
                 </dl>
             </div>
