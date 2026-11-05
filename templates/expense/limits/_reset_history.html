@@ -1,21 +1,29 @@
 {% macro reset_history(history) %}
 {% for reset in history %}
 <details class="mt-2">
-    <summary>{{ 'Manual reset' if reset.kind == 'MANUAL' else 'Automatic Monday reset' }} — {{ reset.reset_at.strftime('%Y-%m-%d %H:%M UTC') }}</summary>
+    <summary>{{ 'Manual reset' if reset.kind == 'MANUAL' else 'Automatic reset' }} — {{ reset.reset_at.strftime('%Y-%m-%d %H:%M UTC') }}</summary>
     <div class="mt-2 space-y-1 text-sm">
-        <p>Reviewed by {{ reset.reviewer }}. Reason: {{ reset.reason }}</p>
+        <p>{% if reset.kind == "MANUAL" %}Reviewed by {{ reset.reviewer }}. {% endif %}Reason: {{ reset.reason }}</p>
         {% if reset.has_snapshot %}
         <p>Budget at reset: {{ "{:,.2f}".format(reset.budget) }} {{ reset.currency }}</p>
-        <p>Paid in the allowance period before reset: {{ "{:,.2f}".format(reset.paid_before_reset) }}. Pending transfers retained: {{ "{:,.2f}".format(reset.committed) }}.</p>
+        <p>Paid in the allowance period before reset: {{ "{:,.2f}".format(reset.paid_before_reset) }}. {{ "Pending transfers retained" if reset.kind == "MANUAL" else "Pending transfers when recorded" }}: {{ "{:,.2f}".format(reset.committed) }}.</p>
         <p>Available before: {{ "{:,.2f}".format(reset.remaining_before) }} → after: {{ "{:,.2f}".format(reset.remaining_after) }} {{ reset.currency }}.</p>
         <p>Additional allowance restored: {{ "{:,.2f}".format(reset.restored) }} {{ reset.currency }}.</p>
         {% else %}
+        {% if reset.kind == "AUTOMATIC" %}
+        <p>Scheduled cutoff recorded. Balances at the cutoff were unavailable.</p>
+        {% else %}
         <p>Historical reset: balances at the time were not recorded. This entry alone does not validate an excess.</p>
         {% endif %}
-        <p>Payments in the selected review period: before this reset {{ "{:,.2f}".format(reset.period_paid_before) }}; after {{ "{:,.2f}".format(reset.period_paid_after) }}.</p>
-        {% if reset.period_paid_timing_unknown %}
-        <p>Same-day historical payments with unknown timing: {{ "{:,.2f}".format(reset.period_paid_timing_unknown) }}. They cannot be assigned reliably to before or after this reset.</p>
         {% endif %}
+        {% for currency, split in reset.payment_splits | default([]) %}
+        <p>Payments in the selected period ({{ currency }}): before {{ "{:,.2f}".format(split.period_paid_before) }}; after {{ "{:,.2f}".format(split.period_paid_after) }}.</p>
+        {% if split.period_paid_timing_unknown %}
+        <p>Same-day historical payments with unknown timing: {{ "{:,.2f}".format(split.period_paid_timing_unknown) }} {{ currency }}.</p>
+        {% endif %}
+        {% else %}
+        <p>No recorded payments in the selected period.</p>
+        {% endfor %}
         <p>Payment splits are shown per reset; do not add splits from different resets together.</p>
     </div>
 </details>

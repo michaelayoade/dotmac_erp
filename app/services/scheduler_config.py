@@ -287,11 +287,7 @@ def _builtin_beat_schedule() -> dict[str, dict]:
         },
         "expense-weekly-budget-reset": {
             "task": "app.tasks.expense.reset_weekly_approver_budgets",
-            "schedule": crontab(
-                hour=7,
-                minute=0,
-                day_of_week=1,
-            ),  # Monday 7:00 AM (Africa/Lagos timezone)
+            "schedule": crontab(),
         },
         "expense-stuck-transfers": {
             "task": "app.tasks.expense.poll_stuck_expense_transfers",

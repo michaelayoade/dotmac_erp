@@ -14,28 +14,24 @@ def reset_evidence(
     at = at.replace(tzinfo=timezone.utc) if at.tzinfo is None else at
     for payment in payments:
         amount = payment.amount_paid or Decimal("0")
-        if payment.paid_on < at.date():
-            before += amount
-        elif payment.paid_on > at.date():
-            after += amount
-        elif payment.paid_at is None:
-            if str(getattr(payment, "claim_id", None)) in (
-                getattr(reset, "legacy_paid_claim_ids", None) or []
-            ):
-                before += amount
-            else:
-                unknown += amount
-        else:
+        if payment.paid_at is not None:
             paid_at = payment.paid_at
-            paid_at = (
-                paid_at.replace(tzinfo=timezone.utc)
-                if paid_at.tzinfo is None
-                else paid_at
-            )
+            if paid_at.tzinfo is None:
+                paid_at = paid_at.replace(tzinfo=timezone.utc)
             if paid_at < at:
                 before += amount
             else:
                 after += amount
+        elif payment.paid_on < at.date():
+            before += amount
+        elif payment.paid_on > at.date():
+            after += amount
+        elif str(getattr(payment, "claim_id", None)) in (
+            getattr(reset, "legacy_paid_claim_ids", None) or []
+        ):
+            before += amount
+        else:
+            unknown += amount
     has_snapshot = reset.budget_snapshot is not None
     return {
         "reset_at": at,

@@ -57,7 +57,7 @@ def test_missing_budget_blocks():
 def test_reset_lookup_is_bounded_by_payment_time():
     now = datetime(2026, 11, 1, 12, tzinfo=UTC)
     svc = SimpleNamespace(
-        _start_of_week_utc=lambda dt: datetime(2026, 10, 26, tzinfo=UTC),
+        get_weekly_boundary=lambda org, dt: datetime(2026, 10, 26, tzinfo=UTC),
         get_latest_weekly_reset=MagicMock(return_value=None),
     )
     production_methods()._get_weekly_budget_window(
@@ -79,6 +79,7 @@ def test_usage_sums_actual_payments_and_bounds_payment_dates():
     assert "sum(expense.expense_claim.amount_paid)" in sql
     assert "net_payable_amount" not in sql
     assert "paid_on >=" in sql and "paid_on <=" in sql
+    assert "paid_at >=" in sql and "paid_at <=" in sql
 
 
 def test_same_day_reset_uses_payment_action_time():

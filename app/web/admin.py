@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
@@ -25,6 +25,7 @@ from app.web.deps import (
     get_db,
     optional_web_auth,
     require_admin_access,
+    get_db_for_org,
     resolve_brand_context,
 )
 
@@ -946,6 +947,128 @@ def admin_settings_hub(
         )
     )
     return templates.TemplateResponse(request, "admin/settings/index.html", context)
+
+
+def _expense_settings_page(
+    request, auth, db, *, error=None, proposed=None, preview=None
+):
+    from datetime import datetime, timezone
+
+    from app.services.expense.reset_schedule import (
+        WEEKDAYS,
+        active_schedule,
+        next_boundary,
+        schedule_history,
+    )
+    from app.services.module_settings_web import module_settings_web_service
+
+    now = datetime.now(timezone.utc)
+    history = schedule_history(db, auth.organization_id)
+    active = active_schedule(history, now)
+    pending = next(
+        (
+            entry
+            for entry in reversed(history)
+            if not entry.get("superseded_at")
+            and datetime.fromisoformat(entry["effective_at"]) > now
+        ),
+        active,
+    )
+    context = _admin_base_context(request, auth, "Expense Settings", db)
+    context.update(
+        module_settings_web_service.get_expense_context(db, auth.organization_id)
+    )
+    context.update(
+        error=error,
+        settings_saved=request.session.pop("admin_expense_saved", False),
+        active_reset=active,
+        reset_schedule=proposed or pending,
+        weekdays=WEEKDAYS,
+        next_reset_label=next_boundary(history, now).strftime("%a %d %b %Y %H:%M UTC"),
+        pending_reset_label=(
+            datetime.fromisoformat(pending["effective_at"]).strftime(
+                "%a %d %b %Y %H:%M UTC"
+            )
+            if pending is not active
+            else None
+        ),
+        schedule_preview=preview,
+    )
+    return templates.TemplateResponse(request, "admin/settings/expense.html", context)
+
+
+@router.get("/settings/expense", response_class=HTMLResponse)
+def admin_expense_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_admin_access),
+    db: Session = Depends(get_db_for_org),
+):
+    return _expense_settings_page(request, auth, db)
+
+
+@router.post("/settings/expense", response_class=HTMLResponse)
+async def update_admin_expense_settings(
+    request: Request,
+    auth: WebAuthContext = Depends(require_admin_access),
+    db: Session = Depends(get_db_for_org),
+):
+    from app.services.module_settings_web import module_settings_web_service
+
+    form = await request.form()
+    _, error = module_settings_web_service.update_expense_settings(
+        db,
+        auth.organization_id,
+        dict(form),
+        allowed_account_ids=form.getlist("expense_allowed_account_ids"),
+    )
+    if error:
+        db.rollback()
+        return _expense_settings_page(request, auth, db, error=error)
+    request.session["admin_expense_saved"] = True
+    return RedirectResponse("/admin/settings/expense", status_code=303)
+
+
+@router.post("/settings/expense/reset-schedule", response_class=HTMLResponse)
+async def update_admin_expense_schedule(
+    request: Request,
+    auth: WebAuthContext = Depends(require_admin_access),
+    db: Session = Depends(get_db_for_org),
+):
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfoNotFoundError
+
+    from app.services.expense.reset_schedule import (
+        boundary,
+        parse_schedule,
+        save_schedule,
+    )
+
+    if auth.person_id is None:
+        raise HTTPException(status_code=403, detail="Administrator identity required")
+    form = await request.form()
+    try:
+        proposed = parse_schedule(form)
+        if form.get("schedule_action") == "preview":
+            preview = boundary(proposed, datetime.now(timezone.utc), upcoming=True)
+            return _expense_settings_page(
+                request,
+                auth,
+                db,
+                proposed=proposed,
+                preview=preview.strftime("%a %d %b %Y %H:%M UTC"),
+            )
+        save_schedule(db, auth.organization_id, auth.person_id, proposed)
+        db.commit()
+    except (ValueError, ZoneInfoNotFoundError):
+        db.rollback()
+        return _expense_settings_page(
+            request,
+            auth,
+            db,
+            error="Enter a valid weekday, time, and time zone such as Africa/Lagos or UTC.",
+        )
+    request.session["admin_expense_saved"] = True
+    return RedirectResponse("/admin/settings/expense", status_code=303)
 
 
 @router.get("/settings/integrations", response_class=HTMLResponse)

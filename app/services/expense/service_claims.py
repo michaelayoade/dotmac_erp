@@ -1750,14 +1750,10 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         try:
             # Completed provider transfers settle a commitment checked before
             # initiation. Never reject recording money that has already moved.
-            if claim.approver_id is None and not skip_budget_check:
-                raise ExpenseServiceError(
-                    "Payment requires an approver with a weekly budget"
-                )
-            if skip_budget_check and claim.approver_id is not None:
+            if claim.approver_id is not None:
                 from app.models.people.hr.employee import Employee
 
-                # Settlement must serialize with allowance checks as well.
+                # Select the event time after acquiring the same lock as the gate.
                 self.db.scalar(
                     select(Employee)
                     .where(
@@ -1766,6 +1762,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     )
                     .with_for_update()
                 )
+            payment_event_at = paid_at or datetime.now(UTC)
             if not skip_budget_check:
                 if claim.approver_id is None:
                     raise ExpenseServiceError(
@@ -1775,22 +1772,17 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     raise ExpenseServiceError(
                         "A transfer is already pending for this expense"
                     )
-                payment_as_of = datetime.combine(
-                    payment_date or date.today(),
-                    datetime.max.time(),
-                    tzinfo=UTC,
-                )
                 self._validate_approver_weekly_budget(
                     org_id,
                     claim,
                     claim.approver_id,
-                    approval_at=payment_as_of,
+                    approval_at=payment_event_at,
                 )
 
             claim.status = ExpenseClaimStatus.PAID
             claim.amount_paid = payable
             claim.paid_on = payment_date or date.today()
-            claim.paid_at = paid_at or datetime.now(UTC)
+            claim.paid_at = payment_event_at
             claim.payment_reference = payment_reference
             self._stamp_status_change(claim, actor_id)
             if send_notification and claim.employee and claim.employee.work_email:

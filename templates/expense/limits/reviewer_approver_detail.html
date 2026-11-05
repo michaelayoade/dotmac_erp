@@ -6,7 +6,7 @@
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <a href="/expense/limits/reviewer/approvers" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
+            <a href="/expense/limits/reviewer/approvers?{{ filter_query }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300">
                 {{ icon_svg("arrow-left") }}
             </a>
             <div>
@@ -16,8 +16,16 @@
         </div>
     </div>
 
+    {% if reset_result == "saved" %}
+    <p role="status" class="text-sm text-emerald-700 dark:text-emerald-400">Weekly budget reset recorded.</p>
+    {% elif reset_result in ("invalid_dates", "missing_reason", "failed") %}
+    <p role="alert" class="text-sm text-rose-700 dark:text-rose-400">{{ {"invalid_dates": "Enter a valid review date range.", "missing_reason": "Enter a reason for the reset.", "failed": "The budget reset could not be saved."}[reset_result] }}</p>
+    {% endif %}
+
     <div class="card p-6">
         <form method="get" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <input type="hidden" name="tab" value="{{ review_tab }}">
+            <input type="hidden" name="kind" value="{{ 'all' if include_automatic else 'manual' }}">
             <div>
                 <label class="form-label">From</label>
                 <input aria-label="From" type="date" name="from_date" value="{{ filters.from_date }}" class="form-input">
@@ -42,6 +50,10 @@
                     <span class="font-medium">Not configured</span>
                 {% endif %}
             </p>
+            <p class="mt-1">Paid {{ 'in selected period' if filters.from_date or filters.to_date else '(all time)' }}:
+                {% for currency, amount in paid_by_currency %}{{ "{:,.2f}".format(amount or 0) }} {{ currency }}{% if not loop.last %}, {% endif %}{% else %}0.00{% endfor %}
+            </p>
+            <p class="mt-1">Manual resets in this view: {{ manual_reset_count }}</p>
             <p class="mt-1">Last Reset:
                 {% if last_reset %}
                     <span class="font-medium">{{ last_reset.reset_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
@@ -52,6 +64,8 @@
         </div>
 
         {% if weekly_budget is not none and can_reset_budget %}
+        <details class="mt-4">
+        <summary class="cursor-pointer font-medium">Reset weekly balance</summary>
         <form method="post" action="/expense/limits/reviewer/approvers/{{ approver.employee_id }}/reset" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {{ request.state.csrf_form | safe }}
             <div>
@@ -70,6 +84,7 @@
                 <button type="submit" class="btn btn-primary">Reset Consumed Budget To Zero</button>
             </div>
         </form>
+        </details>
         {% elif weekly_budget is none %}
         <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">Reset unavailable until a weekly approval budget is configured for this approver.</p>
         {% else %}
@@ -77,12 +92,19 @@
         {% endif %}
     </div>
 
+    <nav aria-label="Approver review views" class="flex flex-wrap gap-2">
+        <a class="btn {{ 'btn-primary' if review_tab == 'activity' else 'btn-secondary' }}" href="?{{ filter_query }}" {% if review_tab == 'activity' %}aria-current="page"{% endif %}>Expense activity</a>
+        <a class="btn {{ 'btn-primary' if review_tab == 'resets' else 'btn-secondary' }}" href="?{{ filter_query }}&amp;tab=resets" {% if review_tab == 'resets' %}aria-current="page"{% endif %}>Reset history</a>
+    </nav>
+    {% if review_tab == 'resets' %}
     <div class="card p-6">
         <h2 class="text-base font-semibold text-slate-900 dark:text-white">Reset audit for selected period</h2>
         <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">Resets restore allowance; all actual payments remain in the period totals. A manual reset documents an exception, not a blanket exemption from the payment limit.</p>
+        <a class="btn btn-secondary mt-4" href="?{{ filter_query }}&amp;tab=resets&amp;kind={{ 'manual' if include_automatic else 'all' }}">{{ 'Show manual resets only' if include_automatic else 'Include automatic resets' }}</a>
         {{ reset_history(reset_history_entries) }}
     </div>
 
+    {% else %}
     <div class="card overflow-hidden">
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-base font-semibold text-slate-900 dark:text-white">Approved/Rejected Decisions</h2>
@@ -125,5 +147,13 @@
             </table>
         </div>
     </div>
+    {% endif %}
+        {% if page > 1 or has_next_page %}
+        <nav aria-label="Review pages" class="mt-4 flex items-center gap-3">
+            {% if page > 1 %}<a class="btn btn-secondary" href="?{{ page_query }}&amp;page={{ page - 1 }}">Previous</a>{% endif %}
+            <span>Page {{ page }}</span>
+            {% if has_next_page %}<a class="btn btn-secondary" href="?{{ page_query }}&amp;page={{ page + 1 }}">Next</a>{% endif %}
+        </nav>
+        {% endif %}
 </div>
 {% endblock %}

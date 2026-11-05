@@ -134,10 +134,10 @@ MODULE_SETTINGS_CONFIGS = [
         key="expense",
         title="Expense",
         description="Reimbursement and AP integration settings",
-        url="/settings/expense",
+        url="/admin/settings/expense",
         icon="receipt",
         page_title="Expense Settings",
-        template="settings/expense.html",
+        template="admin/settings/expense.html",
         setting_keys=[
             "expense_route_to_ap",
             "expense_claim_expiry_days",
@@ -173,6 +173,7 @@ MODULE_SETTINGS_SECTIONS = [
         "icon": config.icon,
     }
     for config in MODULE_SETTINGS_CONFIGS
+    if config.key != "expense"
 ]
 
 
