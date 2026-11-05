@@ -102,37 +102,45 @@ async def submit_reimbursement(
     """Create an employee claim and use the ordinary approval workflow."""
     from app.services.expense import ExpenseService
 
+    items: list[dict] = []
+    category_ids: set[UUID] = set()
     try:
         expense_date = date.fromisoformat(str(form.get("claim_date", "")))
-        items = [
-            {
-                "expense_date": expense_date,
-                "category_id": UUID(str(category)),
-                "description": str(description).strip(),
-                "claimed_amount": Decimal(str(amount)),
-            }
-            for category, description, amount in zip(
-                form.getlist("claim_category"),
-                form.getlist("claim_description"),
-                form.getlist("claim_amount"),
-                strict=True,
+        for category, description, amount in zip(
+            form.getlist("claim_category"),
+            form.getlist("claim_description"),
+            form.getlist("claim_amount"),
+            strict=True,
+        ):
+            category_id = UUID(str(category))
+            item_description = str(description).strip()
+            claimed_amount = Decimal(str(amount))
+            if (
+                not item_description
+                or not claimed_amount.is_finite()
+                or claimed_amount <= 0
+            ):
+                raise ValueError(
+                    "Enter a description and positive amount for every expense item."
+                )
+            category_ids.add(category_id)
+            items.append(
+                {
+                    "expense_date": expense_date,
+                    "category_id": category_id,
+                    "description": item_description,
+                    "claimed_amount": claimed_amount,
+                }
             )
-        ]
     except (ValueError, InvalidOperation) as exc:
-        raise ValueError("Enter a valid expense date, category and amount.") from exc
+        raise ValueError(
+            "Enter a valid expense date, category, description and amount."
+        ) from exc
 
     if expense_date > date.today():
         raise ValueError("The reimbursement date must be today or earlier.")
-    if not items or any(
-        not item["description"]
-        or not item["claimed_amount"].is_finite()
-        or item["claimed_amount"] <= 0
-        for item in items
-    ):
-        raise ValueError(
-            "Enter a description and positive amount for every expense item."
-        )
-    category_ids = {item["category_id"] for item in items}
+    if not items:
+        raise ValueError("Add at least one expense item.")
     active_categories = set(
         db.scalars(
             select(ExpenseCategory.category_id).where(
@@ -188,7 +196,10 @@ async def submit_reimbursement(
         notes=f"Fleet maintenance {record.maintenance_id}",
         items=items,
         created_by_id=actor_id,
-        **payout,
+        recipient_name=payout["recipient_name"],
+        recipient_bank_name=payout["recipient_bank_name"],
+        recipient_bank_code=payout["recipient_bank_code"],
+        recipient_account_number=payout["recipient_account_number"],
     )
     result = service.submit_claim(
         org_id, claim.claim_id, actor_id=actor_id, defer_approver_email=True
