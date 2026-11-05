@@ -512,24 +512,24 @@ class ExpenseLimitService(ExpenseServiceBase):
             )
             if existing is not None:
                 return existing
-        snapshot_at = (
-            reset_at - timedelta(microseconds=1)
-            if reset_kind == "AUTOMATIC"
-            else reset_at
-        )
-        balance = self.get_approver_weekly_budget_balance(
-            org_id, approver_id, as_of=snapshot_at
-        )
-        if balance is None:
-            raise ValueError("Approver has no weekly budget configured")
-        limit = self.db.scalar(
-            select(ExpenseApproverLimit).where(
-                ExpenseApproverLimit.organization_id == org_id,
-                ExpenseApproverLimit.approver_limit_id == limit_id,
+        # Automatic events can be written after the boundary. Current transfer
+        # commitments and budget rules cannot reconstruct an exact past balance.
+        balance = None
+        limit = None
+        if reset_kind == "MANUAL":
+            balance = self.get_approver_weekly_budget_balance(
+                org_id, approver_id, as_of=reset_at
             )
-        )
-        if limit is None:
-            raise ValueError("Approver budget configuration no longer exists")
+            if balance is None:
+                raise ValueError("Approver has no weekly budget configured")
+            limit = self.db.scalar(
+                select(ExpenseApproverLimit).where(
+                    ExpenseApproverLimit.organization_id == org_id,
+                    ExpenseApproverLimit.approver_limit_id == limit_id,
+                )
+            )
+            if limit is None:
+                raise ValueError("Approver budget configuration no longer exists")
 
         action_query = (
             select(func.count(ExpenseClaimAction.action_id))
@@ -558,17 +558,19 @@ class ExpenseLimitService(ExpenseServiceBase):
         reviewed_claim_count = self.db.scalar(action_query) or 0
         # Capture which legacy rows were already paid at this reset. This is
         # evidence of their presence, not an invented historical payment time.
-        legacy_paid_claim_ids = list(
-            self.db.scalars(
-                select(ExpenseClaim.claim_id).where(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.approver_id == approver_id,
-                    ExpenseClaim.status == ExpenseClaimStatus.PAID,
-                    ExpenseClaim.paid_on == reset_at.date(),
-                    ExpenseClaim.paid_at.is_(None),
-                )
-            ).all()
-        )
+        legacy_paid_claim_ids = []
+        if balance is not None:
+            legacy_paid_claim_ids = list(
+                self.db.scalars(
+                    select(ExpenseClaim.claim_id).where(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.approver_id == approver_id,
+                        ExpenseClaim.status == ExpenseClaimStatus.PAID,
+                        ExpenseClaim.paid_on == reset_at.date(),
+                        ExpenseClaim.paid_at.is_(None),
+                    )
+                ).all()
+            )
 
         reset = ExpenseApproverLimitReset(
             organization_id=org_id,
@@ -581,12 +583,14 @@ class ExpenseLimitService(ExpenseServiceBase):
             reviewed_claim_count=int(reviewed_claim_count),
             reset_at=reset_at,
             reset_kind=reset_kind,
-            budget_snapshot=budget,
-            currency_snapshot=limit.currency_code,
-            paid_before_reset=balance.used,
-            committed_at_reset=balance.committed,
-            remaining_before_reset=balance.remaining,
-            remaining_after_reset=budget - balance.committed,
+            budget_snapshot=budget if balance is not None else None,
+            currency_snapshot=limit.currency_code if limit is not None else None,
+            paid_before_reset=balance.used if balance is not None else None,
+            committed_at_reset=balance.committed if balance is not None else None,
+            remaining_before_reset=balance.remaining if balance is not None else None,
+            remaining_after_reset=budget - balance.committed
+            if balance is not None
+            else None,
             reviewer_name_snapshot=reviewer.name,
             legacy_paid_claim_ids=[str(claim_id) for claim_id in legacy_paid_claim_ids],
         )
@@ -628,6 +632,7 @@ class ExpenseLimitService(ExpenseServiceBase):
             ExpenseClaim.paid_on,
             ExpenseClaim.paid_at,
             ExpenseClaim.amount_paid,
+            ExpenseClaim.currency_code,
         ).where(
             ExpenseClaim.organization_id == org_id,
             ExpenseClaim.approver_id == approver_id,
@@ -660,8 +665,18 @@ class ExpenseLimitService(ExpenseServiceBase):
         history = self.db.execute(resets).all()
         if not history:
             return []
-        paid = list(self.db.execute(payments).all())
-        return [reset_evidence(reset, name, paid) for reset, name in history]
+        payments_by_currency: dict[str, list] = {}
+        for payment in self.db.execute(payments).all():
+            payments_by_currency.setdefault(payment.currency_code, []).append(payment)
+        result = []
+        for reset, name in history:
+            evidence = reset_evidence(reset, name, [])
+            evidence["payment_splits"] = [
+                (currency, reset_evidence(reset, name, payments))
+                for currency, payments in sorted(payments_by_currency.items())
+            ]
+            result.append(evidence)
+        return result
 
     # =========================================================================
     # Period Usage

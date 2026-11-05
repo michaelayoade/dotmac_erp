@@ -16,6 +16,12 @@
         </div>
     </div>
 
+    {% if reset_result == "saved" %}
+    <p role="status" class="text-sm text-emerald-700 dark:text-emerald-400">Weekly budget reset recorded.</p>
+    {% elif reset_result in ("invalid_dates", "missing_reason", "failed") %}
+    <p role="alert" class="text-sm text-rose-700 dark:text-rose-400">{{ {"invalid_dates": "Enter a valid review date range.", "missing_reason": "Enter a reason for the reset.", "failed": "The budget reset could not be saved."}[reset_result] }}</p>
+    {% endif %}
+
     <div class="card p-6">
         <form method="get" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <input type="hidden" name="tab" value="{{ review_tab }}">

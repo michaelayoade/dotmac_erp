@@ -10,12 +10,20 @@
         <p>Available before: {{ "{:,.2f}".format(reset.remaining_before) }} → after: {{ "{:,.2f}".format(reset.remaining_after) }} {{ reset.currency }}.</p>
         <p>Additional allowance restored: {{ "{:,.2f}".format(reset.restored) }} {{ reset.currency }}.</p>
         {% else %}
+        {% if reset.kind == "AUTOMATIC" %}
+        <p>Scheduled cutoff recorded. Balances at the cutoff were unavailable.</p>
+        {% else %}
         <p>Historical reset: balances at the time were not recorded. This entry alone does not validate an excess.</p>
         {% endif %}
-        <p>Payments in the selected review period: before this reset {{ "{:,.2f}".format(reset.period_paid_before) }}; after {{ "{:,.2f}".format(reset.period_paid_after) }}.</p>
-        {% if reset.period_paid_timing_unknown %}
-        <p>Same-day historical payments with unknown timing: {{ "{:,.2f}".format(reset.period_paid_timing_unknown) }}. They cannot be assigned reliably to before or after this reset.</p>
         {% endif %}
+        {% for currency, split in reset.payment_splits | default([]) %}
+        <p>Payments in the selected period ({{ currency }}): before {{ "{:,.2f}".format(split.period_paid_before) }}; after {{ "{:,.2f}".format(split.period_paid_after) }}.</p>
+        {% if split.period_paid_timing_unknown %}
+        <p>Same-day historical payments with unknown timing: {{ "{:,.2f}".format(split.period_paid_timing_unknown) }} {{ currency }}.</p>
+        {% endif %}
+        {% else %}
+        <p>No recorded payments in the selected period.</p>
+        {% endfor %}
         <p>Payment splits are shown per reset; do not add splits from different resets together.</p>
     </div>
 </details>

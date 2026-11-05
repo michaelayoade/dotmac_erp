@@ -1187,6 +1187,7 @@ class ExpenseLimitWebService:
         paid_amount_rows = db.execute(
             select(
                 ExpenseClaim.approver_id.label("approver_id"),
+                ExpenseClaim.currency_code,
                 func.coalesce(
                     func.sum(ExpenseClaim.amount_paid),
                     Decimal("0"),
@@ -1194,23 +1195,20 @@ class ExpenseLimitWebService:
                 func.count(ExpenseClaim.claim_id).label("paid_count"),
             )
             .where(*paid_filters)
-            .group_by(ExpenseClaim.approver_id)
+            .group_by(ExpenseClaim.approver_id, ExpenseClaim.currency_code)
         ).all()
-        paid_amount_map: dict[UUID, Decimal] = {
-            cast(UUID, row.approver_id): row.paid_amount or Decimal("0")
-            for row in paid_amount_rows
-            if row.approver_id is not None
-        }
-        paid_count_map: dict[UUID, int] = {
-            cast(UUID, row.approver_id): int(row.paid_count or 0)
-            for row in paid_amount_rows
-            if row.approver_id is not None
-        }
-        paid_approver_ids: list[UUID] = [
-            cast(UUID, row.approver_id)
-            for row in paid_amount_rows
-            if row.approver_id is not None
-        ]
+        paid_amount_map: dict[UUID, dict[str, Decimal]] = {}
+        paid_count_map: dict[UUID, int] = {}
+        for row in paid_amount_rows:
+            if row.approver_id is None:
+                continue
+            paid_amount_map.setdefault(row.approver_id, {})[row.currency_code] = (
+                row.paid_amount
+            )
+            paid_count_map[row.approver_id] = (
+                paid_count_map.get(row.approver_id, 0) + row.paid_count
+            )
+        paid_approver_ids = list(paid_amount_map)
 
         from app.models.expense.limit_rule import ExpenseApproverLimitReset
 
@@ -1273,8 +1271,7 @@ class ExpenseLimitWebService:
         total_approved_count = 0
         total_rejected_count = 0
         total_paid_count = 0
-        total_paid_amount = Decimal("0")
-        summary_currency_code = ""
+        total_paid_by_currency: dict[str, Decimal] = {}
 
         def _last_action_sort_value(approver_id: UUID) -> datetime:
             if approver_id not in activity_map:
@@ -1342,13 +1339,14 @@ class ExpenseLimitWebService:
             )
             last_action_at = activity_row.last_action_at if activity_row else None
             paid_count = paid_count_map.get(approver_id, 0)
-            paid_amount = paid_amount_map.get(approver_id, Decimal("0"))
+            paid_by_currency = paid_amount_map.get(approver_id, {})
             total_approved_count += approved_count
             total_rejected_count += rejected_count
             total_paid_count += paid_count
-            total_paid_amount += paid_amount
-            if not summary_currency_code:
-                summary_currency_code = currency_code
+            for paid_currency, amount in paid_by_currency.items():
+                total_paid_by_currency[paid_currency] = (
+                    total_paid_by_currency.get(paid_currency, Decimal("0")) + amount
+                )
 
             review_params = {}
             if parsed_from:
@@ -1372,7 +1370,10 @@ class ExpenseLimitWebService:
                     "approved_count": approved_count,
                     "rejected_count": rejected_count,
                     "paid_count": paid_count,
-                    "paid_amount": paid_amount,
+                    "paid_amount": next(iter(paid_by_currency.values()), Decimal("0"))
+                    if len(paid_by_currency) <= 1
+                    else None,
+                    "paid_by_currency": sorted(paid_by_currency.items()),
                     "last_action_at": last_action_at,
                     "review_url": (
                         f"/expense/limits/reviewer/approvers/{employee.employee_id}"
@@ -1398,8 +1399,15 @@ class ExpenseLimitWebService:
                         cast(int, row["automatic_resets"]) for row in approver_rows
                     ),
                     "paid_count": total_paid_count,
-                    "paid_amount": total_paid_amount,
-                    "currency_code": summary_currency_code,
+                    "paid_amount": next(
+                        iter(total_paid_by_currency.values()), Decimal("0")
+                    )
+                    if len(total_paid_by_currency) <= 1
+                    else None,
+                    "paid_by_currency": sorted(total_paid_by_currency.items()),
+                    "currency_code": next(iter(total_paid_by_currency), "")
+                    if len(total_paid_by_currency) == 1
+                    else "",
                 },
             }
         )
@@ -1579,6 +1587,7 @@ class ExpenseLimitWebService:
                 "filters": filters,
                 "filter_query": filter_query,
                 "review_tab": tab,
+                "reset_result": request.query_params.get("reset_result"),
                 "include_automatic": include_automatic,
                 "page": page,
                 "has_next_page": len(history if tab == "resets" else actions) > 20,
@@ -1617,6 +1626,12 @@ class ExpenseLimitWebService:
         reviewed_from_raw = _safe_form_text(form_data.get("reviewed_from"))
         reviewed_to_raw = _safe_form_text(form_data.get("reviewed_to"))
 
+        review_url = f"/expense/limits/reviewer/approvers/{approver_id}"
+        params = {
+            "tab": "resets",
+            "from_date": reviewed_from_raw,
+            "to_date": reviewed_to_raw,
+        }
         try:
             reviewed_from = (
                 date.fromisoformat(reviewed_from_raw) if reviewed_from_raw else None
@@ -1624,16 +1639,18 @@ class ExpenseLimitWebService:
             reviewed_to = (
                 date.fromisoformat(reviewed_to_raw) if reviewed_to_raw else None
             )
+            if reviewed_from and reviewed_to and reviewed_from > reviewed_to:
+                raise ValueError("Invalid review date range")
         except ValueError:
             return RedirectResponse(
-                url=f"/expense/limits/reviewer/approvers/{approver_id}?error=Invalid+review+date+filter",
+                url=f"{review_url}?tab=resets&reset_result=invalid_dates",
                 status_code=303,
             )
 
         if not reason:
+            params["reset_result"] = "missing_reason"
             return RedirectResponse(
-                url=f"/expense/limits/reviewer/approvers/{approver_id}?error=Reset+reason+is+required",
-                status_code=303,
+                url=f"{review_url}?{urlencode(params)}", status_code=303
             )
 
         service.create_weekly_budget_reset(
@@ -1645,9 +1662,9 @@ class ExpenseLimitWebService:
             reviewed_to=reviewed_to,
         )
         db.flush()
+        params["reset_result"] = "saved"
         return RedirectResponse(
-            url=f"/expense/limits/reviewer/approvers/{approver_id}?success=Weekly+budget+usage+reset",
-            status_code=303,
+            url=f"{review_url}?{urlencode(params)}", status_code=303
         )
 
     @staticmethod

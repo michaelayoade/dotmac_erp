@@ -189,3 +189,37 @@ class TestWeeklyBudgetLookupPriority:
         result = svc._get_approver_weekly_budget(org_id, employee)
         assert result == (Decimal("300000"), designation_limit_id)
         assert db.execute.call_count == 3
+
+
+def test_automatic_reset_keeps_effective_time_without_fabricating_snapshot(
+    org_id, approver_id, reviewer_person_id
+):
+    db = MagicMock()
+    db.scalar.side_effect = [
+        SimpleNamespace(name="Expense Approver"),
+        _make_employee(approver_id),
+        None,
+        3,
+    ]
+    service = ExpenseLimitService(db)
+    cutoff = datetime(2026, 11, 2, tzinfo=UTC)
+    with (
+        patch.object(
+            service,
+            "_get_approver_weekly_budget",
+            return_value=(Decimal("200000"), uuid4()),
+        ),
+        patch.object(service, "get_approver_weekly_budget_balance") as snapshot,
+    ):
+        event = service.create_weekly_budget_reset(
+            org_id,
+            approver_id=approver_id,
+            reviewed_by_id=reviewer_person_id,
+            reset_reason="Scheduled weekly budget reset",
+            reset_kind="AUTOMATIC",
+            effective_at=cutoff,
+        )
+    assert event.reset_at == cutoff
+    assert event.budget_snapshot is None
+    assert event.remaining_before_reset is None
+    snapshot.assert_not_called()

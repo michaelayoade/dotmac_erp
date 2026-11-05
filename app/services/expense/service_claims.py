@@ -1736,7 +1736,6 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             )
             self.db.flush()
 
-        payment_event_at = paid_at or datetime.now(UTC)
         if payment_date is not None and payment_date > date.today():
             raise ExpenseServiceError("Payment date cannot be in the future")
         payable = claim.net_payable_amount or Decimal("0")
@@ -1751,14 +1750,10 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         try:
             # Completed provider transfers settle a commitment checked before
             # initiation. Never reject recording money that has already moved.
-            if claim.approver_id is None and not skip_budget_check:
-                raise ExpenseServiceError(
-                    "Payment requires an approver with a weekly budget"
-                )
-            if skip_budget_check and claim.approver_id is not None:
+            if claim.approver_id is not None:
                 from app.models.people.hr.employee import Employee
 
-                # Settlement must serialize with allowance checks as well.
+                # Select the event time after acquiring the same lock as the gate.
                 self.db.scalar(
                     select(Employee)
                     .where(
@@ -1767,6 +1762,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     )
                     .with_for_update()
                 )
+            payment_event_at = paid_at or datetime.now(UTC)
             if not skip_budget_check:
                 if claim.approver_id is None:
                     raise ExpenseServiceError(

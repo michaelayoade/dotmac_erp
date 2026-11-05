@@ -551,20 +551,23 @@ def reset_weekly_approver_budgets() -> dict:
                     .where(
                         reset.organization_id == org_id,
                         reset.reset_kind == "AUTOMATIC",
-                        reset.reset_at >= reset_at,
+                        reset.reset_at == reset_at,
                     )
                     .limit(1)
                 )
-                # The organization batch commits atomically. An existing automatic
-                # entry for this period means that the batch already ran.
+                # The new worker writes the exact boundary in an atomic batch.
+                # Older runs used their execution time and may have skipped
+                # approvers with a manual reset, so those rows cannot mark a batch complete.
                 if completed is not None:
                     results["organizations_processed"] += 1
                     continue
                 employees = db.scalars(
-                    select(Employee).where(
+                    select(Employee)
+                    .where(
                         Employee.organization_id == org_id,
                         Employee.status == EmployeeStatus.ACTIVE,
                     )
+                    .order_by(Employee.employee_id)
                 ).all()
                 previous_start = limit_service.get_weekly_boundary(
                     org_id, reset_at - timedelta(microseconds=1)

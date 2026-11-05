@@ -113,8 +113,10 @@ def test_reset_records_197k_before_and_150k_after_without_erasing_paid_total(
     )
     assert len(history) == 1
     assert history[0]["restored"] == Decimal("197000")
-    assert history[0]["period_paid_before"] == Decimal("197000")
-    assert history[0]["period_paid_after"] == Decimal("150000")
+    [(currency, split)] = history[0]["payment_splits"]
+    assert currency == "NGN"
+    assert split["period_paid_before"] == Decimal("197000")
+    assert split["period_paid_after"] == Decimal("150000")
     assert history[0]["reviewer"] == person.name
 
 
@@ -497,3 +499,32 @@ def test_reviewer_links_preserve_date_range(db_session, engine, monkeypatch):
     assert context["approvers"][0]["review_url"].endswith(
         f"/{seeded.approver.employee_id}?from_date=2026-08-01&to_date=2026-08-31"
     )
+
+
+def test_reviewer_paid_totals_keep_currencies_separate(db_session, engine, monkeypatch):
+    from sqlalchemy import select
+
+    seeded = _seed_reviewer_activity(db_session, engine)
+    claim = db_session.scalar(
+        select(ExpenseClaim).where(
+            ExpenseClaim.organization_id == seeded.auth.organization_id,
+            ExpenseClaim.claim_number == "CLM-OTHER",
+        )
+    )
+    assert claim is not None
+    claim.currency_code = "USD"
+    db_session.commit()
+
+    context = _render_reviewer_list(
+        db_session,
+        monkeypatch,
+        seeded.auth,
+        q=None,
+        from_date="2026-08-01",
+        to_date="2026-08-31",
+    )
+    assert context["summary"]["paid_by_currency"] == [
+        ("NGN", Decimal("233.33")),
+        ("USD", Decimal("20.00")),
+    ]
+    assert context["summary"]["paid_amount"] is None

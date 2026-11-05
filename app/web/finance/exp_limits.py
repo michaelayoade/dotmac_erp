@@ -11,7 +11,7 @@ HTML template routes for expense limit management:
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -352,11 +352,14 @@ async def reviewer_reset_approver_budget(
         )
         db.commit()
         return response
-    except Exception as exc:
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
         db.rollback()
         logger.exception("Failed to reset weekly budget usage")
         return RedirectResponse(
-            url=f"/finance/expenses/limits/reviewer/approvers/{approver_id}?error={exc}",
+            url=f"/expense/limits/reviewer/approvers/{approver_id}?tab=resets&reset_result=failed",
             status_code=303,
         )
 
