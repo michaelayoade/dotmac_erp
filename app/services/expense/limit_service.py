@@ -24,6 +24,7 @@ except ImportError:  # pragma: no cover
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import joinedload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.expense import (
     ExpenseApproverLimit,
@@ -1519,7 +1520,7 @@ class ExpenseLimitService(ExpenseServiceBase):
     ) -> Decimal:
         # Exact timestamps determine the budget period. Legacy payments carry
         # only a date and count conservatively on either boundary day.
-        legacy = ExpenseClaim.paid_at.is_(None)
+        legacy: ColumnElement[bool] = ExpenseClaim.paid_at.is_(None)
         if known_legacy_before_reset:
             legacy = and_(
                 legacy,

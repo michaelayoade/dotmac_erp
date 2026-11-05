@@ -952,7 +952,7 @@ def admin_settings_hub(
 def _expense_settings_page(
     request, auth, db, *, error=None, proposed=None, preview=None
 ):
-    from datetime import UTC, datetime
+    from datetime import datetime, timezone
 
     from app.services.expense.reset_schedule import (
         WEEKDAYS,
@@ -962,7 +962,7 @@ def _expense_settings_page(
     )
     from app.services.module_settings_web import module_settings_web_service
 
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     history = schedule_history(db, auth.organization_id)
     active = active_schedule(history, now)
     pending = next(
@@ -1034,7 +1034,7 @@ async def update_admin_expense_schedule(
     auth: WebAuthContext = Depends(require_admin_access),
     db: Session = Depends(get_db_for_org),
 ):
-    from datetime import UTC, datetime
+    from datetime import datetime, timezone
     from zoneinfo import ZoneInfoNotFoundError
 
     from app.services.expense.reset_schedule import (
@@ -1049,7 +1049,7 @@ async def update_admin_expense_schedule(
     try:
         proposed = parse_schedule(form)
         if form.get("schedule_action") == "preview":
-            preview = boundary(proposed, datetime.now(UTC), upcoming=True)
+            preview = boundary(proposed, datetime.now(timezone.utc), upcoming=True)
             return _expense_settings_page(
                 request,
                 auth,

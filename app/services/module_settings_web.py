@@ -173,6 +173,7 @@ MODULE_SETTINGS_SECTIONS = [
         "icon": config.icon,
     }
     for config in MODULE_SETTINGS_CONFIGS
+    if config.key != "expense"
 ]
 
 
@@ -184,11 +185,7 @@ class ModuleSettingsWebService:
     def get_hub_context(self, organization_id: uuid.UUID) -> dict[str, Any]:
         """Get context for settings hub page."""
         return {
-            "settings_sections": [
-                section
-                for section in MODULE_SETTINGS_SECTIONS
-                if section.key != "expense"
-            ],
+            "settings_sections": MODULE_SETTINGS_SECTIONS,
         }
 
     # ========== Support Settings ==========

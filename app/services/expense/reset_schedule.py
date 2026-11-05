@@ -1,6 +1,6 @@
 """Organization-specific weekly expense budget boundaries."""
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -42,14 +42,14 @@ def boundary(config: dict, at: datetime, *, upcoming: bool = False) -> datetime:
     local = at.astimezone(zone)
     day = local.date() - timedelta(days=(local.weekday() - config["weekday"]) % 7)
     clock = time.fromisoformat(config["time"])
-    candidate = datetime.combine(day, clock, zone).astimezone(UTC)
+    candidate = datetime.combine(day, clock, zone).astimezone(timezone.utc)
     if upcoming and candidate <= at:
         candidate = datetime.combine(day + timedelta(days=7), clock, zone).astimezone(
-            UTC
+            timezone.utc
         )
     elif not upcoming and candidate > at:
         candidate = datetime.combine(day - timedelta(days=7), clock, zone).astimezone(
-            UTC
+            timezone.utc
         )
     return candidate
 
@@ -110,7 +110,7 @@ def save_schedule(db: Session, org_id: UUID, actor_id: UUID, config: dict) -> No
         .with_for_update()
     )
     row = schedule_row(db, org_id)
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     history = list((row.value_json or {}).get("history", [])) if row else []
     effective_at = boundary(config, now, upcoming=True)
     # Keep prior scheduled changes as audit evidence, including superseded ones.
