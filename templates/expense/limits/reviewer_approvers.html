@@ -38,7 +38,7 @@
         </form>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Approved Decisions</p>
             <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.approved_count }}</p>
@@ -48,9 +48,14 @@
             <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.rejected_count }}</p>
         </div>
         <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Paid Amount</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{{ "{:,.2f}".format(summary.paid_amount) }}{% if summary.currency_code %} {{ summary.currency_code }}{% endif %}</p>
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Paid {{ "in selected period" if filters.from_date or filters.to_date else "(all time)" }}</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">{% for currency, amount in summary.paid_by_currency | default([]) %}<span class="block">{{ "{:,.2f}".format(amount) }} {{ currency }}</span>{% else %}0.00{% endfor %}</p>
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ summary.paid_count }} paid claims{% if filters.from_date or filters.to_date %} in selected period{% endif %}</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-sm font-medium">Manual resets</p>
+            <p class="mt-1 text-2xl font-semibold">{{ summary.manual_resets | default(0) }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ summary.automatic_resets | default(0) }} automatic</p>
         </div>
     </div>
 
@@ -64,11 +69,11 @@
                         <th scope="col" class="text-right">Approved Count</th>
                         <th scope="col" class="text-right">Rejected Count</th>
                         <th scope="col" class="text-right">Paid Claims</th>
-                        <th scope="col" class="text-right">Paid Amount</th>
+                        <th scope="col" class="text-right">Paid {{ "in selected period" if filters.from_date or filters.to_date else "(all time)" }}</th>
                         <th scope="col" class="text-right">Weekly Budget</th>
                         <th scope="col" class="text-right">Max Per Claim</th>
                         <th scope="col">Last Activity</th>
-                        <th scope="col">Last Reset</th>
+                        <th scope="col">Resets</th>
                         <th scope="col"></th>
                     </tr>
                 </thead>
@@ -80,9 +85,9 @@
                         <td class="text-right font-mono">{{ approver.approved_count }}</td>
                         <td class="text-right font-mono">{{ approver.rejected_count }}</td>
                         <td class="text-right font-mono">{{ approver.paid_count }}</td>
-                        <td class="text-right font-mono">{{ "{:,.2f}".format(approver.paid_amount) }} {{ approver.currency_code }}</td>
+                        <td class="text-right font-mono">{% for currency, amount in approver.paid_by_currency %}<span class="block whitespace-nowrap">{{ "{:,.2f}".format(amount) }} {{ currency }}</span>{% else %}0.00{% endfor %}</td>
                         <td class="text-right font-mono">
-                            {% if approver.weekly_budget %}
+                            {% if approver.weekly_budget is not none %}
                                 {{ "{:,.2f}".format(approver.weekly_budget) }} {{ approver.currency_code }}
                             {% else %}
                                 <span class="text-slate-400">Not Set</span>
@@ -97,11 +102,10 @@
                             {% endif %}
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">
-                            {% if approver.last_reset_at %}
-                                {{ approver.last_reset_at.strftime('%Y-%m-%d %H:%M UTC') }}
-                            {% else %}
-                                Never
-                            {% endif %}
+                            {% if approver.manual_resets or approver.automatic_resets %}
+                            <a class="underline whitespace-nowrap" href="{{ approver.reset_url }}{% if not approver.manual_resets %}&amp;kind=all{% endif %}">{{ approver.manual_resets }} manual</a>
+                            <p class="whitespace-nowrap">{{ approver.automatic_resets }} automatic</p>
+                            {% else %}—{% endif %}
                         </td>
                         <td class="text-right">
                             <a class="btn btn-sm btn-primary" href="{{ approver.review_url }}">Review</a>

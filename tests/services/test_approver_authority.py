@@ -187,7 +187,8 @@ class TestApproverAuthorityValidation:
         svc._set_action_status = MagicMock()
 
         with patch.object(svc, "_validate_approver_authority") as mock_validate:
-            svc.approve_claim(org_id, claim_id, approver_id=None)
+            with pytest.raises(Exception, match="Approver must be linked"):
+                svc.approve_claim(org_id, claim_id, approver_id=None)
             # Should never be called when approver_id is None
             mock_validate.assert_not_called()
 

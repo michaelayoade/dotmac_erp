@@ -237,6 +237,7 @@ def _expense_mark_paid(harness: _Harness):
         payment_date=None,
         send_notification=True,
         skip_budget_check=False,
+        paid_at=None,
     ):
         claim = harness.claim
         claim.status = ExpenseClaimStatus.PAID

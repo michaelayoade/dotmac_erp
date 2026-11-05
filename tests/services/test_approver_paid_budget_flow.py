@@ -33,7 +33,7 @@ def _make_claim(
     return claim
 
 
-def test_approve_claim_does_not_consume_budget_before_payment():
+def test_approve_claim_checks_balance_without_marking_paid():
     db = MagicMock()
     org_id = uuid4()
     approver_id = uuid4()
@@ -46,11 +46,15 @@ def test_approve_claim_does_not_consume_budget_before_payment():
 
     with (
         patch.object(svc, "_validate_approver_authority"),
-        patch.object(svc, "_validate_approver_weekly_budget") as mock_weekly_budget,
+        patch(
+            "app.services.expense.limit_service.ExpenseLimitService.check_approver_weekly_budget"
+        ) as mock_weekly_budget,
     ):
         svc.approve_claim(org_id, claim.claim_id, approver_id=approver_id)
 
-    mock_weekly_budget.assert_not_called()
+    mock_weekly_budget.assert_called_once()
+    assert claim.status == ExpenseClaimStatus.APPROVED
+    assert claim.paid_on is None
 
 
 def test_mark_paid_validates_budget_using_paid_event():
@@ -66,6 +70,7 @@ def test_mark_paid_validates_budget_using_paid_event():
 
     with (
         patch.object(svc, "_validate_approver_weekly_budget") as mock_weekly_budget,
+        patch.object(svc, "has_payment_in_flight", return_value=False),
     ):
         svc.mark_paid(
             org_id,
@@ -77,6 +82,5 @@ def test_mark_paid_validates_budget_using_paid_event():
 
     _, _, weekly_approver_id = mock_weekly_budget.call_args.args
     assert weekly_approver_id == approver_id
-    assert mock_weekly_budget.call_args.kwargs["approval_at"].date() == date(
-        2026, 4, 10
-    )
+    assert mock_weekly_budget.call_args.kwargs["approval_at"] == claim.paid_at
+    assert claim.paid_on == date(2026, 4, 10)

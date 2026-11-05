@@ -61,10 +61,6 @@ MODULE_SETTINGS_HANDLERS = {
         get_context=module_settings_web_service.get_procurement_context,
         update_settings=module_settings_web_service.update_procurement_settings,
     ),
-    "expense": ModuleSettingsHandler(
-        get_context=module_settings_web_service.get_expense_context,
-        update_settings=module_settings_web_service.update_expense_settings,
-    ),
     "fixed-assets": ModuleSettingsHandler(
         get_context=module_settings_web_service.get_fixed_assets_context,
         update_settings=module_settings_web_service.update_fixed_assets_settings,
@@ -166,14 +162,7 @@ async def update_module_settings(
         raw_form = await request.form()
     form = _normalize_form(raw_form)
 
-    # Expense settings need multi-select for allowed account IDs
-    if module_key == "expense":
-        allowed_ids = raw_form.getlist("expense_allowed_account_ids")
-        success, error = handler.update_settings(
-            db, auth.organization_id, form, allowed_account_ids=allowed_ids
-        )
-    else:
-        success, error = handler.update_settings(db, auth.organization_id, form)
+    _, error = handler.update_settings(db, auth.organization_id, form)
 
     if error:
         context = base_context(request, auth, config.page_title, "settings", db=db)

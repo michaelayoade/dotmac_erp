@@ -158,6 +158,7 @@ _test_engine = create_engine(
             "public": None,
             "audit": None,
             "expense": None,
+            "payments": None,
             "platform": None,
             "gl": None,
             "ap": None,

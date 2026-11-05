@@ -1217,6 +1217,10 @@ class PaymentService:
         """
         from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 
+        if isinstance(intent, PaymentIntent):
+            self.db.refresh(intent, with_for_update=True)
+        if intent.organization_id != self.organization_id:
+            raise HTTPException(status_code=404, detail="Payment intent not found")
         if intent.direction != PaymentDirection.OUTBOUND:
             raise HTTPException(
                 status_code=400,
@@ -1245,24 +1249,55 @@ class PaymentService:
                 detail="Payment intent has expired. Please create a new one.",
             )
 
+        if intent.source_type != "EXPENSE_CLAIM" or intent.source_id is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Expense transfer requires a linked expense claim",
+            )
+
         # Lock the expense claim to prevent concurrent modifications
         # This prevents race conditions where claim is cancelled while transfer is in progress
-        if intent.source_type == "EXPENSE_CLAIM" and intent.source_id:
-            locked_claim = self.db.scalar(
-                select(ExpenseClaim)
-                .where(ExpenseClaim.claim_id == intent.source_id)
-                .with_for_update(nowait=False)
+        locked_claim = self.db.scalar(
+            select(ExpenseClaim)
+            .where(
+                ExpenseClaim.claim_id == intent.source_id,
+                ExpenseClaim.organization_id == self.organization_id,
             )
-            if not locked_claim:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Expense claim not found",
-                )
-            if locked_claim.status != ExpenseClaimStatus.APPROVED:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot initiate transfer - claim status is '{locked_claim.status.value}'",
-                )
+            .with_for_update(nowait=False)
+        )
+        if locked_claim is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Expense claim not found",
+            )
+        if locked_claim.status != ExpenseClaimStatus.APPROVED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot initiate transfer - claim status is '{locked_claim.status.value}'",
+            )
+
+        from app.services.expense.limit_service import ExpenseLimitService
+
+        if (
+            intent.currency_code != locked_claim.currency_code
+            or Decimal(intent.amount) != locked_claim.net_payable_amount
+        ):
+            raise ValueError(
+                "Transfer amount or currency no longer matches the approved claim"
+            )
+        if locked_claim.approver_id is None:
+            raise ValueError("Payment requires an approver with a weekly budget")
+        ExpenseLimitService(self.db).check_approver_weekly_budget(
+            self.organization_id,
+            locked_claim.approver_id,
+            Decimal(intent.amount),
+            exclude_intent_id=intent.intent_id,
+            currency_code=intent.currency_code,
+        )
+        # Persisted with the transfer result; the approver lock is held until then.
+        # Unknown provider outcomes retain this commitment via INDETERMINATE.
+        intent.status = PaymentIntentStatus.PROCESSING
+        self.db.flush()
 
         # Amount in kobo - use round to avoid truncation
         amount_kobo = int(
@@ -1292,6 +1327,8 @@ class PaymentService:
                     # retryable. The unobserved case never reaches here — the
                     # recovery helper settles it INDETERMINATE and raises
                     # TransferOutcomeUnknown out of this block.
+                    intent.status = PaymentIntentStatus.PENDING
+                    self.db.flush()
                     raise
 
         # Update intent with transfer code
@@ -1658,6 +1695,7 @@ class PaymentService:
                         payment_date=completed_at.date(),
                         send_notification=False,
                         skip_budget_check=True,
+                        paid_at=completed_at,
                     )
                 except Exception:
                     logger.exception(
@@ -2005,6 +2043,7 @@ class PaymentService:
                 claim.status = ExpenseClaimStatus.APPROVED
                 claim.amount_paid = Decimal("0")
                 claim.paid_on = None
+                claim.paid_at = None
                 claim.payment_reference = None
                 logger.info(
                     f"Reverted claim {claim.claim_number} to APPROVED due to failed transfer"
@@ -2787,6 +2826,7 @@ class PaymentService:
                 claim.status = ExpenseClaimStatus.APPROVED
                 claim.amount_paid = Decimal("0")
                 claim.paid_on = None
+                claim.paid_at = None
                 claim.payment_reference = None
                 # Clear reimbursement journal reference (will create reversal)
                 # Note: We keep the original journal for audit trail

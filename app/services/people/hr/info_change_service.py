@@ -65,7 +65,6 @@ from app.services.people.hr.employee_extended import (
     staged_file_id_for_path,
 )
 from app.services.people.hr.org_resolver import OrgResolver
-from app.services.storage import get_storage
 
 if TYPE_CHECKING:
     pass
@@ -2045,20 +2044,7 @@ class InfoChangeService:
                 target.size_bytes,
                 filename,
             )
-        storage = get_storage()
-        s3_key = request.pending_document_path
-        if not s3_key.startswith("employee_documents/"):
-            s3_key = f"employee_documents/{s3_key}"
-        if not storage.exists(s3_key):
-            raise ValueError("Evidence not found")
-        chunks, content_type, content_length = storage.stream(s3_key)
-        filename = Path(request.pending_document_name or "evidence").name or "evidence"
-        return (
-            chunks,
-            content_type or "application/octet-stream",
-            content_length,
-            filename,
-        )
+        raise ValueError("Evidence not found")
 
     # =========================================================================
     # Query Methods

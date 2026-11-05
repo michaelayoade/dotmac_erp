@@ -11,7 +11,7 @@ HTML template routes for expense limit management:
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 _require_policies_manage = require_web_permission("expense:policies:manage")
 _require_limits_review = require_web_permission("expense:limits:review")
+_require_limits_reset = require_web_permission("expense:limits:reset")
 
 router = APIRouter(tags=["expense-limits-web"])
 
@@ -336,7 +337,7 @@ def reviewer_approver_detail(
 async def reviewer_reset_approver_budget(
     request: Request,
     approver_id: UUID,
-    auth: WebAuthContext = Depends(_require_limits_review),
+    auth: WebAuthContext = Depends(_require_limits_reset),
     db: Session = Depends(get_db_for_org),
 ):
     """Reset consumed weekly budget for a single approver."""
@@ -351,11 +352,14 @@ async def reviewer_reset_approver_budget(
         )
         db.commit()
         return response
-    except Exception as exc:
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
         db.rollback()
         logger.exception("Failed to reset weekly budget usage")
         return RedirectResponse(
-            url=f"/finance/expenses/limits/reviewer/approvers/{approver_id}?error={exc}",
+            url=f"/expense/limits/reviewer/approvers/{approver_id}?tab=resets&reset_result=failed",
             status_code=303,
         )
 

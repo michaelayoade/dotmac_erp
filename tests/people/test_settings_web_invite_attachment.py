@@ -212,24 +212,27 @@ async def test_update_default_invite_attachment_can_clear_existing(
 async def test_download_default_invite_attachment_returns_file(
     db_session, person, monkeypatch
 ):
-    class _Storage:
-        def download(self, key):
-            assert key == "hr_invites/org/welcome.pdf"
-            return b"welcome pack"
-
+    file_id = uuid4()
+    readable = MagicMock()
+    readable.__enter__.return_value = readable
+    readable.__exit__.return_value = False
+    readable.read.return_value = b"welcome pack"
     set_default_invite_attachment_metadata(
         db_session,
         person.organization_id,
         {
-            "s3_key": "hr_invites/org/welcome.pdf",
+            "s3_key": f"tenants/{person.organization_id}/files/{file_id}",
             "filename": "welcome.pdf",
             "content_type": "application/pdf",
         },
     )
     db_session.commit()
     monkeypatch.setattr(
-        "app.services.people.hr.invite_attachment.get_storage", lambda: _Storage()
+        "app.services.storage.get_dotmac_files_provider",
+        lambda: MagicMock(),
     )
+    monkeypatch.setattr("dotmac_files.download_target", lambda *a, **k: MagicMock())
+    monkeypatch.setattr("dotmac_files.open_object", lambda *a, **k: readable)
 
     auth = WebAuthContext(
         is_authenticated=True,

@@ -1246,6 +1246,16 @@ SETTINGS_SPECS: list[SettingSpec] = [
     # GL Domain Settings (FX revaluation accounts)
     SettingSpec(
         domain=SettingDomain.gl,
+        key="sub_supplier_ap_control_account_id",
+        env_var=None,
+        value_type=SettingValueType.string,
+        default="",
+        inherits=False,
+        label="Sub Supplier AP Control Account",
+        description="Organization AP liability account for suppliers synchronized from Dotmac Sub.",
+    ),
+    SettingSpec(
+        domain=SettingDomain.gl,
         key="fx_gain_account_id",
         env_var=None,
         value_type=SettingValueType.string,

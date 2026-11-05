@@ -949,6 +949,31 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 approved_amounts,
             )
 
+            if approver_id is None:
+                raise ExpenseServiceError(
+                    "Approver must be linked to an employee record"
+                )
+            proposed_amount = sum(
+                (
+                    corrections_map.get(str(item.item_id), {}).get(
+                        "approved_amount",
+                        approved_amounts_map.get(
+                            str(item.item_id), item.claimed_amount
+                        ),
+                    )
+                    for item in claim.items
+                ),
+                Decimal("0"),
+            )
+            self._validate_approver_weekly_budget(
+                org_id,
+                claim,
+                approver_id,
+                claim_amount=max(
+                    proposed_amount - (claim.advance_adjusted or Decimal("0")),
+                    Decimal("0"),
+                ),
+            )
             if (
                 approver_id is not None
                 and isinstance(claim, ExpenseClaim)
@@ -1278,20 +1303,20 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         approver_id: UUID,
         *,
         approval_at: datetime | None = None,
+        claim_amount: Decimal | None = None,
     ) -> None:
         from app.services.expense.limit_service import ExpenseLimitService
 
-        claim_amount = (
-            claim.net_payable_amount
-            or claim.total_approved_amount
-            or claim.total_claimed_amount
-            or Decimal("0")
-        )
+        if claim_amount is None:
+            claim_amount = claim.net_payable_amount
+        if claim_amount is None:
+            raise ExpenseServiceError("Approved payment amount is missing")
         ExpenseLimitService(self.db, self.ctx).check_approver_weekly_budget(
             org_id,
             approver_id,
             claim_amount,
             approval_at=approval_at,
+            currency_code=claim.currency_code,
         )
 
     def reject_claim(
@@ -1702,8 +1727,11 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         send_notification: bool = True,
         skip_budget_check: bool = False,
         actor_id: UUID | None = None,
+        paid_at: datetime | None = None,
     ) -> ExpenseClaim:
         claim = self.get_claim(org_id, claim_id)
+        if isinstance(claim, ExpenseClaim):
+            self.db.refresh(claim, with_for_update=True)
         if claim.status == ExpenseClaimStatus.PAID:
             return claim
         if claim.status != ExpenseClaimStatus.APPROVED:
@@ -1719,6 +1747,8 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             )
             self.db.flush()
 
+        if payment_date is not None and payment_date > date.today():
+            raise ExpenseServiceError("Payment date cannot be in the future")
         payable = claim.net_payable_amount or Decimal("0")
         if payable <= Decimal("0"):
             raise ValueError(
@@ -1729,26 +1759,41 @@ class ExpenseClaimMixin(ExpenseServiceBase):
         if not self._begin_action(org_id, claim_id, ExpenseClaimActionType.MARK_PAID):
             return claim
         try:
-            # Skip budget re-validation when called after a completed
-            # Paystack transfer — the money has already left and the
-            # budget was checked at approval time and again before
-            # the transfer was initiated.
-            if not skip_budget_check and claim.approver_id is not None:
-                payment_as_of = datetime.combine(
-                    payment_date or date.today(),
-                    datetime.min.time(),
-                    tzinfo=UTC,
+            # Completed provider transfers settle a commitment checked before
+            # initiation. Never reject recording money that has already moved.
+            if claim.approver_id is not None:
+                from app.models.people.hr.employee import Employee
+
+                # Select the event time after acquiring the same lock as the gate.
+                self.db.scalar(
+                    select(Employee)
+                    .where(
+                        Employee.organization_id == org_id,
+                        Employee.employee_id == claim.approver_id,
+                    )
+                    .with_for_update()
                 )
+            payment_event_at = paid_at or datetime.now(UTC)
+            if not skip_budget_check:
+                if claim.approver_id is None:
+                    raise ExpenseServiceError(
+                        "Payment requires an approver with a weekly budget"
+                    )
+                if self.has_payment_in_flight(org_id, claim_id):
+                    raise ExpenseServiceError(
+                        "A transfer is already pending for this expense"
+                    )
                 self._validate_approver_weekly_budget(
                     org_id,
                     claim,
                     claim.approver_id,
-                    approval_at=payment_as_of,
+                    approval_at=payment_event_at,
                 )
 
             claim.status = ExpenseClaimStatus.PAID
             claim.amount_paid = payable
             claim.paid_on = payment_date or date.today()
+            claim.paid_at = payment_event_at
             claim.payment_reference = payment_reference
             self._stamp_status_change(claim, actor_id)
             if send_notification and claim.employee and claim.employee.work_email:

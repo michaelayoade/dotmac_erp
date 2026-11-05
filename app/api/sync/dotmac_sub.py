@@ -63,6 +63,8 @@ from app.services.inventory.material_support import MaterialSupportService
 from app.services.finance.rpt.ncc_financials import ncc_financials_context
 from app.services.people.hr.ncc_staff_report import NccStaffReportService
 from app.services.sync.dotmac_sub_sync_service import DotMacSubSyncService
+from app.schemas.sync.sub_supplier import SubSupplierCreate, SubSupplierRead
+from app.services.sync.sub import suppliers as sub_suppliers
 from app.services.sync.sub.expenses import SubExpenseReceiptError
 from app.services.sync.sub_purchase_invoice_status import (
     PurchaseInvoiceStatusNotFoundError,
@@ -183,6 +185,55 @@ def require_sub_expense_payment_scope(
 
 def require_sub_po_scope(auth: dict = Depends(require_service_auth)) -> dict:
     return _require_sub_flow_scope(auth, "sub:po:write")
+
+
+def require_sub_supplier_write_scope(
+    auth: dict = Depends(require_service_auth),
+) -> dict:
+    return _require_sub_flow_scope(auth, "sub:suppliers:write")
+
+
+def require_sub_supplier_read_scope(auth: dict = Depends(require_service_auth)) -> dict:
+    return _require_sub_flow_scope(auth, "sub:suppliers:read", "sub:suppliers:write")
+
+
+@router.post(
+    "/suppliers",
+    response_model=SubSupplierRead,
+    status_code=201,
+    dependencies=[Depends(require_sub_supplier_write_scope)],
+)
+def create_sub_supplier(
+    payload: SubSupplierCreate,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubSupplierRead:
+    try:
+        return sub_suppliers.create_supplier(
+            db, organization_id=UUID(str(auth["organization_id"])), command=payload
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get(
+    "/suppliers/{source_vendor_id}",
+    response_model=SubSupplierRead,
+    dependencies=[Depends(require_sub_supplier_read_scope)],
+)
+def get_sub_supplier(
+    source_vendor_id: UUID,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(get_db_with_service_org),
+) -> SubSupplierRead:
+    supplier = sub_suppliers.get_supplier(
+        db,
+        organization_id=UUID(str(auth["organization_id"])),
+        source_vendor_id=source_vendor_id,
+    )
+    if supplier is None:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    return supplier
 
 
 def require_sub_ncc_read_scope(auth: dict = Depends(require_service_auth)) -> dict:

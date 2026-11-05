@@ -70,6 +70,12 @@ FONT_PRESETS: dict[str, list[dict[str, str]]] = {
 # Hub sections configuration
 ADMIN_SETTINGS_SECTIONS = [
     {
+        "title": "Expense Settings",
+        "description": "Weekly budget reset schedule, reimbursements, and expense accounts",
+        "url": "/admin/settings/expense",
+        "icon": "receipt",
+    },
+    {
         "title": "Organization",
         "description": "Company profile, legal details, and contact information",
         "url": "/admin/settings/organization",

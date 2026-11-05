@@ -59,23 +59,6 @@ class MockNumberingSequence:
         self.last_used_at = last_used_at
 
 
-@pytest.fixture(autouse=True)
-def _legacy_allocator_branch(monkeypatch):
-    """Exercise the legacy allocator branch in isolation.
-
-    Every live series has been issued by ``dotmac-numbering`` since
-    2026-10-19, so no real SequenceType selects the legacy branch any
-    more. These mock-based tests cover that branch (kept as the
-    mirrored rollback record until the allocator retires), so the
-    cut-over set is emptied here; module-branch behaviour is covered
-    by test_numbering_cutover.py.
-    """
-    monkeypatch.setattr(
-        "app.services.finance.common.numbering_module.CUT_OVER_SERIES",
-        frozenset(),
-    )
-
-
 @pytest.fixture
 def org_id():
     return uuid4()
@@ -444,107 +427,25 @@ class TestSyncNumberingServiceFormatNumber:
 
 
 class TestSyncNumberingServiceGenerateNextNumber:
-    """Tests for SyncNumberingService.generate_next_number method."""
+    """The legacy allocator retired 2026-10-27: sync generation fails
+    closed for any series the composed module does not issue. Module
+    issuance itself is covered by test_numbering_cutover.py."""
 
-    def test_generate_next_number_first_time(self, mock_db, org_id):
-        """Test generating first number (sequence reset)."""
-        sequence = MockNumberingSequence(
-            organization_id=org_id,
-            current_number=0,
-            current_year=None,
-            reset_frequency=ResetFrequency.MONTHLY,
+    def test_generate_next_number_fails_closed_without_cutover(
+        self, monkeypatch, mock_db, org_id
+    ):
+        monkeypatch.setattr(
+            "app.services.finance.common.numbering_module.CUT_OVER_SERIES",
+            frozenset(),
         )
+        sequence = MockNumberingSequence(organization_id=org_id, current_number=5)
         mock_db.scalar.return_value = sequence
 
-        with patch("app.services.finance.common.numbering.select") as mock_select:
-            mock_select.return_value = MagicMock()
-            service = SyncNumberingService(mock_db)
+        service = SyncNumberingService(mock_db)
+        with pytest.raises(ValueError, match="not a cut-over series"):
             service.generate_next_number(org_id, SequenceType.CREDIT_NOTE)
 
-        assert sequence.current_number == 1
-        assert sequence.current_year == date.today().year
-        assert sequence.current_month == date.today().month
-        mock_db.flush.assert_called_once()
-
-    def test_generate_next_number_increment(self, mock_db, org_id):
-        """Test incrementing existing sequence."""
-        today = date.today()
-        sequence = MockNumberingSequence(
-            organization_id=org_id,
-            current_number=5,
-            current_year=today.year,
-            current_month=today.month,
-            reset_frequency=ResetFrequency.MONTHLY,
-        )
-        mock_db.scalar.return_value = sequence
-
-        with patch("app.services.finance.common.numbering.select") as mock_select:
-            mock_select.return_value = MagicMock()
-            service = SyncNumberingService(mock_db)
-            result = service.generate_next_number(org_id, SequenceType.CREDIT_NOTE)
-
-        assert sequence.current_number == 6
-        assert "0006" in result
-
-    def test_generate_next_number_with_reset(self, mock_db, org_id):
-        """Test generating number with monthly reset."""
-        sequence = MockNumberingSequence(
-            organization_id=org_id,
-            current_number=100,
-            current_year=2024,
-            current_month=12,
-            reset_frequency=ResetFrequency.MONTHLY,
-        )
-        mock_db.scalar.return_value = sequence
-
-        with patch("app.services.finance.common.numbering.select") as mock_select:
-            mock_select.return_value = MagicMock()
-            service = SyncNumberingService(mock_db)
-            service.generate_next_number(
-                org_id, SequenceType.CREDIT_NOTE, reference_date=date(2025, 1, 1)
-            )
-
-        assert sequence.current_number == 1
-        assert sequence.current_year == 2025
-        assert sequence.current_month == 1
-
-    def test_generate_next_number_no_reset(self, mock_db, org_id):
-        """Test generating number without reset (NEVER frequency)."""
-        sequence = MockNumberingSequence(
-            organization_id=org_id,
-            current_number=100,
-            current_year=2024,
-            reset_frequency=ResetFrequency.NEVER,
-        )
-        mock_db.scalar.return_value = sequence
-
-        with patch("app.services.finance.common.numbering.select") as mock_select:
-            mock_select.return_value = MagicMock()
-            service = SyncNumberingService(mock_db)
-            service.generate_next_number(
-                org_id, SequenceType.CREDIT_NOTE, reference_date=date(2025, 1, 1)
-            )
-
-        assert sequence.current_number == 101
-
-    def test_generate_next_number_updates_last_used(self, mock_db, org_id):
-        """Test that generate_next_number updates last_used_at."""
-        today = date.today()
-        sequence = MockNumberingSequence(
-            organization_id=org_id,
-            current_number=1,
-            current_year=today.year,
-            current_month=today.month,
-            last_used_at=None,
-        )
-        mock_db.scalar.return_value = sequence
-
-        with patch("app.services.finance.common.numbering.select") as mock_select:
-            mock_select.return_value = MagicMock()
-            service = SyncNumberingService(mock_db)
-            service.generate_next_number(org_id, SequenceType.CREDIT_NOTE)
-
-        assert sequence.last_used_at is not None
+        assert sequence.current_number == 5
 
 
 class TestAsyncNumberingService:
@@ -610,15 +511,12 @@ class TestAsyncNumberingService:
         mock_async_db.execute.return_value = mock_result
 
         service = NumberingService(mock_async_db)
-        result = await service.update_sequence(
-            sequence_id,
-            prefix="NEW",
-            min_digits=6,
-        )
-
-        assert result.prefix == "NEW"
-        assert result.min_digits == 6
-        mock_async_db.flush.assert_called_once()
+        with pytest.raises(ValueError, match="issued by"):
+            await service.update_sequence(
+                sequence_id,
+                prefix="NEW",
+                min_digits=6,
+            )
 
     @pytest.mark.asyncio
     async def test_update_sequence_not_found(self, mock_async_db):
@@ -647,10 +545,8 @@ class TestAsyncNumberingService:
         mock_async_db.execute.return_value = mock_result
 
         service = NumberingService(mock_async_db)
-        result = await service.reset_sequence_counter(sequence_id, new_value=50)
-
-        assert result.current_number == 50
-        mock_async_db.flush.assert_called_once()
+        with pytest.raises(ValueError, match="issued by"):
+            await service.reset_sequence_counter(sequence_id, new_value=50)
 
     @pytest.mark.asyncio
     async def test_reset_sequence_counter_not_found(self, mock_async_db):
@@ -686,48 +582,20 @@ class TestAsyncNumberingService:
 
 
 class TestPreviewFormat:
-    """Tests for preview_format method."""
+    """Preview delegates to the module formatter for cut-over series."""
 
-    def test_preview_format(self, mock_db):
-        """Test preview formatting."""
-        sequence = MockNumberingSequence(
-            sequence_type=SequenceType.CREDIT_NOTE,
-            prefix="CN",
-            include_year=True,
-            include_month=True,
-            year_format=4,
-            min_digits=4,
-            separator="-",
+    def test_preview_format_delegates_to_module(self, monkeypatch, mock_db):
+        sequence = MockNumberingSequence(sequence_type=SequenceType.CREDIT_NOTE)
+        seen = {}
+
+        def fake_preview(seq, *, sample_number, reference_date):
+            seen["sample_number"] = sample_number
+            return "CN-PREVIEW"
+
+        monkeypatch.setattr(
+            "app.services.finance.common.numbering_module.preview_from_module",
+            fake_preview,
         )
-
         service = NumberingService(mock_db)
-        result = service.preview_format(sequence, sample_number=1)
-
-        today = date.today()
-        expected = f"CN{today.year}{today.month:02d}-0001"
-        assert result == expected
-
-    def test_preview_format_custom_number(self, mock_db):
-        """Test preview formatting with custom sample number."""
-        sequence = MockNumberingSequence(
-            prefix="INV",
-            min_digits=4,
-        )
-
-        service = NumberingService(mock_db)
-        result = service.preview_format(sequence, sample_number=999)
-
-        assert "0999" in result
-
-    def test_preview_format_with_suffix(self, mock_db):
-        """Test preview formatting with suffix."""
-        sequence = MockNumberingSequence(
-            prefix="QT",
-            suffix="-DRAFT",
-            min_digits=4,
-        )
-
-        service = NumberingService(mock_db)
-        result = service.preview_format(sequence, sample_number=1)
-
-        assert result.endswith("-DRAFT")
+        assert service.preview_format(sequence, sample_number=7) == "CN-PREVIEW"
+        assert seen["sample_number"] == 7

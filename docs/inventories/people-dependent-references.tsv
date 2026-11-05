@@ -38,10 +38,10 @@ expense	expense_claim	requested_approver_id	hr	employee	employee_id	explicit	app
 expense	expense_claim	status_changed_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:159 via app/models/mixins.py:156|app/models/people/exp/expense_claim.py:129 via app/models/people/base.py:85
 expense	expense_claim	updated_by_id	public	people	id	mixin_expansion	app/models/expense/expense_claim.py:159 via app/models/mixins.py:106|app/models/people/exp/expense_claim.py:129 via app/models/people/base.py:66
 expense	expense_claim_approval_step	approver_id	hr	employee	employee_id	explicit	app/models/expense/expense_claim_approval_step.py:83
-expense	expense_limit_evaluation	evaluated_by_id	public	people	id	explicit	app/models/expense/limit_rule.py:677
+expense	expense_limit_evaluation	evaluated_by_id	public	people	id	explicit	app/models/expense/limit_rule.py:702
 expense	expense_limit_rule	created_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:103 via app/models/mixins.py:100
 expense	expense_limit_rule	updated_by_id	public	people	id	mixin_expansion	app/models/expense/limit_rule.py:103 via app/models/mixins.py:106
-expense	expense_period_usage	employee_id	hr	employee	employee_id	explicit	app/models/expense/limit_rule.py:750
+expense	expense_period_usage	employee_id	hr	employee	employee_id	explicit	app/models/expense/limit_rule.py:775
 fa	asset	custodian_employee_id	hr	employee	employee_id	explicit	app/models/fixed_assets/asset.py:89
 fleet	fuel_log_entry	created_by_id	public	people	id	mixin_expansion	app/models/fleet/fuel_log.py:26 via app/models/people/base.py:61
 fleet	fuel_log_entry	employee_id	hr	employee	employee_id	explicit	app/models/fleet/fuel_log.py:60

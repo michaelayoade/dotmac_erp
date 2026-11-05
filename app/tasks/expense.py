@@ -11,7 +11,6 @@ Handles:
 import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 try:
     from datetime import UTC  # type: ignore
@@ -35,8 +34,6 @@ from app.services.notification import NotificationService
 from app.tenant_catalog import active_organization_ids, organization_ids
 
 logger = logging.getLogger(__name__)
-
-AFRICA_LAGOS_TZ = ZoneInfo("Africa/Lagos")
 
 
 @shared_task
@@ -526,8 +523,9 @@ def expire_old_expense_claims() -> dict:
 
 @shared_task
 def reset_weekly_approver_budgets() -> dict:
-    """Reset weekly approver budgets every Monday at 07:00 Africa/Lagos."""
+    """Record the latest configured weekly boundary for each organization."""
 
+    from app.models.expense.limit_rule import ExpenseApproverLimitReset
     from app.services.expense.limit_service import ExpenseLimitService
 
     logger.info("Running scheduled weekly approver budget reset")
@@ -540,27 +538,40 @@ def reset_weekly_approver_budgets() -> dict:
         "errors": [],
     }
 
-    now_lagos = datetime.now(AFRICA_LAGOS_TZ)
-    current_week_start = (now_lagos - timedelta(days=now_lagos.weekday())).date()
-    current_week_end = current_week_start + timedelta(days=6)
-    previous_week_start = current_week_start - timedelta(days=7)
-    previous_week_end = current_week_end - timedelta(days=7)
-    week_window_start = datetime.combine(
-        current_week_start, datetime.min.time(), tzinfo=AFRICA_LAGOS_TZ
-    )
-
     org_ids = active_organization_ids()
 
     for org_id in org_ids:
         try:
             with session_for_org(org_id) as db:
+                limit_service = ExpenseLimitService(db)
+                reset_at = limit_service.get_weekly_boundary(org_id, datetime.now(UTC))
+                reset = ExpenseApproverLimitReset
+                completed = db.scalar(
+                    select(reset.reset_id)
+                    .where(
+                        reset.organization_id == org_id,
+                        reset.reset_kind == "AUTOMATIC",
+                        reset.reset_at == reset_at,
+                    )
+                    .limit(1)
+                )
+                # The new worker writes the exact boundary in an atomic batch.
+                # Older runs used their execution time and may have skipped
+                # approvers with a manual reset, so those rows cannot mark a batch complete.
+                if completed is not None:
+                    results["organizations_processed"] += 1
+                    continue
                 employees = db.scalars(
-                    select(Employee).where(
+                    select(Employee)
+                    .where(
                         Employee.organization_id == org_id,
                         Employee.status == EmployeeStatus.ACTIVE,
                     )
+                    .order_by(Employee.employee_id)
                 ).all()
-                limit_service = ExpenseLimitService(db)
+                previous_start = limit_service.get_weekly_boundary(
+                    org_id, reset_at - timedelta(microseconds=1)
+                )
 
                 for employee in employees:
                     results["employees_evaluated"] += 1
@@ -575,7 +586,8 @@ def reset_weekly_approver_budgets() -> dict:
                         org_id,
                         employee.employee_id,
                         approver_limit_id,
-                        from_datetime=week_window_start,
+                        from_datetime=reset_at,
+                        automatic_only=True,
                     )
                     if already_reset is not None:
                         results["already_reset"] += 1
@@ -586,8 +598,10 @@ def reset_weekly_approver_budgets() -> dict:
                         approver_id=employee.employee_id,
                         reviewed_by_id=employee.person_id,
                         reset_reason="Scheduled weekly budget reset",
-                        reviewed_from=previous_week_start,
-                        reviewed_to=previous_week_end,
+                        reset_kind="AUTOMATIC",
+                        reviewed_from=previous_start.date(),
+                        reviewed_to=(reset_at - timedelta(microseconds=1)).date(),
+                        effective_at=reset_at,
                     )
                     results["resets_created"] += 1
 

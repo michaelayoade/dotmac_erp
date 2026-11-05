@@ -694,6 +694,16 @@ def mark_claim_paid(
             response_body=response.model_dump(mode="json"),
         )
         return response
+    except ExpenseLimitServiceError as exc:
+        IdempotencyService.update_response(
+            db=db,
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            endpoint=request.url.path,
+            response_status=400,
+            response_body={"detail": str(exc)},
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except HTTPException as exc:
         IdempotencyService.update_response(
             db=db,

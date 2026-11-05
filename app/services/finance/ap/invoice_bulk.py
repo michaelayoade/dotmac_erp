@@ -45,6 +45,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
     export_fields = [
         ("invoice_number", "Invoice Number"),
         ("supplier_invoice_number", "Supplier Invoice #"),
+        ("purpose", "Purpose"),
         ("invoice_date", "Invoice Date"),
         ("received_date", "Received Date"),
         ("due_date", "Due Date"),
@@ -144,6 +145,11 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
 
     def _get_export_value(self, entity: SupplierInvoice, field_name: str) -> str:
         """Handle special field formatting for supplier invoice export."""
+        if field_name == "purpose":
+            purpose = entity.purpose or ""
+            if purpose.startswith(("=", "+", "-", "@", "\t", "\r")):
+                return f"'{purpose}"
+            return purpose
         if field_name == "status":
             return entity.status.value if entity.status else ""
         if field_name == "invoice_type":

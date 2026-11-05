@@ -4446,6 +4446,17 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "GET /api/v1/sync/sub/suppliers/{source_vendor_id}": {
+   "params": [
+    "header:x-api-key!",
+    "path:source_vendor_id!"
+   ],
+   "request": null,
+   "responses": {
+    "200": "a107fa7db5f8",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "GET /api/v1/tax/codes": {
    "params": [
     "cookie:access_token",
@@ -8900,6 +8911,16 @@
     "422": "a11c9d9b2af8"
    }
   },
+  "POST /api/v1/sync/sub/suppliers": {
+   "params": [
+    "header:x-api-key!"
+   ],
+   "request": "075aa1f2dd1c",
+   "responses": {
+    "201": "a107fa7db5f8",
+    "422": "a11c9d9b2af8"
+   }
+  },
   "POST /api/v1/tax/calculate/invoice": {
    "params": [
     "cookie:access_token",
@@ -10016,6 +10037,8 @@
   "SubPurchaseOrderItemPayload": "ffbcc56d991b",
   "SubPurchaseOrderPayload": "499d4c3368f2",
   "SubPurchaseOrderResponse": "f7ca51c8af34",
+  "SubSupplierCreate": "060f5ad16ff7",
+  "SubSupplierRead": "f10b88ba887f",
   "SubTicketPayload": "b672b21de0a4",
   "SubWorkOrderPayload": "b5967b6d5749",
   "SupplierBankDetailsInput": "ea497edb5f60",

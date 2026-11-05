@@ -19,7 +19,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_with_org, require_organization_id
 from app.models.finance.automation.generated_document import GeneratedDocument
-from app.services.careers.resume_service import ResumeService
 from app.services.finance.common.attachment import attachment_service
 from app.services.storage import (
     StorageObjectMissing,
@@ -149,22 +148,7 @@ def download_resume(
     if staged is not None:
         return staged
 
-    service = ResumeService()
-    file_id = Path(filename).stem
-    # Try S3 key first
-    s3_key = f"resumes/{org_id}/{filename}"
-    storage = get_storage()
-    if storage.exists(s3_key):
-        return _stream_s3_file(s3_key, filename=filename)
-
-    # Fallback to legacy path lookup
-    file_path = service.get_resume_path(org_id, file_id)
-    if not file_path or file_path.name != filename or not file_path.exists():
-        raise HTTPException(status_code=404, detail="Resume not found")
-
-    return _stream_s3_file(
-        f"resumes/{org_id}/{file_path.name}", filename=file_path.name
-    )
+    raise HTTPException(status_code=404, detail="Resume not found")
 
 
 @router.get("/resumes/{file_id}")
@@ -178,13 +162,7 @@ def download_resume_by_id(
     if staged is not None:
         return staged
 
-    service = ResumeService()
-    file_path = service.get_resume_path(organization_id, file_id)
-    if not file_path:
-        raise HTTPException(status_code=404, detail="Resume not found")
-
-    s3_key = f"resumes/{organization_id}/{file_path.name}"
-    return _stream_s3_file(s3_key, filename=file_path.name)
+    raise HTTPException(status_code=404, detail="Resume not found")
 
 
 # ---------------------------------------------------------------------------
@@ -267,43 +245,12 @@ def download_attachment(
             },
         )
 
-    # Build S3 key from the stored file_path
-    file_path_str = attachment.file_path or ""
-    if file_path_str.startswith("attachments/"):
-        s3_key = file_path_str
-    else:
-        s3_key = f"attachments/{file_path_str}"
-
-    return _stream_s3_file(
-        s3_key,
-        filename=attachment.file_name,
-        media_type=attachment.content_type or "application/octet-stream",
-        disposition="auto",
-    )
+    raise HTTPException(status_code=404, detail="Attachment not found")
 
 
 # ---------------------------------------------------------------------------
 # Dynamic form attachment downloads
 # ---------------------------------------------------------------------------
-
-
-@router.get("/form_attachments/{org_id}/{filename}")
-def download_form_attachment(
-    org_id: UUID,
-    filename: str,
-    organization_id: UUID = Depends(require_organization_id),
-):
-    """Download a dynamic form attachment (authenticated)."""
-    if org_id != organization_id:
-        raise HTTPException(status_code=404, detail="File not found")
-    if Path(filename).name != filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    return _stream_s3_file(
-        f"form_attachments/{org_id}/{filename}",
-        filename=filename,
-        disposition="auto",
-    )
 
 
 @router.get("/form_attachments/{org_id}/staged/{file_id}")
@@ -357,9 +304,10 @@ def download_avatar(
 ):
     """Download an avatar image (authenticated).
 
-    Post-cutover URLs carry the ``dotmac-files`` file id and stream
-    through the module's authorized target; pre-cutover filename URLs
-    keep the legacy object path until the backfill rewrites them.
+    URLs carry the ``dotmac-files`` file id and stream through the
+    module's authorized target. (Pre-cutover filename URLs were
+    retired with the legacy serving branches on 2026-10-27; the avatar
+    backfill had already rewritten every stored URL.)
     """
     if Path(filename).name != filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -367,7 +315,7 @@ def download_avatar(
     try:
         file_id = UUID(filename)
     except ValueError:
-        return _stream_s3_file(f"avatars/{filename}", filename=filename)
+        raise HTTPException(status_code=404, detail="File not found") from None
 
     from dotmac_files import FileError, download_target, open_object
 

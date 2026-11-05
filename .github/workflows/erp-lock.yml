@@ -1,24 +1,23 @@
 # Resolve a private-index repin against the private Forgejo index, and prove
 # the bytes it names are the bytes the index actually publishes.
 #
-# ── THIS WORKFLOW'S ONE PENDING MOVEMENT ────────────────────────────────────
+# ── THIS WORKFLOW'S ONE PENDING ADDITION ────────────────────────────────────
 #
-# `ALLOWED_MOVEMENTS` is a CLOSED, one-shot allowlist: `dotmac-files`
-# 0.1.0a6 -> 0.1.0a7. Every other Forgejo pin stays frozen (see
+# `ALLOWED_ADDITIONS` is a CLOSED, one-shot allowlist: `dotmac-payroll`
+# 0.1.0a2. Every existing Forgejo pin stays frozen (see
 # `IMMUTABLE_PINS`), and the whole-lock drift check refuses any change to
 # their entries. After the resolved pair is applied, a re-dispatch fails the
-# old-version check. This replaces the spent `dotmac-files` 0.1.0a5 ->
-# 0.1.0a6 movement, which is already applied on main.
-# The wheel filename and SHA-256 require independent review in
+# original-absence check. The wheel and sdist filenames and SHA-256 values
+# require independent review in
 # `RELEASED_WHEEL_DIGESTS`; `acquire` rejects changed bytes before uploading
-# the bundle. Starter's module-release verification record for tag
-# dotmac-files-v0.1.0a7 (tag object 25f1d9bd7c, publisher/verifier run
-# 39211782120) binds the reviewed wheel digest.
+# the bundle. The governed release record for tag dotmac-payroll-v0.1.0a2
+# (tag object fdd148e4e2b7f4091a8d1cf10bdfc7da9c57457f, protected release run
+# 41226687556) binds the reviewed artifact digests.
 # Keep wheel and sdist: Poetry 2.4.1 reads metadata from any parseable wheel
 # without a platform compatibility check. Merely offering the sdist alongside
 # it does not execute its backend.
 #
-# A future repin requires a reviewed change to `ALLOWED_MOVEMENTS`, never a
+# A future change requires a reviewed closed allowlist update, never a
 # re-dispatch of this one.
 #
 # This exists for exactly the reason `dotmac_vendor_control_plane`'s
@@ -34,11 +33,25 @@
 # It is `workflow_dispatch` only. Nothing schedules it and no push triggers
 # it: a lock move is an authored act.
 #
+# ── THE CREDENTIAL IS RELEASED ONLY TO PROTECTED MAIN ───────────────────────
+#
+# `acquire` (and only `acquire`) runs in the GitHub environment
+# `forgejo-registry-read-main`, whose deployment-branch policy admits the
+# branch `main` alone, and the credential is the environment secret
+# `FORGEJO_BUNDLE_READ_TOKEN` -- not the broader repository secret. GitHub
+# evaluates that policy BEFORE the secret is released, so a dispatch from any
+# other branch is refused with no credential in reach. The in-workflow
+# `protected-main` step below stays as a second layer: a workflow-local check
+# is authored by the dispatched branch and cannot be the only control. The
+# environment must exist, configured, BEFORE this workflow merges (GitHub
+# auto-creates an unprotected environment on first use otherwise).
+# `resolve` and `attest` hold no environment and no secret.
+#
 # ── THE CREDENTIAL AND THE RESOLVER NEVER SHARE A JOB ────────────────────────
 #
 # Poetry can execute an sdist build backend during resolution when a
 # candidate's packaged metadata is insufficient (GHSA-73h3-mf4w-8647). While
-# that runs in the same job as `FORGEJO_READ_TOKEN`, the credential is in that
+# that runs in the same job as `FORGEJO_BUNDLE_READ_TOKEN`, the credential is in that
 # code's reach: its environment, its `.netrc`, its process tree. No guard on
 # the manifest closes that, because the executing code is a PUBLISHED
 # package's, not the manifest's.
@@ -98,11 +111,11 @@ on:
           names a tree nobody reviewed.
         required: true
         type: string
-      dotmac_files_version:
+      dotmac_payroll_version:
         description: >-
-          The dotmac-files version to move to. The only value this workflow
-          accepts is 0.1.0a7; anything else is refused by name. The source
-          manifest must still declare 0.1.0a6.
+          The dotmac-payroll version to add. The only value this workflow
+          accepts is 0.1.0a2; anything else is refused by name. The source
+          manifest and lock must not already contain dotmac-payroll.
         required: true
         type: string
 
@@ -119,11 +132,12 @@ jobs:
   # ── THE ONLY JOB THAT HOLDS THE CREDENTIAL WHILE FETCHING ─────────────────
   acquire:
     runs-on: ubuntu-latest
+    environment: forgejo-registry-read-main
     steps:
       - name: Refuse anything but an exact commit and the one allowed movement
         env:
           REF: ${{ inputs.ref }}
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          PAYROLL_VERSION: ${{ inputs.dotmac_payroll_version }}
         run: |
           set -euo pipefail
           # A 40-hex ref is the only input that cannot mean something
@@ -133,8 +147,8 @@ jobs:
             echo "::error::ref must be a full 40-character commit SHA, got '${REF}'"
             exit 1
           fi
-          if [ "${FILES_VERSION}" != "0.1.0a7" ]; then
-            echo "::error::dotmac_files_version must be 0.1.0a7, got '${FILES_VERSION}'"
+          if [ "${PAYROLL_VERSION}" != "0.1.0a2" ]; then
+            echo "::error::dotmac_payroll_version must be 0.1.0a2, got '${PAYROLL_VERSION}'"
             exit 1
           fi
 
@@ -184,9 +198,25 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Move the files pin, and refuse a tree that would misdirect the credential
+      # Classify the ORIGINAL manifest and lock at the exact commit, with the
+      # reviewed policy from the trusted checkout, BEFORE any edit. Refuses a
+      # lock entry with a wrong type or url, a duplicate, a manifest/lock
+      # disagreement and an unadmitted off-index form; derives the exact
+      # artifact set `acquire` will hold the index to.
+      - name: Classify the original manifest and lock before moving anything
         env:
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          REF: ${{ inputs.ref }}
+          PAYROLL_VERSION: ${{ inputs.dotmac_payroll_version }}
+        run: |
+          set -euo pipefail
+          python scripts/erp_lock.py classify \
+            --repo work --ref "${REF}" \
+            --policy .github/dependency-bundle-policy.json \
+            --movement "dotmac-payroll=${PAYROLL_VERSION}"
+
+      - name: Add the payroll pin, and refuse a tree that would misdirect the credential
+        env:
+          PAYROLL_VERSION: ${{ inputs.dotmac_payroll_version }}
         run: |
           set -euo pipefail
           # `set-versions` refuses unless the ref's OWN tree declares the
@@ -197,14 +227,14 @@ jobs:
           # configure the resolver.
           python scripts/erp_lock.py set-versions \
             --manifest work/pyproject.toml \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-payroll=${PAYROLL_VERSION}"
           python scripts/erp_lock.py manifest-guard \
             --manifest work/pyproject.toml --checkout work \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-payroll=${PAYROLL_VERSION}"
 
       - name: There is a credential to resolve with
         env:
-          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
         # Bash requires GNU long options before short options; the reverse
         # order exits 2 before this credential-presence check can run.
         shell: /bin/bash --noprofile --norc -p -eo pipefail {0}
@@ -213,17 +243,18 @@ jobs:
           # Deliberately AFTER the manifest guard: no step holds the
           # credential until the untrusted manifest has been judged.
           if [ -z "${FORGEJO_CREDENTIAL:-}" ]; then
-            echo "::error::FORGEJO_READ_TOKEN is unset or empty in this repository."
+            echo "::error::FORGEJO_BUNDLE_READ_TOKEN is unset or empty in the forgejo-registry-read-main environment."
             echo "::error::Its owner is OpenBao secret/dotmac/forgejo/read-token#value;"
-            echo "::error::this workflow consumes the projection, it does not fetch it."
+            echo "::error::this workflow consumes the environment secret, it does not fetch it."
             exit 1
           fi
           echo "the credential is present"
 
       - name: Download the closed bundle from the private index
         env:
-          TOKEN: ${{ secrets.FORGEJO_READ_TOKEN }}
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          TOKEN: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
+          REF: ${{ inputs.ref }}
+          PAYROLL_VERSION: ${{ inputs.dotmac_payroll_version }}
         run: |
           set -euo pipefail
           # The netrc exists for the length of this ONE step. curl offers it
@@ -238,14 +269,14 @@ jobs:
             "registry.dotmac.io" "ci-reader" "${TOKEN}" >> "${HOME}/.netrc"
 
           python scripts/erp_lock.py acquire \
-            --manifest work/pyproject.toml \
-            --lock work/poetry.lock \
-            --movement "dotmac-files=${FILES_VERSION}" \
+            --repo work --ref "${REF}" \
+            --policy .github/dependency-bundle-policy.json \
+            --movement "dotmac-payroll=${PAYROLL_VERSION}" \
             --out /tmp/bundle
 
       - name: The bundle carries no credential out of this job
         env:
-          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
         run: |
           set -euo pipefail
           # The bundle is package bytes, wheel-derived Requires-Dist and an
@@ -260,7 +291,7 @@ jobs:
 
       - name: Record secret-free credential attestation
         env:
-          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_READ_TOKEN }}
+          FORGEJO_CREDENTIAL: ${{ secrets.FORGEJO_BUNDLE_READ_TOKEN }}
         run: |
           set -euo pipefail
           python scripts/erp_lock.py credential-scan \
@@ -324,9 +355,9 @@ jobs:
       - name: Install the repository-pinned, importable Poetry
         uses: ./.github/actions/setup-poetry
 
-      - name: Move the files pin, and refuse a tree that would misdirect the credential
+      - name: Add the payroll pin, and refuse a tree that would misdirect the credential
         env:
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          PAYROLL_VERSION: ${{ inputs.dotmac_payroll_version }}
         run: |
           set -euo pipefail
           # Re-derived here rather than carried from `acquire` as an
@@ -334,10 +365,10 @@ jobs:
           # judged.
           python scripts/erp_lock.py set-versions \
             --manifest work/pyproject.toml \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-payroll=${PAYROLL_VERSION}"
           python scripts/erp_lock.py manifest-guard \
             --manifest work/pyproject.toml --checkout work \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-payroll=${PAYROLL_VERSION}"
 
       - name: This job holds no credential, and says so before it resolves
         run: |
@@ -370,7 +401,7 @@ jobs:
             --directory /tmp/bundle > /tmp/mirror.log 2>&1 &
           for _ in $(seq 1 50); do
             if curl -sS -o /dev/null --fail \
-              "http://127.0.0.1:${MIRROR_PORT}/simple/dotmac-files/"; then
+              "http://127.0.0.1:${MIRROR_PORT}/simple/dotmac-payroll/"; then
               echo "the bundle is being served on 127.0.0.1:${MIRROR_PORT}"
               exit 0
             fi
@@ -408,7 +439,7 @@ jobs:
           python scripts/erp_lock.py off-index-lock \
             --lock /tmp/poetry.lock.before
 
-      - name: Resolve the files pin, with no way to ask for more
+      - name: Resolve the payroll addition, with no way to ask for more
         working-directory: work
         env:
           POETRY_CONFIG_DIR: /tmp/poetry-config
@@ -437,15 +468,13 @@ jobs:
           set -euo pipefail
           poetry check --lock
 
-      - name: Only files moved, and only version, files and dependencies
+      - name: Only payroll was added, with its reviewed fields
         run: |
           set -euo pipefail
-          # The drift gate covers the WHOLE lock. Only `dotmac-files` may
-          # differ, and only in `version`, `files` and `dependencies`.
-          # `dotmac-files`, `dotmac-tax`, and every other entry remain identical.
-          # `dependencies` is permitted here because a version move can raise
-          # the moved package's own floor on a transitive dependency; the NEXT
-          # step is what bounds that permitted freedom.
+          # The drift gate covers the WHOLE lock. Only one exact
+          # `dotmac-payroll` entry may appear; every existing entry remains
+          # identical. The NEXT step binds the new entry's dependency names
+          # to the acquired wheel metadata.
           python scripts/erp_lock.py drift \
             --before /tmp/poetry.lock.before --after work/poetry.lock
 
@@ -476,13 +505,13 @@ jobs:
 
       - name: The lock's hashes are the bytes the index published
         env:
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          PAYROLL_VERSION: ${{ inputs.dotmac_payroll_version }}
         run: |
           set -euo pipefail
           python scripts/erp_lock.py verify \
             --lock work/poetry.lock \
             --digests /tmp/bundle/digests.json \
-            --movement "dotmac-files=${FILES_VERSION}"
+            --movement "dotmac-payroll=${PAYROLL_VERSION}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -521,7 +550,7 @@ jobs:
       - name: Assemble the evidence — the manifest and the lock, bound together
         env:
           REF: ${{ inputs.ref }}
-          FILES_VERSION: ${{ inputs.dotmac_files_version }}
+          PAYROLL_VERSION: ${{ inputs.dotmac_payroll_version }}
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -541,7 +570,7 @@ jobs:
             --lock /tmp/pair/poetry.lock \
             --credential-proof /tmp/bundle/credential-scan.ok \
             --coordinate "ref=${REF}" \
-            --coordinate "dotmac_files_version=${FILES_VERSION}" \
+            --coordinate "dotmac_payroll_version=${PAYROLL_VERSION}" \
             --coordinate "repository=${REPOSITORY}" \
             --coordinate "workflow_run=${RUN_ID}" \
             --coordinate "run_attempt=${RUN_ATTEMPT}" \
@@ -549,7 +578,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: erp-lock-${{ inputs.dotmac_files_version }}
+          name: erp-lock-${{ inputs.dotmac_payroll_version }}
           path: /tmp/evidence
           if-no-files-found: error
 

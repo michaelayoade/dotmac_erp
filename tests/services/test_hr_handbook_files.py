@@ -107,26 +107,15 @@ class TestStreamDocument:
         assert b"".join(chunks) == b"{\\rtf1}"
         assert (content_type, content_length) == ("application/rtf", 4)
 
-    def test_legacy_document_keeps_storage_branch(self):
+    def test_legacy_document_is_not_found(self):
         org_id = uuid4()
         document = SimpleNamespace(
             organization_id=org_id,
             file_path=f"hr_documents/{org_id}/policy.pdf",
         )
-        storage = MagicMock()
-        storage.exists.return_value = True
-        storage.stream.return_value = (iter([b"%PDF"]), "application/pdf", 4)
 
-        with patch(
-            "app.services.people.hr.handbook_service.get_storage",
-            return_value=storage,
-        ):
-            chunks, content_type, content_length = HRDocumentService(
-                MagicMock()
-            ).stream_document(document)
-
-        assert b"".join(chunks) == b"%PDF"
-        assert (content_type, content_length) == ("application/pdf", 4)
+        with pytest.raises(HRDocumentFileNotFoundError):
+            HRDocumentService(MagicMock()).stream_document(document)
 
     def test_missing_staged_object_is_not_found(self):
         from dotmac_files import FileError

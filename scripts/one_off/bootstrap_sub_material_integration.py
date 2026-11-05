@@ -30,6 +30,7 @@ SCOPES = [
     "sub:attendance:read",
     "sub:attendance:write",
     "sub:po:write",
+    "sub:suppliers:write",
     "sub:ap:write",
     "sub:expense:write",
     "sub:expense:pay",

@@ -582,6 +582,31 @@ class ExpenseApproverLimitReset(Base):
         nullable=False,
         server_default=func.now(),
     )
+    reset_kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="MANUAL", server_default="MANUAL"
+    )
+    budget_snapshot: Mapped[Decimal | None] = mapped_column(
+        Numeric(19, 4), nullable=True
+    )
+    currency_snapshot: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    paid_before_reset: Mapped[Decimal | None] = mapped_column(
+        Numeric(19, 4), nullable=True
+    )
+    committed_at_reset: Mapped[Decimal | None] = mapped_column(
+        Numeric(19, 4), nullable=True
+    )
+    remaining_before_reset: Mapped[Decimal | None] = mapped_column(
+        Numeric(19, 4), nullable=True
+    )
+    remaining_after_reset: Mapped[Decimal | None] = mapped_column(
+        Numeric(19, 4), nullable=True
+    )
+    reviewer_name_snapshot: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
+    legacy_paid_claim_ids: Mapped[list[str] | None] = mapped_column(
+        JSONB, nullable=True
+    )
 
 
 class ExpenseLimitEvaluation(Base):

@@ -49,24 +49,24 @@ def _stage_form_file(
     original_filename: str | None,
 ):
     """Upload and stage one dynamic form attachment on the tenant plane."""
-    from dotmac_files import FileError, FilePolicy, prepare_upload
+    from dotmac_files import FileError, prepare_upload
     from dotmac_files.providers import StorageError
 
     from app.services.file_object_cleanup import (
         CleanupUnsafeReferenceView,
         stage_tenant_file_if_unreserved,
     )
-    from app.services.file_upload import FileStorageError
+    from app.services.file_upload import (
+        FileStorageError,
+        policy_from_upload_config,
+        resolve_declared_media_type,
+    )
     from app.services.storage import get_dotmac_files_provider
     from app.services.tenant_projection import reconcile_organization_tenant
     from app.tenancy import OrganizationTenantContext
 
     config = get_form_attachment_upload().config
-    policy = FilePolicy(
-        max_bytes=config.max_size_bytes,
-        allowed_extensions=frozenset(config.allowed_extensions),
-        allowed_media_types=frozenset(config.allowed_content_types),
-    )
+    policy = policy_from_upload_config(config)
     scope = OrganizationTenantContext.for_organization(organization_id).tenant_scope
     try:
         prepared = prepare_upload(
@@ -74,7 +74,9 @@ def _stage_form_file(
             scope=scope,
             policy=policy,
             original_filename=original_filename or "attachment",
-            declared_media_type=content_type or "",
+            declared_media_type=resolve_declared_media_type(
+                original_filename, content_type
+            ),
             chunks=iter([file_data]),
         )
     except FileError as exc:

@@ -11,8 +11,8 @@ entries are named and left alone. Legacy objects are not deleted;
 orphan reconciliation owns that.
 
 Usage:
-    python scripts/backfill_expense_receipt_files.py --database-url postgresql://... --dry-run
-    python scripts/backfill_expense_receipt_files.py --database-url postgresql://...
+    python scripts/backfill_expense_receipt_files.py --dry-run
+    python scripts/backfill_expense_receipt_files.py
 
 ``--dry-run`` performs no writes. Output is a JSON summary; failures
 are named per claim item. Exit code 1 when any candidate failed.
@@ -23,17 +23,18 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
-import os
 import sys
 from pathlib import Path
 
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.db.session_context import session_for_org
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimItem
 from app.services.expense.receipt_files import receipt_file_id, stage_receipt
 from app.services.expense.web_common import ExpenseWebCommonMixin
 from app.services.storage import get_dotmac_files_provider
+from app.tenant_catalog import organization_ids
 
 
 def _read_legacy(entry: str) -> bytes | None:
@@ -97,22 +98,30 @@ def backfill(db: Session, *, dry_run: bool) -> dict:
     return summary
 
 
+def _merge(total: dict, part: dict) -> None:
+    for key, value in part.items():
+        if isinstance(value, list):
+            total.setdefault(key, []).extend(value)
+        elif isinstance(value, int):
+            total[key] = total.get(key, 0) + value
+        else:
+            total[key] = value
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database-url", default=os.environ.get("DATABASE_URL", ""))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
-    if not args.database_url:
-        parser.error("--database-url or DATABASE_URL is required")
-    engine = create_engine(args.database_url)
-    try:
-        with sessionmaker(bind=engine)() as db:
-            summary = backfill(db, dry_run=args.dry_run)
-    finally:
-        engine.dispose()
+    summary: dict = {}
+    # Cross-tenant authority is limited to discovering organizations.
+    # Each organization's reads and writes use a fresh tenant session so
+    # the ORM org filter and both RLS GUCs are primed (session_for_org).
+    for org_id in organization_ids(include_inactive=True):
+        with session_for_org(org_id) as db:
+            _merge(summary, backfill(db, dry_run=args.dry_run))
     json.dump(summary, sys.stdout, indent=2)
     sys.stdout.write("\n")
-    return 1 if summary["failures"] else 0
+    return 1 if summary.get("failures") else 0
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ import asyncio
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
+
 from app.services.people.hr.invite_attachment import (
     delete_invite_attachment_object,
     load_default_invite_attachment,
@@ -57,20 +59,13 @@ class TestReadBytes:
         assert data == b"welcome pack"
         assert resolve.call_args.kwargs["file_id"] is not None
 
-    def test_legacy_reads_from_storage(self):
-        storage = MagicMock()
-        storage.download.return_value = b"legacy bytes"
-        with patch(
-            "app.services.people.hr.invite_attachment.get_storage",
-            return_value=storage,
-        ):
-            data = read_invite_attachment_bytes(
+    def test_legacy_read_is_not_found(self):
+        with pytest.raises(FileNotFoundError):
+            read_invite_attachment_bytes(
                 MagicMock(),
                 uuid4(),
                 {"s3_key": "hr_invite_attachments/org/pack.pdf"},
             )
-        assert data == b"legacy bytes"
-        storage.download.assert_called_once_with("hr_invite_attachments/org/pack.pdf")
 
 
 class TestDeleteObject:

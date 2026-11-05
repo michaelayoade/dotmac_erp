@@ -1173,27 +1173,6 @@ class ExpenseLimitWebService:
         }
         activity_approver_ids: list[UUID] = list(activity_map)
 
-        if not (parsed_from or parsed_to) and not activity_approver_ids:
-            context = base_context(request, auth, "Expense Reviewer", "limits-review")
-            context.update(
-                {
-                    "approvers": [],
-                    "filters": filters,
-                    "active_filters": active_filters,
-                    "filter_errors": {},
-                    "summary": {
-                        "approved_count": 0,
-                        "rejected_count": 0,
-                        "paid_count": 0,
-                        "paid_amount": Decimal("0"),
-                        "currency_code": "",
-                    },
-                }
-            )
-            return templates.TemplateResponse(
-                request, "expense/limits/reviewer_approvers.html", context
-            )
-
         paid_filters = [
             ExpenseClaim.organization_id == org_id,
             ExpenseClaim.approver_id.isnot(None),
@@ -1204,12 +1183,11 @@ class ExpenseLimitWebService:
             paid_filters.append(ExpenseClaim.paid_on >= parsed_from)
         if parsed_to:
             paid_filters.append(ExpenseClaim.paid_on <= parsed_to)
-        if not (parsed_from or parsed_to) and activity_approver_ids:
-            paid_filters.append(ExpenseClaim.approver_id.in_(activity_approver_ids))
 
         paid_amount_rows = db.execute(
             select(
                 ExpenseClaim.approver_id.label("approver_id"),
+                ExpenseClaim.currency_code,
                 func.coalesce(
                     func.sum(ExpenseClaim.amount_paid),
                     Decimal("0"),
@@ -1217,26 +1195,42 @@ class ExpenseLimitWebService:
                 func.count(ExpenseClaim.claim_id).label("paid_count"),
             )
             .where(*paid_filters)
-            .group_by(ExpenseClaim.approver_id)
+            .group_by(ExpenseClaim.approver_id, ExpenseClaim.currency_code)
         ).all()
-        paid_amount_map: dict[UUID, Decimal] = {
-            cast(UUID, row.approver_id): row.paid_amount or Decimal("0")
-            for row in paid_amount_rows
-            if row.approver_id is not None
+        paid_amount_map: dict[UUID, dict[str, Decimal]] = {}
+        paid_count_map: dict[UUID, int] = {}
+        for row in paid_amount_rows:
+            if row.approver_id is None:
+                continue
+            paid_amount_map.setdefault(row.approver_id, {})[row.currency_code] = (
+                row.paid_amount
+            )
+            paid_count_map[row.approver_id] = (
+                paid_count_map.get(row.approver_id, 0) + row.paid_count
+            )
+        paid_approver_ids = list(paid_amount_map)
+
+        from app.models.expense.limit_rule import ExpenseApproverLimitReset
+
+        reset_model = ExpenseApproverLimitReset
+        counts = select(
+            reset_model.approver_id,
+            func.count().filter(reset_model.reset_kind == "MANUAL"),
+            func.count().filter(reset_model.reset_kind == "AUTOMATIC"),
+        ).where(reset_model.organization_id == org_id)
+        if parsed_from:
+            counts = counts.where(func.date(reset_model.reset_at) >= parsed_from)
+        if parsed_to:
+            counts = counts.where(func.date(reset_model.reset_at) <= parsed_to)
+        reset_counts = {
+            approver_id: (manual, automatic)
+            for approver_id, manual, automatic in db.execute(
+                counts.group_by(reset_model.approver_id)
+            ).all()
         }
-        paid_count_map: dict[UUID, int] = {
-            cast(UUID, row.approver_id): int(row.paid_count or 0)
-            for row in paid_amount_rows
-            if row.approver_id is not None
-        }
-        paid_approver_ids: list[UUID] = [
-            cast(UUID, row.approver_id)
-            for row in paid_amount_rows
-            if row.approver_id is not None
-        ]
 
         approver_ids: list[UUID] = list(
-            dict.fromkeys([*activity_approver_ids, *paid_approver_ids])
+            dict.fromkeys([*activity_approver_ids, *paid_approver_ids, *reset_counts])
         )
         if not approver_ids:
             context = base_context(request, auth, "Expense Reviewer", "limits-review")
@@ -1277,8 +1271,7 @@ class ExpenseLimitWebService:
         total_approved_count = 0
         total_rejected_count = 0
         total_paid_count = 0
-        total_paid_amount = Decimal("0")
-        summary_currency_code = ""
+        total_paid_by_currency: dict[str, Decimal] = {}
 
         def _last_action_sort_value(approver_id: UUID) -> datetime:
             if approver_id not in activity_map:
@@ -1336,16 +1329,7 @@ class ExpenseLimitWebService:
                     )
                     or _settings.default_functional_currency_code
                 )
-            latest_reset = (
-                service.get_latest_weekly_reset(
-                    org_id,
-                    approver_id=employee.employee_id,
-                    approver_limit_id=limit_id,
-                    from_datetime=None,
-                )
-                if limit_id
-                else None
-            )
+            manual_resets, automatic_resets = reset_counts.get(approver_id, (0, 0))
             activity_row = activity_map.get(approver_id)
             approved_count = (
                 int(activity_row.approved_count or 0) if activity_row else 0
@@ -1355,13 +1339,14 @@ class ExpenseLimitWebService:
             )
             last_action_at = activity_row.last_action_at if activity_row else None
             paid_count = paid_count_map.get(approver_id, 0)
-            paid_amount = paid_amount_map.get(approver_id, Decimal("0"))
+            paid_by_currency = paid_amount_map.get(approver_id, {})
             total_approved_count += approved_count
             total_rejected_count += rejected_count
             total_paid_count += paid_count
-            total_paid_amount += paid_amount
-            if not summary_currency_code:
-                summary_currency_code = currency_code
+            for paid_currency, amount in paid_by_currency.items():
+                total_paid_by_currency[paid_currency] = (
+                    total_paid_by_currency.get(paid_currency, Decimal("0")) + amount
+                )
 
             review_params = {}
             if parsed_from:
@@ -1377,13 +1362,18 @@ class ExpenseLimitWebService:
                     "name": display_name,
                     "limit_id": str(limit_id) if limit_id else None,
                     "weekly_budget": weekly_budget,
+                    "manual_resets": manual_resets,
+                    "automatic_resets": automatic_resets,
+                    "reset_url": f"/expense/limits/reviewer/approvers/{employee.employee_id}?{urlencode({**review_params, 'tab': 'resets'})}",
                     "max_approval_amount": max_approval_amount,
                     "currency_code": currency_code,
-                    "last_reset_at": latest_reset.reset_at if latest_reset else None,
                     "approved_count": approved_count,
                     "rejected_count": rejected_count,
                     "paid_count": paid_count,
-                    "paid_amount": paid_amount,
+                    "paid_amount": next(iter(paid_by_currency.values()), Decimal("0"))
+                    if len(paid_by_currency) <= 1
+                    else None,
+                    "paid_by_currency": sorted(paid_by_currency.items()),
                     "last_action_at": last_action_at,
                     "review_url": (
                         f"/expense/limits/reviewer/approvers/{employee.employee_id}"
@@ -1402,9 +1392,22 @@ class ExpenseLimitWebService:
                 "summary": {
                     "approved_count": total_approved_count,
                     "rejected_count": total_rejected_count,
+                    "manual_resets": sum(
+                        cast(int, row["manual_resets"]) for row in approver_rows
+                    ),
+                    "automatic_resets": sum(
+                        cast(int, row["automatic_resets"]) for row in approver_rows
+                    ),
                     "paid_count": total_paid_count,
-                    "paid_amount": total_paid_amount,
-                    "currency_code": summary_currency_code,
+                    "paid_amount": next(
+                        iter(total_paid_by_currency.values()), Decimal("0")
+                    )
+                    if len(total_paid_by_currency) <= 1
+                    else None,
+                    "paid_by_currency": sorted(total_paid_by_currency.items()),
+                    "currency_code": next(iter(total_paid_by_currency), "")
+                    if len(total_paid_by_currency) == 1
+                    else "",
                 },
             }
         )
@@ -1453,32 +1456,108 @@ class ExpenseLimitWebService:
             except ValueError:
                 parsed_to = None
 
-        week_start = service._start_of_week_utc(datetime.now(UTC)).date()
-        if parsed_from is None:
-            parsed_from = week_start
-        if parsed_to is None:
-            parsed_to = date.today()
+        tab = "resets" if request.query_params.get("tab") == "resets" else "activity"
+        include_automatic = request.query_params.get("kind") == "all"
+        try:
+            page = max(1, min(10000, int(request.query_params.get("page", "1"))))
+        except ValueError:
+            page = 1
+        decision_filters = []
+        paid_filters = []
+        if parsed_from:
+            decision_filters.append(
+                func.date(ExpenseClaimAction.created_at) >= parsed_from
+            )
+            paid_filters.append(ExpenseClaim.paid_on >= parsed_from)
+        if parsed_to:
+            decision_filters.append(
+                func.date(ExpenseClaimAction.created_at) <= parsed_to
+            )
+            paid_filters.append(ExpenseClaim.paid_on <= parsed_to)
+        paid_by_currency = db.execute(
+            select(ExpenseClaim.currency_code, func.sum(ExpenseClaim.amount_paid))
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.approver_id == approver_id,
+                ExpenseClaim.status == ExpenseClaimStatus.PAID,
+                *paid_filters,
+            )
+            .group_by(ExpenseClaim.currency_code)
+        ).all()
+        from app.models.expense.limit_rule import ExpenseApproverLimitReset
+
+        reset_model = ExpenseApproverLimitReset
+        manual_count_query = select(func.count()).where(
+            reset_model.organization_id == org_id,
+            reset_model.approver_id == approver_id,
+            reset_model.reset_kind == "MANUAL",
+        )
+        if parsed_from:
+            manual_count_query = manual_count_query.where(
+                func.date(reset_model.reset_at) >= parsed_from
+            )
+        if parsed_to:
+            manual_count_query = manual_count_query.where(
+                func.date(reset_model.reset_at) <= parsed_to
+            )
+        manual_reset_count = db.scalar(manual_count_query) or 0
+        history = (
+            service.get_reset_history(
+                org_id,
+                approver_id,
+                from_date=parsed_from,
+                to_date=parsed_to,
+                manual_only=not include_automatic,
+                offset=(page - 1) * 20,
+                limit=21,
+            )
+            if tab == "resets"
+            else []
+        )
+        filters = {
+            "from_date": parsed_from.isoformat() if parsed_from else "",
+            "to_date": parsed_to.isoformat() if parsed_to else "",
+        }
+        filter_query = urlencode(filters)
+        history_query = urlencode(
+            {
+                **filters,
+                "tab": "resets",
+                "kind": "all" if include_automatic else "manual",
+            }
+        )
 
         # Include both approvals and rejections executed by this approver.
-        actions = list(
-            db.execute(
-                select(ExpenseClaimAction, ExpenseClaim)
-                .join(
-                    ExpenseClaim,
-                    ExpenseClaim.claim_id == ExpenseClaimAction.claim_id,
-                )
-                .where(
-                    ExpenseClaim.organization_id == org_id,
-                    ExpenseClaim.approver_id == approver_id,
-                    ExpenseClaimAction.action_type.in_(
-                        [ExpenseClaimActionType.APPROVE, ExpenseClaimActionType.REJECT]
-                    ),
-                    ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
-                    func.date(ExpenseClaimAction.created_at) >= parsed_from,
-                    func.date(ExpenseClaimAction.created_at) <= parsed_to,
-                )
-                .order_by(ExpenseClaimAction.created_at.desc())
-            ).all()
+        actions = (
+            list(
+                db.execute(
+                    select(ExpenseClaimAction, ExpenseClaim)
+                    .join(
+                        ExpenseClaim,
+                        ExpenseClaim.claim_id == ExpenseClaimAction.claim_id,
+                    )
+                    .where(
+                        ExpenseClaim.organization_id == org_id,
+                        ExpenseClaim.approver_id == approver_id,
+                        ExpenseClaimAction.action_type.in_(
+                            [
+                                ExpenseClaimActionType.APPROVE,
+                                ExpenseClaimActionType.REJECT,
+                            ]
+                        ),
+                        ExpenseClaimAction.status == ExpenseClaimActionStatus.COMPLETED,
+                    )
+                    .where(*decision_filters)
+                    .order_by(
+                        ExpenseClaimAction.created_at.desc(),
+                        ExpenseClaimAction.action_id.desc(),
+                    )
+                    .offset((page - 1) * 20)
+                    .limit(21)
+                ).all()
+            )
+            if tab == "activity"
+            else []
         )
 
         budget_info = service._get_approver_weekly_budget(org_id, employee)
@@ -1504,14 +1583,22 @@ class ExpenseLimitWebService:
         context.update(
             {
                 "approver": employee,
-                "actions": actions,
-                "filters": {
-                    "from_date": parsed_from.isoformat(),
-                    "to_date": parsed_to.isoformat(),
-                },
+                "actions": actions[:20],
+                "filters": filters,
+                "filter_query": filter_query,
+                "review_tab": tab,
+                "reset_result": request.query_params.get("reset_result"),
+                "include_automatic": include_automatic,
+                "page": page,
+                "has_next_page": len(history if tab == "resets" else actions) > 20,
+                "page_query": history_query if tab == "resets" else filter_query,
+                "manual_reset_count": manual_reset_count,
+                "paid_by_currency": paid_by_currency,
                 "weekly_budget": budget_amount,
                 "limit_id": str(limit_id) if limit_id else None,
                 "last_reset": latest_reset,
+                "can_reset_budget": auth.has_permission("expense:limits:reset"),
+                "reset_history_entries": history[:20],
             }
         )
         return templates.TemplateResponse(
@@ -1526,6 +1613,12 @@ class ExpenseLimitWebService:
         form_data: dict[str, object],
     ) -> RedirectResponse:
         """Create manual budget reset for one approver."""
+        if not auth.has_permission("expense:limits:reset"):
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=403, detail="Expense budget reset permission is required"
+            )
         org_id = coerce_uuid(auth.organization_id)
         service = ExpenseLimitService(db)
 
@@ -1533,6 +1626,12 @@ class ExpenseLimitWebService:
         reviewed_from_raw = _safe_form_text(form_data.get("reviewed_from"))
         reviewed_to_raw = _safe_form_text(form_data.get("reviewed_to"))
 
+        review_url = f"/expense/limits/reviewer/approvers/{approver_id}"
+        params = {
+            "tab": "resets",
+            "from_date": reviewed_from_raw,
+            "to_date": reviewed_to_raw,
+        }
         try:
             reviewed_from = (
                 date.fromisoformat(reviewed_from_raw) if reviewed_from_raw else None
@@ -1540,16 +1639,18 @@ class ExpenseLimitWebService:
             reviewed_to = (
                 date.fromisoformat(reviewed_to_raw) if reviewed_to_raw else None
             )
+            if reviewed_from and reviewed_to and reviewed_from > reviewed_to:
+                raise ValueError("Invalid review date range")
         except ValueError:
             return RedirectResponse(
-                url=f"/expense/limits/reviewer/approvers/{approver_id}?error=Invalid+review+date+filter",
+                url=f"{review_url}?tab=resets&reset_result=invalid_dates",
                 status_code=303,
             )
 
         if not reason:
+            params["reset_result"] = "missing_reason"
             return RedirectResponse(
-                url=f"/expense/limits/reviewer/approvers/{approver_id}?error=Reset+reason+is+required",
-                status_code=303,
+                url=f"{review_url}?{urlencode(params)}", status_code=303
             )
 
         service.create_weekly_budget_reset(
@@ -1561,9 +1662,9 @@ class ExpenseLimitWebService:
             reviewed_to=reviewed_to,
         )
         db.flush()
+        params["reset_result"] = "saved"
         return RedirectResponse(
-            url=f"/expense/limits/reviewer/approvers/{approver_id}?success=Weekly+budget+usage+reset",
-            status_code=303,
+            url=f"{review_url}?{urlencode(params)}", status_code=303
         )
 
     @staticmethod
@@ -1590,38 +1691,16 @@ class ExpenseLimitWebService:
                 "last_reset_at": None,
             }
 
-        now = datetime.now(UTC)
-
-        window_start, latest_reset = service._get_weekly_budget_window(
-            org_id,
-            limit.scope_id,
-            limit.approver_limit_id,
-            as_of=now,
-        )
-        usage_query = select(
-            func.coalesce(func.sum(ExpenseClaim.net_payable_amount), Decimal("0"))
-        ).where(
-            ExpenseClaim.organization_id == org_id,
-            ExpenseClaim.status == ExpenseClaimStatus.PAID,
-            ExpenseClaim.paid_on.isnot(None),
-            ExpenseClaim.paid_on >= window_start.date(),
-            ExpenseClaim.paid_on <= now.date(),
-            ExpenseClaim.approver_id == limit.scope_id,
-        )
-
-        used_amount = db.scalar(usage_query) or Decimal("0")
-        remaining_budget = base_budget - used_amount
-
+        balance = service.get_approver_weekly_budget_balance(org_id, limit.scope_id)
+        if balance is None:
+            return None
         return {
-            "usage_label": (
-                f"Since manual reset on {latest_reset.reset_at.date().isoformat()}"
-                if latest_reset
-                else f"This week starting {window_start.date().isoformat()}"
-            ),
-            "base_budget": base_budget,
-            "used_amount": used_amount,
-            "remaining_budget": remaining_budget,
-            "last_reset_at": latest_reset.reset_at if latest_reset else None,
+            "usage_label": balance.usage_label,
+            "base_budget": balance.budget,
+            "used_amount": balance.used,
+            "remaining_budget": balance.remaining,
+            "committed": balance.committed,
+            "last_reset_at": balance.last_reset_at,
         }
 
     @staticmethod

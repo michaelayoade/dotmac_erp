@@ -8,7 +8,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.help.models import ArticleStatus, HelpArticleOverride
-from app.services.storage import get_storage
 
 
 class SLAPolicyDocumentNotFoundError(LookupError):
@@ -109,17 +108,4 @@ class SLAPolicyReadService:
                 file_name=policy.file_name,
             )
 
-        expected_prefix = f"sla_policies/{organization_id}/{article_id}/"
-        if not policy.file_path.startswith(expected_prefix):
-            raise SLAPolicyDocumentNotFoundError("SLA policy document not found")
-
-        storage = get_storage()
-        if not storage.exists(policy.file_path):
-            raise SLAPolicyDocumentNotFoundError("SLA policy document not found")
-        chunks, _stored_content_type, content_length = storage.stream(policy.file_path)
-        return SLAPolicyDocumentStream(
-            chunks=chunks,
-            content_type=policy.file_content_type,
-            content_length=content_length,
-            file_name=policy.file_name,
-        )
+        raise SLAPolicyDocumentNotFoundError("SLA policy document not found")

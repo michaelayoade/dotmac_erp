@@ -46,6 +46,9 @@ class Supplier(Base, ERPNextSyncMixin):
     __tablename__ = "supplier"
     __table_args__ = (
         UniqueConstraint("organization_id", "supplier_code", name="uq_supplier_code"),
+        UniqueConstraint(
+            "organization_id", "sub_vendor_id", name="uq_supplier_sub_vendor"
+        ),
         ForeignKeyConstraint(
             ["organization_id", "ap_control_account_id"],
             ["gl.account.organization_id", "gl.account.account_id"],
@@ -68,6 +71,9 @@ class Supplier(Base, ERPNextSyncMixin):
     )
 
     supplier_code: Mapped[str] = mapped_column(String(30), nullable=False)
+    sub_vendor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
     supplier_type: Mapped[SupplierType] = mapped_column(
         Enum(SupplierType, name="supplier_type"),
         nullable=False,

@@ -28,14 +28,14 @@
     {% set report_hero_stats = [
         {"label": "Approved Decisions", "value": report.approved_count, "subtitle": "{:,.2f}".format(report.approved_total), "icon": "check-circle", "icon_bg": "bg-emerald-100 dark:bg-emerald-900/30", "icon_class": "h-6 w-6 text-emerald-600 dark:text-emerald-400", "value_class": "text-emerald-600 dark:text-emerald-400", "subtitle_class": "text-slate-500 dark:text-slate-400 font-mono"},
         {"label": "Rejected Decisions", "value": report.rejected_count, "subtitle": "{:,.2f}".format(report.rejected_total), "icon": "x-circle", "icon_bg": "bg-rose-100 dark:bg-rose-900/30", "icon_class": "h-6 w-6 text-rose-600 dark:text-rose-400", "value_class": "text-rose-600 dark:text-rose-400", "subtitle_class": "text-slate-500 dark:text-slate-400 font-mono"},
-        {"label": "Period Decisions", "value": report.approved_count + report.rejected_count, "subtitle": weekly_balance.remaining is defined and weekly_balance and "{:,.2f}".format(weekly_balance.remaining) or "Weekly budget unlimited", "icon": "clipboard-check", "icon_bg": "bg-slate-100 dark:bg-slate-800", "icon_class": "h-6 w-6 text-slate-600 dark:text-slate-300", "subtitle_class": weekly_balance.remaining is defined and weekly_balance and (weekly_balance.remaining < 0 and 'text-rose-600 dark:text-rose-400 font-mono' or 'text-emerald-600 dark:text-emerald-400 font-mono') or 'text-slate-500 dark:text-slate-400'}
+        {"label": "Period Decisions", "value": report.approved_count + report.rejected_count, "subtitle": weekly_balance.remaining is defined and weekly_balance and "{:,.2f}".format(weekly_balance.remaining) or "No weekly budget configured", "icon": "clipboard-check", "icon_bg": "bg-slate-100 dark:bg-slate-800", "icon_class": "h-6 w-6 text-slate-600 dark:text-slate-300", "subtitle_class": weekly_balance.remaining is defined and weekly_balance and (weekly_balance.remaining < 0 and 'text-rose-600 dark:text-rose-400 font-mono' or 'text-emerald-600 dark:text-emerald-400 font-mono') or 'text-slate-500 dark:text-slate-400'}
     ] %}
     {% include "expense/reports/_report_hero_stats.html" %}
 
     {% if weekly_balance %}
     <div class="card p-5">
         <h2 class="text-base font-semibold text-slate-900 dark:text-white">Approval Budget Balance</h2>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ weekly_balance.usage_label }}</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ weekly_balance.usage_label }} | Pending transfers {{ "{:,.2f}".format(weekly_balance.committed) }}</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Budget</p>

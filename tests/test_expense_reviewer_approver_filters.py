@@ -1,8 +1,9 @@
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+import pytest
 
 from starlette.responses import HTMLResponse
 
@@ -12,9 +13,14 @@ from app.models.expense.expense_claim_action import (
     ExpenseClaimActionStatus,
     ExpenseClaimActionType,
 )
-from app.models.expense.limit_rule import ExpenseApproverLimit
+from app.models.expense.limit_rule import (
+    ExpenseApproverLimit,
+    ExpenseApproverLimitReset,
+)
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person
+from app.models.finance.payments.payment_intent import PaymentIntent
+from app.services.expense.limit_service import ExpenseLimitService
 from app.services.expense.limit_web import ExpenseLimitWebService
 from app.web.deps import WebAuthContext
 
@@ -23,7 +29,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _ensure_reviewer_tables(engine) -> None:
-    for table in (Employee.__table__, ExpenseApproverLimit.__table__):
+    for table in (
+        Employee.__table__,
+        ExpenseApproverLimit.__table__,
+        ExpenseApproverLimitReset.__table__,
+        PaymentIntent.__table__,
+    ):
         for column in table.columns:
             default = column.server_default
             if default is None:
@@ -42,6 +53,71 @@ def _make_person(org_id, email: str) -> Person:
         last_name="Reviewer",
         email=email,
     )
+
+
+@pytest.mark.parametrize("legacy_payment", [False, True])
+def test_reset_records_197k_before_and_150k_after_without_erasing_paid_total(
+    db_session, engine, legacy_payment
+):
+    _ensure_reviewer_tables(engine)
+    org_id = uuid4()
+    person = _make_person(org_id, f"reset-reviewer-{org_id.hex}@example.com")
+    employee = _make_employee(org_id, person, "RESET-001")
+    limit = ExpenseApproverLimit(
+        approver_limit_id=uuid4(),
+        organization_id=org_id,
+        scope_type="EMPLOYEE",
+        scope_id=employee.employee_id,
+        max_approval_amount=Decimal("80000"),
+        weekly_approval_budget=Decimal("200000"),
+        currency_code="NGN",
+        is_active=True,
+    )
+    now = datetime.now(UTC)
+    before = _make_claim(
+        org_id,
+        employee.employee_id,
+        employee.employee_id,
+        f"RESET-BEFORE-{org_id.hex}",
+        amount_paid=Decimal("197000"),
+        paid_on=now.date(),
+    )
+    before.paid_at = None if legacy_payment else now
+    db_session.add_all([person, employee, limit, before])
+    db_session.flush()
+    service = ExpenseLimitService(db_session)
+    reset = service.create_weekly_budget_reset(
+        org_id,
+        approver_id=employee.employee_id,
+        reviewed_by_id=person.id,
+        reset_reason="Authorised emergency repairs",
+    )
+    assert reset.remaining_before_reset == Decimal("3000")
+    assert reset.remaining_after_reset == Decimal("200000")
+    after = _make_claim(
+        org_id,
+        employee.employee_id,
+        employee.employee_id,
+        f"RESET-AFTER-{org_id.hex}",
+        amount_paid=Decimal("150000"),
+        paid_on=now.date(),
+    )
+    after.paid_at = reset.reset_at + timedelta(microseconds=1)
+    db_session.add(after)
+    db_session.flush()
+    balance = service.get_approver_weekly_budget_balance(org_id, employee.employee_id)
+    assert balance.used == Decimal("150000")
+    assert balance.remaining == Decimal("50000")
+    history = service.get_reset_history(
+        org_id, employee.employee_id, from_date=now.date(), to_date=now.date()
+    )
+    assert len(history) == 1
+    assert history[0]["restored"] == Decimal("197000")
+    [(currency, split)] = history[0]["payment_splits"]
+    assert currency == "NGN"
+    assert split["period_paid_before"] == Decimal("197000")
+    assert split["period_paid_after"] == Decimal("150000")
+    assert history[0]["reviewer"] == person.name
 
 
 def _make_employee(org_id, person: Person, code: str) -> Employee:
@@ -423,3 +499,32 @@ def test_reviewer_links_preserve_date_range(db_session, engine, monkeypatch):
     assert context["approvers"][0]["review_url"].endswith(
         f"/{seeded.approver.employee_id}?from_date=2026-08-01&to_date=2026-08-31"
     )
+
+
+def test_reviewer_paid_totals_keep_currencies_separate(db_session, engine, monkeypatch):
+    from sqlalchemy import select
+
+    seeded = _seed_reviewer_activity(db_session, engine)
+    claim = db_session.scalar(
+        select(ExpenseClaim).where(
+            ExpenseClaim.organization_id == seeded.auth.organization_id,
+            ExpenseClaim.claim_number == "CLM-OTHER",
+        )
+    )
+    assert claim is not None
+    claim.currency_code = "USD"
+    db_session.commit()
+
+    context = _render_reviewer_list(
+        db_session,
+        monkeypatch,
+        seeded.auth,
+        q=None,
+        from_date="2026-08-01",
+        to_date="2026-08-31",
+    )
+    assert context["summary"]["paid_by_currency"] == [
+        ("NGN", Decimal("233.33")),
+        ("USD", Decimal("20.00")),
+    ]
+    assert context["summary"]["paid_amount"] is None
