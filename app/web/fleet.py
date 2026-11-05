@@ -612,6 +612,22 @@ def maintenance_list(
     return templates.TemplateResponse(request, "fleet/maintenance.html", context)
 
 
+@router.get("/maintenance/suppliers/search")
+def maintenance_supplier_search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=20, ge=1, le=20),
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
+    db: Session = Depends(get_db_for_org),
+):
+    from app.services.finance.ap.web import ap_web_service
+
+    return JSONResponse(
+        ap_web_service.supplier_typeahead(
+            db=db, organization_id=str(auth.organization_id), query=q, limit=limit
+        )
+    )
+
+
 @router.get("/maintenance/new", response_class=HTMLResponse)
 def maintenance_new(
     request: Request,
@@ -627,6 +643,10 @@ def maintenance_new(
             auth.organization_id, vehicle_id=vehicle_id
         )
     )
+    if auth.has_permission("expense:claims:submit"):
+        from app.services.fleet.maintenance_finance import reimbursement_form_options
+
+        context.update(reimbursement_form_options(db, auth.organization_id))
     return templates.TemplateResponse(request, "fleet/maintenance_form.html", context)
 
 

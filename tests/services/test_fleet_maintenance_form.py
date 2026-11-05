@@ -80,7 +80,7 @@ async def test_maintenance_create_response_saves_uploaded_attachments(monkeypatc
 
         def create(self, schema):
             captured["schema"] = schema
-            return SimpleNamespace(maintenance_id=maintenance_id)
+            return SimpleNamespace(maintenance_id=maintenance_id, supplier_id=schema.supplier_id)
 
     async def _fake_save_attachment(self, **kwargs):
         captured["attachment_kwargs"] = kwargs
@@ -122,3 +122,50 @@ async def test_maintenance_create_response_saves_uploaded_attachments(monkeypatc
     assert captured["attachment_kwargs"]["maintenance_id"] == maintenance_id
     assert captured["attachment_kwargs"]["upload"] is upload
     assert captured["attachment_kwargs"]["uploaded_by"] == TEST_USER_ID
+
+def test_draft_invoice_maps_maintenance_fields(monkeypatch):
+    from decimal import Decimal
+
+    from app.services.fleet.maintenance_finance import (
+        SupplierInvoiceService,
+        create_draft_invoice,
+    )
+
+    supplier_id, vehicle_id, cost_center_id, invoice_id = (uuid4() for _ in range(4))
+    scheduled = date(2026, 7, 10)
+    record = SimpleNamespace(
+        supplier_id=supplier_id,
+        vehicle_id=vehicle_id,
+        vehicle=SimpleNamespace(assigned_cost_center_id=cost_center_id),
+        scheduled_date=scheduled,
+        estimated_cost=Decimal("100.50"),
+        notes="Replace brake pads",
+    )
+    supplier = SimpleNamespace(supplier_id=supplier_id, currency_code="NGN")
+    db = SimpleNamespace(scalar=lambda query: supplier)
+
+    def create_invoice(db_arg, org_id, payload, actor_id):
+        assert db_arg is db
+        assert org_id == TEST_ORG_ID
+        assert actor_id == TEST_USER_ID
+        assert payload.supplier_id == supplier_id
+        assert payload.vehicle_id == vehicle_id
+        assert payload.invoice_date == payload.due_date == payload.received_date == scheduled
+        assert payload.purpose == record.notes
+        line, = payload.lines
+        assert line.item_id is None
+        assert line.expense_account_id is None
+        assert line.cost_center_id == cost_center_id
+        assert line.unit_price == record.estimated_cost
+        return SimpleNamespace(invoice_id=invoice_id)
+
+    monkeypatch.setattr(SupplierInvoiceService, "create_invoice", create_invoice)
+    create_draft_invoice(
+        db,
+        TEST_ORG_ID,
+        record,
+        FormData({"create_draft_invoice": "1"}),
+        SimpleNamespace(has_permission=lambda permission: permission == "ap:invoices:create"),
+        TEST_USER_ID,
+    )
+    assert record.invoice_id == invoice_id
