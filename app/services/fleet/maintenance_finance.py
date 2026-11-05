@@ -15,9 +15,6 @@ from app.models.expense import ExpenseCategory
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
 from app.models.fleet.maintenance import MaintenanceRecord
-from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.services.expense.expense_service import ExpenseService
-from app.services.expense.receipt_files import stage_receipt
 from app.services.finance.ap.supplier_invoice import (
     InvoiceLineInput,
     SupplierInvoiceInput,
@@ -53,7 +50,9 @@ def create_draft_invoice(
     if not auth.has_permission("ap:invoices:create") or actor_id is None:
         raise ValueError("You do not have permission to create supplier invoices.")
     if supplier is None or record.estimated_cost is None or record.estimated_cost <= 0:
-        raise ValueError("A supplier and positive estimated cost are required for the draft invoice.")
+        raise ValueError(
+            "A supplier and positive estimated cost are required for the draft invoice."
+        )
     vehicle = record.vehicle
     invoice = SupplierInvoiceService.create_invoice(
         db,
@@ -82,16 +81,12 @@ def create_draft_invoice(
 
 
 def reimbursement_form_options(db: Session, org_id: UUID) -> dict:
+    from app.services.expense import ExpenseService
+
     return {
-        "expense_categories": ExpenseService(db).list_categories(
-            org_id, is_active=True
-        ).items,
-        "expense_approvers": db.scalars(
-            select(Employee).where(
-                Employee.organization_id == org_id,
-                Employee.status == EmployeeStatus.ACTIVE,
-            )
-        ).all(),
+        "expense_categories": ExpenseService(db)
+        .list_categories(org_id, is_active=True)
+        .items,
     }
 
 
@@ -105,10 +100,10 @@ async def submit_reimbursement(
     uploads: list[UploadFile],
 ) -> None:
     """Create an employee claim and use the ordinary approval workflow."""
+    from app.services.expense import ExpenseService
+
     try:
         expense_date = date.fromisoformat(str(form.get("claim_date", "")))
-        approver = form.get("claim_approver")
-        approver_id = UUID(str(approver)) if approver else None
         items = [
             {
                 "expense_date": expense_date,
@@ -124,7 +119,7 @@ async def submit_reimbursement(
             )
         ]
     except (ValueError, InvalidOperation) as exc:
-        raise ValueError("Enter a valid expense date, category, amount and approver.") from exc
+        raise ValueError("Enter a valid expense date, category and amount.") from exc
 
     if expense_date > date.today():
         raise ValueError("The reimbursement date must be today or earlier.")
@@ -134,7 +129,9 @@ async def submit_reimbursement(
         or item["claimed_amount"] <= 0
         for item in items
     ):
-        raise ValueError("Enter a description and positive amount for every expense item.")
+        raise ValueError(
+            "Enter a description and positive amount for every expense item."
+        )
     category_ids = {item["category_id"] for item in items}
     active_categories = set(
         db.scalars(
@@ -147,18 +144,6 @@ async def submit_reimbursement(
     )
     if active_categories != category_ids:
         raise ValueError("Select an active category for every expense item.")
-
-    if approver_id is not None and (
-        approver_id == employee_id
-        or not db.scalar(
-            select(Employee.employee_id).where(
-                Employee.organization_id == org_id,
-                Employee.employee_id == approver_id,
-                Employee.status == EmployeeStatus.ACTIVE,
-            )
-        )
-    ):
-        raise ValueError("Select another active employee as the requested approver.")
 
     payout = {
         field: str(form.get(field, "")).strip()
@@ -175,7 +160,9 @@ async def submit_reimbursement(
     vehicle = record.vehicle
     service = ExpenseService(db)
     receipt_url = None
-    if form.get("use_attachments_as_receipts") == "1":
+    if form.get("use_attachments_as_receipts") == "1" and uploads:
+        from app.services.expense.receipt_files import stage_receipt
+
         for upload in uploads:
             await upload.seek(0)
             receipt = stage_receipt(
@@ -198,12 +185,15 @@ async def submit_reimbursement(
         purpose=(record.description or "Car maintenance")[:500],
         vehicle_id=record.vehicle_id,
         cost_center_id=vehicle.assigned_cost_center_id,
-        requested_approver_id=approver_id,
         notes=f"Fleet maintenance {record.maintenance_id}",
         items=items,
         created_by_id=actor_id,
         **payout,
     )
-    result = service.submit_claim(org_id, claim.claim_id, actor_id=actor_id)
+    result = service.submit_claim(
+        org_id, claim.claim_id, actor_id=actor_id, defer_approver_email=True
+    )
     if not result.success:
-        raise ValueError(result.warning_message or "The expense could not be submitted for approval.")
+        raise ValueError(
+            result.warning_message or "The expense could not be submitted for approval."
+        )

@@ -61,6 +61,18 @@ class MaintenanceService:
         """Get maintenance record by ID."""
         return self.db.get(MaintenanceRecord, maintenance_id)
 
+    def has_submission(self, maintenance_id: UUID) -> bool:
+        """Check whether this organization already saved the form submission."""
+        return (
+            self.db.scalar(
+                select(MaintenanceRecord.maintenance_id).where(
+                    MaintenanceRecord.organization_id == self.organization_id,
+                    MaintenanceRecord.maintenance_id == maintenance_id,
+                )
+            )
+            is not None
+        )
+
     def get_or_raise(self, maintenance_id: UUID) -> MaintenanceRecord:
         """Get maintenance record or raise NotFoundError."""
         record = self.get_by_id(maintenance_id)
@@ -142,7 +154,9 @@ class MaintenanceService:
             stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())
 
-    def create(self, data: MaintenanceCreate) -> MaintenanceRecord:
+    def create(
+        self, data: MaintenanceCreate, *, maintenance_id: UUID | None = None
+    ) -> MaintenanceRecord:
         """Create a new maintenance record."""
         # Verify vehicle exists and belongs to org
         vehicle = self.db.get(Vehicle, data.vehicle_id)
@@ -151,6 +165,7 @@ class MaintenanceService:
 
         record = MaintenanceRecord(
             organization_id=self.organization_id,
+            maintenance_id=maintenance_id,
             **data.model_dump(),
         )
 

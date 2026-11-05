@@ -80,7 +80,9 @@ async def test_maintenance_create_response_saves_uploaded_attachments(monkeypatc
 
         def create(self, schema):
             captured["schema"] = schema
-            return SimpleNamespace(maintenance_id=maintenance_id, supplier_id=schema.supplier_id)
+            return SimpleNamespace(
+                maintenance_id=maintenance_id, supplier_id=schema.supplier_id
+            )
 
     async def _fake_save_attachment(self, **kwargs):
         captured["attachment_kwargs"] = kwargs
@@ -123,6 +125,7 @@ async def test_maintenance_create_response_saves_uploaded_attachments(monkeypatc
     assert captured["attachment_kwargs"]["upload"] is upload
     assert captured["attachment_kwargs"]["uploaded_by"] == TEST_USER_ID
 
+
 def test_draft_invoice_maps_maintenance_fields(monkeypatch):
     from decimal import Decimal
 
@@ -150,9 +153,14 @@ def test_draft_invoice_maps_maintenance_fields(monkeypatch):
         assert actor_id == TEST_USER_ID
         assert payload.supplier_id == supplier_id
         assert payload.vehicle_id == vehicle_id
-        assert payload.invoice_date == payload.due_date == payload.received_date == scheduled
+        assert (
+            payload.invoice_date
+            == payload.due_date
+            == payload.received_date
+            == scheduled
+        )
         assert payload.purpose == record.notes
-        line, = payload.lines
+        (line,) = payload.lines
         assert line.item_id is None
         assert line.expense_account_id is None
         assert line.cost_center_id == cost_center_id
@@ -165,7 +173,126 @@ def test_draft_invoice_maps_maintenance_fields(monkeypatch):
         TEST_ORG_ID,
         record,
         FormData({"create_draft_invoice": "1"}),
-        SimpleNamespace(has_permission=lambda permission: permission == "ap:invoices:create"),
+        SimpleNamespace(
+            has_permission=lambda permission: permission == "ap:invoices:create"
+        ),
         TEST_USER_ID,
     )
     assert record.invoice_id == invoice_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "financial_option", ["create_draft_invoice", "submit_reimbursement"]
+)
+async def test_maintenance_financial_submission_runs_once(
+    monkeypatch, financial_option
+):
+    from unittest.mock import AsyncMock, Mock
+
+    from app.services.fleet import maintenance_finance
+
+    db = _FakeDb()
+    submission_id = uuid4()
+    vehicle_id = uuid4()
+    service = Mock()
+    service.has_submission.side_effect = [False, True]
+    service.create.return_value = SimpleNamespace(maintenance_id=submission_id)
+    create_invoice = Mock()
+    submit_reimbursement = AsyncMock()
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+    monkeypatch.setattr(
+        FleetWebService, "_resolve_active_employee_id_for_auth", lambda *_: uuid4()
+    )
+    monkeypatch.setattr(maintenance_finance, "create_draft_invoice", create_invoice)
+    monkeypatch.setattr(
+        maintenance_finance, "submit_reimbursement", submit_reimbursement
+    )
+    auth = SimpleNamespace(
+        organization_id=TEST_ORG_ID, user_id=TEST_USER_ID, has_permission=lambda _: True
+    )
+    request = _FakeRequest(
+        FormData(
+            {
+                "maintenance_submission_id": str(submission_id),
+                "vehicle_id": str(vehicle_id),
+                "maintenance_type": "CORRECTIVE",
+                "description": "Replace damaged tyre",
+                "scheduled_date": "2026-07-10",
+                financial_option: "1",
+            }
+        )
+    )
+    web = FleetWebService(db)
+    first = await web.create_entity_response(request, auth, db, "maintenance")
+    retry = await web.create_entity_response(request, auth, db, "maintenance")
+
+    assert (
+        first.headers["location"] == retry.headers["location"] == "/fleet/maintenance"
+    )
+    assert db.committed
+    assert not db.rolled_back
+    service.create.assert_called_once()
+    assert service.create.call_args.kwargs["maintenance_id"] == submission_id
+    assert create_invoice.call_count == 1
+    assert submit_reimbursement.await_count == (
+        financial_option == "submit_reimbursement"
+    )
+
+
+@pytest.mark.asyncio
+async def test_reimbursement_maps_items_and_submits_to_standard_routing(monkeypatch):
+    from decimal import Decimal
+    from unittest.mock import Mock
+
+    from app.services import expense
+    from app.services.fleet import maintenance_finance
+
+    employee_id, vehicle_id, cost_center_id, claim_id, category_id = (
+        uuid4() for _ in range(5)
+    )
+    service = Mock()
+    service.create_claim.return_value = SimpleNamespace(claim_id=claim_id)
+    service.submit_claim.return_value = SimpleNamespace(success=True)
+    monkeypatch.setitem(expense.__dict__, "ExpenseService", lambda _: service)
+    db = SimpleNamespace(scalars=lambda _: [category_id])
+    record = SimpleNamespace(
+        maintenance_id=uuid4(),
+        description="Routine service",
+        vehicle_id=vehicle_id,
+        vehicle=SimpleNamespace(assigned_cost_center_id=cost_center_id),
+    )
+    form = FormData(
+        [
+            ("claim_date", date.today().isoformat()),
+            ("claim_category", str(category_id)),
+            ("claim_category", str(category_id)),
+            ("claim_description", "Oil"),
+            ("claim_description", "Labour"),
+            ("claim_amount", "100.00"),
+            ("claim_amount", "50.25"),
+            ("claim_approver", str(uuid4())),
+            ("recipient_name", "Test Employee"),
+            ("recipient_bank_name", "Test Bank"),
+            ("recipient_bank_code", "001"),
+            ("recipient_account_number", "0123456789"),
+        ]
+    )
+    await maintenance_finance.submit_reimbursement(
+        db, TEST_ORG_ID, record, form, employee_id, TEST_USER_ID, []
+    )
+
+    claim = service.create_claim.call_args.kwargs
+    assert claim["employee_id"] == employee_id
+    assert claim["vehicle_id"] == vehicle_id
+    assert claim["cost_center_id"] == cost_center_id
+    assert claim.get("requested_approver_id") is None
+    assert [item["claimed_amount"] for item in claim["items"]] == [
+        Decimal("100.00"),
+        Decimal("50.25"),
+    ]
+    service.submit_claim.assert_called_once_with(
+        TEST_ORG_ID, claim_id, actor_id=TEST_USER_ID, defer_approver_email=True
+    )

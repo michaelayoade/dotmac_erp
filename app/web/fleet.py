@@ -6,7 +6,7 @@ Server-rendered HTML routes for fleet management.
 
 from pathlib import Path
 from datetime import date
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import (
     APIRouter,
@@ -621,10 +621,16 @@ def maintenance_supplier_search(
 ):
     from app.services.finance.ap.web import ap_web_service
 
+    result = ap_web_service.supplier_typeahead(
+        db=db, organization_id=str(auth.organization_id), query=q, limit=limit
+    )
+    # Fleet managers can select suppliers. AP metadata stays on the AP endpoint.
     return JSONResponse(
-        ap_web_service.supplier_typeahead(
-            db=db, organization_id=str(auth.organization_id), query=q, limit=limit
-        )
+        {
+            "items": [
+                {"ref": item["ref"], "label": item["label"]} for item in result["items"]
+            ]
+        }
     )
 
 
@@ -643,6 +649,7 @@ def maintenance_new(
             auth.organization_id, vehicle_id=vehicle_id
         )
     )
+    context["maintenance_submission_id"] = uuid4()
     if auth.has_permission("expense:claims:submit"):
         from app.services.fleet.maintenance_finance import reimbursement_form_options
 
