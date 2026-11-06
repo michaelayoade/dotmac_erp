@@ -60,8 +60,8 @@ FOUNDATION_WORKFLOW_SHA = "55750e104df3dd94b6f9f70bf8c8db53986394c7"
 # below. A tag is deliberately absent: the descriptor refuses mutable
 # references, and a `sha-<short>` tag is one.
 IMAGE_REPOSITORY = "ghcr.io/michaelayoade/dotmac_erp"
-IMAGE_SOURCE_REVISION = "675265e3da4a85f411cf4c85f6d895bc983badf0"
-IMAGE_DIGEST = "sha256:bf437d585e1ea3b78bc50732effdd24e5d5e962313582d35d265b29c5c34d059"
+IMAGE_SOURCE_REVISION = "74fa788ae562905e4c8a1fcd46616585e4bf7694"
+IMAGE_DIGEST = "sha256:fe4502c4e3db4fa8852a224b925bf7b283df094682a4a2ffd07514299c24f1b4"
 # SHA-256 of deploy/product-manifest.json at IMAGE_SOURCE_REVISION. This
 # published assembly remains fixed when the next candidate's manifest changes.
 IMAGE_MANIFEST_DIGEST = (
@@ -165,7 +165,7 @@ def test_public_source_revision_is_projected_into_telemetry() -> None:
 
 def test_descriptor_matches_committed_publication_evidence() -> None:
     """Preserve the published digest/source/assembly binding when selecting a release."""
-    evidence_path = REPO_ROOT / "deploy/releases/2026-11-05-675265e3.image-release.json"
+    evidence_path = REPO_ROOT / "deploy/releases/2026-11-06-74fa788a.image-release.json"
     raw = evidence_path.read_text(encoding="utf-8")
     evidence = json.loads(raw)
     spec = _load()
