@@ -748,7 +748,13 @@ class PayrollLifecycle:
         run = self._get_run(organization_id, run_id)
         user_id = coerce_uuid(submitted_by_id)
 
+        from app.services.people.payroll.run_totals import lock_run, refresh_run_totals
+
+        lock_run(self.db, run)
+        self.db.refresh(run, attribute_names=["status"])
         self.validate_run_transition(run.status, PayrollEntryStatus.SUBMITTED)
+
+        refresh_run_totals(self.db, run)
 
         previous = self._update_run_status(run, PayrollEntryStatus.SUBMITTED, user_id)
         self.db.flush()
