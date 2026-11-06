@@ -597,6 +597,39 @@ def test_cancel_finance_handling_blocks_irreversible_claim(claim_status):
         cancel_finance_handling(db, TEST_ORG_ID, record, TEST_USER_ID, uuid4())
 
 
+def test_expense_claim_ids_are_resolved_by_tenant_scoped_maintenance_reference():
+    from unittest.mock import Mock
+
+    from app.services.fleet.maintenance_finance import (
+        expense_claim_ids_by_maintenance,
+    )
+
+    first_maintenance_id, second_maintenance_id = uuid4(), uuid4()
+    first_claim_id, second_claim_id = uuid4(), uuid4()
+    db = Mock()
+    db.execute.return_value.all.return_value = [
+        (first_claim_id, str(first_maintenance_id), None),
+        (
+            second_claim_id,
+            None,
+            f"Fleet maintenance {second_maintenance_id}",
+        ),
+    ]
+    records = [
+        SimpleNamespace(maintenance_id=first_maintenance_id),
+        SimpleNamespace(maintenance_id=second_maintenance_id),
+    ]
+
+    result = expense_claim_ids_by_maintenance(db, TEST_ORG_ID, records)
+
+    assert result == {
+        first_maintenance_id: first_claim_id,
+        second_maintenance_id: second_claim_id,
+    }
+    statement = db.execute.call_args.args[0]
+    assert "expense_claim.organization_id" in str(statement)
+
+
 def test_maintenance_list_actions_are_inline_and_confirm_cancellation():
     template = Path("templates/fleet/maintenance.html").read_text(encoding="utf-8")
 
@@ -604,3 +637,19 @@ def test_maintenance_list_actions_are_inline_and_confirm_cancellation():
     assert '"action": "/fleet/maintenance/"' in template
     assert "Do you still want to cancel this maintenance" in template
     assert "record.maintenance_id not in finance_handled_ids" in template
+
+
+def test_maintenance_details_show_role_aware_financial_reference_links():
+    maintenance_template = Path("templates/fleet/maintenance_detail.html").read_text(
+        encoding="utf-8"
+    )
+    vehicle_template = Path("templates/fleet/vehicle_detail.html").read_text(
+        encoding="utf-8"
+    )
+
+    for template in (maintenance_template, vehicle_template):
+        assert "/finance/ap/invoices/{{ record.invoice_id }}" in template
+        assert "/expense/claims/{{ expense_claim_id }}" in template
+        assert 'auth.has_permission("ap:invoices:read")' in template
+        assert 'auth.has_module_access("expense")' in template
+        assert "not auth.is_technician" in template

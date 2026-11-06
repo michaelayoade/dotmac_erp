@@ -223,8 +223,6 @@ def finance_handled_maintenance_ids(
     records: list[MaintenanceRecord],
 ) -> set[UUID]:
     """Return maintenance IDs that already created a financial record."""
-    from app.models.expense.expense_claim import ExpenseClaim
-
     record_ids = {record.maintenance_id for record in records}
     handled_ids = {
         record.maintenance_id
@@ -235,10 +233,33 @@ def finance_handled_maintenance_ids(
     if not pending_ids:
         return handled_ids
 
-    references = {str(record_id) for record_id in pending_ids}
-    legacy_notes = {f"Fleet maintenance {record_id}" for record_id in pending_ids}
+    pending_records = [
+        record for record in records if record.maintenance_id in pending_ids
+    ]
+    handled_ids.update(
+        expense_claim_ids_by_maintenance(db, org_id, pending_records).keys()
+    )
+    return handled_ids
+
+
+def expense_claim_ids_by_maintenance(
+    db: Session,
+    org_id: UUID,
+    records: list[MaintenanceRecord],
+) -> dict[UUID, UUID]:
+    """Resolve tenant-scoped reimbursement claim IDs for maintenance records."""
+    record_ids = {record.maintenance_id for record in records}
+    if not record_ids:
+        return {}
+
+    references = {str(record_id) for record_id in record_ids}
+    legacy_notes = {f"Fleet maintenance {record_id}" for record_id in record_ids}
     rows = db.execute(
-        select(ExpenseClaim.source_reference, ExpenseClaim.notes).where(
+        select(
+            ExpenseClaim.claim_id,
+            ExpenseClaim.source_reference,
+            ExpenseClaim.notes,
+        ).where(
             ExpenseClaim.organization_id == org_id,
             (
                 (
@@ -249,16 +270,19 @@ def finance_handled_maintenance_ids(
             ),
         )
     ).all()
-    for source_reference, notes in rows:
+    claim_ids: dict[UUID, UUID] = {}
+    for claim_id, source_reference, notes in rows:
         candidate = source_reference
         if candidate is None and notes and notes.startswith("Fleet maintenance "):
             candidate = notes.removeprefix("Fleet maintenance ")
         if candidate:
             try:
-                handled_ids.add(UUID(candidate))
+                maintenance_id = UUID(candidate)
             except ValueError:
                 continue
-    return handled_ids
+            if maintenance_id in record_ids:
+                claim_ids.setdefault(maintenance_id, claim_id)
+    return claim_ids
 
 
 def cancel_finance_handling(

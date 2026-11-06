@@ -992,6 +992,13 @@ class FleetWebService:
             vehicle_id=vid,
             params=PaginationParams(limit=5),
         )
+        from app.services.fleet.maintenance_finance import (
+            expense_claim_ids_by_maintenance,
+        )
+
+        maintenance_expense_claim_ids = expense_claim_ids_by_maintenance(
+            self.db, org_id, maintenance_result.items
+        )
 
         # Get documents
         documents_result = document_service.list_documents(
@@ -1036,6 +1043,7 @@ class FleetWebService:
                 limit=10,
             ),
             "maintenance_records": maintenance_result.items,
+            "maintenance_expense_claim_ids": maintenance_expense_claim_ids,
             "documents": documents_result.items,
             "fuel_logs": fuel_result.items,
             "incidents": incidents_result.items,
@@ -1257,6 +1265,13 @@ class FleetWebService:
         org_id = coerce_uuid(organization_id)
         service = MaintenanceService(self.db, org_id)
         record = service.get_or_raise(record_id)
+        from app.services.fleet.maintenance_finance import (
+            expense_claim_ids_by_maintenance,
+        )
+
+        expense_claim_id = expense_claim_ids_by_maintenance(
+            self.db, org_id, [record]
+        ).get(record.maintenance_id)
         maintenance_attachments = self._attachment_views(
             org_id,
             [record],
@@ -1266,6 +1281,7 @@ class FleetWebService:
 
         return {
             "record": record,
+            "expense_claim_id": expense_claim_id,
             "maintenance_attachments": maintenance_attachments,
             "recent_activity": get_recent_activity_for_record(
                 self.db,
