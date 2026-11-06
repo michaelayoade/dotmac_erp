@@ -11,10 +11,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData, UploadFile
 
-from app.models.expense import ExpenseCategory
+from app.models.expense import ExpenseCategory, ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.ap.supplier import Supplier
-from app.models.finance.ap.supplier_invoice import SupplierInvoiceType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
 from app.models.fleet.maintenance import MaintenanceRecord
+from app.services.common import ValidationError
 from app.services.finance.ap.supplier_invoice import (
     InvoiceLineInput,
     SupplierInvoiceInput,
@@ -254,3 +259,99 @@ def finance_handled_maintenance_ids(
             except ValueError:
                 continue
     return handled_ids
+
+
+def cancel_finance_handling(
+    db: Session,
+    org_id: UUID,
+    record: MaintenanceRecord,
+    user_id: UUID | None,
+    person_id: UUID | None,
+) -> None:
+    """Cancel reversible financial records linked to cancelled maintenance.
+
+    Posted or paid supplier invoices and approved or paid reimbursements require
+    a Finance-owned reversal, so they block cancellation. All mutations share
+    the caller's transaction with the maintenance status change.
+    """
+    reason = f"Fleet maintenance {record.maintenance_id} was cancelled."
+
+    if record.invoice_id is not None:
+        invoice = db.scalar(
+            select(SupplierInvoice)
+            .where(
+                SupplierInvoice.organization_id == org_id,
+                SupplierInvoice.invoice_id == record.invoice_id,
+            )
+            .with_for_update()
+        )
+        if invoice is None:
+            raise ValidationError("The linked supplier invoice was not found.")
+        if invoice.status not in {
+            SupplierInvoiceStatus.VOID,
+            SupplierInvoiceStatus.REJECTED,
+        }:
+            if invoice.status in SupplierInvoiceStatus.gl_impacting():
+                raise ValidationError(
+                    "This maintenance cannot be cancelled because its supplier "
+                    "invoice is posted or paid. Finance must reverse it first."
+                )
+            invoice_actor_id = user_id or person_id
+            if invoice_actor_id is None:
+                raise ValidationError(
+                    "An authenticated user is required to void the supplier invoice."
+                )
+            SupplierInvoiceService.void_invoice(
+                db,
+                org_id,
+                invoice.invoice_id,
+                invoice_actor_id,
+                reason,
+            )
+
+    claims = list(
+        db.scalars(
+            select(ExpenseClaim)
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                (
+                    (
+                        (ExpenseClaim.source_system == "fleet_maintenance")
+                        & (ExpenseClaim.source_reference == str(record.maintenance_id))
+                    )
+                    | (
+                        ExpenseClaim.notes
+                        == f"Fleet maintenance {record.maintenance_id}"
+                    )
+                ),
+            )
+            .with_for_update()
+        ).all()
+    )
+    cancellable_claim_statuses = {
+        ExpenseClaimStatus.DRAFT,
+        ExpenseClaimStatus.SUBMITTED,
+        ExpenseClaimStatus.PENDING_APPROVAL,
+    }
+    safe_terminal_claim_statuses = {
+        ExpenseClaimStatus.CANCELLED,
+        ExpenseClaimStatus.REJECTED,
+        ExpenseClaimStatus.APPROVAL_WITHDRAWN,
+        ExpenseClaimStatus.EXPIRED,
+    }
+    for claim in claims:
+        if claim.status in cancellable_claim_statuses:
+            from app.services.expense import ExpenseService
+
+            claim_actor_id = person_id or user_id
+            ExpenseService(db).cancel_claim(
+                org_id,
+                claim.claim_id,
+                reason=reason,
+                actor_id=claim_actor_id,
+            )
+        elif claim.status not in safe_terminal_claim_statuses:
+            raise ValidationError(
+                "This maintenance cannot be cancelled because its employee "
+                "reimbursement is approved or paid. Finance must reverse it first."
+            )

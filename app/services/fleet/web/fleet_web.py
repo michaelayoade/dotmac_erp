@@ -1201,18 +1201,26 @@ class FleetWebService:
 
     def cancel_maintenance_response(
         self,
-        organization_id: UUID,
+        auth: Any,
         record_id: UUID,
     ) -> Any:
         """Cancel a scheduled maintenance record and return to the list."""
         from fastapi.responses import RedirectResponse
 
-        service = MaintenanceService(self.db, coerce_uuid(organization_id))
+        org_id = coerce_uuid(auth.organization_id)
+        user_id = getattr(auth, "user_id", None)
+        person_id = getattr(auth, "person_id", None)
+        service = MaintenanceService(self.db, org_id)
         try:
             record = service.get_for_update(record_id)
             if record.status != MaintenanceStatus.SCHEDULED:
                 raise ValueError("Only scheduled maintenance can be cancelled.")
-            service.cancel(record_id)
+            from app.services.fleet.maintenance_finance import (
+                cancel_finance_handling,
+            )
+
+            cancel_finance_handling(self.db, org_id, record, user_id, person_id)
+            service.cancel(record_id, reason="Cancelled from maintenance schedule")
             self.db.commit()
         except Exception as exc:
             self.db.rollback()

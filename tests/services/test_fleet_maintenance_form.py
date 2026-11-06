@@ -435,6 +435,8 @@ async def test_financed_maintenance_cannot_be_edited(monkeypatch):
 def test_cancel_maintenance_soft_cancels_scheduled_record(monkeypatch):
     from unittest.mock import Mock
 
+    from app.services.fleet import maintenance_finance
+
     db = _FakeDb()
     maintenance_id = uuid4()
     service = Mock()
@@ -445,14 +447,154 @@ def test_cancel_maintenance_soft_cancels_scheduled_record(monkeypatch):
     monkeypatch.setattr(
         "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
     )
-
-    response = FleetWebService(db).cancel_maintenance_response(
-        TEST_ORG_ID, maintenance_id
+    cancel_finance = Mock()
+    monkeypatch.setattr(maintenance_finance, "cancel_finance_handling", cancel_finance)
+    person_id = uuid4()
+    auth = _Auth(
+        organization_id=TEST_ORG_ID,
+        user_id=TEST_USER_ID,
+        person_id=person_id,
     )
 
-    service.cancel.assert_called_once_with(maintenance_id)
+    response = FleetWebService(db).cancel_maintenance_response(auth, maintenance_id)
+
+    cancel_finance.assert_called_once_with(
+        db,
+        TEST_ORG_ID,
+        service.get_for_update.return_value,
+        TEST_USER_ID,
+        person_id,
+    )
+    service.cancel.assert_called_once_with(
+        maintenance_id, reason="Cancelled from maintenance schedule"
+    )
     assert db.committed is True
     assert response.headers["location"].startswith("/fleet/maintenance?success=")
+
+
+def test_cancel_maintenance_rolls_back_when_finance_requires_reversal(monkeypatch):
+    from unittest.mock import Mock
+
+    from app.services.common import ValidationError
+    from app.services.fleet import maintenance_finance
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    service = Mock()
+    service.get_for_update.return_value = SimpleNamespace(
+        maintenance_id=maintenance_id,
+        status=MaintenanceStatus.SCHEDULED,
+    )
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+    monkeypatch.setattr(
+        maintenance_finance,
+        "cancel_finance_handling",
+        Mock(side_effect=ValidationError("Finance must reverse it first.")),
+    )
+    auth = _Auth(
+        organization_id=TEST_ORG_ID,
+        user_id=TEST_USER_ID,
+        person_id=uuid4(),
+    )
+
+    response = FleetWebService(db).cancel_maintenance_response(auth, maintenance_id)
+
+    assert "Finance%20must%20reverse%20it%20first" in response.headers["location"]
+    assert db.rolled_back is True
+    assert db.committed is False
+    service.cancel.assert_not_called()
+
+
+def test_cancel_finance_handling_voids_invoice_and_cancels_open_claim(monkeypatch):
+    from unittest.mock import Mock
+
+    from app.models.expense import ExpenseClaimStatus
+    from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+    from app.services import expense
+    from app.services.fleet.maintenance_finance import (
+        SupplierInvoiceService,
+        cancel_finance_handling,
+    )
+
+    maintenance_id, invoice_id, claim_id = (uuid4() for _ in range(3))
+    invoice = SimpleNamespace(
+        invoice_id=invoice_id,
+        status=SupplierInvoiceStatus.DRAFT,
+    )
+    claim = SimpleNamespace(
+        claim_id=claim_id,
+        status=ExpenseClaimStatus.PENDING_APPROVAL,
+    )
+    db = Mock()
+    db.scalar.return_value = invoice
+    db.scalars.return_value.all.return_value = [claim]
+    void_invoice = Mock()
+    expense_service = Mock()
+    monkeypatch.setattr(SupplierInvoiceService, "void_invoice", void_invoice)
+    monkeypatch.setitem(expense.__dict__, "ExpenseService", lambda _: expense_service)
+    record = SimpleNamespace(
+        maintenance_id=maintenance_id,
+        invoice_id=invoice_id,
+    )
+
+    person_id = uuid4()
+    cancel_finance_handling(db, TEST_ORG_ID, record, TEST_USER_ID, person_id)
+
+    reason = f"Fleet maintenance {maintenance_id} was cancelled."
+    void_invoice.assert_called_once_with(
+        db, TEST_ORG_ID, invoice_id, TEST_USER_ID, reason
+    )
+    expense_service.cancel_claim.assert_called_once_with(
+        TEST_ORG_ID,
+        claim_id,
+        reason=reason,
+        actor_id=person_id,
+    )
+
+
+@pytest.mark.parametrize(
+    "invoice_status",
+    ["POSTED", "PARTIALLY_PAID", "PAID"],
+)
+def test_cancel_finance_handling_blocks_gl_impacted_invoice(invoice_status):
+    from unittest.mock import Mock
+
+    from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+    from app.services.common import ValidationError
+    from app.services.fleet.maintenance_finance import cancel_finance_handling
+
+    db = Mock()
+    db.scalar.return_value = SimpleNamespace(
+        invoice_id=uuid4(),
+        status=SupplierInvoiceStatus(invoice_status),
+    )
+    record = SimpleNamespace(
+        maintenance_id=uuid4(),
+        invoice_id=db.scalar.return_value.invoice_id,
+    )
+
+    with pytest.raises(ValidationError, match="Finance must reverse it first"):
+        cancel_finance_handling(db, TEST_ORG_ID, record, TEST_USER_ID, uuid4())
+
+
+@pytest.mark.parametrize("claim_status", ["APPROVED", "PAID"])
+def test_cancel_finance_handling_blocks_irreversible_claim(claim_status):
+    from unittest.mock import Mock
+
+    from app.models.expense import ExpenseClaimStatus
+    from app.services.common import ValidationError
+    from app.services.fleet.maintenance_finance import cancel_finance_handling
+
+    db = Mock()
+    db.scalars.return_value.all.return_value = [
+        SimpleNamespace(claim_id=uuid4(), status=ExpenseClaimStatus(claim_status))
+    ]
+    record = SimpleNamespace(maintenance_id=uuid4(), invoice_id=None)
+
+    with pytest.raises(ValidationError, match="Finance must reverse it first"):
+        cancel_finance_handling(db, TEST_ORG_ID, record, TEST_USER_ID, uuid4())
 
 
 def test_maintenance_list_actions_are_inline_and_confirm_cancellation():

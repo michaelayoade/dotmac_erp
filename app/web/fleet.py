@@ -721,9 +721,7 @@ def maintenance_cancel(
     db: Session = Depends(get_db_for_org),
 ):
     """Soft-cancel a scheduled maintenance record."""
-    return FleetWebService(db).cancel_maintenance_response(
-        auth.organization_id, record_id
-    )
+    return FleetWebService(db).cancel_maintenance_response(auth, record_id)
 
 
 @router.get("/maintenance/{record_id}", response_class=HTMLResponse)
