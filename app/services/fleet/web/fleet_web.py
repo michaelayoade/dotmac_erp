@@ -1075,6 +1075,7 @@ class FleetWebService:
                     "current_status": status,
                     "current_maintenance_type": maintenance_type,
                     "current_vehicle_id": vehicle_id,
+                    "finance_handled_ids": set(),
                 }
             )
             return context
@@ -1091,6 +1092,13 @@ class FleetWebService:
             status=status_filter,
             maintenance_type=type_filter,
             params=params,
+        )
+        from app.services.fleet.maintenance_finance import (
+            finance_handled_maintenance_ids,
+        )
+
+        finance_handled_ids = finance_handled_maintenance_ids(
+            self.db, org_id, result.items
         )
         vehicles_result = vehicle_service.list_vehicles(
             status=VehicleStatus.ACTIVE,
@@ -1117,6 +1125,7 @@ class FleetWebService:
             "current_status": status,
             "current_maintenance_type": maintenance_type,
             "current_vehicle_id": vehicle_id,
+            "finance_handled_ids": finance_handled_ids,
             "active_filters": active_filters,
         }
 
@@ -1125,18 +1134,37 @@ class FleetWebService:
         organization_id: UUID,
         *,
         vehicle_id: UUID | None = None,
+        record_id: UUID | None = None,
     ) -> dict[str, Any]:
-        """Build context for maintenance create form."""
+        """Build context for maintenance create or edit form."""
         if not self._fleet_tables_ready():
             return {
                 "vehicles": [],
                 "maintenance_types": [t.value for t in MaintenanceType],
                 "statuses": [s.value for s in MaintenanceStatus],
                 "selected_vehicle_id": vehicle_id,
+                "record": None,
+                "is_edit": False,
+                "form_action": "/fleet/maintenance/new",
                 "maintenance_attachment_max_size": self._maintenance_attachment_max_size_label(),
             }
         org_id = coerce_uuid(organization_id)
         vehicle_service = VehicleService(self.db, org_id)
+        record = None
+        if record_id is not None:
+            record = MaintenanceService(self.db, org_id).get_or_raise(record_id)
+            if record.status != MaintenanceStatus.SCHEDULED:
+                raise ValueError("Only scheduled maintenance can be edited.")
+            from app.services.fleet.maintenance_finance import (
+                finance_handled_maintenance_ids,
+            )
+
+            if record.maintenance_id in finance_handled_maintenance_ids(
+                self.db, org_id, [record]
+            ):
+                raise ValueError(
+                    "Maintenance with financial handling cannot be edited."
+                )
 
         # Get active vehicles for dropdown
         vehicles_result = vehicle_service.list_vehicles(
@@ -1148,11 +1176,55 @@ class FleetWebService:
             "vehicles": vehicles_result.items,
             "maintenance_types": [t.value for t in MaintenanceType],
             "statuses": [s.value for s in MaintenanceStatus],
-            "selected_vehicle_id": vehicle_id,
+            "selected_vehicle_id": record.vehicle_id if record else vehicle_id,
+            "record": record,
+            "is_edit": record is not None,
+            "form_action": (
+                f"/fleet/maintenance/{record.maintenance_id}/edit"
+                if record
+                else "/fleet/maintenance/new"
+            ),
+            "maintenance_attachments": (
+                self._attachment_views(
+                    org_id,
+                    [record],
+                    id_attr="maintenance_id",
+                    entity_type=self.MAINTENANCE_ATTACHMENT_ENTITY_TYPE,
+                ).get(str(record.maintenance_id), [])
+                if record
+                else []
+            ),
             "maintenance_attachment_max_size": self._maintenance_attachment_max_size_label(),
         }
 
         return context
+
+    def cancel_maintenance_response(
+        self,
+        organization_id: UUID,
+        record_id: UUID,
+    ) -> Any:
+        """Cancel a scheduled maintenance record and return to the list."""
+        from fastapi.responses import RedirectResponse
+
+        service = MaintenanceService(self.db, coerce_uuid(organization_id))
+        try:
+            record = service.get_for_update(record_id)
+            if record.status != MaintenanceStatus.SCHEDULED:
+                raise ValueError("Only scheduled maintenance can be cancelled.")
+            service.cancel(record_id)
+            self.db.commit()
+        except Exception as exc:
+            self.db.rollback()
+            logger.warning("Maintenance cancellation failed: %s", exc)
+            return RedirectResponse(
+                url=f"/fleet/maintenance?error={quote(str(exc)[:200])}",
+                status_code=303,
+            )
+        return RedirectResponse(
+            url="/fleet/maintenance?success=Maintenance%20cancelled.",
+            status_code=303,
+        )
 
     @staticmethod
     def _maintenance_attachment_max_size_label() -> str:
@@ -2100,6 +2172,12 @@ class FleetWebService:
 
         submission_id = None
         try:
+            if (
+                entity_type == "maintenance"
+                and form.get("create_draft_invoice") == "1"
+                and form.get("submit_reimbursement") == "1"
+            ):
+                raise ValueError("Choose only one financial handling option.")
             if entity_type == "maintenance" and form.get("maintenance_submission_id"):
                 submission_id = UUID(str(form["maintenance_submission_id"]))
                 if MaintenanceService(db, org_id).has_submission(submission_id):
@@ -2259,6 +2337,7 @@ class FleetWebService:
 
         from app.schemas.fleet.fuel import FuelLogUpdate
         from app.schemas.fleet.incident import IncidentUpdate
+        from app.schemas.fleet.maintenance import MaintenanceUpdate
 
         entity_map: dict[str, dict[str, Any]] = {
             "fuel": {
@@ -2279,6 +2358,15 @@ class FleetWebService:
                 "save_attachment": self._save_incident_attachment,
                 "attachment_id_kw": "incident_id",
             },
+            "maintenance": {
+                "service_cls": MaintenanceService,
+                "schema_cls": MaintenanceUpdate,
+                "edit_url": f"/fleet/maintenance/{entity_id}/edit",
+                "redirect_url": "/fleet/maintenance",
+                "upload_field": "maintenance_files",
+                "save_attachment": self._save_maintenance_attachment,
+                "attachment_id_kw": "maintenance_id",
+            },
         }
         cfg = entity_map.get(entity_type)
         if not cfg:
@@ -2287,9 +2375,33 @@ class FleetWebService:
             )
 
         try:
-            schema = cfg["schema_cls"](**data)
+            if (
+                entity_type == "maintenance"
+                and form.get("create_draft_invoice") == "1"
+                and form.get("submit_reimbursement") == "1"
+            ):
+                raise ValueError("Choose only one financial handling option.")
             service = cfg["service_cls"](db, org_id)
-            service.update(entity_id, schema)
+            if entity_type == "maintenance":
+                record = service.get_for_update(entity_id)
+                if record.status != MaintenanceStatus.SCHEDULED:
+                    raise ValueError("Only scheduled maintenance can be edited.")
+                from app.services.fleet.maintenance_finance import (
+                    finance_handled_maintenance_ids,
+                )
+
+                if record.maintenance_id in finance_handled_maintenance_ids(
+                    db, org_id, [record]
+                ):
+                    raise ValueError(
+                        "Maintenance with financial handling cannot be edited."
+                    )
+            schema = cfg["schema_cls"](**data)
+            record = service.update(entity_id, schema)
+            if entity_type == "maintenance":
+                from app.services.fleet.maintenance_finance import create_draft_invoice
+
+                create_draft_invoice(db, org_id, record, form, auth, user_id)
             uploads = [
                 upload
                 for upload in form.getlist(cfg["upload_field"])
@@ -2302,6 +2414,19 @@ class FleetWebService:
                     **{cfg["attachment_id_kw"]: entity_id},
                     upload=upload,
                     uploaded_by=user_id,
+                )
+            if entity_type == "maintenance" and form.get("submit_reimbursement") == "1":
+                from app.services.fleet.maintenance_finance import (
+                    submit_reimbursement,
+                )
+
+                if not auth.has_permission("expense:claims:submit"):
+                    raise ValueError(
+                        "You do not have permission to submit expense claims."
+                    )
+                employee_id = self._resolve_active_employee_id_for_auth(org_id, auth)
+                await submit_reimbursement(
+                    db, org_id, record, form, employee_id, user_id, uploads
                 )
             db.commit()
             logger.info(

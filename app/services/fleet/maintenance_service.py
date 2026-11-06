@@ -80,6 +80,20 @@ class MaintenanceService:
             raise NotFoundError(f"Maintenance record {maintenance_id} not found")
         return record
 
+    def get_for_update(self, maintenance_id: UUID) -> MaintenanceRecord:
+        """Get and lock an organization-scoped maintenance record for mutation."""
+        record = self.db.scalar(
+            select(MaintenanceRecord)
+            .where(
+                MaintenanceRecord.organization_id == self.organization_id,
+                MaintenanceRecord.maintenance_id == maintenance_id,
+            )
+            .with_for_update()
+        )
+        if record is None:
+            raise NotFoundError(f"Maintenance record {maintenance_id} not found")
+        return record
+
     def list_records(
         self,
         *,

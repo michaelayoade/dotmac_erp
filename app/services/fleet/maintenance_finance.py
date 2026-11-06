@@ -34,6 +34,8 @@ def create_draft_invoice(
     auth: WebAuthContext,
     actor_id: UUID | None,
 ) -> None:
+    if form.get("create_draft_invoice") != "1":
+        return
     supplier = None
     if record.supplier_id:
         supplier = db.scalar(
@@ -45,8 +47,6 @@ def create_draft_invoice(
         )
         if supplier is None:
             raise ValueError("Select an active supplier.")
-    if form.get("create_draft_invoice") != "1":
-        return
     if not auth.has_permission("ap:invoices:create") or actor_id is None:
         raise ValueError("You do not have permission to create supplier invoices.")
     if supplier is None or record.estimated_cost is None or record.estimated_cost <= 0:
@@ -201,6 +201,8 @@ async def submit_reimbursement(
         recipient_bank_code=payout["recipient_bank_code"],
         recipient_account_number=payout["recipient_account_number"],
     )
+    claim.source_system = "fleet_maintenance"
+    claim.source_reference = str(record.maintenance_id)
     result = service.submit_claim(
         org_id, claim.claim_id, actor_id=actor_id, defer_approver_email=True
     )
@@ -208,3 +210,47 @@ async def submit_reimbursement(
         raise ValueError(
             result.warning_message or "The expense could not be submitted for approval."
         )
+
+
+def finance_handled_maintenance_ids(
+    db: Session,
+    org_id: UUID,
+    records: list[MaintenanceRecord],
+) -> set[UUID]:
+    """Return maintenance IDs that already created a financial record."""
+    from app.models.expense.expense_claim import ExpenseClaim
+
+    record_ids = {record.maintenance_id for record in records}
+    handled_ids = {
+        record.maintenance_id
+        for record in records
+        if getattr(record, "invoice_id", None) is not None
+    }
+    pending_ids = record_ids - handled_ids
+    if not pending_ids:
+        return handled_ids
+
+    references = {str(record_id) for record_id in pending_ids}
+    legacy_notes = {f"Fleet maintenance {record_id}" for record_id in pending_ids}
+    rows = db.execute(
+        select(ExpenseClaim.source_reference, ExpenseClaim.notes).where(
+            ExpenseClaim.organization_id == org_id,
+            (
+                (
+                    (ExpenseClaim.source_system == "fleet_maintenance")
+                    & ExpenseClaim.source_reference.in_(references)
+                )
+                | ExpenseClaim.notes.in_(legacy_notes)
+            ),
+        )
+    ).all()
+    for source_reference, notes in rows:
+        candidate = source_reference
+        if candidate is None and notes and notes.startswith("Fleet maintenance "):
+            candidate = notes.removeprefix("Fleet maintenance ")
+        if candidate:
+            try:
+                handled_ids.add(UUID(candidate))
+            except ValueError:
+                continue
+    return handled_ids

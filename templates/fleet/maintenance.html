@@ -160,7 +160,19 @@
                         </td>
                         <td>{{ status_badge(record.status, 'sm') }}</td>
                         <td class="text-right">
-                            {{ action_buttons(view_href="/fleet/maintenance/" ~ record.maintenance_id) }}
+                            {% set status_value = record.status.value if record.status.value is defined else record.status %}
+                            {% set can_manage_schedule = auth.has_permission("fleet:maintenance:manage") and status_value == "SCHEDULED" %}
+                            {{ action_buttons(
+                                view_href="/fleet/maintenance/" ~ record.maintenance_id,
+                                edit_href="/fleet/maintenance/" ~ record.maintenance_id ~ "/edit" if can_manage_schedule and record.maintenance_id not in finance_handled_ids else none,
+                                delete_action={
+                                    "action": "/fleet/maintenance/" ~ record.maintenance_id ~ "/cancel",
+                                    "title": "Cancel",
+                                    "aria_label": "Cancel scheduled maintenance",
+                                    "icon": "trash",
+                                    "confirm": "Do you still want to cancel this maintenance"
+                                } if can_manage_schedule else none
+                            ) }}
                         </td>
                     </tr>
                     {% else %}

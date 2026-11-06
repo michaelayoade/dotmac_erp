@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
+from urllib.parse import unquote
 
 import pytest
 from starlette.datastructures import FormData, UploadFile
@@ -27,6 +29,11 @@ class _FakeDb:
 
     def rollback(self):
         self.rolled_back = True
+
+
+class _Auth(SimpleNamespace):
+    def has_permission(self, _permission):
+        return True
 
 
 class _FakeRequest:
@@ -124,6 +131,41 @@ async def test_maintenance_create_response_saves_uploaded_attachments(monkeypatc
     assert captured["attachment_kwargs"]["maintenance_id"] == maintenance_id
     assert captured["attachment_kwargs"]["upload"] is upload
     assert captured["attachment_kwargs"]["uploaded_by"] == TEST_USER_ID
+
+
+@pytest.mark.asyncio
+async def test_maintenance_rejects_both_financial_options(monkeypatch):
+    from unittest.mock import Mock
+
+    db = _FakeDb()
+    service = Mock()
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+
+    response = await FleetWebService(db).create_entity_response(
+        _FakeRequest(
+            FormData(
+                {
+                    "vehicle_id": str(uuid4()),
+                    "maintenance_type": "CORRECTIVE",
+                    "description": "Replace damaged tyre",
+                    "scheduled_date": "2026-07-10",
+                    "create_draft_invoice": "1",
+                    "submit_reimbursement": "1",
+                }
+            )
+        ),
+        _Auth(organization_id=TEST_ORG_ID, user_id=TEST_USER_ID),
+        db,
+        "maintenance",
+    )
+
+    assert "Choose only one financial handling option" in unquote(
+        response.headers["location"]
+    )
+    assert db.rolled_back is True
+    service.create.assert_not_called()
 
 
 def test_draft_invoice_maps_maintenance_fields(monkeypatch):
@@ -296,3 +338,127 @@ async def test_reimbursement_maps_items_and_submits_to_standard_routing(monkeypa
     service.submit_claim.assert_called_once_with(
         TEST_ORG_ID, claim_id, actor_id=TEST_USER_ID, defer_approver_email=True
     )
+    assert service.create_claim.return_value.source_system == "fleet_maintenance"
+    assert service.create_claim.return_value.source_reference == str(
+        record.maintenance_id
+    )
+
+
+@pytest.mark.asyncio
+async def test_unfinanced_maintenance_can_add_finance_during_edit(monkeypatch):
+    from unittest.mock import AsyncMock, Mock
+
+    from app.services.fleet import maintenance_finance
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    record = SimpleNamespace(
+        maintenance_id=maintenance_id,
+        status=MaintenanceStatus.SCHEDULED,
+        invoice_id=None,
+    )
+    service = Mock()
+    service.get_for_update.return_value = record
+    service.update.return_value = record
+    create_invoice = Mock()
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+    monkeypatch.setattr(
+        maintenance_finance, "finance_handled_maintenance_ids", lambda *_: set()
+    )
+    monkeypatch.setattr(maintenance_finance, "create_draft_invoice", create_invoice)
+    monkeypatch.setattr(FleetWebService, "_save_maintenance_attachment", AsyncMock())
+
+    response = await FleetWebService(db).update_entity_response(
+        _FakeRequest(
+            FormData(
+                {
+                    "maintenance_type": "CORRECTIVE",
+                    "description": "Replace damaged tyre",
+                    "scheduled_date": "2026-07-10",
+                    "create_draft_invoice": "1",
+                }
+            )
+        ),
+        _Auth(organization_id=TEST_ORG_ID, user_id=TEST_USER_ID),
+        db,
+        "maintenance",
+        maintenance_id,
+    )
+
+    assert response.headers["location"] == "/fleet/maintenance"
+    assert db.committed is True
+    service.update.assert_called_once()
+    create_invoice.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_financed_maintenance_cannot_be_edited(monkeypatch):
+    from unittest.mock import Mock
+
+    from app.services.fleet import maintenance_finance
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    record = SimpleNamespace(
+        maintenance_id=maintenance_id,
+        status=MaintenanceStatus.SCHEDULED,
+        invoice_id=uuid4(),
+    )
+    service = Mock()
+    service.get_for_update.return_value = record
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+    monkeypatch.setattr(
+        maintenance_finance,
+        "finance_handled_maintenance_ids",
+        lambda *_: {maintenance_id},
+    )
+
+    response = await FleetWebService(db).update_entity_response(
+        _FakeRequest(FormData({"description": "Changed"})),
+        _Auth(organization_id=TEST_ORG_ID, user_id=TEST_USER_ID),
+        db,
+        "maintenance",
+        maintenance_id,
+    )
+
+    assert "financial handling cannot be edited" in unquote(
+        response.headers["location"]
+    )
+    assert db.rolled_back is True
+    service.update.assert_not_called()
+
+
+def test_cancel_maintenance_soft_cancels_scheduled_record(monkeypatch):
+    from unittest.mock import Mock
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    service = Mock()
+    service.get_for_update.return_value = SimpleNamespace(
+        maintenance_id=maintenance_id,
+        status=MaintenanceStatus.SCHEDULED,
+    )
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+
+    response = FleetWebService(db).cancel_maintenance_response(
+        TEST_ORG_ID, maintenance_id
+    )
+
+    service.cancel.assert_called_once_with(maintenance_id)
+    assert db.committed is True
+    assert response.headers["location"].startswith("/fleet/maintenance?success=")
+
+
+def test_maintenance_list_actions_are_inline_and_confirm_cancellation():
+    template = Path("templates/fleet/maintenance.html").read_text(encoding="utf-8")
+
+    assert 'edit_href="/fleet/maintenance/"' in template
+    assert '"action": "/fleet/maintenance/"' in template
+    assert "Do you still want to cancel this maintenance" in template
+    assert "record.maintenance_id not in finance_handled_ids" in template
