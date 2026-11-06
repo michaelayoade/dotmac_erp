@@ -105,14 +105,34 @@
                         </dd>
                     </div>
                     {% endif %}
+                    {% if record.invoice_id %}
+                    <div class="col-span-2">
+                        <dt class="text-xs text-slate-500 dark:text-slate-400">Supplier Invoice ID</dt>
+                        <dd class="break-all text-sm font-mono text-slate-900 dark:text-white">
+                            {% if auth.has_permission("ap:invoices:read") %}
+                            <a class="text-link" href="/finance/ap/invoices/{{ record.invoice_id }}">{{ record.invoice_id }}</a>
+                            {% else %}
+                            {{ record.invoice_id }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% elif expense_claim_id %}
+                    <div class="col-span-2">
+                        <dt class="text-xs text-slate-500 dark:text-slate-400">Expense Claim ID</dt>
+                        <dd class="break-all text-sm font-mono text-slate-900 dark:text-white">
+                            {% if not auth.is_technician and (auth.has_module_access("expense") or auth.has_module_access("finance")) %}
+                            <a class="text-link" href="/expense/claims/{{ expense_claim_id }}">{{ expense_claim_id }}</a>
+                            {% else %}
+                            {{ expense_claim_id }}
+                            {% endif %}
+                        </dd>
+                    </div>
+                    {% elif record.invoice_number %}
                     <div>
                         <dt class="text-xs text-slate-500 dark:text-slate-400">Invoice Number</dt>
-                        <dd class="text-sm font-mono text-slate-900 dark:text-white">{% if record.invoice_id and auth.has_permission("ap:invoices:read") %}
-                            <a class="text-link" href="/finance/ap/invoices/{{ record.invoice_id }}">View supplier invoice</a>
-                            {% else %}
-                            {{ record.invoice_number or '-' }}
-                            {% endif %}</dd>
+                        <dd class="text-sm font-mono text-slate-900 dark:text-white">{{ record.invoice_number }}</dd>
                     </div>
+                    {% endif %}
                 </dl>
             </div>
         </div>

@@ -1637,6 +1637,20 @@ if (typeof window.searchAutosuggest === 'undefined') {
     {{ icon_svg("edit", "h-4 w-4") }}
   </a>
   {% endif %}
+  {% if delete_action %}
+  <form method="POST"
+        action="{{ delete_action.action }}"
+        class="inline-flex"
+        {% if delete_action.confirm %}onsubmit="return confirm('{{ delete_action.confirm }}');"{% endif %}>
+    {{ request.state.csrf_form | safe }}
+    <button type="submit"
+            class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400 transition-colors"
+            title="{{ delete_action.title if delete_action.title else 'Delete' }}"
+            aria-label="{{ delete_action.aria_label if delete_action.aria_label else delete_action.title if delete_action.title else 'Delete' }}">
+      {{ icon_svg(delete_action.icon if delete_action.icon else "trash", "h-4 w-4") }}
+    </button>
+  </form>
+  {% endif %}
   {% for action in extra_actions %}
   {% set action_href = action.href | default('', true) %}
   {% set action_class = action.class | default('rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors', true) %}

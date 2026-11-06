@@ -1,7 +1,28 @@
 {% extends "modules/base_modules.html" %}
 {% from "components/macros.html" import icon_svg %}
 
-{% block page_title %}Schedule Maintenance{% endblock %}
+{% set record = record if record is defined else None %}
+{% set is_edit = is_edit if is_edit is defined else false %}
+{% set form_action = form_action if form_action is defined else "/fleet/maintenance/new" %}
+
+{% macro attachment_upload(input_id) %}
+<div x-data='{ count: 0 }'>
+    <label for="{{ input_id }}" class="form-label">Attachments</label>
+    <label for="{{ input_id }}" class="flex cursor-pointer items-center gap-4 rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-5 transition-colors hover:border-amber-400 hover:bg-amber-50/40 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/10">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+            {{ icon_svg("cloud-upload", "h-5 w-5") }}
+        </span>
+        <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium text-slate-800 dark:text-slate-100" x-text="count ? count + ' file' + (count === 1 ? '' : 's') + ' selected' : 'Click to upload maintenance files'"></span>
+            <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Images or PDFs only. Maximum size: {{ maintenance_attachment_max_size if maintenance_attachment_max_size else '20 MB' }} per file.</span>
+        </span>
+    </label>
+    <input aria-label="Upload maintenance images or PDFs" type="file" id="{{ input_id }}" name="maintenance_files" multiple accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf" class="sr-only" @change="count = $event.target.files.length">
+    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Add invoices, estimates, inspection photos, or related documents.</p>
+</div>
+{% endmacro %}
+
+{% block page_title %}{{ "Edit Maintenance" if is_edit else "Schedule Maintenance" }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -9,26 +30,28 @@
         <li><a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a></li>
         <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <a href="/fleet/maintenance" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Maintenance</a></li>
-        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Schedule</span></li>
+        <li class="flex items-center gap-2">{{ icon_svg("chevron-right", "h-4 w-4") }} <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if is_edit else "Schedule" }}</span></li>
     </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-    <form method="POST" action="/fleet/maintenance/new" enctype="multipart/form-data" class="space-y-6">
+    <form method="POST" action="{{ form_action }}" enctype="multipart/form-data" class="space-y-6" x-data='{ finance: null, items: [0], nextItem: 1 }'>
         {{ request.state.csrf_form | safe }}
+        {% if not is_edit %}
         <input type="hidden" name="maintenance_submission_id" value="{{ maintenance_submission_id }}">
+        {% endif %}
         <!-- Vehicle & Type -->
         <div class="card">
             <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                 <h3 class="font-semibold text-slate-900 dark:text-white">Maintenance Details</h3>
             </div>
             <div class="p-4 space-y-4">
-                <div class="grid gap-4 sm:grid-cols-3">
+                <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="vehicle_id" class="form-label">Vehicle <span class="text-rose-500">*</span></label>
-                        <select id="vehicle_id" name="vehicle_id" required class="form-select">
+                        <select id="vehicle_id" name="vehicle_id" required class="form-select" {{ 'disabled' if is_edit else '' }}>
                             <option value="">Select vehicle...</option>
                             {% for v in vehicles %}
                             <option value="{{ v.vehicle_id }}" {{ 'selected' if selected_vehicle_id and selected_vehicle_id|string == v.vehicle_id|string else '' }}>
@@ -36,161 +59,146 @@
                             </option>
                             {% endfor %}
                         </select>
+                        {% if is_edit %}<input type="hidden" name="vehicle_id" value="{{ record.vehicle_id }}">{% endif %}
                     </div>
                     <div>
                         <label for="maintenance_type" class="form-label">Maintenance Type <span class="text-rose-500">*</span></label>
                         <select id="maintenance_type" name="maintenance_type" required class="form-select">
                             <option value="">Select type...</option>
                             {% for mt in maintenance_types %}
-                            <option value="{{ mt }}">{{ mt | replace('_', ' ') | title }}</option>
+                            <option value="{{ mt }}" {{ 'selected' if record and record.maintenance_type.value == mt else '' }}>{{ mt | replace('_', ' ') | title }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div>
-                        <label for="status" class="form-label">Status <span class="text-rose-500">*</span></label>
-                        <select id="status" name="status" required class="form-select">
-                            {% set maintenance_statuses = statuses if statuses is defined and statuses else ['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] %}
-                            {% for status in maintenance_statuses %}
-                            <option value="{{ status }}" {{ 'selected' if status == 'SCHEDULED' else '' }}>
-                                {{ status | replace('_', ' ') | title }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                    <input type="hidden" name="status" value="SCHEDULED">
                 </div>
 
                 <div>
                     <label for="description" class="form-label">Description <span class="text-rose-500">*</span></label>
                     <textarea aria-label="Describe the maintenance needed..." id="description" name="description" required rows="3"
                               placeholder="Describe the maintenance needed..."
-                              class="form-input min-h-24 w-full resize-y"></textarea>
+                              class="form-input min-h-24 w-full resize-y">{{ record.description if record else '' }}</textarea>
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="scheduled_date" class="form-label">Scheduled Date <span class="text-rose-500">*</span></label>
-                        <input type="date" id="scheduled_date" name="scheduled_date" required class="form-input">
+                        <input type="date" id="scheduled_date" name="scheduled_date" required class="form-input" value="{{ record.scheduled_date.isoformat() if record and record.scheduled_date else '' }}">
                     </div>
                     <div>
                         <label for="odometer_at_service" class="form-label">Odometer Reading (km)</label>
                         <input aria-label="Current reading" type="number" id="odometer_at_service" name="odometer_at_service"
                                min="0" step="1" placeholder="Current reading"
-                               class="form-input">
+                               class="form-input" value="{{ record.odometer_at_service if record and record.odometer_at_service is not none else '' }}">
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Cost & Supplier -->
+        <!-- Optional financial handling -->
+        {% if auth.has_permission("ap:invoices:create") or auth.has_permission("expense:claims:submit") %}
         <div class="card">
-            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Financial Handling</h3>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Select one option, or leave both unselected.</p>
+            </div>
+            <div class="grid gap-3 p-4 sm:grid-cols-2">
+                {% if auth.has_permission("ap:invoices:create") %}
+                <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 transition-colors hover:border-amber-400 hover:bg-amber-50/40 dark:border-slate-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/10">
+                    <input type="checkbox" name="create_draft_invoice" value="1" class="form-checkbox mt-0.5" :checked="finance === 'supplier'" @change="finance = $event.target.checked ? 'supplier' : null">
+                    <span>
+                        <span class="block text-sm font-medium text-slate-800 dark:text-slate-100">Create draft supplier invoice</span>
+                        <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Prepare an AP invoice from the supplier and estimate.</span>
+                    </span>
+                </label>
+                {% endif %}
+                {% if auth.has_permission("expense:claims:submit") %}
+                <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 transition-colors hover:border-amber-400 hover:bg-amber-50/40 dark:border-slate-700 dark:hover:border-amber-500 dark:hover:bg-amber-900/10">
+                    <input type="checkbox" name="submit_reimbursement" value="1" class="form-checkbox mt-0.5" :checked="finance === 'reimbursement'" @change="finance = $event.target.checked ? 'reimbursement' : null">
+                    <span>
+                        <span class="block text-sm font-medium text-slate-800 dark:text-slate-100">Submit employee reimbursement for approval</span>
+                        <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Send the existing expense details through approval routing.</span>
+                    </span>
+                </label>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if auth.has_permission("ap:invoices:create") %}
+        <fieldset x-show="finance === 'supplier'" x-cloak :disabled="finance !== 'supplier'" class="card">
+            <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
                 <h3 class="font-semibold text-slate-900 dark:text-white">Supplier &amp; Cost</h3>
             </div>
-            <div class="p-4 space-y-4">
+            <div class="space-y-4 p-4">
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="estimated_cost" class="form-label">Estimated Cost</label>
-                        <input aria-label="0.00" type="number" id="estimated_cost" name="estimated_cost"
-                               min="0" step="0.01" placeholder="0.00"
-                               class="form-input">
+                        <label for="estimated_cost" class="form-label">Estimated Cost <span class="text-rose-500">*</span></label>
+                        <input aria-label="Estimated cost" type="number" id="estimated_cost" name="estimated_cost" min="0.01" step="0.01" placeholder="0.00" class="form-input font-mono tabular-nums" required value="{{ record.estimated_cost if record and record.estimated_cost is not none else '' }}">
                     </div>
                     <div>
-                        <label for="supplier_search" class="form-label">Supplier</label>
+                        <label for="supplier_search" class="form-label">Supplier <span class="text-rose-500">*</span></label>
                         <div class="relative" data-typeahead-url="/fleet/maintenance/suppliers/search" data-typeahead-min="2" data-typeahead-limit="20">
-                            <input id="supplier_search" type="text" class="form-input" autocomplete="off" placeholder="Search suppliers" data-typeahead-input>
-                            <input type="hidden" name="supplier_id" data-typeahead-hidden>
+                            <input id="supplier_search" type="text" class="form-input" autocomplete="off" placeholder="Search suppliers" data-typeahead-input value="{{ record.supplier.supplier_name if record and record.supplier else '' }}">
+                            <input type="hidden" name="supplier_id" data-typeahead-hidden value="{{ record.supplier_id if record and record.supplier_id else '' }}">
                             <div data-typeahead-results></div>
                         </div>
                     </div>
                 </div>
-                {% if auth.has_permission("ap:invoices:create") %}
-                <label class="flex items-center gap-2">
-                    <input type="checkbox" name="create_draft_invoice" value="1" checked>
-                    Create draft supplier invoice
-                </label>
-                {% endif %}
-                {% if auth.has_permission("expense:claims:submit") %}
-                <div x-data="{ reimburse: false, items: [0], nextItem: 1 }">
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" name="submit_reimbursement" value="1" x-model="reimburse">
-                        Submit employee reimbursement for approval
-                    </label>
-                    <fieldset x-show="reimburse" :disabled="!reimburse" class="mt-4 grid gap-4 sm:grid-cols-2">
-                        <div class="space-y-3 sm:col-span-2">
-                            <template x-for="(item, index) in items" :key="item">
-                                <div class="grid gap-3 sm:grid-cols-3">
-                                    <label class="form-label">Expense category
-                                        <select name="claim_category" class="form-select" required>
-                                            <option value="">Select category</option>
-                                            {% for category in expense_categories %}
-                                            <option value="{{ category.category_id }}">{{ category.category_name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </label>
-                                    <label class="form-label">Expense description
-                                        <input name="claim_description" class="form-input" maxlength="500" required>
-                                    </label>
-                                    <label class="form-label">Reimbursement amount
-                                        <input name="claim_amount" type="number" class="form-input" min="0.01" step="0.01" required>
-                                    </label>
-                                    <button x-show="items.length > 1" type="button" class="btn btn-secondary" @click="items.splice(index, 1)">Remove item</button>
-                                </div>
-                            </template>
-                            <button type="button" class="btn btn-secondary" @click="items.push(nextItem++)">Add expense item</button>
-                        </div>
-                        {% for name, label, type in [
-                            ("claim_date", "Expense date", "date"),
-                            ("recipient_name", "Beneficiary", "text"),
-                            ("recipient_bank_name", "Bank name", "text"),
-                            ("recipient_bank_code", "Bank code", "text"),
-                            ("recipient_account_number", "Account number", "text")
-                        ] %}
-                        <div>
-                            <label for="{{ name }}" class="form-label">{{ label }}</label>
-                            <input id="{{ name }}" name="{{ name }}" type="{{ type }}" class="form-input" required
-                                   {% if type == "number" %}min="0.01" step="0.01"{% endif %}>
-                        </div>
-                        {% endfor %}
-                        <p class="text-sm text-slate-600 dark:text-slate-300 sm:col-span-2">
-                            Approval follows your organization's expense routing.
-                        </p>
-                        <label class="flex items-center gap-2 sm:col-span-2">
-                            <input type="checkbox" name="use_attachments_as_receipts" value="1">
-                            Use the maintenance attachments as receipts
-                        </label>
-                    </fieldset>
-                </div>
-                {% endif %}
-                <div x-data='{ count: 0 }'>
-                    <label for="maintenance_files" class="form-label">Attachments</label>
-                    <label
-                        for="maintenance_files"
-                        class="flex cursor-pointer items-center gap-4 rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-5 transition-colors hover:border-amber-400 hover:bg-amber-50/40 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-amber-500 dark:hover:bg-amber-900/10"
-                    >
-                        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                            {{ icon_svg("cloud-upload", "h-5 w-5") }}
-                        </span>
-                        <span class="min-w-0 flex-1">
-                            <span class="block text-sm font-medium text-slate-800 dark:text-slate-100" x-text="count ? count + ' file' + (count === 1 ? '' : 's') + ' selected' : 'Click to upload maintenance files'"></span>
-                            <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">Images or PDFs only. Maximum size: {{ maintenance_attachment_max_size if maintenance_attachment_max_size else '20 MB' }} per file.</span>
-                        </span>
-                    </label>
-                    <input
-                        aria-label="Upload maintenance images or PDFs"
-                        type="file"
-                        id="maintenance_files"
-                        name="maintenance_files"
-                        multiple
-                        accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,application/pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf"
-                        class="sr-only"
-                        @change="count = $event.target.files.length"
-                    >
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Optional. Add invoices, estimates, inspection photos, or related documents.
-                    </p>
-                </div>
+                {{ attachment_upload("supplier_maintenance_files") }}
             </div>
-        </div>
+        </fieldset>
+        {% endif %}
+
+        {% if auth.has_permission("expense:claims:submit") %}
+        <fieldset x-show="finance === 'reimbursement'" x-cloak :disabled="finance !== 'reimbursement'" class="card">
+            <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                <h3 class="font-semibold text-slate-900 dark:text-white">Expense Details</h3>
+            </div>
+            <div class="grid gap-4 p-4 sm:grid-cols-2">
+                <div class="space-y-3 sm:col-span-2">
+                    <template x-for="(item, index) in items" :key="item">
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <label class="form-label">Expense category
+                                <select name="claim_category" class="form-select" required>
+                                    <option value="">Select category</option>
+                                    {% for category in expense_categories %}
+                                    <option value="{{ category.category_id }}">{{ category.category_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label class="form-label">Expense description
+                                <input name="claim_description" class="form-input" maxlength="500" required>
+                            </label>
+                            <label class="form-label">Reimbursement amount
+                                <input name="claim_amount" type="number" class="form-input font-mono tabular-nums" min="0.01" step="0.01" required>
+                            </label>
+                            <button x-show="items.length > 1" type="button" class="btn btn-secondary" @click="items.splice(index, 1)">Remove item</button>
+                        </div>
+                    </template>
+                    <button type="button" class="btn btn-secondary" @click="items.push(nextItem++)">Add expense item</button>
+                </div>
+                {% for name, label, type in [
+                    ("claim_date", "Expense date", "date"),
+                    ("recipient_name", "Beneficiary", "text"),
+                    ("recipient_bank_name", "Bank name", "text"),
+                    ("recipient_bank_code", "Bank code", "text"),
+                    ("recipient_account_number", "Account number", "text")
+                ] %}
+                <div>
+                    <label for="{{ name }}" class="form-label">{{ label }}</label>
+                    <input id="{{ name }}" name="{{ name }}" type="{{ type }}" class="form-input" required>
+                </div>
+                {% endfor %}
+                <p class="text-sm text-slate-600 dark:text-slate-300 sm:col-span-2">Approval follows your organization's expense routing.</p>
+                <div class="sm:col-span-2">{{ attachment_upload("reimbursement_maintenance_files") }}</div>
+                <label class="flex min-h-11 items-center gap-2 sm:col-span-2">
+                    <input type="checkbox" name="use_attachments_as_receipts" value="1" class="form-checkbox">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Use the maintenance attachments as receipts</span>
+                </label>
+            </div>
+        </fieldset>
+        {% endif %}
 
         <!-- Notes -->
         <div class="card">
@@ -202,7 +210,7 @@
                     <label for="notes" class="form-label">Notes</label>
                     <textarea aria-label="Additional notes..." id="notes" name="notes" rows="3"
                               placeholder="Additional notes..."
-                              class="form-input min-h-24 w-full resize-y"></textarea>
+                              class="form-input min-h-24 w-full resize-y">{{ record.notes if record and record.notes else '' }}</textarea>
                 </div>
             </div>
         </div>
@@ -212,7 +220,7 @@
             <a href="/fleet/maintenance" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ icon_svg("check", "h-4 w-4 mr-2") }}
-                Schedule Maintenance
+                {{ "Save Changes" if is_edit else "Schedule Maintenance" }}
             </button>
         </div>
     </form>
