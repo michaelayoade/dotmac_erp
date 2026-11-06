@@ -1829,6 +1829,14 @@ class SupplierInvoiceService(ListResponseMixin):
                 f"Cannot delete invoice with {allocation_count} payment allocation(s)."
             )
 
+        reference_error = SupplierInvoiceService._deletion_reference_error(
+            db,
+            org_id,
+            inv_id,
+        )
+        if reference_error:
+            raise ValidationError(reference_error)
+
         line_ids = list(
             db.scalars(
                 select(SupplierInvoiceLine.line_id).where(
@@ -1847,6 +1855,70 @@ class SupplierInvoiceService(ListResponseMixin):
         )
         db.delete(invoice)
         db.flush()
+
+    @staticmethod
+    def _deletion_reference_error(
+        db: Session,
+        organization_id: UUID,
+        invoice_id: UUID,
+    ) -> str | None:
+        """Return the domain reference that owns an invoice, if one exists.
+
+        The database foreign keys remain the final concurrency guard. This
+        preflight gives users a useful domain-level refusal before attempting
+        the delete and also covers receipt approvals whose invoice link is a
+        declared application reference rather than a database foreign key.
+        """
+        from app.models.expense.expense_claim import ExpenseClaim
+        from app.models.finance.ap.invoice_inventory_receipt_approval import (
+            InvoiceInventoryReceiptApproval,
+        )
+        from app.models.fleet.maintenance import MaintenanceRecord
+
+        claim_number = db.scalar(
+            select(ExpenseClaim.claim_number)
+            .where(
+                ExpenseClaim.organization_id == organization_id,
+                ExpenseClaim.supplier_invoice_id == invoice_id,
+            )
+            .limit(1)
+        )
+        if claim_number:
+            return (
+                f"This invoice was generated from expense claim {claim_number} and "
+                "cannot be deleted here. Manage it from the originating expense "
+                "claim."
+            )
+
+        maintenance_id = db.scalar(
+            select(MaintenanceRecord.maintenance_id)
+            .where(
+                MaintenanceRecord.organization_id == organization_id,
+                MaintenanceRecord.invoice_id == invoice_id,
+            )
+            .limit(1)
+        )
+        if maintenance_id:
+            return (
+                "This invoice is linked to a fleet maintenance record and cannot "
+                "be deleted here. Manage it from the originating maintenance record."
+            )
+
+        receipt_approval_id = db.scalar(
+            select(InvoiceInventoryReceiptApproval.approval_id)
+            .where(
+                InvoiceInventoryReceiptApproval.organization_id == organization_id,
+                InvoiceInventoryReceiptApproval.supplier_invoice_id == invoice_id,
+            )
+            .limit(1)
+        )
+        if receipt_approval_id:
+            return (
+                "This invoice has an inventory receipt approval and cannot be "
+                "deleted. Complete or reject the receipt workflow first."
+            )
+
+        return None
 
 
 # Module-level singleton instance

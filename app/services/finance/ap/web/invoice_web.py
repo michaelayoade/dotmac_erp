@@ -19,6 +19,7 @@ except ImportError:  # pragma: no cover
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
@@ -835,9 +836,6 @@ class InvoiceWebService:
             return None
         except HTTPException as exc:
             return exc.detail
-        except Exception:
-            logger.exception("delete_invoice: failed for org %s", org_id)
-            return "Unable to delete invoice. Please try again."
 
     # =====================================================================
     # HTTP Response Methods
@@ -1282,6 +1280,17 @@ class InvoiceWebService:
             error = self.delete_invoice(db, str(auth.organization_id), invoice_id)
             if not error:
                 db.commit()
+        except IntegrityError:
+            db.rollback()
+            logger.exception(
+                "delete_invoice: database reference blocked invoice %s for org %s",
+                invoice_id,
+                auth.organization_id,
+            )
+            error = (
+                "This invoice is still referenced by another record and cannot be "
+                "deleted. Remove or resolve the originating record first."
+            )
         except Exception:
             db.rollback()
             raise
