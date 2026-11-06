@@ -30,6 +30,7 @@ class MaintenanceCreate(MaintenanceBase):
     """Create maintenance record request."""
 
     status: MaintenanceStatus = MaintenanceStatus.SCHEDULED
+    odometer_at_service: int | None = Field(default=None, ge=0)
 
 
 class MaintenanceUpdate(BaseModel):
@@ -42,6 +43,7 @@ class MaintenanceUpdate(BaseModel):
     supplier_id: UUID | None = None
     technician_name: str | None = Field(default=None, max_length=100)
     notes: str | None = None
+    odometer_at_service: int | None = Field(default=None, ge=0)
 
 
 class MaintenanceRead(MaintenanceBase):

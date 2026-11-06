@@ -8274,6 +8274,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
     font-family: JetBrains Mono, ui-monospace, monospace;
 }
 
+.font-sans {
+    font-family: DM Sans, system-ui, sans-serif;
+}
+
 .text-2xl {
     font-size: 1.5rem;
     line-height: 2rem;

@@ -6,6 +6,7 @@ Server-rendered HTML routes for fleet management.
 
 from pathlib import Path
 from datetime import date
+from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -666,6 +667,61 @@ async def maintenance_create(
     """Create maintenance record from form submission."""
     web_service = FleetWebService(db)
     return await web_service.create_entity_response(request, auth, db, "maintenance")
+
+
+@router.get("/maintenance/{record_id}/edit", response_class=HTMLResponse)
+def maintenance_edit(
+    request: Request,
+    record_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
+    db: Session = Depends(get_db_for_org),
+):
+    """Edit a scheduled maintenance record without financial handling."""
+    context = base_context(request, auth, "Edit Maintenance", "fleet", db=db)
+    web_service = FleetWebService(db)
+    try:
+        context.update(
+            web_service.maintenance_form_context(
+                auth.organization_id,
+                record_id=record_id,
+            )
+        )
+        if auth.has_permission("expense:claims:submit"):
+            from app.services.fleet.maintenance_finance import (
+                reimbursement_form_options,
+            )
+
+            context.update(reimbursement_form_options(db, auth.organization_id))
+        return templates.TemplateResponse(
+            request, "fleet/maintenance_form.html", context
+        )
+    except (NotFoundError, ValueError) as exc:
+        return RedirectResponse(
+            url=f"/fleet/maintenance?error={quote(str(exc))}", status_code=303
+        )
+
+
+@router.post("/maintenance/{record_id}/edit")
+async def maintenance_update(
+    request: Request,
+    record_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
+    db: Session = Depends(get_db_for_org),
+):
+    """Update an editable scheduled maintenance record."""
+    return await FleetWebService(db).update_entity_response(
+        request, auth, db, "maintenance", record_id
+    )
+
+
+@router.post("/maintenance/{record_id}/cancel")
+def maintenance_cancel(
+    record_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
+    db: Session = Depends(get_db_for_org),
+):
+    """Soft-cancel a scheduled maintenance record."""
+    return FleetWebService(db).cancel_maintenance_response(auth, record_id)
 
 
 @router.get("/maintenance/{record_id}", response_class=HTMLResponse)
