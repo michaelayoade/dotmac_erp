@@ -5618,6 +5618,7 @@
   },
   "POST /api/v1/auth/mfa/confirm": {
    "params": [
+    "cookie:access_token",
     "header:authorization"
    ],
    "request": "5254e7b60fac",
@@ -5631,6 +5632,7 @@
   },
   "POST /api/v1/auth/mfa/setup": {
    "params": [
+    "cookie:access_token",
     "header:authorization"
    ],
    "request": "102546c8553d",

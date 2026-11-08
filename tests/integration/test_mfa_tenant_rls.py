@@ -102,6 +102,22 @@ def mfa_runtime(engine, monkeypatch, postgresql_scope_writers):
                 )
                 seed.commit()
 
+            # Migration heads intentionally do not apply the runtime identity
+            # cutover grants. These fixture-only grants roll back with the test.
+            connection.execute(text("GRANT USAGE ON SCHEMA public TO app_user"))
+            connection.execute(
+                text(
+                    "GRANT SELECT ON public.people, public.user_credentials, "
+                    "public.domain_settings, public.roles, public.person_roles, "
+                    "public.permissions, public.role_permissions TO app_user"
+                )
+            )
+            connection.execute(
+                text(
+                    "GRANT SELECT, INSERT, UPDATE ON public.sessions, public.mfa_methods "
+                    "TO app_user"
+                )
+            )
             connection.execute(text("SET LOCAL ROLE app_user"))
             assert not connection.scalar(
                 text(
