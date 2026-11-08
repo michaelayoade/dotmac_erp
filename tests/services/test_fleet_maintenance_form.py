@@ -639,6 +639,36 @@ def test_maintenance_list_actions_are_inline_and_confirm_cancellation():
     assert "record.maintenance_id not in finance_handled_ids" in template
 
 
+def test_maintenance_list_action_macro_receives_request_context():
+    from app.templates import templates
+
+    source = Path("templates/fleet/maintenance.html").read_text(encoding="utf-8")
+    macro_import = next(
+        line
+        for line in source.splitlines()
+        if line.startswith('{% from "components/macros.html" import ')
+    )
+    probe = templates.env.from_string(
+        f"{macro_import}\n{{{{ action_buttons(delete_action=delete_action) }}}}"
+    )
+    csrf_form = '<input type="hidden" name="csrf_token" value="token">'
+    request = SimpleNamespace(state=SimpleNamespace(csrf_form=csrf_form))
+
+    rendered = probe.render(
+        request=request,
+        delete_action={
+            "action": "/fleet/maintenance/record-id/cancel",
+            "title": "Cancel",
+            "aria_label": "Cancel scheduled maintenance",
+            "icon": "trash",
+            "confirm": "Cancel this maintenance?",
+        },
+    )
+
+    assert csrf_form in rendered
+    assert 'action="/fleet/maintenance/record-id/cancel"' in rendered
+
+
 def test_maintenance_details_show_role_aware_financial_reference_links():
     maintenance_template = Path("templates/fleet/maintenance_detail.html").read_text(
         encoding="utf-8"
