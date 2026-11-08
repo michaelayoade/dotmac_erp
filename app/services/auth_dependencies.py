@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
 from app.db import SessionLocal
-from app.db.session_context import allow_cross_org, prime_tenant_context
+from app.db.session_context import (
+    allow_cross_org,
+    prime_tenant_context,
+    session_for_org,
+)
 from app.models.auth import ApiKey, SessionStatus
 from app.models.auth import Session as AuthSession
 from app.models.person import Person
@@ -25,6 +29,7 @@ from app.services.auth import hash_api_key
 from app.services.auth_flow import decode_access_token, hash_session_token
 from app.services.cache import cache_service
 from app.services.common import coerce_uuid
+from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
 
@@ -605,14 +610,18 @@ def require_tenant_auth(
     session.last_seen_at = now
     db.flush()
 
-    # Look up the user's organization (or use default if single-org mode)
-    with allow_cross_org(db):
-        person = db.get(Person, person_uuid)
-    organization_id = person.organization_id if person else None
-
-    # Single-org mode: use default org if configured
-    if not organization_id and app_settings.default_organization_id:
-        organization_id = coerce_uuid(app_settings.default_organization_id)
+    # The person table has forced RLS; discover through isolated tenant sessions.
+    organization_id = None
+    for candidate in organization_ids(include_inactive=True):
+        with session_for_org(candidate) as tenant_db:
+            organization_id = tenant_db.scalar(
+                select(Person.organization_id).where(
+                    Person.id == person_uuid,
+                    Person.organization_id == candidate,
+                )
+            )
+        if organization_id is not None:
+            break
 
     if not organization_id:
         raise HTTPException(status_code=403, detail="Organization access required")

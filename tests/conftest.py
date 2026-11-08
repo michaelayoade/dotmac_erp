@@ -619,7 +619,7 @@ def _strip_leaked_global_session_listeners():
 
 
 @pytest.fixture()
-def client(db_session):
+def client(db_session, monkeypatch):
     """Create a test client with database dependency override."""
     from fastapi import APIRouter, Depends, FastAPI
 
@@ -640,6 +640,13 @@ def client(db_session):
     )
     from app.services.auth_dependencies import (
         require_tenant_auth,
+    )
+
+    # SQLite fixtures have people but no tenant catalog or organization rows.
+    # PostgreSQL canaries exercise real tenant isolation separately.
+    monkeypatch.setattr(
+        "app.services.auth_dependencies.organization_ids",
+        lambda **_: list(db_session.scalars(select(Person.organization_id).distinct())),
     )
     from app.services.settings_seed import (
         seed_audit_settings,

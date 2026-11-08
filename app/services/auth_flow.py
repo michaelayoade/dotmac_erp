@@ -262,7 +262,13 @@ def _refresh_cookie_path(db: Session | None) -> str:
 
 
 def _mfa_key(db: Session | None) -> bytes:
-    key = _env_value("TOTP_ENCRYPTION_KEY") or _setting_value(db, "totp_encryption_key")
+    # Verification runs before tenant authentication and must use the same key.
+    key = _env_value("TOTP_ENCRYPTION_KEY")
+    if not key and db is not None:
+        value = resolve_value(
+            db, SettingDomain.auth, "totp_encryption_key", organization_id=None
+        )
+        key = str(value) if value is not None else None
     key = resolve_secret(key, db)
     if not key:
         raise HTTPException(
