@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pyotp
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -129,8 +129,13 @@ def mfa_runtime(engine, monkeypatch, postgresql_scope_writers):
                 connection.execute(
                     text(
                         "SELECT set_config('app.current_organization_id', '', true), "
-                        "set_config('app.current_tenant', '', true)"
+                        "set_config('app.current_tenant', '', true), "
+                        "set_config('app.bypass_rls', 'false', true)"
                     )
+                )
+                assert (
+                    connection.scalar(text("SELECT public.should_bypass_rls()"))
+                    is False
                 )
 
             clear_scope()
@@ -142,7 +147,6 @@ def mfa_runtime(engine, monkeypatch, postgresql_scope_writers):
 
             monkeypatch.setattr(app.db, "SessionLocal", session_factory)
             monkeypatch.setattr(deps, "SessionLocal", session_factory)
-            monkeypatch.setattr(auth_dependencies, "SessionLocal", session_factory)
             # Limit discovery to this transaction's fixtures; data reads retain real RLS.
             monkeypatch.setattr(
                 auth_dependencies, "organization_ids", lambda **_: [org_a, org_b]
@@ -166,6 +170,24 @@ def mfa_runtime(engine, monkeypatch, postgresql_scope_writers):
             monkeypatch.setattr("app.services.audit_dispatcher.fire_audit_event", audit)
             app = FastAPI()
             app.include_router(auth_flow.router, prefix="/api/v1")
+
+            def authenticate(request: Request):
+                # Serialize auth before the service session on this one test
+                # connection, so auth teardown cannot roll back service saves.
+                # The production authentication implementation still runs in full.
+                with session_factory() as db:
+                    auth = auth_dependencies.require_tenant_auth(
+                        authorization=request.headers.get("authorization"),
+                        access_token=request.cookies.get("access_token"),
+                        request=request,
+                        db=db,
+                    )
+                    db.commit()
+                    return auth
+
+            app.dependency_overrides[auth_dependencies.require_tenant_auth] = (
+                authenticate
+            )
             with Session(
                 connection, join_transaction_mode="create_savepoint"
             ) as token_db:
