@@ -33,7 +33,6 @@ from app.schemas.auth_flow import (
 )
 from app.services import auth_flow as auth_flow_service
 from app.api.deps import get_db_auth_bypass, get_db_with_org, require_tenant_auth
-from app.services.auth_dependencies import require_user_auth
 from app.services.auth_flow_api import auth_flow_api_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -115,8 +114,8 @@ def login(
 )
 def mfa_setup(
     payload: MfaSetupRequest,
-    auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db_auth_bypass),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
 ):
     if str(payload.person_id) != auth["person_id"]:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -135,8 +134,8 @@ def mfa_setup(
 )
 def mfa_confirm(
     payload: MfaConfirmRequest,
-    auth: dict = Depends(require_user_auth),
-    db: Session = Depends(get_db_auth_bypass),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db_with_org),
 ):
     return auth_flow_service.auth_flow.mfa_confirm(
         db, str(payload.method_id), payload.code, auth["person_id"]
