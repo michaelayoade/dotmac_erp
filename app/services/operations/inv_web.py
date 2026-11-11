@@ -778,6 +778,7 @@ class OperationsInventoryWebService:
         issue_qty: list[str],
         issued_before: list[str],
         out_of_stock: list[str],
+        serial_numbers: list[str] | None = None,
     ) -> RedirectResponse:
         """Issue selected material lines after parsing the inline form."""
         from app.services.inventory.material_request_issue import (
@@ -793,6 +794,7 @@ class OperationsInventoryWebService:
                 not line_ids
                 or len(line_ids) != len(issue_qty)
                 or len(line_ids) != len(issued_before)
+                or (serial_numbers is not None and len(line_ids) != len(serial_numbers))
             ):
                 raise ValueError("Issue form is incomplete; reload the request")
             ids = [UUID(value) for value in line_ids]
@@ -807,6 +809,16 @@ class OperationsInventoryWebService:
                 for line_id, value in zip(ids, issued_before, strict=True)
             }
             out_ids = {UUID(value) for value in out_of_stock}
+            serials_by_line = None
+            if serial_numbers is not None:
+                parsed = [json.loads(value) for value in serial_numbers]
+                if any(
+                    not isinstance(values, list)
+                    or any(not isinstance(value, str) for value in values)
+                    for values in parsed
+                ):
+                    raise ValueError("Issue form contains invalid serial numbers")
+                serials_by_line = dict(zip(ids, parsed, strict=True))
             MaterialRequestIssueService.issue_available(
                 db,
                 org_id,
@@ -815,9 +827,14 @@ class OperationsInventoryWebService:
                 quantities,
                 expected,
                 out_ids,
+                serial_numbers=serials_by_line,
             )
             db.commit()
-        except (ValueError, InvalidOperation, HTTPException) as exc:
+        except (
+            ValueError,
+            InvalidOperation,
+            HTTPException,
+        ) as exc:
             db.rollback()
             message = exc.detail if isinstance(exc, HTTPException) else str(exc)
             return RedirectResponse(

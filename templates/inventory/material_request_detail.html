@@ -1,6 +1,16 @@
 {% extends "inventory/base_inventory.html" %}
 
 {% from "components/macros.html" import status_badge, icon_svg %}
+{% macro item_columns(request) %}
+<colgroup>
+    <col style='width: 3rem'><col style='width: 14rem'><col style='width: 10rem'>
+    <col style='width: 7rem'><col style='width: 7rem'>
+    {% if request.request_type == 'ISSUE' %}<col style='width: 7rem'>{% endif %}
+    {% if request.stock_required %}<col style='width: 7rem'><col style='width: 6rem'>{% endif %}
+    {% if request.can_issue_lines %}<col style='width: 9rem'><col style='width: 9rem'>{% endif %}
+    <col style='width: 5rem'><col style='width: 8rem'>
+</colgroup>
+{% endmacro %}
 {% block page_title %}Material Request {{ material_request.request_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -183,7 +193,8 @@
         </div>
         {% if material_request_items %}
         <div class="table-container">
-            <table class="table">
+            <table class="table table-fixed" style='min-width: 76rem'>
+                {{ item_columns(material_request) }}
                 <thead>
                     <tr>
                         <th scope="col">#</th>
@@ -206,16 +217,22 @@
                         <th scope="col">Schedule Date</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for item in material_request_items %}
-                    <tr {% if material_request.can_issue_lines and item.has_pending_qty %}x-data='{ outOfStock: {{ item.out_of_stock | tojson }}, issueQty: {{ ('0' if item.out_of_stock else item.suggested_issue_qty) | tojson }} }'{% endif %}>
+            </table>
+        </div>
+        {% for item in material_request_items %}
+        <div class='border-t border-slate-200 dark:border-slate-700'
+             {% if material_request.can_issue_lines and item.has_pending_qty %}
+             x-data='materialIssueLine({{ ('0' if item.out_of_stock else item.suggested_issue_qty) | tojson }}, {{ item.saved_serials | tojson }}, {{ item.ordered_qty_value | tojson }}, {{ item.track_serial_numbers | tojson }}, {{ item.out_of_stock | tojson }})'
+             {% endif %}>
+            <div class='table-container'>
+                <table class='table table-fixed' style='min-width: 76rem'>
+                    {{ item_columns(material_request) }}
+                    <tbody>
+                    <tr>
                         <td class="text-slate-400 font-mono text-sm">{{ loop.index }}</td>
                         <td class="max-w-[14rem]">
                             <div class="truncate font-mono font-medium text-slate-900 dark:text-white" title="{{ item.item_code }}">{{ item.item_code }}</div>
                             <div class="truncate text-xs text-slate-500" title="{{ item.item_name }}">{{ item.item_name }}</div>
-                            {% if material_request.can_issue_lines and item.saved_serials %}
-                            <details class="text-xs text-slate-500"><summary>Saved serial order</summary><p class="break-words">{{ item.saved_serials | join(', ') }}</p><p>The next unissued serials in this order will be issued.</p></details>
-                            {% endif %}
                         </td>
                         <td class="text-slate-500">{{ item.warehouse_name or '-' }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ item.requested_qty }}</td>
@@ -245,9 +262,10 @@
                             <input type='hidden' name='line_ids' value='{{ item.item_id }}' form='lineIssueForm'>
                             <input type='hidden' name='issued_before' value='{{ item.ordered_qty_raw }}' form='lineIssueForm'>
                             <input aria-label='Quantity to issue for {{ item.item_code }}' type='number' name='issue_qty' form='lineIssueForm'
-                                   min='0' max='{{ item.suggested_issue_qty }}' step='0.000001' required
-                                   x-model='issueQty' :readonly='outOfStock'
-                                   class='form-input w-28 text-right font-mono'>
+                                   min='0' max='{{ item.suggested_issue_qty }}' step='{{ '1' if item.track_serial_numbers else '0.000001' }}' required
+                                   x-model='issueQty' @input='syncSerials(); $el.setCustomValidity("")' :readonly='outOfStock'
+                                   {% if item.track_serial_numbers %}data-serial-tracked{% endif %}
+                                   class='form-input material-issue-qty w-28 text-right font-mono'>
                             {% else %}<span class='text-slate-400'>—</span>{% endif %}
                         </td>
                         <td>
@@ -256,7 +274,7 @@
                                    x-model='outOfStock' tabindex='-1' class='sr-only' aria-hidden='true' {% if item.out_of_stock %}checked{% endif %}>
                             <button type='button' class='badge badge-sm badge-rejected cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500'
                                     :aria-pressed='outOfStock.toString()'
-                                    @click='outOfStock = !outOfStock; issueQty = outOfStock ? 0 : {{ item.suggested_issue_qty | tojson }}'>
+                                    @click='outOfStock = !outOfStock; issueQty = outOfStock ? 0 : {{ item.suggested_issue_qty | tojson }}; syncSerials()'>
                                 Out of stock <span x-show='outOfStock' x-cloak aria-hidden='true'>Selected</span>
                             </button>
                             {% elif not item.has_pending_qty %}{{ status_badge('ISSUED', 'sm') }}
@@ -267,8 +285,44 @@
                         <td class="text-slate-500">{{ item.uom or '-' }}</td>
                         <td class="text-slate-500">{{ item.schedule_date or '-' }}</td>
                     </tr>
-                    {% endfor %}
-                </tbody>
+                    </tbody>
+                </table>
+            </div>
+            {% if material_request.can_issue_lines and item.has_pending_qty %}
+            <input type='hidden' name='serial_numbers' form='lineIssueForm' :value='JSON.stringify(serials)'>
+            {% if item.track_serial_numbers %}
+            <section x-show='serials.length > 0' x-cloak class='mx-4 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/30'
+                     aria-label='Serial numbers for {{ item.item_name }}'>
+                <div class='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                    <h4 class='text-sm font-semibold text-slate-900 dark:text-white'>Serial numbers for {{ item.item_name }}</h4>
+                    <span class='text-xs text-slate-600 dark:text-slate-300' x-text='`${serials.length} to issue`'></span>
+                </div>
+                <p class='mb-3 text-xs text-slate-600 dark:text-slate-300'>Enter or scan one serial number per unit being issued.</p>
+                <div class='grid gap-3 sm:grid-cols-2'>
+                    <template x-for='(_, index) in serials' :key='index'>
+                        <div>
+                            <label class='mb-1 block text-xs font-medium text-slate-700 dark:text-slate-200'
+                                   :for='`serial-{{ item.item_id }}-${index}`'>{{ item.item_name }} <span x-text='index + 1'></span> serial number</label>
+                            <input type='text' class='form-input material-serial-input w-full' form='lineIssueForm'
+                                   :id='`serial-{{ item.item_id }}-${index}`' x-model='serials[index]'
+                                   placeholder='Enter or scan serial number' autocomplete='off' required
+                                   @input='$el.setCustomValidity("")'>
+                        </div>
+                    </template>
+                </div>
+            </section>
+            {% endif %}
+            {% endif %}
+            {% if item.issued_serials %}
+            <div class='mx-4 mb-4 text-xs text-slate-600 dark:text-slate-300'>
+                <span class='font-semibold'>Previously issued serials:</span> {{ item.issued_serials | join(', ') }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class='table-container'>
+            <table class='table table-fixed' style='min-width: 76rem'>
+                {{ item_columns(material_request) }}
                 <tfoot class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
                         <td colspan="3" class="font-semibold text-slate-900 dark:text-white">Total</td>
@@ -299,11 +353,11 @@
         <div class="flex flex-wrap gap-3">
 {% if material_request.can_issue_lines and auth is defined and auth.has_any_permission(['inv:material_requests:approve', 'inventory:material_requests:approve']) %}
             <form id='lineIssueForm' method='post' action='/inventory/material-requests/{{ material_request.request_id }}/issue-lines'
-                  onsubmit='return confirm(this.dataset.confirm)'
+                  onsubmit='return submitMaterialIssue(this)'
                   data-confirm='Issue the entered quantities now? Marked out-of-stock lines will remain outstanding.'>
                 {{ request.state.csrf_form | safe }}
                 <button type='submit' class='btn btn-success'>
-                    {{ icon_svg('check', 'h-4 w-4 mr-1.5') }} Issue remaining line items
+                    {{ icon_svg('check', 'h-4 w-4 mr-1.5') }} Issue selected items
                 </button>
             </form>
             <p class='w-full text-sm text-slate-500 dark:text-slate-400'>Edit the Issue now quantity on each line. Click Out of stock for a zero-stock line, then issue the rest. The original requested quantities remain unchanged. This also applies to existing Self-Care requests. Issuing deducts stock immediately; it is not a draft edit.</p>
@@ -378,4 +432,50 @@
     {% include "partials/_recent_activity.html" %}
     {% endif %}
 </div>
+<script>
+function materialIssueLine(initialQty, savedSerials, issuedBefore, tracked, initiallyOutOfStock) {
+    const count = tracked && Number.isInteger(Number(initialQty)) && Number(initialQty) > 0
+        ? Number(initialQty) : 0;
+    return {
+        outOfStock: initiallyOutOfStock,
+        issueQty: initialQty,
+        serials: Array.from({ length: count }, (_, index) => savedSerials[issuedBefore + index] || ''),
+        syncSerials() {
+            const next = tracked && Number.isInteger(Number(this.issueQty)) && Number(this.issueQty) > 0
+                ? Number(this.issueQty) : 0;
+            this.serials = Array.from({ length: next }, (_, index) => this.serials[index] || savedSerials[issuedBefore + index] || '');
+        },
+    };
+}
+
+function submitMaterialIssue(form) {
+    const serialInputs = document.querySelectorAll('.material-serial-input');
+    const seen = new Set();
+    for (const quantity of document.querySelectorAll('.material-issue-qty[data-serial-tracked]')) {
+        quantity.setCustomValidity('');
+        if (!Number.isInteger(Number(quantity.value))) {
+            quantity.setCustomValidity('Serial-tracked items must be issued in whole units.');
+            quantity.reportValidity();
+            return false;
+        }
+    }
+    for (const input of serialInputs) {
+        input.setCustomValidity('');
+        const value = input.value.trim();
+        if (!value) {
+            input.setCustomValidity('Enter a serial number for this unit.');
+        } else if (seen.has(value.toLocaleLowerCase())) {
+            input.setCustomValidity('This serial number was entered more than once.');
+        }
+        if (!input.checkValidity()) {
+            input.reportValidity();
+            return false;
+        }
+        seen.add(value.toLocaleLowerCase());
+    }
+    if (!confirm(form.dataset.confirm)) return false;
+    form.querySelector('button[type="submit"]').disabled = true;
+    return true;
+}
+</script>
 {% endblock %}

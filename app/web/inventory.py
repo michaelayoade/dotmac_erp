@@ -1342,6 +1342,7 @@ def issue_material_request_lines(
     issue_qty: list[str] = Form([]),
     issued_before: list[str] = Form([]),
     out_of_stock: list[str] = Form([]),
+    serial_numbers: list[str] = Form([]),
     _perm: WebAuthContext = Depends(
         require_any_web_permission(
             ["inv:material_requests:approve", "inventory:material_requests:approve"]
@@ -1359,6 +1360,7 @@ def issue_material_request_lines(
         issue_qty=issue_qty,
         issued_before=issued_before,
         out_of_stock=out_of_stock,
+        serial_numbers=serial_numbers,
     )
 
 
