@@ -246,10 +246,10 @@ class MaterialRequestIssueService:
                         f"Item #{line.sequence}: serial numbers cannot be blank"
                     )
                 for value in supplied:
-                    key = value.strip().casefold()
-                    if key in seen_serials:
+                    serial_key = value.strip().casefold()
+                    if serial_key in seen_serials:
                         raise ValueError(f"Duplicate serial number: {value.strip()}")
-                    seen_serials.add(key)
+                    seen_serials.add(serial_key)
                 normalized = InventorySerialService.normalize_serial_numbers(supplied)
                 if len(normalized) != int(quantity):
                     raise ValueError(
