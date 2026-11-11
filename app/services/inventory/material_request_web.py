@@ -12,7 +12,7 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 from typing import Any, TypedDict
 from uuid import UUID
 
@@ -30,6 +30,10 @@ from app.models.inventory import (
     MaterialRequestType,
     TransactionType,
     Warehouse,
+)
+from app.models.inventory.inventory_serial import (
+    InventorySerial,
+    InventorySerialMovement,
 )
 from app.models.people.hr import Employee, EmployeeStatus
 from app.models.person import Person
@@ -562,6 +566,42 @@ class MaterialRequestWebService:
             ).all()
             items_map = {i.item_id: i for i in inv_items}
 
+        issued_serials_by_line: dict[UUID, list[str]] = {}
+        if any(
+            (line.ordered_qty or 0) > 0
+            and getattr(
+                items_map.get(line.inventory_item_id), "track_serial_numbers", False
+            )
+            is True
+            for line in request_items
+        ):
+            serial_history = db.execute(
+                select(
+                    InventoryTransaction.source_document_line_id,
+                    InventorySerial.serial_number,
+                )
+                .join(
+                    InventorySerialMovement,
+                    InventorySerialMovement.transaction_id
+                    == InventoryTransaction.transaction_id,
+                )
+                .join(
+                    InventorySerial,
+                    InventorySerial.serial_id == InventorySerialMovement.serial_id,
+                )
+                .where(
+                    InventoryTransaction.organization_id == org_id,
+                    InventoryTransaction.source_document_id == req_id,
+                    InventoryTransaction.transaction_type == TransactionType.ISSUE,
+                    InventorySerialMovement.organization_id == org_id,
+                    InventorySerialMovement.movement_type == "ISSUE",
+                    InventorySerial.organization_id == org_id,
+                )
+                .order_by(InventorySerialMovement.created_at)
+            ).all()
+            for line_id, serial_number in serial_history:
+                issued_serials_by_line.setdefault(line_id, []).append(serial_number)
+
         warehouses_map = {}
         if warehouse_ids:
             wh_list = db.scalars(
@@ -720,6 +760,10 @@ class MaterialRequestWebService:
                 )
             pending_qty = max(requested_qty - ordered_qty, Decimal("0"))
             suggested_issue_qty = min(pending_qty, max(available_qty, Decimal("0")))
+            if getattr(inv_item, "track_serial_numbers", False) is True:
+                suggested_issue_qty = suggested_issue_qty.to_integral_value(
+                    rounding=ROUND_FLOOR
+                )
             if effective_warehouse_id:
                 remaining_display_stock[
                     (item.inventory_item_id, effective_warehouse_id)
@@ -755,6 +799,11 @@ class MaterialRequestWebService:
                     "has_pending_qty": pending_qty > 0,
                     "suggested_issue_qty": str(suggested_issue_qty),
                     "saved_serials": list(getattr(item, "serial_numbers", None) or []),
+                    "issued_serials": issued_serials_by_line.get(item.item_id, []),
+                    "track_serial_numbers": getattr(
+                        inv_item, "track_serial_numbers", False
+                    )
+                    is True,
                     "out_of_stock": getattr(item, "out_of_stock", False),
                     "available_qty": _format_currency(available_qty),
                     "available_qty_value": float(available_qty),

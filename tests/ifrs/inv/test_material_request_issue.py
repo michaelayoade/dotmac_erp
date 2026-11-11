@@ -46,6 +46,7 @@ def _request_with_lines(count: int = 5):
     db.scalars.side_effect = [request_result, lines_result]
     db.get.return_value = SimpleNamespace(
         organization_id=org_id,
+        track_serial_numbers=False,
         average_cost=Decimal("1"),
         base_uom="EA",
         currency_code="NGN",
@@ -256,3 +257,101 @@ def test_zero_stock_badge_does_not_allow_empty_issue() -> None:
                 {line_id},
             )
     assert request.status == MaterialRequestStatus.SUBMITTED
+
+
+def test_serials_follow_each_issued_line_and_nonserial_line_gets_none() -> None:
+    db, org_id, user_id, request, lines = _request_with_lines(3)
+    lines[0].ordered_qty = Decimal("1")
+    lines[0].requested_qty = Decimal("3")
+    lines[1].requested_qty = Decimal("1")
+    lines[2].requested_qty = Decimal("5")
+    request.status = MaterialRequestStatus.PARTIALLY_ISSUED
+    items = {
+        line.inventory_item_id: SimpleNamespace(
+            organization_id=org_id,
+            track_serial_numbers=index < 2,
+            average_cost=Decimal("1"),
+            base_uom="EA",
+            currency_code="NGN",
+        )
+        for index, line in enumerate(lines)
+    }
+    db.get.side_effect = lambda _model, item_id: items[item_id]
+    with (
+        patch(
+            "app.services.inventory.material_request_issue.InventoryTransactionService.get_current_balance",
+            return_value=Decimal("10"),
+        ),
+        patch(
+            "app.services.inventory.material_request_issue.InventoryTransactionService.create_issue"
+        ) as post,
+        patch(
+            "app.services.inventory.material_request_issue.PeriodGuardService.get_period_for_date",
+            return_value=SimpleNamespace(fiscal_period_id=uuid4()),
+        ),
+    ):
+        MaterialRequestIssueService.issue_available(
+            db,
+            org_id,
+            user_id,
+            request.request_id,
+            {
+                line.item_id: qty
+                for line, qty in zip(
+                    lines, [Decimal("2"), Decimal("1"), Decimal("5")], strict=True
+                )
+            },
+            {line.item_id: line.ordered_qty for line in lines},
+            set(),
+            serial_numbers={
+                lines[0].item_id: ["RTR-2", "RTR-3"],
+                lines[1].item_id: ["ONT-1"],
+                lines[2].item_id: [],
+            },
+        )
+    assert [call.args[2].serial_numbers for call in post.call_args_list] == [
+        ["RTR-2", "RTR-3"],
+        ["ONT-1"],
+        None,
+    ]
+    assert [call.args[2].source_document_line_id for call in post.call_args_list] == [
+        line.item_id for line in lines
+    ]
+    assert request.status == MaterialRequestStatus.ISSUED
+
+
+@pytest.mark.parametrize(
+    ("values", "message"),
+    [([], "one serial"), (["", "RTR-2"], "blank"), (["RTR-2", "rtr-2"], "Duplicate")],
+)
+def test_invalid_serials_do_not_post_stock(values: list[str], message: str) -> None:
+    db, org_id, user_id, request, lines = _request_with_lines(1)
+    line = lines[0]
+    line.requested_qty = Decimal("2")
+    db.get.return_value.track_serial_numbers = True
+    with (
+        patch(
+            "app.services.inventory.material_request_issue.InventoryTransactionService.get_current_balance",
+            return_value=Decimal("2"),
+        ),
+        patch(
+            "app.services.inventory.material_request_issue.InventoryTransactionService.create_issue"
+        ) as post,
+        patch(
+            "app.services.inventory.material_request_issue.PeriodGuardService.get_period_for_date",
+            return_value=SimpleNamespace(fiscal_period_id=uuid4()),
+        ),
+    ):
+        with pytest.raises(ValueError, match=message):
+            MaterialRequestIssueService.issue_available(
+                db,
+                org_id,
+                user_id,
+                request.request_id,
+                {line.item_id: Decimal("2")},
+                {line.item_id: Decimal("0")},
+                set(),
+                serial_numbers={line.item_id: values},
+            )
+    post.assert_not_called()
+    assert line.ordered_qty == 0

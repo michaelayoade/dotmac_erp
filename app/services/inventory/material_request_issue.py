@@ -105,6 +105,7 @@ class MaterialRequestIssueService:
         quantities: dict[UUID, Decimal],
         expected_issued: dict[UUID, Decimal],
         out_of_stock_ids: set[UUID],
+        serial_numbers: dict[UUID, list[str]] | None = None,
     ) -> MaterialRequest:
         """Post selected quantities and the Sub outcome in one caller transaction.
 
@@ -158,6 +159,8 @@ class MaterialRequestIssueService:
             )
         if not out_of_stock_ids <= set(pending):
             raise ValueError("Unknown out-of-stock line")
+        if serial_numbers and not set(serial_numbers) <= set(pending):
+            raise ValueError("Unknown serial-number line")
         if request.source_system == "sub":
             validate_sub_issue_history(db, organization_id, request_id, lines)
 
@@ -220,6 +223,51 @@ class MaterialRequestIssueService:
         if fiscal_period is None:
             raise ValueError("No open fiscal period exists for today")
 
+        selected_serials: dict[UUID, list[str] | None] = {}
+        seen_serials: set[str] = set()
+        for line, quantity, _warehouse_id in selected:
+            item = db.get(Item, line.inventory_item_id)
+            if item is None or item.organization_id != organization_id:
+                raise ValueError(f"Item #{line.sequence}: inventory item not found")
+            supplied = (serial_numbers or {}).get(line.item_id)
+            if getattr(item, "track_serial_numbers", False):
+                if quantity != quantity.to_integral_value():
+                    raise ValueError(
+                        f"Item #{line.sequence}: serialized issues require whole units"
+                    )
+                if supplied is None:
+                    supplied = _serials_for_issue(line, quantity)
+                if supplied is None or len(supplied) != int(quantity):
+                    raise ValueError(
+                        f"Item #{line.sequence}: enter one serial number for each unit issued"
+                    )
+                if any(not value.strip() for value in supplied):
+                    raise ValueError(
+                        f"Item #{line.sequence}: serial numbers cannot be blank"
+                    )
+                for value in supplied:
+                    key = value.strip().casefold()
+                    if key in seen_serials:
+                        raise ValueError(f"Duplicate serial number: {value.strip()}")
+                    seen_serials.add(key)
+                normalized = InventorySerialService.normalize_serial_numbers(supplied)
+                if len(normalized) != int(quantity):
+                    raise ValueError(
+                        f"Item #{line.sequence}: serial numbers cannot be blank"
+                    )
+                saved = _serials_for_issue(line, quantity)
+                if saved and normalized != saved:
+                    raise ValueError(
+                        f"Item #{line.sequence}: serial numbers must match the saved selection"
+                    )
+                selected_serials[line.item_id] = normalized
+            else:
+                if supplied:
+                    raise ValueError(
+                        f"Item #{line.sequence}: serial numbers are not tracked"
+                    )
+                selected_serials[line.item_id] = None
+
         old_status = request.status
         for line, quantity, warehouse_id in selected:
             item = db.get(Item, line.inventory_item_id)
@@ -240,7 +288,7 @@ class MaterialRequestIssueService:
                 source_document_id=request.request_id,
                 source_document_line_id=line.item_id,
                 reference=request.request_number,
-                serial_numbers=_serials_for_issue(line, quantity),
+                serial_numbers=selected_serials[line.item_id],
             )
             InventoryTransactionService.create_issue(
                 db, organization_id, transaction, user_id, auto_commit=False
