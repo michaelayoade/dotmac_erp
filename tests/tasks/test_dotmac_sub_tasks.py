@@ -17,7 +17,10 @@ def test_business_failure_survives_celery_pickle_round_trip() -> None:
         "error_count": 1,
     }
 
-    restored = pickle.loads(pickle.dumps(dotmac_sub.DotmacSubBusinessFailure(summary)))
+    # The payload is created in-process from this fixed test object, not untrusted data.
+    restored = pickle.loads(  # noqa: S301
+        pickle.dumps(dotmac_sub.DotmacSubBusinessFailure(summary))
+    )
 
     assert type(restored) is dotmac_sub.DotmacSubBusinessFailure
     assert restored.summary == summary
