@@ -94,6 +94,12 @@ class DotmacSubBusinessFailure(Exception):
             f"{summary.get('error_count', 0)} business error(s)"
         )
 
+    def __reduce__(
+        self,
+    ) -> tuple[type[DotmacSubBusinessFailure], tuple[dict[str, Any]]]:
+        """Preserve the structured summary when Celery serializes the failure."""
+        return (type(self), (self.summary,))
+
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=300)
 def report_dotmac_sub_invoice_mismatches(
