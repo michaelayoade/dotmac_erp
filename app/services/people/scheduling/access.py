@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -96,12 +96,20 @@ class SchedulerAccessService:
             actor_employee_id=actor_employee_id,
             can_view_all=can_view_all,
         )
-        return list(
-            self.db.scalars(
-                select(Employee).where(
-                    Employee.organization_id == organization_id,
-                    Employee.department_id == department_id,
-                    Employee.status == EmployeeStatus.ACTIVE,
-                )
-            ).all()
+        employees = self.db.scalars(
+            select(Employee)
+            .options(selectinload(Employee.person))
+            .where(
+                Employee.organization_id == organization_id,
+                Employee.department_id == department_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+            )
+        ).all()
+        return sorted(
+            employees,
+            key=lambda employee: (
+                employee.full_name.casefold(),
+                employee.employee_code.casefold(),
+                str(employee.employee_id),
+            ),
         )
