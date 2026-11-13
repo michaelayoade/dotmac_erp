@@ -19,8 +19,8 @@ from app.web.deps import (
     get_db_for_org,
     require_self_service_access,
     require_self_service_discipline_manager,
-    require_self_service_expense_ui_access,
     require_self_service_expense_approver,
+    require_self_service_expense_ui_access,
     require_self_service_leave_approver,
 )
 
@@ -292,6 +292,25 @@ async def my_check_in(
         notes=notes,
         latitude=latitude,
         longitude=longitude,
+    )
+
+
+@router.post("/attendance/exception")
+async def request_attendance_exception(
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db_for_org),
+) -> RedirectResponse:
+    """Submit an attendance exception for HR approval."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        form = await request.form()
+    return self_service_web_service.attendance_exception_response(
+        auth,
+        db,
+        reason=_safe_form_text(form.get("reason")),
+        requested_date=_safe_form_text(form.get("requested_date")),
+        explanation=_safe_form_text(form.get("explanation")),
     )
 
 

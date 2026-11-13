@@ -14,7 +14,6 @@ from app.services.common import ValidationError
 from app.services.people.attendance import AttendanceService, CheckInRequirementError
 from app.services.people.attendance.attendance_service import AttendanceServiceError
 
-
 ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 EMPLOYEE_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
 DEPARTMENT_ID = uuid.UUID("00000000-0000-0000-0000-000000000003")
@@ -786,7 +785,12 @@ def test_generate_scheduled_absences_uses_published_schedule() -> None:
     db.flush.assert_called_once()
 
 
-def test_generate_scheduled_absences_preserves_existing_attendance() -> None:
+@pytest.mark.parametrize(
+    ("approved_leave", "counter"), [(True, "on_leave"), (False, "existing")]
+)
+def test_generate_scheduled_absences_preserves_leave_and_attendance(
+    approved_leave, counter
+) -> None:
     service, db = _make_service()
     shift = SimpleNamespace(start_time=time(8, 0), end_time=time(17, 0))
     assignment = SimpleNamespace(
@@ -799,8 +803,8 @@ def test_generate_scheduled_absences_preserves_existing_attendance() -> None:
     db.execute.return_value.all.return_value = [(assignment, schedule)]
     db.scalars.side_effect = [
         SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
-        SimpleNamespace(all=lambda: []),
-        SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
+        SimpleNamespace(all=lambda: [EMPLOYEE_ID] if approved_leave else []),
+        SimpleNamespace(all=lambda: [] if approved_leave else [EMPLOYEE_ID]),
     ]
     service._org_tzinfo = lambda _org_id: UTC  # type: ignore[method-assign]
 
@@ -810,7 +814,7 @@ def test_generate_scheduled_absences_preserves_existing_attendance() -> None:
         as_of=datetime(2026, 8, 4, 12, 0, tzinfo=UTC),
     )
 
-    assert result["existing"] == 1
+    assert result[counter] == 1
     assert result["created"] == 0
     db.add.assert_not_called()
     db.flush.assert_not_called()

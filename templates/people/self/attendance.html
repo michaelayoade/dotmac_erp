@@ -66,6 +66,32 @@
         </div>
     </div>
 
+    {% if request.query_params.get("exception_submitted") %}
+    <p role="status">Attendance exception submitted for HR approval.</p>
+    {% endif %}
+    {% if request.query_params.get("exception_error") %}
+    <p role="alert">{{ request.query_params.get("exception_error") }}</p>
+    {% endif %}
+    <details class="card p-4">
+        <summary class="cursor-pointer font-medium">Request an early exit or late entry</summary>
+        <form method="post" action="/people/self/attendance/exception" class="mt-4 space-y-3">
+            {{ request.state.csrf_form | safe }}
+            <label class="block">Exception
+                <select name="reason" class="form-select" required>
+                    <option value="Early exit">Early exit</option>
+                    <option value="Late entry">Late entry</option>
+                </select>
+            </label>
+            <label class="block">Shift date
+                <input type="date" name="requested_date" class="form-input" required>
+            </label>
+            <label class="block">Reason
+                <textarea name="explanation" class="form-input" rows="2" required></textarea>
+            </label>
+            <button type="submit" class="btn btn-secondary">Submit for HR approval</button>
+        </form>
+    </details>
+
     <div class="grid gap-4 sm:grid-cols-3">
         <div class="card p-5">
             <p class="text-sm text-slate-500 dark:text-slate-400">Today</p>

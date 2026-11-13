@@ -58,6 +58,7 @@ def _email_module_for_entity(entity_type: str | None) -> EmailModule:
         return EmailModule.EXPENSE
     if entity in {
         "EMPLOYEE",
+        "ATTENDANCE",
         "LEAVE_REQUEST",
         "DISCIPLINARY_CASE",
         "PERFORMANCE_APPRAISAL",
@@ -383,6 +384,15 @@ class WorkflowService:
             raise HTTPException(
                 status_code=422,
                 detail=(f"{action_type.value} requires one of: " + ", ".join(choices)),
+            )
+        if (schedule_config or {}).get("missed_checkout") and (
+            entity_type != WorkflowEntityType.ATTENDANCE
+            or trigger_event != TriggerEvent.ON_SCHEDULE
+            or action_type != ActionType.SEND_EMAIL
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="Missed check-out requires a scheduled Attendance email rule",
             )
         if trigger_event in {
             TriggerEvent.ON_SCHEDULE,
@@ -748,6 +758,130 @@ class WorkflowService:
                 context,
                 "Entity is disabled in Admin Automation settings",
             )
+
+        if rule.action_type == ActionType.SEND_EMAIL and not db.scalar(
+            select(WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.rule_id == rule.rule_id,
+                WorkflowRule.organization_id == rule.organization_id,
+                WorkflowRule.is_active.is_(True),
+                WorkflowRule.archived_at.is_(None),
+            )
+            .with_for_update()
+        ):
+            return self._record_skipped(db, rule, context, "Email workflow is disabled")
+
+        if (
+            context.entity_type == "ATTENDANCE"
+            and rule.action_type == ActionType.SEND_EMAIL
+        ):
+            from app.models.people.attendance import (
+                Attendance,
+                AttendanceRequest,
+                AttendanceRequestStatus,
+                AttendanceStatus,
+            )
+
+            attendance = db.get(Attendance, context.entity_id)
+            if not attendance or attendance.organization_id != rule.organization_id:
+                return self._record_skipped(db, rule, context, "Attendance unavailable")
+
+            if rule.schedule_config and rule.schedule_config.get("missed_checkout"):
+                if not attendance.check_in or attendance.check_out:
+                    return self._record_skipped(
+                        db, rule, context, "No outstanding check-out"
+                    )
+
+            if (context.new_values or {}).get(
+                "status"
+            ) == AttendanceStatus.ABSENT.value:
+                if attendance.status != AttendanceStatus.ABSENT:
+                    return self._record_skipped(
+                        db, rule, context, "Attendance is no longer absent"
+                    )
+
+                from app.models.people.leave.leave_application import (
+                    LeaveApplication,
+                    LeaveApplicationStatus,
+                )
+
+                from app.models.people.scheduling import (
+                    ScheduleStatus,
+                    ShiftSchedule,
+                    WorkSchedule,
+                )
+
+                rostered = db.scalar(
+                    select(ShiftSchedule.shift_schedule_id)
+                    .join(
+                        WorkSchedule,
+                        WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
+                    )
+                    .where(
+                        ShiftSchedule.organization_id == rule.organization_id,
+                        WorkSchedule.organization_id == rule.organization_id,
+                        ShiftSchedule.employee_id == attendance.employee_id,
+                        ShiftSchedule.shift_date == attendance.attendance_date,
+                        ShiftSchedule.status.in_(
+                            [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                        ),
+                        WorkSchedule.status.in_(
+                            [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                        ),
+                    )
+                    .limit(1)
+                )
+                if not rostered:
+                    return self._record_skipped(
+                        db, rule, context, "No published shift for the attendance date"
+                    )
+
+                on_leave = db.scalar(
+                    select(LeaveApplication.application_id)
+                    .where(
+                        LeaveApplication.organization_id == rule.organization_id,
+                        LeaveApplication.employee_id == attendance.employee_id,
+                        LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                        LeaveApplication.half_day.is_(False),
+                        LeaveApplication.from_date <= attendance.attendance_date,
+                        LeaveApplication.to_date >= attendance.attendance_date,
+                    )
+                    .limit(1)
+                )
+                if on_leave:
+                    return self._record_skipped(
+                        db, rule, context, "Approved full-day leave"
+                    )
+
+            exception_reason = rule.action_config.get("attendance_exception")
+            if exception_reason in {"Early exit", "Late entry"}:
+                is_exception = (
+                    attendance.early_exit
+                    if exception_reason == "Early exit"
+                    else attendance.late_entry
+                )
+                if not is_exception:
+                    return self._record_skipped(
+                        db, rule, context, "Attendance exception no longer applies"
+                    )
+                approved = db.scalar(
+                    select(AttendanceRequest.attendance_request_id)
+                    .where(
+                        AttendanceRequest.organization_id == rule.organization_id,
+                        AttendanceRequest.employee_id == attendance.employee_id,
+                        AttendanceRequest.from_date == attendance.attendance_date,
+                        AttendanceRequest.to_date == attendance.attendance_date,
+                        AttendanceRequest.reason
+                        == f"Attendance exception: {exception_reason}",
+                        AttendanceRequest.half_day.is_(False),
+                        AttendanceRequest.status == AttendanceRequestStatus.APPROVED,
+                    )
+                    .limit(1)
+                )
+                if approved:
+                    return self._record_skipped(
+                        db, rule, context, "HR approved the attendance exception"
+                    )
 
         execution = WorkflowExecution(
             rule_id=rule.rule_id,
@@ -1806,6 +1940,18 @@ class WorkflowService:
     ) -> None:
         """Write an async action request into the transaction's outbox."""
         from app.services.finance.platform.outbox_publisher import OutboxPublisher
+
+        if rule.action_type == ActionType.SEND_EMAIL and not db.scalar(
+            select(WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.rule_id == rule.rule_id,
+                WorkflowRule.organization_id == rule.organization_id,
+                WorkflowRule.is_active.is_(True),
+                WorkflowRule.archived_at.is_(None),
+            )
+            .with_for_update()
+        ):
+            return
 
         payload = {
             "rule_id": str(rule.rule_id),

@@ -7,6 +7,8 @@ rate limiter caps.
 """
 
 import uuid
+from datetime import date
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -943,3 +945,110 @@ class TestRateLimiting:
         mock_db = MagicMock()
         mock_db.scalar.return_value = 51  # Over the 50 limit
         assert workflow_service._check_entity_rate_limit(mock_db, uuid.uuid4()) is True
+
+
+@pytest.mark.parametrize(
+    ("reason", "flag"), [("Early exit", "early_exit"), ("Late entry", "late_entry")]
+)
+def test_approved_attendance_exception_skips_email(workflow_service, reason, flag):
+    db = MagicMock()
+    rule = _make_mock_rule(
+        entity_type=WorkflowEntityType.ATTENDANCE,
+        action_type=ActionType.SEND_EMAIL,
+        action_config={"recipient": "entity_owner", "attendance_exception": reason},
+    )
+    context = TriggerContext(
+        entity_type="ATTENDANCE",
+        entity_id=uuid.uuid4(),
+        event=TriggerEvent.ON_FIELD_CHANGE,
+        organization_id=rule.organization_id,
+    )
+    db.get.return_value = SimpleNamespace(
+        organization_id=rule.organization_id,
+        employee_id=uuid.uuid4(),
+        attendance_date=date(2026, 11, 13),
+        **{flag: True},
+    )
+    db.scalar.side_effect = [rule.rule_id, uuid.uuid4()]
+    with (
+        patch.object(workflow_service, "_run_action") as run_action,
+        patch(
+            "app.services.finance.automation.entity_configuration."
+            "entity_configuration_service.is_enabled",
+            return_value=True,
+        ),
+    ):
+        result = workflow_service.execute_action(db, rule, context)
+    assert result.status == ExecutionStatus.SKIPPED
+    assert result.error_message == "HR approved the attendance exception"
+    run_action.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("active", "rostered", "on_leave", "expected_reason"),
+    [
+        (False, False, False, "Email workflow is disabled"),
+        (True, False, False, "No published shift for the attendance date"),
+        (True, True, True, "Approved full-day leave"),
+        (True, True, False, None),
+    ],
+)
+def test_absence_email_rechecks_rule_and_roster(
+    workflow_service, active, rostered, on_leave, expected_reason
+):
+    from app.services.finance.automation.workflow import ActionResult
+
+    db = MagicMock()
+    rule = _make_mock_rule(
+        entity_type=WorkflowEntityType.ATTENDANCE,
+        action_type=ActionType.SEND_EMAIL,
+        action_config={"recipient": "entity_owner"},
+    )
+    context = TriggerContext(
+        entity_type="ATTENDANCE",
+        entity_id=uuid.uuid4(),
+        event=TriggerEvent.ON_CREATE,
+        organization_id=rule.organization_id,
+        new_values={"status": "ABSENT"},
+    )
+    db.get.return_value = SimpleNamespace(
+        organization_id=rule.organization_id,
+        employee_id=uuid.uuid4(),
+        attendance_date=date(2026, 11, 14),
+        status="ABSENT",
+    )
+    db.scalar.side_effect = [
+        rule.rule_id if active else None,
+        uuid.uuid4() if rostered else None,
+        uuid.uuid4() if on_leave else None,
+    ]
+    with (
+        patch.object(
+            workflow_service, "_run_action", return_value=ActionResult(success=True)
+        ) as run_action,
+        patch(
+            "app.services.finance.automation.entity_configuration."
+            "entity_configuration_service.is_enabled",
+            return_value=True,
+        ),
+    ):
+        result = workflow_service.execute_action(db, rule, context)
+
+    if expected_reason:
+        assert result.status == ExecutionStatus.SKIPPED
+        assert result.error_message == expected_reason
+        run_action.assert_not_called()
+    else:
+        assert result.status == ExecutionStatus.SUCCESS
+        run_action.assert_called_once()
+
+
+def test_disabled_email_workflow_does_not_publish(workflow_service, sample_context):
+    db = MagicMock()
+    db.scalar.return_value = None
+    rule = _make_mock_rule(action_type=ActionType.SEND_EMAIL, is_active=False)
+    with patch(
+        "app.services.finance.platform.outbox_publisher.OutboxPublisher.publish_event"
+    ) as publish:
+        workflow_service._enqueue_action(db, rule, sample_context)
+    publish.assert_not_called()

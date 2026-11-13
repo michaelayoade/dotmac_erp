@@ -1034,7 +1034,10 @@ class AttendanceService:
             if check_out_time
             else self._now_in_org_tz(org_id)
         )
-        today = now.date()
+        resolved = ScheduleResolver(self.db).resolve_employee_shift(
+            org_id, employee_id, now
+        )
+        today = resolved.assignment.shift_date if resolved else now.date()
 
         attendance = self.get_attendance_by_date(
             org_id, employee_id, today, for_update=True
@@ -1645,7 +1648,16 @@ class AttendanceService:
 
         request.status = AttendanceRequestStatus.APPROVED
         request.status_changed_at = datetime.now()
-        self._process_attendance_request(org_id, request)
+        if not (
+            request.reason
+            in {
+                "Attendance exception: Early exit",
+                "Attendance exception: Late entry",
+            }
+            and request.from_date == request.to_date
+            and not request.half_day
+        ):
+            self._process_attendance_request(org_id, request)
         self.db.flush()
         return request
 

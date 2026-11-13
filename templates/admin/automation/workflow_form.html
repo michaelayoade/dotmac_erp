@@ -17,6 +17,7 @@
 <div class="mx-auto max-w-3xl">
     <script>
         window.__workflowFormInitial = {
+            entityType: {{ (rule.entity_type_raw if rule else form_data.entity_type | default('', true)) | tojson }},
             triggerEvent: {{ (rule.trigger_event_raw if rule else form_data.trigger_event | default('', true)) | tojson }},
             actionType: {{ (rule.action_type_raw if rule else form_data.action_type | default('', true)) | tojson }},
             triggerConditions: {{ (rule.trigger_conditions if rule else form_data.trigger_conditions | default({}, true)) | tojson }},
@@ -61,7 +62,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type <span class="text-rose-500">*</span></label>
-                        <select id="entity_type" name="entity_type" required {% if is_edit %}disabled{% endif %}
+                        <select id="entity_type" name="entity_type" x-model="entityType" required {% if is_edit %}disabled{% endif %}
                                 class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="">Select entity...</option>
                             {% for et in entity_types %}
@@ -219,6 +220,10 @@
                     <input aria-label="e.g., OVERDUE" type="text" placeholder="e.g., OVERDUE" x-model="scheduleStatus"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
+                <label x-show="entityType === 'ATTENDANCE' && actionType === 'SEND_EMAIL'" class="flex items-center gap-2">
+                    <input type="checkbox" x-model="missedCheckout">
+                    Missed check-outs after the scheduled shift ends
+                </label>
                 <div class="space-y-4">
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Additional filters</span>
@@ -295,11 +300,22 @@
                 <p x-show="!actionType" x-cloak class="text-sm text-slate-500 dark:text-slate-400">Select an action type to configure details.</p>
 
                 <div x-show="actionType === 'SEND_EMAIL'" x-cloak class="space-y-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" x-model="emailEmployee">
+                        Email the employee on the record
+                    </label>
+                    <label x-show="entityType === 'ATTENDANCE'" class="block">
+                        Suppress if HR approved this exception for the shift date
+                        <select x-model="attendanceException" class="form-select">
+                            <option value="">None</option>
+                            <option value="Early exit">Early exit</option>
+                            <option value="Late entry">Late entry</option>
+                        </select>
+                    </label>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Recipients *</label>
+                        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Fixed email recipients</label>
                         <input aria-label="email1@company.com, email2@company.com" type="text" placeholder="email1@company.com, email2@company.com" x-model="emailRecipients"
-                               value="{{ (rule.action_config.recipients | join(', ')) if rule and rule.action_config else '' }}"
-                               :required="actionType === 'SEND_EMAIL'"
+                               :required="actionType === 'SEND_EMAIL' && !emailEmployee"
                                class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                     </div>
                     <div>
@@ -677,6 +693,7 @@ function workflowForm(initial) {
         : [];
 
     return {
+        entityType: initial.entityType || "",
         triggerEvent: initial.triggerEvent || "",
         actionType: initial.actionType || "",
         cooldownSeconds: initial.cooldownSeconds || "",
@@ -693,6 +710,9 @@ function workflowForm(initial) {
         amountValue: amountThreshold.value === undefined || amountThreshold.value === null ? "" : String(amountThreshold.value),
         advancedConditionsEnabled: advancedConditionsEnabled,
         advancedConditionsJson: advancedConditionsEnabled ? JSON.stringify(triggerConditions, null, 2) : "",
+        emailEmployee: actionConfig.recipient === "entity_owner",
+        attendanceException: actionConfig.attendance_exception || "",
+        missedCheckout: Boolean(scheduleConfig && scheduleConfig.missed_checkout),
         emailRecipients: Array.isArray(actionConfig.recipients) ? actionConfig.recipients.join(", ") : "",
         emailSubject: actionConfig.subject || "Workflow Notification",
         emailBodyHtml: actionConfig.body_html || "",
@@ -769,6 +789,10 @@ function workflowForm(initial) {
                         return;
                     }
                     let value = cond.value;
+                    if (this.entityType === "ATTENDANCE" && ["late_entry", "early_exit"].includes(field) &&
+                        ["equals", "not_equals"].includes(operator) && ["true", "false"].includes(String(value).toLowerCase())) {
+                        value = String(value).toLowerCase() === "true";
+                    }
                     if (operator === "in" || operator === "not_in") {
                         value = String(cond.value || "")
                             .split(",")
@@ -819,6 +843,12 @@ function workflowForm(initial) {
                     .map((item) => item.trim())
                     .filter((item) => item);
                 config.recipients = recipients;
+                if (this.emailEmployee) {
+                    config.recipient = "entity_owner";
+                }
+                if (this.entityType === "ATTENDANCE" && this.attendanceException) {
+                    config.attendance_exception = this.attendanceException;
+                }
                 config.subject = this.emailSubject || "Workflow Notification";
                 config.body_html = this.emailBodyHtml || "";
                 if (this.emailBodyText) {
@@ -906,6 +936,9 @@ function workflowForm(initial) {
             const config = {
                 interval_minutes: this.scheduleInterval || 60,
             };
+            if (this.entityType === "ATTENDANCE" && this.actionType === "SEND_EMAIL" && this.missedCheckout) {
+                config.missed_checkout = true;
+            }
             const entityQuery = {};
             if (this.scheduleStatus) {
                 entityQuery.status = this.scheduleStatus;
