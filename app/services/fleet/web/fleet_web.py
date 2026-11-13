@@ -40,6 +40,7 @@ from app.models.fleet.enums import (
     VehicleType,
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.schemas.fleet.maintenance import MaintenanceComplete
 from app.services.common import (
     NotFoundError,
     PaginationParams,
@@ -1212,7 +1213,7 @@ class FleetWebService:
         auth: Any,
         record_id: UUID,
     ) -> Any:
-        """Cancel a scheduled maintenance record and return to the list."""
+        """Cancel open maintenance and return to the list."""
         from fastapi.responses import RedirectResponse
 
         org_id = coerce_uuid(auth.organization_id)
@@ -1221,8 +1222,11 @@ class FleetWebService:
         service = MaintenanceService(self.db, org_id)
         try:
             record = service.get_for_update(record_id)
-            if record.status != MaintenanceStatus.SCHEDULED:
-                raise ValueError("Only scheduled maintenance can be cancelled.")
+            if record.status not in {
+                MaintenanceStatus.SCHEDULED,
+                MaintenanceStatus.IN_PROGRESS,
+            }:
+                raise ValueError("Only open maintenance can be cancelled.")
             from app.services.fleet.maintenance_finance import (
                 cancel_finance_handling,
             )
@@ -1239,6 +1243,56 @@ class FleetWebService:
             )
         return RedirectResponse(
             url="/fleet/maintenance?success=Maintenance%20cancelled.",
+            status_code=303,
+        )
+
+    def start_maintenance_response(self, auth: Any, record_id: UUID) -> Any:
+        """Start scheduled maintenance from the detail page."""
+        from fastapi.responses import RedirectResponse
+
+        service = MaintenanceService(self.db, coerce_uuid(auth.organization_id))
+        try:
+            service.get_for_update(record_id)
+            service.start(record_id)
+            self.db.commit()
+            message = "Maintenance started."
+            parameter = "success"
+        except Exception as exc:
+            self.db.rollback()
+            logger.warning("Maintenance start failed: %s", exc)
+            message = str(exc)[:200]
+            parameter = "error"
+        return RedirectResponse(
+            url=f"/fleet/maintenance/{record_id}?{parameter}={quote(message)}",
+            status_code=303,
+        )
+
+    async def complete_maintenance_response(
+        self, request: "Request", auth: Any, record_id: UUID
+    ) -> Any:
+        """Record completed maintenance from the detail page."""
+        from fastapi.responses import RedirectResponse
+
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+        service = MaintenanceService(self.db, coerce_uuid(auth.organization_id))
+        try:
+            data = MaintenanceComplete.model_validate(
+                self._coerce_fleet_form_data(form)
+            )
+            service.get_for_update(record_id)
+            service.complete(record_id, data)
+            self.db.commit()
+            message = "Maintenance completed."
+            parameter = "success"
+        except Exception as exc:
+            self.db.rollback()
+            logger.warning("Maintenance completion failed: %s", exc)
+            message = str(exc)[:200]
+            parameter = "error"
+        return RedirectResponse(
+            url=f"/fleet/maintenance/{record_id}?{parameter}={quote(message)}",
             status_code=303,
         )
 
