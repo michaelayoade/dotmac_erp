@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
+from app.services import formatters as _date_formatters
 from app.services.admin.settings_web import admin_settings_web_service
 from app.services.admin.web import admin_web_service
 from app.services.branding_assets import delete_branding_asset, save_branding_asset
@@ -984,10 +985,12 @@ def _expense_settings_page(
         active_reset=active,
         reset_schedule=proposed or pending,
         weekdays=WEEKDAYS,
-        next_reset_label=next_boundary(history, now).strftime("%a %d %b %Y %H:%M UTC"),
+        next_reset_label=_date_formatters.format_weekday_utc_datetime_display(
+            next_boundary(history, now)
+        ),
         pending_reset_label=(
-            datetime.fromisoformat(pending["effective_at"]).strftime(
-                "%a %d %b %Y %H:%M UTC"
+            _date_formatters.format_weekday_utc_datetime_display(
+                datetime.fromisoformat(pending["effective_at"])
             )
             if pending is not active
             else None
@@ -1055,7 +1058,7 @@ async def update_admin_expense_schedule(
                 auth,
                 db,
                 proposed=proposed,
-                preview=preview.strftime("%a %d %b %Y %H:%M UTC"),
+                preview=_date_formatters.format_weekday_utc_datetime_display(preview),
             )
         save_schedule(db, auth.organization_id, auth.person_id, proposed)
         db.commit()

@@ -15,7 +15,7 @@
         </div>
         <div class="card-body grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div><span class="text-slate-500 dark:text-slate-400">Score</span><p class="font-mono text-slate-900 dark:text-white">{{ attempt.score if attempt.score is not none else "-" }}%</p></div>
-            <div><span class="text-slate-500 dark:text-slate-400">Submitted</span><p class="text-slate-900 dark:text-white">{{ attempt.submitted_at.strftime('%Y-%m-%d %H:%M') if attempt.submitted_at else "-" }}</p></div>
+            <div><span class="text-slate-500 dark:text-slate-400">Submitted</span><p class="text-slate-900 dark:text-white">{{ (attempt.submitted_at | format_datetime) if attempt.submitted_at else "-" }}</p></div>
             <div><span class="text-slate-500 dark:text-slate-400">Feedback</span><p class="text-slate-900 dark:text-white">{{ "Awaiting facilitator review" if attempt.passed is none else "-" }}</p></div>
         </div>
     </div>

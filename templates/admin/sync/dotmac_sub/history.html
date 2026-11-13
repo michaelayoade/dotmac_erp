@@ -38,8 +38,8 @@
                         <td class="text-right font-mono tabular-nums">{{ run.synced_count }}</td>
                         <td class="text-right font-mono tabular-nums">{{ run.skipped_count }}</td>
                         <td class="text-right font-mono tabular-nums {{ 'text-rose-600 dark:text-rose-400' if run.error_count else '' }}">{{ run.error_count }}</td>
-                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ run.started_at.strftime('%d %b %Y, %H:%M') if run.started_at else '—' }}</td>
-                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ run.completed_at.strftime('%d %b %Y, %H:%M') if run.completed_at else '—' }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ (run.started_at | format_datetime) if run.started_at else '—' }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ (run.completed_at | format_datetime) if run.completed_at else '—' }}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="9" class="py-10 text-center text-sm text-slate-500 dark:text-slate-400">No sync runs recorded yet.</td></tr>

@@ -172,7 +172,7 @@
                             {% endif %}
                             {% if activity.due_date %}
                             <span class="{% if activity.due_date < now().date() and activity.activity_status not in ['COMPLETED', 'SKIPPED'] %}text-rose-600 dark:text-rose-400{% endif %}">
-                                Due: {{ activity.due_date.strftime('%b %d') }}
+                                Due: {{ (activity.due_date | format_date) }}
                             </span>
                             {% endif %}
                             {% if activity.completed_on %}

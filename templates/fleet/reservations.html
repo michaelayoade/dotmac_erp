@@ -127,10 +127,10 @@
                             {{ res.purpose }}
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">
-                            {{ res.start_datetime.strftime('%b %d, %H:%M') }}
+                            {{ (res.start_datetime | format_datetime) }}
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">
-                            {{ res.end_datetime.strftime('%b %d, %H:%M') }}
+                            {{ (res.end_datetime | format_datetime) }}
                         </td>
                         <td>{{ status_badge(res.status, 'sm') }}</td>
                         <td class="text-right">

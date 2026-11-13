@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.payment_terms import PaymentTerms
 from app.models.finance.ar.quote import Quote, QuoteStatus
@@ -314,20 +315,20 @@ class QuoteWebService:
             "payment_terms": quote.payment_terms.terms_name
             if quote.payment_terms
             else "-",
-            "sent_at": quote.sent_at.strftime("%Y-%m-%d %H:%M")
+            "sent_at": _date_formatters.format_datetime_display(quote.sent_at)
             if quote.sent_at
             else None,
-            "viewed_at": quote.viewed_at.strftime("%Y-%m-%d %H:%M")
+            "viewed_at": _date_formatters.format_datetime_display(quote.viewed_at)
             if quote.viewed_at
             else None,
-            "accepted_at": quote.accepted_at.strftime("%Y-%m-%d %H:%M")
+            "accepted_at": _date_formatters.format_datetime_display(quote.accepted_at)
             if quote.accepted_at
             else None,
-            "rejected_at": quote.rejected_at.strftime("%Y-%m-%d %H:%M")
+            "rejected_at": _date_formatters.format_datetime_display(quote.rejected_at)
             if quote.rejected_at
             else None,
             "rejection_reason": quote.rejection_reason,
-            "converted_at": quote.converted_at.strftime("%Y-%m-%d %H:%M")
+            "converted_at": _date_formatters.format_datetime_display(quote.converted_at)
             if quote.converted_at
             else None,
             "converted_to_invoice_id": str(quote.converted_to_invoice_id)
@@ -336,7 +337,7 @@ class QuoteWebService:
             "converted_to_so_id": str(quote.converted_to_so_id)
             if quote.converted_to_so_id
             else None,
-            "created_at": quote.created_at.strftime("%Y-%m-%d %H:%M")
+            "created_at": _date_formatters.format_datetime_display(quote.created_at)
             if quote.created_at
             else "",
             # Actions

@@ -203,7 +203,7 @@
                                 {{ status_badge(invoice.status if invoice.status else '', 'sm') }}
                             </td>
                             <td class="hidden md:table-cell text-sm text-slate-600 dark:text-slate-300">
-                                {{ invoice.due_date.strftime('%d %b %Y') if invoice.due_date else '—' }}
+                                {{ (invoice.due_date | format_date) if invoice.due_date else '—' }}
                             </td>
                         </tr>
                         {% else %}

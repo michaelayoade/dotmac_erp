@@ -13,6 +13,7 @@ from sqlalchemy import Text, and_, cast, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.notification import EntityType, NotificationChannel, NotificationType
+from app.models.finance.core_org.organization import Organization
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
     CalendarEventScope,
@@ -27,6 +28,7 @@ from app.models.people.hr.designation import Designation
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.person import Person, PersonStatus
 from app.services.calendar_notification_content import calendar_event_message
+from app.services.formatting_context import formatting_for_org
 from app.services.notification import NotificationService
 
 DEFAULT_TIMEZONE = "Africa/Lagos"
@@ -1057,6 +1059,12 @@ class OrganizationCalendarService:
             if action_url is not None
             else f"/people/self/calendar/events/{event.event_id}"
         )
+        with formatting_for_org(self.db.get(Organization, self.organization_id)):
+            notice_message = (
+                calendar_event_message(event, message)
+                if action_url == f"/people/self/calendar/events/{event.event_id}"
+                else message
+            )
         notification_service.create_many(
             self.db,
             organization_id=self.organization_id,
@@ -1065,11 +1073,7 @@ class OrganizationCalendarService:
             entity_id=event.event_id,
             notification_type=notification_type,
             title=f"{title_prefix}: {event.title}",
-            message=(
-                calendar_event_message(event, message)
-                if action_url == f"/people/self/calendar/events/{event.event_id}"
-                else message
-            ),
+            message=notice_message,
             channel=NotificationChannel.BOTH,
             action_url=action_url,
             actor_id=actor_person_id,

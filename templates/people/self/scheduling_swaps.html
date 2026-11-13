@@ -33,7 +33,7 @@
                 <select id="requester_schedule_id" name="requester_schedule_id" class="form-select w-full" required>
                     <option value="">Select...</option>
                     {% for s in my_schedule_options %}
-                    <option value="{{ s.shift_schedule_id }}">{{ s.shift_date.strftime('%Y-%m-%d') }} - {{ s.shift_type.shift_name if s.shift_type else '-' }}</option>
+                    <option value="{{ s.shift_schedule_id }}">{{ s.shift_date | format_date }} - {{ s.shift_type.shift_name if s.shift_type else '-' }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -99,7 +99,7 @@
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                     {% for req in my_requests %}
                     <tr>
-                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ req.created_at.strftime('%Y-%m-%d %H:%M') if req.created_at else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ (req.created_at | format_datetime) if req.created_at else '-' }}</td>
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ req.target_employee.full_name if req.target_employee else '-' }}</td>
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ req.status.value }}</td>
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">

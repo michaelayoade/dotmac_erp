@@ -45,6 +45,7 @@ from app.models.notification import EntityType, NotificationChannel, Notificatio
 from app.models.person import Person
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.formatters import format_utc_datetime_display
 from app.services.finance.ap.supplier import supplier_service
 from app.services.finance.ap.supplier_invoice import (
     SupplierInvoiceInput,
@@ -56,6 +57,7 @@ from app.services.finance.ap.web.base import (
     can_record_payment_for_invoice_status,
     format_currency,
     format_date,
+    format_date_display,
     format_file_size,
     get_accounts,
     invoice_detail_view,
@@ -786,7 +788,7 @@ class InvoiceWebService:
             {
                 "payment_id": payment.payment_id,
                 "payment_number": payment.payment_number,
-                "payment_date": format_date(payment.payment_date, format="%d %b %Y"),
+                "payment_date": format_date_display(payment.payment_date),
                 "payment_method": payment.payment_method.value,
                 "amount": format_currency(
                     allocation.allocated_amount,
@@ -1526,7 +1528,7 @@ class InvoiceWebService:
                 status_code=303,
             )
 
-        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        timestamp = format_utc_datetime_display(datetime.now(UTC))
         entry = f"[{timestamp}] {user_id}: {comment_text}"
         invoice.comments = f"{invoice.comments}\n{entry}" if invoice.comments else entry
 

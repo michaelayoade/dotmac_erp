@@ -31,6 +31,7 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.finance.common import (
     format_currency,
     format_date,
+    format_date_display,
     format_file_size,
     parse_date,
     parse_enum_safe,
@@ -344,8 +345,8 @@ def invoice_detail_view(invoice: Invoice, customer: Customer | None) -> dict:
         "invoice_type": invoice.invoice_type.value,
         "customer_id": invoice.customer_id,
         "customer_name": customer_display_name(customer) if customer else "",
-        "invoice_date": format_date(invoice.invoice_date, format="%d %b %Y"),
-        "due_date": format_date(invoice.due_date, format="%d %b %Y"),
+        "invoice_date": format_date_display(invoice.invoice_date),
+        "due_date": format_date_display(invoice.due_date),
         "currency_code": invoice.currency_code,
         "currency": invoice.currency_code,
         "payment_terms": None,  # Set by invoice_detail_context if available
@@ -437,7 +438,7 @@ def receipt_detail_view(payment: CustomerPayment, customer: Customer | None) -> 
         "receipt_number": payment.payment_number,
         "customer_id": payment.customer_id,
         "customer_name": customer_display_name(customer) if customer else "",
-        "receipt_date": format_date(payment.payment_date, format="%d %b %Y"),
+        "receipt_date": format_date_display(payment.payment_date),
         "payment_method": payment.payment_method.value,
         "reference_number": payment.reference,
         "description": payment.description,
@@ -472,7 +473,7 @@ def allocation_view(
             allocation.exchange_difference,
             currency_code,
         ),
-        "allocation_date": format_date(allocation.allocation_date, format="%d %b %Y"),
+        "allocation_date": format_date_display(allocation.allocation_date),
     }
 
 

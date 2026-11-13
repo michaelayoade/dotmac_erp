@@ -32,7 +32,12 @@ from app.services.formatters import (
     format_currency,
     format_currency_compact,
     format_date,
+    format_date_display,
     format_datetime,
+    format_datetime_display,
+    format_utc_datetime_display,
+    format_weekday_date_display,
+    format_weekday_utc_datetime_display,
     format_number,
     parse_decimal,
 )
@@ -41,6 +46,7 @@ from app.services.formatting_context import (
     NUMBER_FORMAT_MAP,
     OrgFormattingPrefs,
     clear_formatting_prefs,
+    formatting_for_org,
     get_formatting_prefs,
     resolve_from_org,
     set_formatting_prefs,
@@ -64,6 +70,34 @@ def _make_org(**kwargs) -> SimpleNamespace:
     return SimpleNamespace(**defaults)
 
 
+def test_display_helpers_follow_organization_format():
+    value = date(2026, 11, 13)
+    moment = datetime(2026, 11, 13, 9, 30)
+    assert format_date_display(value) == "13/11/2026"
+    assert format_datetime_display(moment) == "13/11/2026 09:30"
+
+    set_formatting_prefs(resolve_from_org(_make_org(date_format="MM/DD/YYYY")))
+    assert format_date_display(value) == "11/13/2026"
+    assert format_weekday_date_display(value) == "Friday, 11/13/2026"
+    assert format_datetime_display(moment) == "11/13/2026 09:30"
+    assert (
+        format_utc_datetime_display(datetime(2026, 11, 13, 23, 30, tzinfo=UTC))
+        == "11/13/2026 23:30 UTC"
+    )
+    assert (
+        format_weekday_utc_datetime_display(datetime(2026, 11, 13, 23, 30, tzinfo=UTC))
+        == "Fri 11/13/2026 23:30 UTC"
+    )
+
+
+def test_scoped_organization_format_restores_previous_preferences():
+    initial = resolve_from_org(_make_org(date_format="MM/DD/YYYY"))
+    set_formatting_prefs(initial)
+    with formatting_for_org(_make_org(date_format="DD MMM YYYY")):
+        assert format_date_display(date(2026, 11, 13)) == "13 Nov 2026"
+    assert get_formatting_prefs() is initial
+
+
 @pytest.fixture(autouse=True)
 def _clean_context():
     """Ensure formatting context is clean before and after each test."""
@@ -82,7 +116,7 @@ class TestOrgFormattingPrefs:
 
     def test_defaults(self):
         prefs = OrgFormattingPrefs()
-        assert prefs.date_strftime == "%Y-%m-%d"
+        assert prefs.date_strftime == "%d/%m/%Y"
         assert prefs.thousand_sep == ","
         assert prefs.decimal_sep == "."
         assert prefs.currency_code == settings.default_presentation_currency_code
@@ -137,7 +171,7 @@ class TestResolveFromOrg:
     def test_unknown_format_uses_defaults(self):
         org = _make_org(date_format="UNKNOWN", number_format="weird")
         prefs = resolve_from_org(org)
-        assert prefs.date_strftime == "%Y-%m-%d"
+        assert prefs.date_strftime == "%d/%m/%Y"
         assert prefs.thousand_sep == ","
         assert prefs.decimal_sep == "."
 
@@ -161,7 +195,7 @@ class TestResolveFromOrg:
     def test_none_fields_use_defaults(self):
         org = _make_org()  # all None
         prefs = resolve_from_org(org)
-        assert prefs.date_strftime == "%Y-%m-%d"
+        assert prefs.date_strftime == "%d/%m/%Y"
         assert prefs.thousand_sep == ","
         assert prefs.decimal_sep == "."
 

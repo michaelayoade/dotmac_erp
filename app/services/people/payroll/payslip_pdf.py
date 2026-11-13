@@ -17,7 +17,13 @@ from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
 
 from app.models.people.payroll.salary_slip import SalarySlip
-from app.services.formatters import format_currency_compact
+from app.models.finance.core_org.organization import Organization
+from app.services.formatters import (
+    format_currency_compact,
+    format_date_display,
+    format_datetime_display,
+)
+from app.services.formatting_context import formatting_for_org
 from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -46,6 +52,8 @@ def _get_template_env() -> Environment:
         )
         # Add custom filters
         _template_env.filters["format_currency"] = _format_currency
+        _template_env.filters["format_date"] = format_date_display
+        _template_env.filters["format_datetime"] = format_datetime_display
     return _template_env
 
 
@@ -177,7 +185,13 @@ class PayslipPDFService:
 
         # Render HTML template
         template = _get_template_env().get_template("people/payroll/payslip_pdf.html")
-        html_content = template.render(**context)
+        format_org = (
+            self.db.get(Organization, slip.organization_id)
+            if slip.organization_id
+            else None
+        )
+        with formatting_for_org(format_org):
+            html_content = template.render(**context)
 
         # Generate PDF
         html = HTML(string=html_content, base_url=render_base_url)

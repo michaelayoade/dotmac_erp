@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.db.session_context import prime_tenant_context
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
@@ -407,7 +408,7 @@ def calendar_day(
     context = base_context(
         request,
         auth,
-        selected.strftime("%A, %d %B %Y"),
+        _date_formatters.format_weekday_date_display(selected),
         active_module="calendar",
         db=db,
     )

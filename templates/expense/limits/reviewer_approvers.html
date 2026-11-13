@@ -96,7 +96,7 @@
                         <td class="text-right font-mono">{{ "{:,.2f}".format(approver.max_approval_amount) }} {{ approver.currency_code }}</td>
                         <td class="text-sm text-slate-600 dark:text-slate-300">
                             {% if approver.last_action_at %}
-                                {{ approver.last_action_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                                {{ (approver.last_action_at | format_utc_datetime) }}
                             {% else %}
                                 -
                             {% endif %}

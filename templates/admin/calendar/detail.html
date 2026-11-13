@@ -43,8 +43,8 @@
                         <div>
                             <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">{{ event.title }}</h1>
                             <p class="mt-2 text-sm text-slate-500">
-                                {% if event.all_day %}{{ event.start_date.strftime('%A, %d %B %Y') }}{% if event_end_date_inclusive and event_end_date_inclusive > event.start_date %} – {{ event_end_date_inclusive.strftime('%A, %d %B %Y') }}{% endif %} · All day
-                                {% else %}{{ event_start_local.strftime('%A, %d %B %Y · %H:%M') }} – {{ event_end_local.strftime('%d %B %Y · %H:%M') }} {{ event.timezone }}{% endif %}
+                                {% if event.all_day %}{{ (event.start_date.strftime('%A') ~ ', ' ~ (event.start_date | format_date)) }}{% if event_end_date_inclusive and event_end_date_inclusive > event.start_date %} – {{ (event_end_date_inclusive.strftime('%A') ~ ', ' ~ (event_end_date_inclusive | format_date)) }}{% endif %} · All day
+                                {% else %}{{ (event_start_local.strftime('%A') ~ ', ' ~ (event_start_local | format_datetime)) }} – {{ (event_end_local | format_datetime) }} {{ event.timezone }}{% endif %}
                             </p>
                         </div>
                         <span class="rounded-full px-3 py-1 text-xs font-semibold {{ 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' if event.business_status == 'PUBLISHED' else 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' if event.business_status == 'CANCELLED' else 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300' }}">{{ event.business_status | title }}</span>

@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.people.attendance.shift_type import ShiftType
 from app.models.people.hr.department import Department
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -1244,7 +1245,9 @@ class SchedulingWebService:
                     else "",
                     "status": sr.status.value,
                     "reason": sr.reason or "",
-                    "created_at": sr.created_at.strftime("%Y-%m-%d %H:%M")
+                    "created_at": _date_formatters.format_datetime_display(
+                        sr.created_at
+                    )
                     if sr.created_at
                     else "",
                 }

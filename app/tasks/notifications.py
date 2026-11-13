@@ -26,6 +26,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from app.db.session_context import cross_org_session, session_for_org
 from app.config import settings
 from app.models.email_profile import EmailModule
+from app.models.finance.core_org.organization import Organization
 from app.models.notification import (
     EntityType,
     Notification,
@@ -43,6 +44,7 @@ from app.services.calendar_notification_content import (
     calendar_event_message,
     reminder_interval,
 )
+from app.services.formatting_context import formatting_for_org
 from app.services.notification import NotificationService
 from app.services.email import person_can_receive_email, send_email
 from app.tenant_catalog import active_organization_ids
@@ -153,9 +155,10 @@ def process_due_calendar_reminders(
                     ).all()
                 )
                 interval = reminder_interval(reminder.offset_minutes)
-                reminder_message = calendar_event_message(
-                    event, f"Your event starts in {interval}."
-                )
+                with formatting_for_org(db.get(Organization, organization_id)):
+                    reminder_message = calendar_event_message(
+                        event, f"Your event starts in {interval}."
+                    )
                 notifications = notification_service.create_many(
                     db,
                     organization_id=organization_id,

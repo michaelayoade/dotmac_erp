@@ -718,7 +718,7 @@
                 {% endif %}
             </div>
             <div class="generation-info">
-                Generated on {{ now().strftime('%B %d, %Y at %H:%M') if now is defined else '' }}
+                Generated on {{ now() | format_datetime if now is defined else '' }}
             </div>
         </div>
     </div>

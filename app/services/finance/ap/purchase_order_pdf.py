@@ -16,12 +16,14 @@ from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.core_org.organization import Organization
 from app.services.email_branding import get_email_branding
 from app.services.formatters import format_currency_compact
+from app.services.formatting_context import formatting_for_org, resolve_from_org
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,10 @@ def _get_template_env() -> Environment:
         _template_env = Environment(
             loader=FileSystemLoader(template_dir),
             autoescape=True,
+        )
+        _template_env.filters["format_date"] = _date_formatters.format_date_display
+        _template_env.filters["format_datetime"] = (
+            _date_formatters.format_datetime_display
         )
     return _template_env
 
@@ -100,6 +106,7 @@ class PurchaseOrderPDFService:
             ).all()
         )
         primary_contact = supplier.primary_contact or {}
+        org_date_format = resolve_from_org(organization).date_strftime
 
         context = {
             "po": po,
@@ -143,19 +150,24 @@ class PurchaseOrderPDFService:
                     "unit_price": _format_amount(line.unit_price),
                     "tax_amount": _format_amount(line.tax_amount),
                     "line_amount": _format_amount(line.line_amount),
-                    "delivery_date": line.delivery_date.strftime("%d %b %Y")
+                    "delivery_date": _date_formatters.format_date_display(
+                        line.delivery_date, fmt=org_date_format
+                    )
                     if line.delivery_date
                     else None,
                 }
                 for line in lines
             ],
-            "generated_at": datetime.utcnow().strftime("%d %b %Y %H:%M UTC"),
         }
 
         template = _get_template_env().get_template(
             "finance/ap/purchase_order_pdf.html"
         )
-        html_content = template.render(**context)
+        with formatting_for_org(organization):
+            context["generated_at"] = _date_formatters.format_utc_datetime_display(
+                datetime.utcnow()
+            )
+            html_content = template.render(**context)
         base_url = (
             os.getenv("PDF_ASSET_BASE_URL") or os.getenv("APP_URL") or "http://app:8002"
         ).rstrip("/")

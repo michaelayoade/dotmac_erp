@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import and_, extract, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.people.attendance import Attendance
 from app.models.people.hr import (
     Department,
@@ -579,7 +580,9 @@ class PeopleDashboardService:
                     "full_name": person.name,
                     "designation": desig.designation_name if desig else "",
                     "department": dept.department_name if dept else "",
-                    "date_of_joining": emp.date_of_joining.strftime("%b %d, %Y")
+                    "date_of_joining": _date_formatters.format_date_display(
+                        emp.date_of_joining
+                    )
                     if emp.date_of_joining
                     else "",
                 }

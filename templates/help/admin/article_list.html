@@ -66,7 +66,7 @@
                         <td class="text-sm">{{ article.module_key | replace('_', ' ') | title }}</td>
                         <td class="text-center">{{ status_badge(article.status.value if article.status else 'DRAFT', 'sm') }}</td>
                         <td class="hidden sm:table-cell text-sm text-slate-500 dark:text-slate-400">
-                            {{ article.updated_at.strftime('%d %b %Y') if article.updated_at else '' }}
+                            {{ (article.updated_at | format_date) if article.updated_at else '' }}
                         </td>
                         <td class="text-right">
                             <div class="flex justify-end gap-2">

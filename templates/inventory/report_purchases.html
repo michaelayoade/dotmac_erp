@@ -21,8 +21,8 @@
             <div>
                 <h2 id="purchase-period-heading" class="text-xl font-semibold text-slate-900 dark:text-white">{{ purchase_period.label }}</h2>
                 <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                    {{ purchase_period.start.strftime('%d %b %Y') }} – {{ purchase_period.end.strftime('%d %b %Y') }} · Africa/Lagos<br>
-                    {% if purchase_period.is_current %}{{ purchase_period.unit | title }} to date, through {{ purchase_period.through.strftime('%d %b %Y') }}.{% else %}Completed reporting period.{% endif %}
+                    {{ (purchase_period.start | format_date) }} – {{ (purchase_period.end | format_date) }} · Africa/Lagos<br>
+                    {% if purchase_period.is_current %}{{ purchase_period.unit | title }} to date, through {{ (purchase_period.through | format_date) }}.{% else %}Completed reporting period.{% endif %}
                     Quarters and years use the calendar, not the fiscal year.
                 </p>
             </div>
@@ -136,7 +136,7 @@
                     </tr></thead>
                     <tbody class="divide-y divide-slate-100 text-slate-900 dark:divide-slate-700 dark:text-slate-100">
                         {% for row in purchase_rows %}<tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
-                            <td class="whitespace-nowrap px-4 py-3 align-top">{{ row.invoice_date.strftime('%d %b %Y') }}</td>
+                            <td class="whitespace-nowrap px-4 py-3 align-top">{{ (row.invoice_date | format_date) }}</td>
                             <td class="px-4 py-3 align-top">
                                 {% if can_view_invoice %}<a href="/finance/ap/invoices/{{ row.invoice_id }}" class="font-mono text-emerald-700 hover:underline dark:text-emerald-400">{{ row.invoice_number }}</a>{% else %}{{ row.invoice_number }}{% endif %}
                                 <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{{ row.invoice_type.value | replace('_', ' ') | title }} · Line {{ row.line_number }}</p>

@@ -29,6 +29,7 @@ from app.models.people.attendance import AttendanceStatus
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.formatters import format_date_display
 from app.services.people.attendance import AttendanceService
 from app.services.web_forms import get_form_str
 from app.templates import templates
@@ -1182,7 +1183,7 @@ class AttendanceWebService:
         org_tzinfo = svc.get_org_tzinfo(org_id)
         for section in ("late_entries", "early_exits", "absent_entries"):
             for record in report[section]:
-                record["date_display"] = record["date"].strftime("%d %b %Y")
+                record["date_display"] = format_date_display(record["date"])
                 record["check_in_display"] = (
                     AttendanceWebService._format_attendance_time(
                         record["check_in"], org_tzinfo

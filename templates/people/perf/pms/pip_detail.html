@@ -48,10 +48,10 @@
         <p class="text-sm font-medium {% if pip.status.value == 'ESCALATED' %}text-rose-700 dark:text-rose-300{% else %}text-emerald-700 dark:text-emerald-300{% endif %}">
             {% if pip.status.value == 'ESCALATED' %}
             This PIP has been ESCALATED to the disciplinary committee
-            {% if pip.committee_referral_date %}(referred {{ pip.committee_referral_date.strftime('%d %b %Y') }}){% endif %}.
+            {% if pip.committee_referral_date %}(referred {{ (pip.committee_referral_date | format_date) }}){% endif %}.
             {% else %}
             This PIP has been completed with a SATISFACTORY outcome
-            {% if pip.outcome_date %}on {{ pip.outcome_date.strftime('%d %b %Y') }}{% endif %}.
+            {% if pip.outcome_date %}on {{ (pip.outcome_date | format_date) }}{% endif %}.
             {% endif %}
         </p>
     </div>
@@ -201,17 +201,17 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Start Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ pip.start_date.strftime('%d %b %Y') if pip.start_date else '—' }}
+                    {{ (pip.start_date | format_date) if pip.start_date else '—' }}
                 </p>
             </div>
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">End Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
                     {% if pip.extension_granted and pip.extension_end_date %}
-                        {{ pip.extension_end_date.strftime('%d %b %Y') }}
+                        {{ (pip.extension_end_date | format_date) }}
                         <span class="ml-1 text-xs text-amber-600 dark:text-amber-400">(Extended)</span>
                     {% else %}
-                        {{ pip.end_date.strftime('%d %b %Y') if pip.end_date else '—' }}
+                        {{ (pip.end_date | format_date) if pip.end_date else '—' }}
                     {% endif %}
                 </p>
             </div>
@@ -300,7 +300,7 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Outcome Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ pip.outcome_date.strftime('%d %b %Y') if pip.outcome_date else '—' }}
+                    {{ (pip.outcome_date | format_date) if pip.outcome_date else '—' }}
                 </p>
             </div>
             {% if pip.outcome_notes %}

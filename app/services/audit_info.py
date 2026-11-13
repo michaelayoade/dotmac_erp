@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.person import Person
 
 logger = logging.getLogger(__name__)
@@ -170,8 +171,8 @@ class AuditInfoService:
         if not dt:
             return "-"
         if include_time:
-            return dt.strftime("%b %d, %Y %H:%M")
-        return dt.strftime("%b %d, %Y")
+            return _date_formatters.format_datetime_display(dt)
+        return _date_formatters.format_date_display(dt)
 
 
 def get_audit_service(db: Session) -> AuditInfoService:

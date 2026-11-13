@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import and_, extract, func, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.expense.expense_claim import (
     ExpenseCategory,
     ExpenseClaim,
@@ -144,7 +145,7 @@ class ExpenseDashboardChartsMixin:
                 "employee_name": person.name,
                 "amount": _format_currency(claim.total_claimed_amount, currency),
                 "status": claim.status.value if claim.status else "DRAFT",
-                "date": claim.claim_date.strftime("%b %d, %Y")
+                "date": _date_formatters.format_date_display(claim.claim_date)
                 if claim.claim_date
                 else "",
             }
@@ -341,7 +342,7 @@ class ExpenseDashboardChartsMixin:
                 "employee_name": person.name,
                 "amount": _format_currency(claim.total_claimed_amount, currency),
                 "status": claim.status.value if claim.status else "DRAFT",
-                "date": claim.claim_date.strftime("%b %d, %Y")
+                "date": _date_formatters.format_date_display(claim.claim_date)
                 if claim.claim_date
                 else "",
             }

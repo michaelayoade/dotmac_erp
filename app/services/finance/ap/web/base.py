@@ -35,6 +35,7 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.finance.common import (
     format_currency,
     format_date,
+    format_date_display,
     format_file_size,
     parse_date,
     parse_enum_safe,
@@ -272,10 +273,10 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> 
         "invoice_type": invoice.invoice_type.value,
         "supplier_id": invoice.supplier_id,
         "supplier_name": supplier_display_name(supplier) if supplier else "",
-        "invoice_date": format_date(invoice.invoice_date, format="%d %b %Y"),
+        "invoice_date": format_date_display(invoice.invoice_date),
         "created_at": format_date(invoice.created_at) if invoice.created_at else None,
-        "received_date": format_date(invoice.received_date, format="%d %b %Y"),
-        "due_date": format_date(invoice.due_date, format="%d %b %Y"),
+        "received_date": format_date_display(invoice.received_date),
+        "due_date": format_date_display(invoice.due_date),
         "currency_code": invoice.currency_code,
         "supplier_tin": supplier.tax_identification_number if supplier else None,
         "purpose": invoice.purpose,
@@ -342,7 +343,7 @@ def payment_detail_view(
         "payment_number": payment.payment_number,
         "supplier_id": payment.supplier_id,
         "supplier_name": supplier_display_name(supplier) if supplier else "",
-        "payment_date": format_date(payment.payment_date, format="%d %b %Y"),
+        "payment_date": format_date_display(payment.payment_date),
         "payment_method": payment.payment_method.value,
         "reference_number": payment.reference,
         "amount": format_currency(payment.amount, payment.currency_code),
@@ -374,7 +375,7 @@ def allocation_view(
             allocation.exchange_difference,
             currency_code,
         ),
-        "allocation_date": format_date(allocation.allocation_date, format="%d %b %Y"),
+        "allocation_date": format_date_display(allocation.allocation_date),
     }
 
 

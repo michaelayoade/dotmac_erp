@@ -42,7 +42,7 @@
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resolution Deadline</p>
-                <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ deadline_meta.date.strftime('%d %b %Y') }}</p>
+                <p class="mt-1 text-sm font-medium text-slate-900 dark:text-white">{{ (deadline_meta.date | format_date) }}</p>
             </div>
             <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium
                 {% if deadline_meta.state == 'overdue' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300
@@ -122,7 +122,7 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Filed Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ appeal.filed_date.strftime('%d %b %Y') if appeal.filed_date else '—' }}
+                    {{ (appeal.filed_date | format_date) if appeal.filed_date else '—' }}
                 </p>
             </div>
             <div class="sm:col-span-2">
@@ -250,7 +250,7 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Mediation Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ appeal.mediation_date.strftime('%d %b %Y') if appeal.mediation_date else '—' }}
+                    {{ (appeal.mediation_date | format_date) if appeal.mediation_date else '—' }}
                 </p>
             </div>
             <div>
@@ -277,13 +277,13 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Referred Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ appeal.committee_referral_date.strftime('%d %b %Y') if appeal.committee_referral_date else '—' }}
+                    {{ (appeal.committee_referral_date | format_date) if appeal.committee_referral_date else '—' }}
                 </p>
             </div>
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Hearing Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ appeal.committee_hearing_date.strftime('%d %b %Y') if appeal.committee_hearing_date else '—' }}
+                    {{ (appeal.committee_hearing_date | format_date) if appeal.committee_hearing_date else '—' }}
                 </p>
             </div>
             {% if appeal.committee_decision %}
@@ -318,13 +318,13 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Resolution Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ appeal.resolution_date.strftime('%d %b %Y') if appeal.resolution_date else '—' }}
+                    {{ (appeal.resolution_date | format_date) if appeal.resolution_date else '—' }}
                 </p>
             </div>
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Communicated</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ appeal.communicated_date.strftime('%d %b %Y') if appeal.communicated_date else 'Not yet communicated' }}
+                    {{ (appeal.communicated_date | format_date) if appeal.communicated_date else 'Not yet communicated' }}
                 </p>
             </div>
             {% if appeal.resolution_notes %}

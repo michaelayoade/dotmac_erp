@@ -17,14 +17,17 @@ from celery import shared_task
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.services import formatters as _date_formatters
 from app.config import settings
 from app.db.session_context import session_for_org
 from app.models.email_profile import EmailModule
+from app.models.finance.core_org.organization import Organization
 from app.models.people.perf.weekly_meeting_report import (
     ReportEmailStatus,
     WeeklyMeetingReport,
     WeeklyMeetingReportStatus,
 )
+from app.services.formatting_context import resolve_from_org
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +83,8 @@ def send_weekly_meeting_report_hr_email(
         report.notification_status = ReportEmailStatus.PROCESSING
         report.notification_attempted_at = datetime.now(UTC)
         report.notification_attempt_count += 1
-        snapshot = _email_snapshot(report)
+        date_format = resolve_from_org(db.get(Organization, org_uuid)).date_strftime
+        snapshot = _email_snapshot(report, date_format)
         db.commit()
 
     try:
@@ -131,14 +135,20 @@ def send_weekly_meeting_report_hr_email(
     return {"success": True, "recipient": recipient}
 
 
-def _email_snapshot(report: WeeklyMeetingReport) -> dict[str, str]:
+def _email_snapshot(
+    report: WeeklyMeetingReport, date_format: str | None = None
+) -> dict[str, str]:
     action_url = f"/people/perf/weekly-meeting-reports/{report.report_id}"
     return {
         "report_number": report.report_number,
         "division": report.division_name_snapshot,
         "division_head": report.division_head_name_snapshot or "Not specified",
-        "week_ending": report.week_ending.strftime("%d %b %Y"),
-        "meeting_date": report.meeting_date.strftime("%d %b %Y"),
+        "week_ending": _date_formatters.format_date_display(
+            report.week_ending, fmt=date_format
+        ),
+        "meeting_date": _date_formatters.format_date_display(
+            report.meeting_date, fmt=date_format
+        ),
         "meeting_time": report.meeting_time.strftime("%H:%M"),
         "prepared_by": report.prepared_by_name_snapshot,
         "participant_count": str(len(report.participants)),

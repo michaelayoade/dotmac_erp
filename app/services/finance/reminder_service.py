@@ -19,9 +19,11 @@ from uuid import NAMESPACE_DNS, UUID, uuid5
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.core_org.organization import Organization
 from app.models.finance.tax.tax_period import TaxPeriod, TaxPeriodStatus
 from app.models.notification import (
     EntityType,
@@ -30,6 +32,7 @@ from app.models.notification import (
     NotificationType,
 )
 from app.services.notification import NotificationService
+from app.services.formatting_context import resolve_from_org
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,12 @@ class FinanceReminderService:
         self.db = db
         self.config = config or ReminderConfig()
         self.notification_service = NotificationService()
+
+    def _display_date(self, value: date, organization_id: UUID) -> str:
+        date_format = resolve_from_org(
+            self.db.get(Organization, organization_id)
+        ).date_strftime
+        return _date_formatters.format_date_display(value, fmt=date_format)
 
     # =========================================================================
     # Fiscal Period Close Reminders
@@ -155,7 +164,7 @@ class FinanceReminderService:
 
         message = (
             f"Fiscal period {period.period_name} ends in {days_remaining} day(s) "
-            f"on {period.end_date.strftime('%Y-%m-%d')}. "
+            f"on {self._display_date(period.end_date, period.organization_id)}. "
             "Please complete all journal entries and reviews."
         )
 
@@ -311,7 +320,7 @@ class FinanceReminderService:
         else:
             message = (
                 f"Tax period {period.period_name} filing is due in "
-                f"{days_remaining} day(s) on {effective_due.strftime('%Y-%m-%d')}."
+                f"{days_remaining} day(s) on {self._display_date(effective_due, period.organization_id)}."
             )
 
         sent = 0
@@ -495,7 +504,9 @@ class FinanceReminderService:
         if account.last_reconciled_date:
             last_reconciled_date = account.last_reconciled_date
             days_since = (date.today() - last_reconciled_date).days
-            last_recon_str = last_reconciled_date.strftime("%Y-%m-%d")
+            last_recon_str = self._display_date(
+                last_reconciled_date, account.organization_id
+            )
         else:
             days_since = None
             last_recon_str = "never"

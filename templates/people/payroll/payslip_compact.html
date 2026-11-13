@@ -272,7 +272,7 @@
                 </span>
             </div>
             <div class="period-info">
-                {{ pay_period_start.strftime('%b %d') if pay_period_start else '' }} – {{ pay_period_end | format_date if pay_period_end else '' }}
+                {{ (pay_period_start | format_date) if pay_period_start else '' }} – {{ pay_period_end | format_date if pay_period_end else '' }}
                 &nbsp;|&nbsp; {{ payment_days | int }}/{{ total_working_days | int }} days
             </div>
         </div>

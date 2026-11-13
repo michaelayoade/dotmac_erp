@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.services.setting_domains import registry
 from app.config import settings
 from app.models.audit import AuditActorType, AuditEvent
@@ -317,7 +318,7 @@ def _format_relative_time(dt: datetime) -> str:
         days = int(seconds / 86400)
         return f"{days}d ago"
     else:
-        return dt.strftime("%b %d, %Y")
+        return _date_formatters.format_date_display(dt)
 
 
 def _parse_flag(value: bool | str | None) -> bool:
@@ -678,7 +679,9 @@ class AdminWebService:
                     else 0,
                     "roles": person_roles_map.get(person.id, []),
                     "last_active": last_active_map.get(person.id),
-                    "created_at": person.created_at.strftime("%b %d, %Y")
+                    "created_at": _date_formatters.format_date_display(
+                        person.created_at
+                    )
                     if person.created_at
                     else "",
                 }
@@ -5025,7 +5028,9 @@ class AdminWebService:
         context: dict = {
             "license_status": state.status.value,
             "license_error": state.error,
-            "validated_at": state.validated_at.strftime("%d %b %Y, %H:%M UTC")
+            "validated_at": (
+                _date_formatters.format_utc_datetime_display(state.validated_at)
+            )
             if state.validated_at
             else None,
             "machine_fingerprint": get_machine_fingerprint(),
@@ -5039,8 +5044,12 @@ class AdminWebService:
                     "license_id": payload.license_id,
                     "customer_name": payload.customer_name,
                     "customer_id": payload.customer_id,
-                    "issued_at": payload.issued_at.strftime("%d %b %Y"),
-                    "expires_at": payload.expires_at.strftime("%d %b %Y"),
+                    "issued_at": _date_formatters.format_date_display(
+                        payload.issued_at
+                    ),
+                    "expires_at": _date_formatters.format_date_display(
+                        payload.expires_at
+                    ),
                     "days_remaining": max(days_left, 0),
                     "grace_period_days": payload.grace_period_days,
                     "max_users": payload.max_users,

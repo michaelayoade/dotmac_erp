@@ -13,8 +13,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
+from app.services.formatting_context import resolve_from_org
 from app.api.deps import get_db_with_org, require_organization_id, require_tenant_auth
 from app.models.people.payroll.payroll_entry import PayrollEntryStatus
+from app.models.finance.core_org.organization import Organization
 from app.models.people.payroll.salary_component import (
     SalaryComponentType,
 )
@@ -435,8 +438,14 @@ def export_salary_slips(
             "Bank Branch Code",
         ]
     ]
+    org_date_format = resolve_from_org(
+        db.get(Organization, organization_id)
+    ).date_strftime
     for slip in slips:
-        period = f"{slip.start_date.strftime('%b %d')} - {slip.end_date.strftime('%b %d, %Y')}"
+        period = (
+            f"{_date_formatters.format_date_display(slip.start_date, fmt=org_date_format)} - "
+            f"{_date_formatters.format_date_display(slip.end_date, fmt=org_date_format)}"
+        )
 
         # Earnings breakdown (only components included in gross)
         basic = Decimal("0")

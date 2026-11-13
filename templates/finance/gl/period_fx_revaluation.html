@@ -56,13 +56,13 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Period End</p>
                 <p class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
-                    {{ preview.period_end_date.strftime('%d %b %Y') if preview.period_end_date else '—' }}
+                    {{ (preview.period_end_date | format_date) if preview.period_end_date else '—' }}
                 </p>
             </div>
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reversal Posts On</p>
                 <p class="mt-1 font-mono tabular-nums text-slate-900 dark:text-white">
-                    {{ next_period_start_date.strftime('%d %b %Y') if next_period_start_date else '—' }}
+                    {{ (next_period_start_date | format_date) if next_period_start_date else '—' }}
                 </p>
             </div>
             <div>

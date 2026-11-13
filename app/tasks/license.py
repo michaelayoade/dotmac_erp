@@ -12,6 +12,7 @@ from uuid import UUID
 
 from celery import shared_task
 
+from app.services import formatters as _date_formatters
 from app.db.session_context import session_for_org
 from app.tenant_catalog import organization_ids
 
@@ -89,7 +90,7 @@ def _notify_admins(state, results: dict) -> None:
     if state.payload:
         message_parts.append(f"License: {state.payload.license_id}")
         message_parts.append(
-            f"Expires: {state.payload.expires_at.strftime('%Y-%m-%d')}"
+            f"Expires: {_date_formatters.format_date_display(state.payload.expires_at)}"
         )
     if state.error:
         message_parts.append(f"Detail: {state.error}")

@@ -72,7 +72,7 @@
                         <div>
                             <p class="text-xs text-slate-500 dark:text-slate-400 print:text-slate-600">Period</p>
                             <p class="text-sm font-medium text-slate-900 dark:text-white print:text-black">
-                                {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date | format_date }}
+                                {{ (slip.start_date | format_date) }} - {{ slip.end_date | format_date }}
                             </p>
                         </div>
                         <div>

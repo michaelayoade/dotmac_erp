@@ -14,6 +14,8 @@ from typing import Any
 from jinja2 import TemplateSyntaxError, Undefined
 from jinja2.sandbox import SandboxedEnvironment
 
+from app.services.formatters import format_date_display, format_datetime_display
+
 logger = logging.getLogger(__name__)
 
 # Shared sandboxed environment — prevents access to dangerous
@@ -49,8 +51,8 @@ def _build_template_context(
         "old": old,
         "new": new,
         "user_id": str(user_id) if user_id else "",
-        "today": date.today().isoformat(),
-        "now": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "today": format_date_display(date.today()),
+        "now": format_datetime_display(datetime.utcnow()),
     }
     # Early seeded rules used ``{{ field_name }}`` while the public builder
     # documents ``{{ new.field_name }}``.  Keep both forms working, without
@@ -71,8 +73,10 @@ def _stringify_values(values: dict[str, Any]) -> dict[str, str]:
             result[k] = ""
         elif isinstance(v, Decimal):
             result[k] = str(v)
-        elif isinstance(v, (datetime, date)):
-            result[k] = v.isoformat()
+        elif isinstance(v, datetime):
+            result[k] = format_datetime_display(v)
+        elif isinstance(v, date):
+            result[k] = format_date_display(v)
         else:
             result[k] = str(v)
     return result

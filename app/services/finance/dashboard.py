@@ -22,6 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session, selectinload
 
+from app.services import formatters as _date_formatters
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
@@ -680,7 +681,9 @@ class DashboardService:
                 result.append(
                     JournalEntrySummary(
                         entry_number=journal.journal_number or "",
-                        entry_date=journal.posting_date.strftime("%Y-%m-%d")
+                        entry_date=_date_formatters.format_date_display(
+                            journal.posting_date
+                        )
                         if journal.posting_date
                         else "",
                         description=journal.description or "",
@@ -727,10 +730,10 @@ class DashboardService:
             result.append(
                 FiscalPeriodSummary(
                     period_name=period.period_name,
-                    start_date=period.start_date.strftime("%Y-%m-%d")
+                    start_date=_date_formatters.format_date_display(period.start_date)
                     if period.start_date
                     else "",
-                    end_date=period.end_date.strftime("%Y-%m-%d")
+                    end_date=_date_formatters.format_date_display(period.end_date)
                     if period.end_date
                     else "",
                     status=period.status.value if period.status else "FUTURE",

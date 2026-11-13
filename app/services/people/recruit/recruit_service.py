@@ -34,6 +34,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session, aliased, joinedload
 
+from app.services import formatters as _date_formatters
+from app.services.formatting_context import resolve_from_org
 from app.config import settings
 from app.models.finance.audit.audit_log import AuditAction
 from app.models.forms import (
@@ -1205,7 +1207,9 @@ class RecruitmentService:
         org_name = (org.legal_name or org.trading_name) if org else "Our Company"
         applicant_name = f"{applicant.first_name} {applicant.last_name}".strip()
 
-        interview_date = interview.scheduled_from.strftime("%Y-%m-%d")
+        interview_date = _date_formatters.format_date_display(
+            interview.scheduled_from, fmt=resolve_from_org(org).date_strftime
+        )
         interview_time = interview.scheduled_from.strftime("%I:%M %p")
         interview_type = str(interview.interview_type)
         location_or_link = interview.meeting_link or interview.location or "TBD"

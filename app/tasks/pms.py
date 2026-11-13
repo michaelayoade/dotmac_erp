@@ -18,6 +18,8 @@ from uuid import UUID
 
 from celery import shared_task
 
+from app.services import formatters as _date_formatters
+from app.services.formatting_context import resolve_from_org
 from app.db.session_context import for_each_organization, session_for_org
 
 logger = logging.getLogger(__name__)
@@ -850,6 +852,7 @@ def pms_pip_review_reminder() -> dict[str, Any]:
     )
     from app.models.people.perf.pip import PerformanceImprovementPlan
     from app.models.people.perf.pms_enums import PIPStatus
+    from app.models.finance.core_org.organization import Organization
     from app.services.notification import NotificationService
 
     today = date.today()
@@ -868,6 +871,9 @@ def pms_pip_review_reminder() -> dict[str, Any]:
         results["orgs_checked"] += 1
         try:
             with session_for_org(org_id) as db:
+                org_date_format = resolve_from_org(
+                    db.get(Organization, org_id)
+                ).date_strftime
                 active_pips = db.scalars(
                     select(PerformanceImprovementPlan).where(
                         PerformanceImprovementPlan.organization_id == org_id,
@@ -896,9 +902,7 @@ def pms_pip_review_reminder() -> dict[str, Any]:
                                     continue
 
                                 days_until = (interval_date - today).days
-                                interval_label = (
-                                    f"Review on {interval_date.strftime('%d %b %Y')}"
-                                )
+                                interval_label = f"Review on {_date_formatters.format_date_display(interval_date, fmt=org_date_format)}"
 
                                 supervisor_person_id = _resolve_person_id(
                                     db, org_id, pip.supervisor_id
@@ -920,7 +924,7 @@ def pms_pip_review_reminder() -> dict[str, Any]:
                                         message=(
                                             f"A PIP review checkpoint ({interval_label}) is due "
                                             f"in {days_until} day(s) on "
-                                            f"{interval_date.strftime('%d %b %Y')}. "
+                                            f"{_date_formatters.format_date_display(interval_date, fmt=org_date_format)}. "
                                             "Please prepare for the review meeting."
                                         ),
                                         since=since,
@@ -942,7 +946,7 @@ def pms_pip_review_reminder() -> dict[str, Any]:
                                         message=(
                                             f"PIP {pip.pip_code} has a review checkpoint "
                                             f"({interval_label}) due in {days_until} day(s) on "
-                                            f"{interval_date.strftime('%d %b %Y')}."
+                                            f"{_date_formatters.format_date_display(interval_date, fmt=org_date_format)}."
                                         ),
                                         since=since,
                                         channel=NotificationChannel.IN_APP,

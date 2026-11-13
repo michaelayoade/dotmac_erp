@@ -220,7 +220,7 @@
                         {% for day in week %}
                         <button type="button"
                                 class="bg-white p-2 text-left transition-colors hover:bg-slate-50 dark:bg-slate-900/40 dark:hover:bg-slate-800/60 {% if not day.is_current_month %}opacity-50{% endif %}"
-                                data-date-label="{{ day.date.strftime('%a, %d %b %Y') }}"
+                                data-date-label="{{ (day.date.strftime('%a') ~ ', ' ~ (day.date | format_date)) }}"
                                 data-status-label="{{ day.status_label }}"
                                 data-note="{{ day.holiday_name if day.holiday_name else (day.note if day.note else '') }}"
                                 data-check-in="{{ day.check_in_display }}"

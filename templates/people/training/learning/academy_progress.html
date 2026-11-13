@@ -89,7 +89,7 @@
                                 {% if progress.passed is not none %}<div class="text-xs text-slate-500">{{ 'Passed' if progress.passed else 'Not passed' }}</div>{% endif %}
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                                {{ progress.last_synced_at.strftime('%Y-%m-%d %H:%M') if progress.last_synced_at else '-' }}
+                                {{ (progress.last_synced_at | format_datetime) if progress.last_synced_at else '-' }}
                                 {% if progress.certificate_ref %}<div class="font-mono text-xs text-slate-500">{{ progress.certificate_ref }}</div>{% endif %}
                             </td>
                         </tr>

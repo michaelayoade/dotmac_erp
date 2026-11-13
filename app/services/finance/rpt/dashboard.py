@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod
@@ -314,7 +315,9 @@ def dashboard_context(
                 "report_name": defn.report_name,
                 "report_type": defn.report_type.value,
                 "status": instance.status.value,
-                "queued_at": instance.queued_at.strftime("%Y-%m-%d %H:%M")
+                "queued_at": _date_formatters.format_datetime_display(
+                    instance.queued_at
+                )
                 if instance.queued_at
                 else "",
                 "output_format": instance.output_format,

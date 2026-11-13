@@ -19,6 +19,7 @@ from app.schemas.settings import DomainSettingUpdate
 from app.services.email import SMTPConfig
 from app.services.formatting_context import (
     COMMON_TIMEZONES,
+    DATE_FORMAT_MAP,
 )
 from app.services.formatting_context import (
     DATE_FORMAT_CHOICES as DATE_FORMATS,
@@ -174,6 +175,9 @@ class SettingsWebService:
         org = result.scalar_one_or_none()
         if not org:
             return False, "Organization not found"
+
+        if data.get("date_format") and data["date_format"] not in DATE_FORMAT_MAP:
+            return False, "Invalid date format"
 
         # Update allowed fields
         allowed_fields = [

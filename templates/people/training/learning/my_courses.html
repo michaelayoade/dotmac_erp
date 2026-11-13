@@ -50,7 +50,7 @@
             </div>
             <div class="mt-4 flex items-center justify-between text-sm text-slate-600 dark:text-slate-300">
                 <span>{{ "Mandatory" if assignment and assignment.is_mandatory else "Optional" }}</span>
-                <span>Due {{ assignment.due_date.strftime('%Y-%m-%d') if assignment and assignment.due_date else "-" }}</span>
+                <span>Due {{ assignment.due_date | format_date if assignment and assignment.due_date else "-" }}</span>
             </div>
         </a>
         {% endfor %}

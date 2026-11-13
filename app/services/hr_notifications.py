@@ -14,14 +14,18 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import date
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.email_profile import EmailModule
+from app.models.finance.core_org.organization import Organization
 from app.services.email import employee_can_receive_email, send_email
 from app.services.email_branding import render_branded_email
+from app.services.formatting_context import resolve_from_org
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
@@ -99,6 +103,12 @@ class HRNotificationService:
         self.db = db
         self.app_url = _get_app_url()
 
+    def _date(self, value: date, organization_id: UUID | None) -> str:
+        org = self.db.get(Organization, organization_id) if organization_id else None
+        return _date_formatters.format_date_display(
+            value, fmt=resolve_from_org(org).date_strftime
+        )
+
     def _send(
         self,
         template: str,
@@ -173,7 +183,7 @@ class HRNotificationService:
             "employee_name": employee_name,
             "urgency": urgency,
             "probation_end_date": (
-                probation_end.strftime("%B %d, %Y") if probation_end else "N/A"
+                self._date(probation_end, _org_id(employee)) if probation_end else "N/A"
             ),
             "employee_url": f"{self.app_url}/people/hr/employees/{employee.employee_id}",
         }
@@ -227,7 +237,9 @@ class HRNotificationService:
             "employee_name": employee_name,
             "days_remaining": days_remaining,
             "contract_end_date": (
-                contract_end_date.strftime("%B %d, %Y") if contract_end_date else "N/A"
+                self._date(contract_end_date, _org_id(employee))
+                if contract_end_date
+                else "N/A"
             ),
             "employee_url": f"{self.app_url}/people/hr/employees/{employee.employee_id}",
         }
@@ -375,7 +387,9 @@ class HRNotificationService:
             "employee_first": _employee_first_name(employee),
             "cycle_name": cycle_name,
             "urgency": urgency,
-            "deadline": (deadline.strftime("%B %d, %Y") if deadline else "N/A"),
+            "deadline": (
+                self._date(deadline, cycle.organization_id) if deadline else "N/A"
+            ),
             "appraisal_url": f"{self.app_url}/people/perf/appraisals",
         }
 
@@ -428,7 +442,9 @@ class HRNotificationService:
             "cycle_name": cycle_name,
             "days_remaining": days_remaining,
             "review_deadline": (
-                review_deadline.strftime("%B %d, %Y") if review_deadline else "N/A"
+                self._date(review_deadline, cycle.organization_id)
+                if review_deadline
+                else "N/A"
             ),
             "appraisal_url": f"{self.app_url}/people/perf/appraisals",
         }
@@ -478,7 +494,7 @@ class HRNotificationService:
             "cert_name": cert_name,
             "days_remaining": days_remaining,
             "expiry_date": (
-                valid_until.strftime("%B %d, %Y") if valid_until else "N/A"
+                self._date(valid_until, _org_id(employee)) if valid_until else "N/A"
             ),
             "issuing_org": getattr(certification, "issuing_organization", None)
             or "N/A",

@@ -95,7 +95,7 @@
                 <dt class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Last Reset</dt>
                 <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-white">
                     {% if current_week_usage.last_reset_at %}
-                        {{ current_week_usage.last_reset_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                        {{ (current_week_usage.last_reset_at | format_utc_datetime) }}
                     {% else %}
                         Never reset
                     {% endif %}

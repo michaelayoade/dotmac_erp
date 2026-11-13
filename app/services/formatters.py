@@ -247,9 +247,64 @@ def format_date(
         return ""
 
 
-def format_date_display(value: date | None, fmt: str = "%d %b %Y") -> str:
-    """Human-friendly date (e.g. ``15 Jan 2024``)."""
+def format_date_display(value: date | None, fmt: str | None = None) -> str:
+    """Format a date for the current organization or the ERP default."""
+    if fmt is None:
+        from app.services.formatting_context import (
+            DATE_FORMAT_MAP,
+            DEFAULT_DATE_FORMAT,
+            get_formatting_prefs,
+        )
+
+        prefs = get_formatting_prefs()
+        fmt = prefs.date_strftime if prefs else DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT]
     return format_date(value, fmt)
+
+
+def format_weekday_date_display(value: date | None) -> str:
+    """Format a date with its weekday and the organization date order."""
+    if value is None:
+        return ""
+    return f"{value.strftime('%A')}, {format_date_display(value)}"
+
+
+def format_datetime_display(
+    value: datetime | None, *, convert_timezone: bool = True
+) -> str:
+    """Format a datetime using the organization setting or ERP default."""
+    from app.services.formatting_context import (
+        DATE_FORMAT_MAP,
+        DEFAULT_DATE_FORMAT,
+        get_formatting_prefs,
+    )
+
+    prefs = get_formatting_prefs()
+    if prefs is not None and convert_timezone:
+        return format_datetime(value)
+    date_format = prefs.date_strftime if prefs else DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT]
+    return format_datetime(value, fmt=f"{date_format} %H:%M")
+
+
+def format_utc_datetime_display(value: datetime | None) -> str:
+    """Format a UTC timestamp with the organization date order and UTC label."""
+    if value is None:
+        return ""
+    if value.tzinfo is not None:
+        from datetime import timezone
+
+        value = value.astimezone(timezone.utc)
+    return f"{format_datetime_display(value, convert_timezone=False)} UTC"
+
+
+def format_weekday_utc_datetime_display(value: datetime | None) -> str:
+    """Format a UTC timestamp with weekday and organization date order."""
+    if value is None:
+        return ""
+    if value.tzinfo is not None:
+        from datetime import timezone
+
+        value = value.astimezone(timezone.utc)
+    return f"{value.strftime('%a')} {format_utc_datetime_display(value)}"
 
 
 def format_datetime(

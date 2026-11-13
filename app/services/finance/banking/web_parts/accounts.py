@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.services import formatters as _date_formatters
 from app.services.finance.banking.web_parts.base import (
     Account,
     Any,
@@ -273,7 +274,9 @@ class BankingAccountWebService:
         line_view["notes"] = line.notes
         line_view["transaction_id"] = line.transaction_id
         line_view["matched_at"] = (
-            line.matched_at.strftime("%d %b %Y %H:%M") if line.matched_at else None
+            _date_formatters.format_datetime_display(line.matched_at)
+            if line.matched_at
+            else None
         )
 
         # Parent statement/account info
@@ -337,7 +340,7 @@ class BankingAccountWebService:
                     else None,
                     "is_primary": match.is_primary,
                     "matched_at": (
-                        match.matched_at.strftime("%d %b %Y %H:%M")
+                        _date_formatters.format_datetime_display(match.matched_at)
                         if match.matched_at
                         else None
                     ),
