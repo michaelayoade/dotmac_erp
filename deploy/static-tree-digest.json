@@ -27,6 +27,6 @@
   "algorithm": "sha256 over a manifest of '<sha256>  <relpath>' lines sorted by path",
   "root": "static",
   "served_at": "/static/",
-  "file_count": 71,
-  "tree_digest": "sha256:9689bf32afe8e9b097e8dd3e23726022328472d1ffb9b72aaadd4f4f713681d5"
+  "file_count": 73,
+  "tree_digest": "sha256:a04c6dc01fd535b8c2350bd7745cec9eb4265358f212767c729e5553fbba2a35"
 }
