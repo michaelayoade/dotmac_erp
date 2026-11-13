@@ -724,6 +724,29 @@ def maintenance_cancel(
     return FleetWebService(db).cancel_maintenance_response(auth, record_id)
 
 
+@router.post("/maintenance/{record_id}/start")
+def maintenance_start(
+    record_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
+    db: Session = Depends(get_db_for_org),
+):
+    """Start scheduled maintenance."""
+    return FleetWebService(db).start_maintenance_response(auth, record_id)
+
+
+@router.post("/maintenance/{record_id}/complete")
+async def maintenance_complete(
+    request: Request,
+    record_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_maintenance_manage),
+    db: Session = Depends(get_db_for_org),
+):
+    """Complete scheduled or in-progress maintenance."""
+    return await FleetWebService(db).complete_maintenance_response(
+        request, auth, record_id
+    )
+
+
 @router.get("/maintenance/{record_id}", response_class=HTMLResponse)
 def maintenance_detail(
     request: Request,

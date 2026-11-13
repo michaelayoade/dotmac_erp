@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -432,7 +433,10 @@ async def test_financed_maintenance_cannot_be_edited(monkeypatch):
     service.update.assert_not_called()
 
 
-def test_cancel_maintenance_soft_cancels_scheduled_record(monkeypatch):
+@pytest.mark.parametrize(
+    "status", [MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS]
+)
+def test_cancel_maintenance_soft_cancels_open_record(monkeypatch, status):
     from unittest.mock import Mock
 
     from app.services.fleet import maintenance_finance
@@ -442,7 +446,7 @@ def test_cancel_maintenance_soft_cancels_scheduled_record(monkeypatch):
     service = Mock()
     service.get_for_update.return_value = SimpleNamespace(
         maintenance_id=maintenance_id,
-        status=MaintenanceStatus.SCHEDULED,
+        status=status,
     )
     monkeypatch.setattr(
         "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
@@ -470,6 +474,94 @@ def test_cancel_maintenance_soft_cancels_scheduled_record(monkeypatch):
     )
     assert db.committed is True
     assert response.headers["location"].startswith("/fleet/maintenance?success=")
+
+
+def test_start_maintenance_from_detail_commits_transition(monkeypatch):
+    from unittest.mock import Mock
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    service = Mock()
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+
+    response = FleetWebService(db).start_maintenance_response(
+        _Auth(organization_id=TEST_ORG_ID), maintenance_id
+    )
+
+    service.get_for_update.assert_called_once_with(maintenance_id)
+    service.start.assert_called_once_with(maintenance_id)
+    assert db.committed is True
+    assert response.headers["location"].startswith(
+        f"/fleet/maintenance/{maintenance_id}?success="
+    )
+
+
+@pytest.mark.asyncio
+async def test_complete_maintenance_from_detail_validates_and_commits(monkeypatch):
+    from unittest.mock import Mock
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    service = Mock()
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+    request = SimpleNamespace(
+        state=SimpleNamespace(
+            csrf_form=FormData(
+                {
+                    "csrf_token": "test-token",
+                    "actual_cost": "1250.50",
+                    "completed_date": "2026-11-13",
+                    "work_performed": "Changed brake pads",
+                    "odometer_at_service": "45000",
+                }
+            )
+        )
+    )
+
+    response = await FleetWebService(db).complete_maintenance_response(
+        request, _Auth(organization_id=TEST_ORG_ID), maintenance_id
+    )
+
+    service.get_for_update.assert_called_once_with(maintenance_id)
+    service.complete.assert_called_once()
+    saved_id, data = service.complete.call_args.args
+    assert saved_id == maintenance_id
+    assert data.actual_cost == Decimal("1250.50")
+    assert data.completed_date == date(2026, 11, 13)
+    assert data.odometer_at_service == 45000
+    assert data.work_performed == "Changed brake pads"
+    assert db.committed is True
+    assert response.headers["location"].startswith(
+        f"/fleet/maintenance/{maintenance_id}?success="
+    )
+
+
+@pytest.mark.asyncio
+async def test_complete_maintenance_requires_actual_cost(monkeypatch):
+    from unittest.mock import Mock
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    service = Mock()
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+    request = SimpleNamespace(
+        state=SimpleNamespace(csrf_form=FormData({"actual_cost": ""}))
+    )
+
+    response = await FleetWebService(db).complete_maintenance_response(
+        request, _Auth(organization_id=TEST_ORG_ID), maintenance_id
+    )
+
+    assert db.rolled_back is True
+    assert db.committed is False
+    service.complete.assert_not_called()
+    assert "?error=" in response.headers["location"]
 
 
 def test_cancel_maintenance_rolls_back_when_finance_requires_reversal(monkeypatch):

@@ -16,6 +16,12 @@
 
 {% block content %}
 <div class="space-y-6 stagger-in">
+    {% if request.query_params.get('success') %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" role="status">{{ request.query_params.get('success') }}</div>
+    {% endif %}
+    {% if request.query_params.get('error') %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300" role="alert">{{ request.query_params.get('error') }}</div>
+    {% endif %}
     <!-- Header Card -->
     <div class="card p-6">
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -185,6 +191,68 @@
             </a>
             {% endfor %}
         </div>
+    </div>
+    {% endif %}
+
+    {% if auth.has_permission("fleet:maintenance:manage") and record.status.value in ["SCHEDULED", "IN_PROGRESS"] %}
+    <div class="card p-6 space-y-4">
+        <h3 class="font-semibold text-slate-900 dark:text-white">Update Maintenance Status</h3>
+        {% if record.status.value == "SCHEDULED" %}
+        <form method="post" action="/fleet/maintenance/{{ record.maintenance_id }}/start">
+            {{ request.state.csrf_form | safe }}
+            <button type="submit" class="btn btn-secondary">Start Maintenance</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/fleet/maintenance/{{ record.maintenance_id }}/cancel">
+            {{ request.state.csrf_form | safe }}
+            <button type="submit" class="btn btn-danger-outline" onclick="return confirm('Cancel this maintenance record?')">Cancel Maintenance</button>
+        </form>
+        <details class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+            <summary class="cursor-pointer font-medium text-slate-900 dark:text-white">Complete Maintenance</summary>
+            <form method="post" action="/fleet/maintenance/{{ record.maintenance_id }}/complete" class="mt-4 space-y-4">
+                {{ request.state.csrf_form | safe }}
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="actual_cost" class="form-label">Actual Cost <span class="text-rose-500">*</span></label>
+                        <input id="actual_cost" name="actual_cost" type="number" min="0" step="0.01" required class="form-input" value="{{ record.actual_cost if record.actual_cost is not none else '' }}">
+                    </div>
+                    <div>
+                        <label for="completed_date" class="form-label">Completed Date</label>
+                        <input id="completed_date" name="completed_date" type="date" class="form-input" value="{{ record.completed_date.isoformat() if record.completed_date else '' }}">
+                        <p class="mt-1 text-xs text-slate-500">Leave blank to use today.</p>
+                    </div>
+                    <div>
+                        <label for="odometer_at_service" class="form-label">Odometer at Service (km)</label>
+                        <input id="odometer_at_service" name="odometer_at_service" type="number" min="0" step="1" class="form-input" value="{{ record.odometer_at_service if record.odometer_at_service is not none else '' }}">
+                    </div>
+                    <div>
+                        <label for="technician_name" class="form-label">Technician</label>
+                        <input id="technician_name" name="technician_name" type="text" maxlength="100" class="form-input" value="{{ record.technician_name or '' }}">
+                    </div>
+                    <div>
+                        <label for="invoice_number" class="form-label">Invoice Number</label>
+                        <input id="invoice_number" name="invoice_number" type="text" maxlength="50" class="form-input" value="{{ record.invoice_number or '' }}">
+                    </div>
+                    <div>
+                        <label for="next_service_date" class="form-label">Next Service Date</label>
+                        <input id="next_service_date" name="next_service_date" type="date" class="form-input" value="{{ record.next_service_date.isoformat() if record.next_service_date else '' }}">
+                    </div>
+                    <div>
+                        <label for="next_service_odometer" class="form-label">Next Service Odometer (km)</label>
+                        <input id="next_service_odometer" name="next_service_odometer" type="number" min="0" step="1" class="form-input" value="{{ record.next_service_odometer if record.next_service_odometer is not none else '' }}">
+                    </div>
+                </div>
+                <div>
+                    <label for="work_performed" class="form-label">Work Performed</label>
+                    <textarea id="work_performed" name="work_performed" rows="3" class="form-input">{{ record.work_performed or '' }}</textarea>
+                </div>
+                <div>
+                    <label for="parts_replaced" class="form-label">Parts Replaced</label>
+                    <textarea id="parts_replaced" name="parts_replaced" rows="2" class="form-input">{{ record.parts_replaced or '' }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" onclick="return confirm('Complete this maintenance record?')">Mark Completed</button>
+            </form>
+        </details>
     </div>
     {% endif %}
 
