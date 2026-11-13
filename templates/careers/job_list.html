@@ -102,7 +102,7 @@
                 {% if job.posted_on %}
                 <span class="flex items-center gap-1">
                     {{ icon_svg("calendar", "h-4 w-4") }}
-                    {{ job.posted_on.strftime('%b %d') }}
+                    {{ (job.posted_on | format_date) }}
                 </span>
                 {% endif %}
             </div>

@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.domain_settings import SettingDomain
+from app.models.finance.core_org.organization import Organization
 from app.models.people.payroll.salary_slip import SalarySlip
 from app.services.email_branding import render_branded_email
+from app.services.formatting_context import resolve_from_org
 from app.services.settings_cache import get_setting_value
 
 
@@ -30,6 +33,8 @@ def render_payslip_email(db: Session, slip: SalarySlip) -> tuple[str, str, str]:
     org_id = slip.organization_id
     if org_id is None and employee and employee.organization_id:
         org_id = employee.organization_id
+    org = db.get(Organization, org_id) if org_id else None
+    org_date_format = resolve_from_org(org).date_strftime
 
     header_html = get_setting_value(
         db, SettingDomain.email, "email_header_html", "", organization_id=org_id
@@ -49,8 +54,12 @@ def render_payslip_email(db: Session, slip: SalarySlip) -> tuple[str, str, str]:
         "first_name": first_name,
         "period_str": period_str,
         "slip_number": slip.slip_number,
-        "start_date": slip.start_date.strftime("%d %b"),
-        "end_date": slip.end_date.strftime("%d %b %Y"),
+        "start_date": _date_formatters.format_date_display(
+            slip.start_date, fmt=org_date_format
+        ),
+        "end_date": _date_formatters.format_date_display(
+            slip.end_date, fmt=org_date_format
+        ),
         "currency_code": slip.currency_code,
         "gross_pay": slip.gross_pay,
         "total_deduction": slip.total_deduction,

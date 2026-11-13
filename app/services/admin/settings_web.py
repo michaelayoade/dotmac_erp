@@ -18,6 +18,7 @@ from app.schemas.settings import DomainSettingUpdate
 from app.services.domain_settings import DomainSettings
 from app.services.formatting_context import (
     COMMON_TIMEZONES,
+    DATE_FORMAT_MAP,
 )
 from app.services.people.perf.performance_mode_policy import (
     is_pms_enabled_for_org,
@@ -172,6 +173,9 @@ class AdminSettingsWebService:
         org = db.get(Organization, organization_id)
         if not org:
             return False, "Organization not found"
+
+        if data.get("date_format") and data["date_format"] not in DATE_FORMAT_MAP:
+            return False, "Invalid date format"
 
         pms_enabled_before = bool(org.pms_ohcsf_enabled)
         mode_updated = False

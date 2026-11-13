@@ -379,7 +379,7 @@
                 <div class="document-title">Salary Slip</div>
                 <div class="document-number">{{ slip.slip_number }}</div>
                 <div class="document-period">
-                    {{ pay_period_start.strftime('%B %d') }} &ndash; {{ pay_period_end.strftime('%B %d, %Y') }}
+                    {{ pay_period_start.strftime('%B %d') }} &ndash; {{ (pay_period_end | format_date) }}
                 </div>
             </div>
         </div>
@@ -553,7 +553,7 @@
                 Confidential &mdash; For Employee Use Only
             </div>
             <div class="generation-info">
-                Generated on {{ now().strftime('%B %d, %Y at %H:%M') if now is defined else '' }}
+                Generated on {{ now() | format_datetime if now is defined else '' }}
             </div>
         </div>
     </div>

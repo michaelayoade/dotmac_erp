@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.payment_terms import PaymentTerms
 from app.models.finance.ar.sales_order import SalesOrder, SOStatus
@@ -378,23 +379,23 @@ class SalesOrderWebService:
             "shipping_method": so.shipping_method or "-",
             "allow_partial": so.allow_partial_shipment,
             # Timestamps
-            "submitted_at": so.submitted_at.strftime("%Y-%m-%d %H:%M")
+            "submitted_at": _date_formatters.format_datetime_display(so.submitted_at)
             if so.submitted_at
             else None,
-            "approved_at": so.approved_at.strftime("%Y-%m-%d %H:%M")
+            "approved_at": _date_formatters.format_datetime_display(so.approved_at)
             if so.approved_at
             else None,
-            "confirmed_at": so.confirmed_at.strftime("%Y-%m-%d %H:%M")
+            "confirmed_at": _date_formatters.format_datetime_display(so.confirmed_at)
             if so.confirmed_at
             else None,
-            "completed_at": so.completed_at.strftime("%Y-%m-%d %H:%M")
+            "completed_at": _date_formatters.format_datetime_display(so.completed_at)
             if so.completed_at
             else None,
-            "cancelled_at": so.cancelled_at.strftime("%Y-%m-%d %H:%M")
+            "cancelled_at": _date_formatters.format_datetime_display(so.cancelled_at)
             if so.cancelled_at
             else None,
             "cancellation_reason": so.cancellation_reason,
-            "created_at": so.created_at.strftime("%Y-%m-%d %H:%M")
+            "created_at": _date_formatters.format_datetime_display(so.created_at)
             if so.created_at
             else "",
             # Actions
@@ -454,7 +455,9 @@ class SalesOrderWebService:
                     "carrier": ship.carrier or "-",
                     "tracking_number": ship.tracking_number or "-",
                     "is_delivered": ship.is_delivered,
-                    "delivered_at": ship.delivered_at.strftime("%Y-%m-%d %H:%M")
+                    "delivered_at": _date_formatters.format_datetime_display(
+                        ship.delivered_at
+                    )
                     if ship.delivered_at
                     else None,
                 }

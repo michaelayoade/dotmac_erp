@@ -21,8 +21,10 @@ from uuid import UUID
 
 from celery import shared_task
 
+from app.services import formatters as _date_formatters
 from app.db.session_context import session_for_org
 from app.services.common import coerce_uuid
+from app.services.formatting_context import resolve_from_org
 from app.tenant_catalog import organization_ids
 
 logger = logging.getLogger(__name__)
@@ -158,6 +160,7 @@ def _notify_integrity_violation(
         from sqlalchemy import select
 
         from app.models.person import Person
+        from app.models.finance.core_org.organization import Organization
         from app.models.rbac import PersonRole, Role
 
         stmt = (
@@ -174,8 +177,12 @@ def _notify_integrity_violation(
         )
         recipient_ids = list(db.scalars(stmt).all())
 
+        org_date_format = resolve_from_org(
+            db.get(Organization, organization_id)
+        ).date_strftime
         period_str = (
-            f"{from_date.strftime('%d %b %Y')} – {to_date.strftime('%d %b %Y')}"
+            f"{_date_formatters.format_date_display(from_date, fmt=org_date_format)} – "
+            f"{_date_formatters.format_date_display(to_date, fmt=org_date_format)}"
         )
 
         for recipient_id in recipient_ids:

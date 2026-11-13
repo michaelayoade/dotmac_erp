@@ -402,7 +402,7 @@
                 {{ footer.notice | default('This document is confidential and intended for the named recipient only.') }}
             </div>
             <div class="generation-info">
-                Generated on {{ now().strftime('%B %d, %Y at %H:%M') if now is callable else now | format_datetime }}
+                Generated on {{ (now() | format_datetime) if now is callable else now | format_datetime }}
             </div>
         </div>
     </div>

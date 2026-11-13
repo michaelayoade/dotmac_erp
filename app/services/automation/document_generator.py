@@ -37,9 +37,11 @@ from app.services.formatters import (
 )
 from app.services.formatters import (
     format_date as _base_format_date,
+    format_date_display,
 )
 from app.services.formatters import (
     format_datetime as _base_format_datetime,
+    format_datetime_display,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,14 +87,16 @@ def _format_currency(value: Decimal | float | int | None, decimals: int = 2) -> 
     return format_currency_compact(value, none_value="0.00", decimal_places=decimals)
 
 
-def _format_date(value: date | datetime | None, fmt: str = "%d %B %Y") -> str:
+def _format_date(value: date | datetime | None, fmt: str | None = None) -> str:
     """Format a date value."""
-    return _base_format_date(value, fmt=fmt)
+    return _base_format_date(value, fmt=fmt) if fmt else format_date_display(value)
 
 
-def _format_datetime(value: datetime | None, fmt: str = "%d %B %Y at %H:%M") -> str:
+def _format_datetime(value: datetime | None, fmt: str | None = None) -> str:
     """Format a datetime value."""
-    return _base_format_datetime(value, fmt=fmt)
+    return (
+        _base_format_datetime(value, fmt=fmt) if fmt else format_datetime_display(value)
+    )
 
 
 class DocumentGeneratorError(Exception):

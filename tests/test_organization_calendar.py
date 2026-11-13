@@ -384,6 +384,11 @@ class _CalendarUnitOfWork:
     def flush(self) -> None:
         pass
 
+    def get(self, _model, _organization_id):
+        return SimpleNamespace(
+            date_format="DD/MM/YYYY", number_format=None, timezone="Africa/Lagos"
+        )
+
 
 class _PersonalCalendarService(OrganizationCalendarService):
     def __init__(self, organization_id, candidates, db=None):
@@ -498,7 +503,7 @@ def test_published_organizational_event_notifies_only_selected_participants() ->
         for item in notifications
     )
     assert "Event: Operations review" in notifications[0].message
-    assert "27 Sep 2026" in notifications[0].message
+    assert "27/09/2026" in notifications[0].message
 
 
 def test_overlapping_direct_department_and_designation_targets_get_one_email_each() -> (

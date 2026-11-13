@@ -25,6 +25,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.email_profile import EmailModule
 from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
 from app.services.finance.ap import purchase_order_status
@@ -162,8 +163,10 @@ class PurchaseOrderService(ListResponseMixin):
         context = {
             "supplier_name": supplier_name,
             "po_number": po.po_number,
-            "po_date": po.po_date.strftime("%d %b %Y"),
-            "expected_delivery_date": po.expected_delivery_date.strftime("%d %b %Y")
+            "po_date": _date_formatters.format_date_display(po.po_date),
+            "expected_delivery_date": _date_formatters.format_date_display(
+                po.expected_delivery_date
+            )
             if po.expected_delivery_date
             else None,
             "currency_code": po.currency_code,

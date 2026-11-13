@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.auth import AuthProvider, SessionStatus, UserCredential
 from app.models.auth import Session as AuthSession
 from app.models.finance.audit.audit_log import AuditAction
@@ -186,7 +187,9 @@ class AdminIdentityMixin:
                     "failed_login_attempts": failed_login_attempts,
                     "roles": person_roles_map.get(person.id, []),
                     "last_active": last_active_map.get(person.id),
-                    "created_at": person.created_at.strftime("%b %d, %Y")
+                    "created_at": _date_formatters.format_date_display(
+                        person.created_at
+                    )
                     if person.created_at
                     else "",
                 }

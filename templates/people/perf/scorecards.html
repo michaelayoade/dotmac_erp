@@ -150,7 +150,7 @@
                             <div class="font-medium text-slate-900 dark:text-white">{{ sc.period_label }}</div>
                             {% endif %}
                             <div class="text-slate-500 dark:text-slate-400">
-                                {{ sc.period_start.strftime("%b %d") }} - {{ sc.period_end | format_date }}
+                                {{ (sc.period_start | format_date) }} - {{ sc.period_end | format_date }}
                             </div>
                         </td>
                         <td class="px-4 py-3 text-center">

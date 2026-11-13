@@ -10,7 +10,7 @@
         <div>
             <h1 class="text-2xl font-display font-semibold text-slate-900 dark:text-white">My Timesheet</h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                Week of {{ week_start | format_date }} - {{ (week_start + timedelta(days=6)).strftime('%d %b %Y') }}
+                Week of {{ week_start | format_date }} - {{ (week_start + timedelta(days=6)) | format_date }}
             </p>
         </div>
         <div class="flex items-center gap-2">

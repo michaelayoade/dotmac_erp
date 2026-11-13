@@ -81,7 +81,7 @@
             </div>
 
             <div class="mt-4 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-                <span>{{ slip.start_date.strftime('%d %b') }} - {{ slip.end_date | format_datetime }}</span>
+                <span>{{ (slip.start_date | format_date) }} - {{ slip.end_date | format_datetime }}</span>
                 {{ icon_svg("chevron-right", "w-4 h-4 group-hover:translate-x-1 transition-transform") }}
             </div>
         </a>

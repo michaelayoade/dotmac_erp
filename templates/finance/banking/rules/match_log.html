@@ -55,7 +55,7 @@
           {% for log in logs %}
           <tr class="group">
             <td class="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
-              {{ log.matched_at.strftime('%d %b %Y, %H:%M') if log.matched_at else '—' }}
+              {{ (log.matched_at | format_datetime) if log.matched_at else '—' }}
             </td>
             <td>
               {% if log.rule_id %}

@@ -19,13 +19,16 @@ from typing import TypedDict
 
 from celery import shared_task
 
+from app.services import formatters as _date_formatters
 from app.db.session_context import session_for_org
+from app.models.finance.core_org.organization import Organization
 from app.models.notification import (
     EntityType,
     NotificationChannel,
     NotificationType,
 )
 from app.tenant_catalog import active_organization_ids
+from app.services.formatting_context import formatting_for_org
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +317,18 @@ def process_all_discipline_reminders() -> dict:
 # =============================================================================
 
 
+def _case_date(db, case, value: date | datetime) -> str:
+    org = db.get(Organization, case.organization_id)
+    with formatting_for_org(org):
+        return _date_formatters.format_date_display(value)
+
+
+def _case_datetime(db, case, value: datetime) -> str:
+    org = db.get(Organization, case.organization_id)
+    with formatting_for_org(org):
+        return _date_formatters.format_datetime_display(value)
+
+
 def _send_response_reminder(
     db,
     notification_service,
@@ -353,7 +368,7 @@ def _send_response_reminder(
         title = f"Response Due in {days_until_due} Days - {case.case_number}"
         message = (
             f"This is a reminder that your response to disciplinary case "
-            f"{case.case_number} is due on {case.response_due_date.strftime('%B %d, %Y')}."
+            f"{case.case_number} is due on {_case_date(db, case, case.response_due_date)}."
         )
         notification_type = NotificationType.REMINDER
 
@@ -426,7 +441,7 @@ def _send_hearing_reminder(
     ):
         return
 
-    hearing_date_str = case.hearing_date.strftime("%B %d, %Y at %I:%M %p")
+    hearing_date_str = _case_datetime(db, case, case.hearing_date)
     location_str = f" at {case.hearing_location}" if case.hearing_location else ""
 
     if days_until == 0:
@@ -483,7 +498,7 @@ def _send_appeal_deadline_reminder(
     ):
         return
 
-    deadline_str = case.appeal_deadline.strftime("%B %d, %Y")
+    deadline_str = _case_date(db, case, case.appeal_deadline)
 
     if days_until_deadline == 0:
         title = f"Appeal Deadline Today - {case.case_number}"

@@ -28,6 +28,7 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.services.inventory.purchase_report import PurchaseReportFilters
 from app.services.inventory.purchase_report_web import PurchaseReportWebService
+from app.templates import templates as app_templates
 from app.web.deps import get_db_for_org, require_inventory_access
 from app.web.inventory_weekly_purchases import router
 
@@ -130,6 +131,7 @@ def test_template_all_periods_empty_populated_and_description_escaping(kind, pop
         autoescape=True,
         undefined=StrictUndefined,
     )
+    env.filters.update(app_templates.env.filters)
     html = env.get_template("inventory/report_purchases.html").render(
         **context(kind, [row()] if populated else [])
     )

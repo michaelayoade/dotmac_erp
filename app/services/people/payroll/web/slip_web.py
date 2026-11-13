@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.services import formatters as _date_formatters
 from app.models.people.hr.employee import Employee
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import (
@@ -176,7 +177,7 @@ class SlipWebService:
                 {
                     "name": "start_date",
                     "value": start_date.isoformat(),
-                    "display_value": f"From: {start_date.strftime('%d %b %Y')}",
+                    "display_value": f"From: {_date_formatters.format_date_display(start_date)}",
                 }
             )
         if end_date:
@@ -184,7 +185,7 @@ class SlipWebService:
                 {
                     "name": "end_date",
                     "value": end_date.isoformat(),
-                    "display_value": f"To: {end_date.strftime('%d %b %Y')}",
+                    "display_value": f"To: {_date_formatters.format_date_display(end_date)}",
                 }
             )
         if parsed_employment_type_id:
@@ -320,7 +321,7 @@ class SlipWebService:
 
         rows: list[list[str]] = [headers]
         for slip in slips:
-            period = f"{slip.start_date.strftime('%b %d')} - {slip.end_date.strftime('%b %d, %Y')}"
+            period = f"{_date_formatters.format_date_display(slip.start_date)} - {_date_formatters.format_date_display(slip.end_date)}"
 
             basic = Decimal("0")
             housing = Decimal("0")

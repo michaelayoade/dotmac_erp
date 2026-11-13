@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import SupplierInvoice
@@ -182,7 +183,9 @@ def vendor_payout_breakdown_context(
                     "invoice_number": row.invoice.invoice_number
                     if row.invoice
                     else "—",
-                    "invoice_date": row.invoice.invoice_date.strftime("%d %b %Y")
+                    "invoice_date": _date_formatters.format_date_display(
+                        row.invoice.invoice_date
+                    )
                     if row.invoice and row.invoice.invoice_date
                     else "—",
                     "description": "Invoice allocation",
@@ -203,8 +206,8 @@ def vendor_payout_breakdown_context(
                     "exchange_difference_raw": float(
                         row.allocation.exchange_difference or 0
                     ),
-                    "allocation_date": row.allocation.allocation_date.strftime(
-                        "%d %b %Y"
+                    "allocation_date": _date_formatters.format_date_display(
+                        row.allocation.allocation_date
                     ),
                 }
             )
@@ -231,7 +234,9 @@ def vendor_payout_breakdown_context(
                         Decimal("0"), payment.currency_code
                     ),
                     "exchange_difference_raw": 0.0,
-                    "allocation_date": payment.payment_date.strftime("%d %b %Y"),
+                    "allocation_date": _date_formatters.format_date_display(
+                        payment.payment_date
+                    ),
                 }
             )
 
@@ -256,7 +261,9 @@ def vendor_payout_breakdown_context(
                         Decimal("0"), payment.currency_code
                     ),
                     "exchange_difference_raw": 0.0,
-                    "allocation_date": payment.payment_date.strftime("%d %b %Y"),
+                    "allocation_date": _date_formatters.format_date_display(
+                        payment.payment_date
+                    ),
                 }
             )
             total_unallocated += unallocated_amount
@@ -265,7 +272,9 @@ def vendor_payout_breakdown_context(
             {
                 "payment_id": str(payment.payment_id),
                 "payment_number": payment.payment_number,
-                "payment_date": payment.payment_date.strftime("%d %b %Y"),
+                "payment_date": _date_formatters.format_date_display(
+                    payment.payment_date
+                ),
                 "supplier_name": supplier_name,
                 "supplier_id": str(payment.supplier_id),
                 "status": payment.status.value,
@@ -323,9 +332,9 @@ def vendor_payout_breakdown_context(
         "payments": grouped_payments,
         "supplier_options": supplier_options,
         "status_options": _status_options(),
-        "start_date": from_date.strftime("%d %b %Y"),
+        "start_date": _date_formatters.format_date_display(from_date),
         "start_date_iso": _iso_date(from_date),
-        "end_date": to_date.strftime("%d %b %Y"),
+        "end_date": _date_formatters.format_date_display(to_date),
         "end_date_iso": _iso_date(to_date),
         "supplier_id": supplier_id or "",
         "selected_supplier_name": selected_supplier_name,

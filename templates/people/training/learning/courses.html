@@ -87,7 +87,7 @@
                         <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ course.version_number }}</td>
                         <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ module_counts.get(course.id, 0) }}</td>
                         <td class="px-4 py-3 text-right text-sm font-mono text-slate-700 dark:text-slate-300">{{ assignment_counts.get(course.id, 0) }}</td>
-                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ course.created_at.strftime('%Y-%m-%d') if course.created_at else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{{ course.created_at | format_date if course.created_at else '-' }}</td>
                         <td class="px-4 py-3 text-right">
                             <div class="inline-flex items-center gap-2">
                                 <a href="/people/training/courses/{{ course.id }}" class="text-slate-500 hover:text-teal-600 dark:hover:text-teal-400" title="View">{{ icon_svg("eye", "h-4 w-4") }}</a>

@@ -113,7 +113,7 @@
                                 {% for day in week_days %}
                                     <div class="border-r border-slate-200 px-3 py-2.5 text-center last:border-r-0 dark:border-slate-800">
                                         <span class="block text-slate-700 dark:text-slate-200">{{ day.strftime("%a") }}</span>
-                                        <span class="block font-mono text-xs font-medium tabular-nums text-slate-500">{{ day.strftime("%d %b") }}</span>
+                                        <span class="block font-mono text-xs font-medium tabular-nums text-slate-500">{{ (day | format_date) }}</span>
                                     </div>
                                 {% endfor %}
                             </div>

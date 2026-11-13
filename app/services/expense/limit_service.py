@@ -26,6 +26,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.services import formatters as _date_formatters
 from app.models.expense import (
     ExpenseApproverLimit,
     ExpenseApproverLimitReset,
@@ -1673,7 +1674,7 @@ class ExpenseLimitService(ExpenseServiceBase):
         return ApproverWeeklyBudgetBalance(
             usage_label=f"Since reset on {window.isoformat()}"
             if reset
-            else f"Budget period since {window:%Y-%m-%d %H:%M UTC}",
+            else f"Budget period since {_date_formatters.format_utc_datetime_display(window)}",
             budget=budget,
             used=used,
             remaining=budget - used - committed,

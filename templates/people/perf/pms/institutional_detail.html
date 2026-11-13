@@ -109,7 +109,7 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Review Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ record.review_date.strftime('%d %b %Y') }}
+                    {{ (record.review_date | format_date) }}
                 </p>
             </div>
             {% endif %}
@@ -338,7 +338,7 @@
                         </p>
                     </div>
                     <div class="text-xs text-slate-500 dark:text-slate-400">
-                        {{ action.created_at.strftime('%d %b %Y %H:%M') if action.created_at else '—' }}
+                        {{ (action.created_at | format_datetime) if action.created_at else '—' }}
                     </div>
                 </div>
                 <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs">
@@ -436,7 +436,7 @@
             <div>
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reconciliation Date</p>
                 <p class="mt-1 text-sm text-slate-900 dark:text-white">
-                    {{ record.reconciliation_date.strftime('%d %b %Y') if record.reconciliation_date else '—' }}
+                    {{ (record.reconciliation_date | format_date) if record.reconciliation_date else '—' }}
                 </p>
             </div>
             {% if record.reconciled_by %}

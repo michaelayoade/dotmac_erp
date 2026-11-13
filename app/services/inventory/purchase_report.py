@@ -16,6 +16,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
+
 REPORT_TIMEZONE = ZoneInfo("Africa/Lagos")
 PERIODS = ("weekly", "monthly", "quarterly", "yearly")
 PAGE_SIZE = 50
@@ -47,7 +49,10 @@ class PurchasePeriod:
             return f"Q{(self.start.month - 1) // 3 + 1} {self.start.year}"
         if self.kind == "monthly":
             return self.start.strftime("%B %Y")
-        return f"{self.start:%d %b %Y} – {self.end:%d %b %Y}"
+        return (
+            f"{_date_formatters.format_date_display(self.start)} – "
+            f"{_date_formatters.format_date_display(self.end)}"
+        )
 
     @property
     def unit(self) -> str:

@@ -63,7 +63,7 @@
                     <option value="{{ appraisal.appraisal_id }}"
                         {% if form_data.appraisal_id == appraisal.appraisal_id | string %}selected{% endif %}>
                         {{ appraisal.appraisal_id | string | truncate(8, True, '') }}...
-                        {% if appraisal.completed_on %} — {{ appraisal.completed_on.strftime('%d %b %Y') }}{% endif %}
+                        {% if appraisal.completed_on %} — {{ (appraisal.completed_on | format_date) }}{% endif %}
                     </option>
                     {% endfor %}
                 </select>

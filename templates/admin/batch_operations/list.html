@@ -40,7 +40,7 @@
                         <td class="text-right font-mono tabular-nums">{{ run.records_updated }}</td>
                         <td class="text-right font-mono tabular-nums">{{ run.records_skipped }}</td>
                         <td class="text-right font-mono tabular-nums {{ 'text-rose-600 dark:text-rose-400' if run.records_failed else '' }}">{{ run.records_failed }}</td>
-                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ run.started_at.strftime('%d %b %Y, %H:%M') if run.started_at else '—' }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ (run.started_at | format_datetime) if run.started_at else '—' }}</td>
                     </tr>
                     {% else %}
                     <tr>

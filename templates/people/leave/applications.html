@@ -193,7 +193,7 @@
                             {{ app.leave_type.leave_type_name if app.leave_type else app.leave_type_id|string|truncate(8, True, '') ~ '...' }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                            {{ app.from_date.strftime('%d %b') if app.from_date else '' }} - {{ app.to_date | format_date if app.to_date else '' }}
+                            {{ (app.from_date | format_date) if app.from_date else '' }} - {{ app.to_date | format_date if app.to_date else '' }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
                             {{ app.total_leave_days }}

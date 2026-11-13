@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.services import formatters as _date_formatters
 from app.models.finance.core_org.business_unit import BusinessUnit
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project, ProjectStatus
@@ -489,16 +490,22 @@ class ExpenseWebService:
                 "journal_entry_id": str(expense.journal_entry_id)
                 if expense.journal_entry_id
                 else None,
-                "submitted_at": expense.submitted_at.strftime("%Y-%m-%d %H:%M")
+                "submitted_at": _date_formatters.format_datetime_display(
+                    expense.submitted_at
+                )
                 if expense.submitted_at
                 else None,
-                "approved_at": expense.approved_at.strftime("%Y-%m-%d %H:%M")
+                "approved_at": _date_formatters.format_datetime_display(
+                    expense.approved_at
+                )
                 if expense.approved_at
                 else None,
-                "posted_at": expense.posted_at.strftime("%Y-%m-%d %H:%M")
+                "posted_at": _date_formatters.format_datetime_display(expense.posted_at)
                 if expense.posted_at
                 else None,
-                "created_at": expense.created_at.strftime("%Y-%m-%d %H:%M")
+                "created_at": _date_formatters.format_datetime_display(
+                    expense.created_at
+                )
                 if expense.created_at
                 else "",
                 "can_edit": expense.status == ExpenseStatus.DRAFT,

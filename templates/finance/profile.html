@@ -280,13 +280,13 @@
                     <div class="space-y-2 text-sm">
                         <div class="metric-mini">
                             <span class="metric-mini-label">Started</span>
-                            <span class="metric-mini-value text-sm">{{ current_session.created_at.strftime('%b %d, %H:%M') }}</span>
+                            <span class="metric-mini-value text-sm">{{ (current_session.created_at | format_datetime) }}</span>
                         </div>
                         <div class="metric-mini">
                             <span class="metric-mini-label">Last activity</span>
                             <span class="metric-mini-value text-sm">
                                 {% if current_session.last_seen_at %}
-                                {{ current_session.last_seen_at.strftime('%b %d, %H:%M') }}
+                                {{ (current_session.last_seen_at | format_datetime) }}
                                 {% else %}
                                 Just now
                                 {% endif %}
@@ -294,7 +294,7 @@
                         </div>
                         <div class="metric-mini">
                             <span class="metric-mini-label">Expires</span>
-                            <span class="metric-mini-value text-sm">{{ current_session.expires_at.strftime('%b %d, %H:%M') }}</span>
+                            <span class="metric-mini-value text-sm">{{ (current_session.expires_at | format_datetime) }}</span>
                         </div>
                     </div>
                     {% else %}

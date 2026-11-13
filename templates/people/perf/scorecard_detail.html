@@ -75,7 +75,7 @@
                     <div class="text-center">
                         <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Period</p>
                         <p class="font-medium text-slate-900 dark:text-white">{{ scorecard.period_label or (scorecard.period_start.strftime("%b %Y")) }}</p>
-                        <p class="text-xs text-slate-500">{{ scorecard.period_start.strftime("%b %d") }} - {{ scorecard.period_end | format_date }}</p>
+                        <p class="text-xs text-slate-500">{{ (scorecard.period_start | format_date) }} - {{ scorecard.period_end | format_date }}</p>
                     </div>
                     <div class="text-center">
                         <p class="text-xs text-slate-500 dark:text-slate-400 uppercase">Status</p>

@@ -60,7 +60,7 @@ Module accents: Finance=teal, People=violet, Expense=amber, Inventory=emerald, P
 - Touch targets: minimum 44x44px on mobile
 
 ## Data Display
-- **Dates**: `DD MMM YYYY` in tables, `YYYY-MM-DD` in form inputs
+- **Dates**: use the organization's display setting (default `DD/MM/YYYY`) for user-facing dates and calendar fields; submit ISO `YYYY-MM-DD`
 - **Currency**: `font-mono tabular-nums`, right-aligned
 - **Enums**: `{{ status | replace('_', ' ') | title }}`
 - **None/null**: `{{ var if var else '' }}` — NEVER render "None"

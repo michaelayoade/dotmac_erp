@@ -26,8 +26,10 @@ Usage in formatters (internal)::
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 from app.config import settings
@@ -50,6 +52,13 @@ DATE_FORMAT_MAP: dict[str, str] = {
     "DD.MM.YYYY": "%d.%m.%Y",
     "DD MMM YYYY": "%d %b %Y",
 }
+DEFAULT_DATE_FORMAT = "DD/MM/YYYY"
+
+
+def organization_date_format(value: str | None) -> str:
+    """Return a supported organization format, or the ERP default."""
+    return value if value in DATE_FORMAT_MAP else DEFAULT_DATE_FORMAT
+
 
 # Maps the org-level "number_format" display string to (thousand_sep, decimal_sep)
 NUMBER_FORMAT_MAP: dict[str, tuple[str, str]] = {
@@ -106,8 +115,8 @@ COMMON_TIMEZONES: list[tuple[str, str]] = [
 class OrgFormattingPrefs:
     """Per-request formatting preferences resolved from an Organization."""
 
-    date_strftime: str = "%Y-%m-%d"
-    datetime_strftime: str = "%Y-%m-%d %H:%M"
+    date_strftime: str = DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT]
+    datetime_strftime: str = f"{DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT]} %H:%M"
     thousand_sep: str = ","
     decimal_sep: str = "."
     decimal_places: int = 2
@@ -140,6 +149,16 @@ def clear_formatting_prefs() -> None:
     _formatting_prefs.set(None)
 
 
+@contextmanager
+def formatting_for_org(org: Organization | None) -> Iterator[None]:
+    """Use one organization's settings for a render and restore prior context."""
+    token = _formatting_prefs.set(resolve_from_org(org))
+    try:
+        yield
+    finally:
+        _formatting_prefs.reset(token)
+
+
 # ---------------------------------------------------------------------------
 # Builder — derives prefs from an Organization model instance
 # ---------------------------------------------------------------------------
@@ -154,7 +173,7 @@ def resolve_from_org(org: Organization | None) -> OrgFormattingPrefs:
         return OrgFormattingPrefs()
 
     # Date format
-    date_strftime = DATE_FORMAT_MAP.get(org.date_format or "", "%Y-%m-%d")
+    date_strftime = DATE_FORMAT_MAP[organization_date_format(org.date_format)]
     # Derive datetime from date by appending time portion
     datetime_strftime = f"{date_strftime} %H:%M"
 

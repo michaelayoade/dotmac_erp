@@ -94,7 +94,7 @@
                                     {{ ob.employee.job_title if ob.employee and ob.employee.job_title else 'New Employee' }}
                                 </p>
                                 <p class="mt-2 text-xs font-medium uppercase tracking-wide text-teal-600 dark:text-teal-400">
-                                    Starts {{ ob.date_of_joining.strftime('%A, %b %d') if ob.date_of_joining else 'TBD' }}
+                                    Starts {{ (ob.date_of_joining.strftime('%A') ~ ', ' ~ (ob.date_of_joining | format_date)) if ob.date_of_joining else 'TBD' }}
                                 </p>
                             </div>
                             <div class="shrink-0 self-start sm:self-center">

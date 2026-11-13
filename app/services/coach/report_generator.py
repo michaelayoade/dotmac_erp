@@ -22,8 +22,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.coach.insight import CoachInsight
 from app.models.coach.report import CoachReport
+from app.models.finance.core_org.organization import Organization
+from app.services.formatting_context import resolve_from_org
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,9 @@ class ReportGenerator:
         recommendations = self._build_recommendations(finance_insights)
 
         executive_summary = self._build_executive_summary(finance_insights, "finance")
+        org_date_format = resolve_from_org(
+            self.db.get(Organization, organization_id)
+        ).date_strftime
 
         return CoachReport(
             report_id=uuid.uuid4(),
@@ -75,7 +81,7 @@ class ReportGenerator:
             report_type="WEEKLY_DIGEST",
             period_start=period_start,
             period_end=period_end,
-            title=f"Weekly Finance Digest — {period_start:%d %b} to {period_end:%d %b %Y}",
+            title=f"Weekly Finance Digest — {_date_formatters.format_date_display(period_start, fmt=org_date_format)} to {_date_formatters.format_date_display(period_end, fmt=org_date_format)}",
             executive_summary=executive_summary,
             sections=sections,
             key_metrics=key_metrics,
@@ -105,6 +111,9 @@ class ReportGenerator:
         key_metrics = self._extract_key_metrics(hr_insights)
         recommendations = self._build_recommendations(hr_insights)
         executive_summary = self._build_executive_summary(hr_insights, "HR")
+        org_date_format = resolve_from_org(
+            self.db.get(Organization, organization_id)
+        ).date_strftime
 
         return CoachReport(
             report_id=uuid.uuid4(),
@@ -114,7 +123,7 @@ class ReportGenerator:
             report_type="WEEKLY_DIGEST",
             period_start=period_start,
             period_end=period_end,
-            title=f"Weekly HR Digest — {period_start:%d %b} to {period_end:%d %b %Y}",
+            title=f"Weekly HR Digest — {_date_formatters.format_date_display(period_start, fmt=org_date_format)} to {_date_formatters.format_date_display(period_end, fmt=org_date_format)}",
             executive_summary=executive_summary,
             sections=sections,
             key_metrics=key_metrics,

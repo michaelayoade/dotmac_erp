@@ -14,6 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
+from app.services import formatters as _date_formatters
 from app.db.session_context import prime_tenant_context
 from app.models.organization_calendar import (
     CalendarEventScope,
@@ -371,7 +372,11 @@ def calendar_day(
         db, auth.organization_id
     ).list_visible_events_for_person(auth.person_id, start, end)
     context = base_context(
-        request, auth, selected.strftime("%A, %d %B %Y"), "self", db=db
+        request,
+        auth,
+        _date_formatters.format_weekday_date_display(selected),
+        "self",
+        db=db,
     )
     context.update(
         {

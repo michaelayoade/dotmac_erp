@@ -19,6 +19,8 @@ from celery import shared_task
 from sqlalchemy import extract, func, select, text
 from sqlalchemy.engine import Connection
 
+from app.services import formatters as _date_formatters
+from app.services.formatting_context import resolve_from_org
 from app.db.session_context import cross_org_session, session_for_org
 from app.models.finance.core_org.organization import Organization
 from app.models.notification import EntityType, NotificationChannel, NotificationType
@@ -1606,7 +1608,10 @@ def send_welcome_email(onboarding_id: str) -> dict:
             )
             org_name = org.legal_name
             start_date = (
-                onboarding.date_of_joining.strftime("%B %d, %Y")
+                _date_formatters.format_date_display(
+                    onboarding.date_of_joining,
+                    fmt=resolve_from_org(org).date_strftime,
+                )
                 if onboarding.date_of_joining
                 else "TBD"
             )

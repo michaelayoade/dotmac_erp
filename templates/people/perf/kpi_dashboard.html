@@ -188,9 +188,9 @@
     <div id="results-container" class="space-y-6" aria-live="polite">
         <div class="text-sm text-slate-600 dark:text-slate-300">
             <p><strong>{{ 'All overdue open KPIs as of' if config.cohort == 'overdue' else ('Active-period overlap:' if config.cohort == 'active' else 'Period-end cohort:') }}</strong>
-                {% if config.cohort == 'overdue' %}{{ business_date.strftime('%d %b %Y') }}{% else %}{{ period_start.strftime('%d %b %Y') }} – {{ period_end.strftime('%d %b %Y') }}{% endif %}.</p>
+                {% if config.cohort == 'overdue' %}{{ (business_date | format_date) }}{% else %}{{ (period_start | format_date) }} – {{ (period_end | format_date) }}{% endif %}.</p>
             <p class="mt-1 text-xs">Source: existing Goals &amp; KPIs records and configured departmental KPI periods, including metric syncs. Configured records preserve their target, weight, direction, thresholds and calculation snapshot for historical reporting.</p>
-            <p class="mt-1 text-xs">Read at {{ queried_at.strftime('%d %b %Y %H:%M %Z') }}. Deadline checks use {{ organization_timezone }} ({{ business_date.isoformat() }}). A recent page read does not mean every actual has been updated recently.</p>
+            <p class="mt-1 text-xs">Read at {{ ((queried_at | format_datetime) ~ ' ' ~ queried_at.strftime('%Z')) }}. Deadline checks use {{ organization_timezone }} ({{ business_date.isoformat() }}). A recent page read does not mean every actual has been updated recently.</p>
         </div>
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {% for card in cards %}
@@ -306,7 +306,7 @@
                                 <div class="mt-1 text-sm">{{ kpi.employee_name }}</div><div class="mt-1 text-xs font-mono text-slate-500 dark:text-slate-400">{{ kpi.employee_code }}</div>
                             </td>
                             <td class="px-5 py-3">{{ kpi.department_name if kpi.department_name else 'Unassigned' }}</td>
-                            <td class="px-5 py-3 whitespace-nowrap">{{ kpi.period_end.strftime('%d %b %Y') }}</td>
+                            <td class="px-5 py-3 whitespace-nowrap">{{ (kpi.period_end | format_date) }}</td>
                             <td class="px-5 py-3 text-right font-mono tabular-nums">{{ number(kpi.target_value) }}</td>
                             <td class="px-5 py-3 text-right font-mono tabular-nums">{{ number(kpi.actual_value) }}</td>
                             <td class="px-5 py-3">{{ kpi.unit_of_measure if kpi.unit_of_measure else '—' }}</td>
@@ -316,7 +316,7 @@
                                 {% if kpi.achievement is not none %}{{ progress_bar("Target attainment", kpi.achievement|string + '%', [kpi.achievement|float, 100]|min, color="violet") }}{% endif %}
                             </td>
                             <td class="px-5 py-3">{{ status_badge(kpi.status.value, size="sm") }}</td>
-                            <td class="px-5 py-3 whitespace-nowrap">{{ kpi.record_updated_at.strftime('%d %b %Y') if kpi.record_updated_at else '—' }}</td>
+                            <td class="px-5 py-3 whitespace-nowrap">{{ (kpi.record_updated_at | format_date) if kpi.record_updated_at else '—' }}</td>
                         </tr>{% else %}<tr><td colspan="9">{{ empty_state("No KPIs match this view", "Select another reporting period or ask the KPI owner to create the required records.") }}</td></tr>{% endfor %}
                     </tbody>
                 </table>

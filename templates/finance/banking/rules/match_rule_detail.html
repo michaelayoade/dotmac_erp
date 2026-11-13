@@ -154,19 +154,19 @@
         <div>
           <p class="text-xs text-slate-500 dark:text-slate-400">Last Match</p>
           <p class="text-sm font-medium text-slate-900 dark:text-white">
-            {{ rule.last_matched_at.strftime('%d %b %Y, %H:%M') if rule.last_matched_at else '—' }}
+            {{ (rule.last_matched_at | format_datetime) if rule.last_matched_at else '—' }}
           </p>
         </div>
         <div>
           <p class="text-xs text-slate-500 dark:text-slate-400">Created</p>
           <p class="text-sm font-medium text-slate-900 dark:text-white">
-            {{ rule.created_at.strftime('%d %b %Y') if rule.created_at else '—' }}
+            {{ (rule.created_at | format_date) if rule.created_at else '—' }}
           </p>
         </div>
         <div>
           <p class="text-xs text-slate-500 dark:text-slate-400">Updated</p>
           <p class="text-sm font-medium text-slate-900 dark:text-white">
-            {{ rule.updated_at.strftime('%d %b %Y') if rule.updated_at else '—' }}
+            {{ (rule.updated_at | format_date) if rule.updated_at else '—' }}
           </p>
         </div>
       </div>
@@ -219,7 +219,7 @@
           {% for log in match_log %}
           <tr>
             <td class="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
-              {{ log.matched_at.strftime('%d %b %Y, %H:%M') if log.matched_at else '—' }}
+              {{ (log.matched_at | format_datetime) if log.matched_at else '—' }}
             </td>
             <td class="text-sm text-slate-600 dark:text-slate-300">
               {{ source_doc_types.get(log.source_doc_type, log.source_doc_type) }}

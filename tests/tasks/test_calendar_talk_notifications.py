@@ -92,7 +92,7 @@ def test_each_due_reminder_queues_email_and_talk_once() -> None:
     assert "1 week" in calls[0].kwargs["title"]
     assert "1 day" in calls[2].kwargs["title"]
     assert "Event: Operations review" in calls[0].kwargs["message"]
-    assert "01 Oct 2026, 09:00" in calls[0].kwargs["message"]
+    assert "01/10/2026 09:00" in calls[0].kwargs["message"]
     assert "Location: Board room" in calls[0].kwargs["message"]
     assert all(
         call.kwargs["action_url"] == f"/people/self/calendar/events/{event_id}"

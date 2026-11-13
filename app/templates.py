@@ -19,6 +19,11 @@ from markupsafe import Markup
 from app.config import settings
 from app.i18n import t
 from app.services import formatters as _fmt
+from app.services.formatting_context import (
+    DATE_FORMAT_MAP,
+    DEFAULT_DATE_FORMAT,
+    get_formatting_prefs,
+)
 from app.static_assets import typeahead_script_url
 from app.ui import UI_TEMPLATE_DIRECTORY, ui_template_globals
 
@@ -36,6 +41,7 @@ templates.env.globals["t"] = t  # Translation function
 templates.env.globals["_"] = t  # Alias for convenience
 templates.env.globals["app_version"] = settings.app_version
 templates.env.globals["typeahead_script_url"] = typeahead_script_url()
+templates.env.globals["default_date_format"] = DEFAULT_DATE_FORMAT
 templates.env.globals.update(ui_template_globals())
 
 
@@ -93,14 +99,20 @@ def format_date_filter(value, fmt: str = "") -> str:
     """Jinja2 filter for date formatting.  Uses org prefs when *fmt* is empty."""
     if fmt:
         return _fmt.format_date(value, format=fmt)
-    return _fmt.format_date(value)
+    if get_formatting_prefs() is not None:
+        return _fmt.format_date(value)
+    return _fmt.format_date(value, format=DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT])
 
 
 def format_datetime_filter(value, fmt: str = "") -> str:
     """Jinja2 filter for datetime formatting.  Uses org prefs when *fmt* is empty."""
     if fmt:
         return _fmt.format_datetime(value, fmt=fmt)
-    return _fmt.format_datetime(value)
+    if get_formatting_prefs() is not None:
+        return _fmt.format_datetime(value)
+    return _fmt.format_datetime(
+        value, fmt=f"{DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT]} %H:%M"
+    )
 
 
 def urldecode(value: str | None) -> str:
@@ -271,6 +283,7 @@ templates.env.filters["format_currency"] = format_currency
 templates.env.filters["format_number"] = format_number
 templates.env.filters["format_date"] = format_date_filter
 templates.env.filters["format_datetime"] = format_datetime_filter
+templates.env.filters["format_utc_datetime"] = _fmt.format_utc_datetime_display
 templates.env.filters["urldecode"] = urldecode
 templates.env.filters["sanitize_html"] = sanitize_html
 templates.env.filters["nl2br"] = nl2br

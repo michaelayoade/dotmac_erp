@@ -20,6 +20,13 @@ from typing import Any, Optional
 
 from jinja2.sandbox import SandboxedEnvironment
 
+from app.services.formatters import (
+    format_date,
+    format_date_display,
+    format_datetime,
+    format_datetime_display,
+)
+
 logger = logging.getLogger(__name__)
 
 # Global singleton for the sandboxed environment
@@ -43,28 +50,14 @@ def _safe_format_currency(
         return "0.00"
 
 
-def _safe_format_date(value: date | datetime | None, fmt: str = "%d %B %Y") -> str:
+def _safe_format_date(value: date | datetime | None, fmt: str | None = None) -> str:
     """Format a date value safely."""
-    if value is None:
-        return ""
-    try:
-        if isinstance(value, datetime):
-            value = value.date()
-        return value.strftime(fmt)
-    except (AttributeError, ValueError):
-        return ""
+    return format_date(value, fmt) if fmt else format_date_display(value)
 
 
-def _safe_format_datetime(
-    value: datetime | None, fmt: str = "%d %B %Y at %H:%M"
-) -> str:
+def _safe_format_datetime(value: datetime | None, fmt: str | None = None) -> str:
     """Format a datetime value safely."""
-    if value is None:
-        return ""
-    try:
-        return value.strftime(fmt)
-    except (AttributeError, ValueError):
-        return ""
+    return format_datetime(value, fmt=fmt) if fmt else format_datetime_display(value)
 
 
 def _safe_abs(value: Any) -> Any:

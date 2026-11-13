@@ -202,7 +202,7 @@
                             {% if review.reviewer_signed_date %}
                             <span class="text-emerald-600 dark:text-emerald-400">
                                 {{ icon_svg("check-circle", "h-3.5 w-3.5 inline") }}
-                                {{ review.reviewer_signed_date.strftime('%d %b %Y') }}
+                                {{ (review.reviewer_signed_date | format_date) }}
                             </span>
                             {% else %}
                             <span class="text-amber-600 dark:text-amber-400">Pending</span>
@@ -215,7 +215,7 @@
                             {% if review.employee_signed_date %}
                             <span class="text-emerald-600 dark:text-emerald-400">
                                 {{ icon_svg("check-circle", "h-3.5 w-3.5 inline") }}
-                                {{ review.employee_signed_date.strftime('%d %b %Y') }}
+                                {{ (review.employee_signed_date | format_date) }}
                             </span>
                             {% else %}
                             <span class="text-amber-600 dark:text-amber-400">Pending</span>
@@ -231,7 +231,7 @@
                     <div>
                         <p class="label-caps text-slate-500 dark:text-slate-400">Created</p>
                         <p class="mt-1 text-slate-600 dark:text-slate-300">
-                            {{ review.created_at.strftime('%d %b %Y') if review.created_at else '—' }}
+                            {{ (review.created_at | format_date) if review.created_at else '—' }}
                         </p>
                     </div>
                 </div>

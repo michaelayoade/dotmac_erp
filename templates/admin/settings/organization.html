@@ -148,11 +148,11 @@
                 <div>
                     <label for="date_format" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date Format</label>
                     <select id="date_format" name="date_format" class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:border-accent-500 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                        <option value="">-- Select Format --</option>
                         {% for fmt_value, fmt_label in date_formats %}
-                        <option value="{{ fmt_value }}" {{ 'selected' if organization.date_format == fmt_value else '' }}>{{ fmt_value }} ({{ fmt_label }})</option>
+                        <option value="{{ fmt_value }}" {{ 'selected' if (organization.date_format or default_date_format) == fmt_value else '' }}>{{ fmt_value }} ({{ fmt_label }})</option>
                         {% endfor %}
                     </select>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Dates and calendar fields use this display format.</p>
                 </div>
                 <div>
                     <label for="number_format" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Number Format</label>

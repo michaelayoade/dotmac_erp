@@ -5,7 +5,7 @@
 {% block page_size %}A4 landscape{% endblock %}
 {% block report_meta %}
 <p class="meta-line">Count Number: {{ count.count_number }}</p>
-<p class="meta-line">Count Date: {{ count.count_date.strftime("%d %b %Y") if count.count_date else "-" }}</p>
+<p class="meta-line">Count Date: {{ (count.count_date | format_date) if count.count_date else "-" }}</p>
 <p class="meta-line">Status: {{ count.status.value | replace("_", " ") | title }}</p>
 <p class="meta-line">Rows: {{ row_count }}</p>
 {% endblock %}

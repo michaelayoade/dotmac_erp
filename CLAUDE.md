@@ -236,8 +236,8 @@ Check for duplicates before sending recurring notifications.
 |------|--------|-------|
 | Currency | `₦1,234,567.89` | `font-mono tabular-nums text-right` |
 | Negative | `(₦1,234.56)` | `font-mono tabular-nums text-right text-rose-600 dark:text-rose-400` |
-| Date (tables) | `07 Feb 2026` | `text-sm` |
-| Date (form inputs) | `2026-02-07` | `form-input` |
+| Date (tables) | `07/02/2026` | `text-sm` |
+| Date (form inputs) | ERP calendar uses the organization format; `2026-02-07` submitted | `form-input` |
 | Entity numbers | `INV-00421` | `font-mono tabular-nums` |
 
 Never minus sign for negatives — always parentheses. Never render `None` — use `—` or `''`.

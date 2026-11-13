@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.services import formatters as _date_formatters
 from app.services.finance.banking.suspicious_matches import (
     clear_suspicious_suggested_matches,
     list_suspicious_matches,
@@ -790,7 +791,7 @@ class BankingStatementWebService:
                 "confidence_score": match.confidence_score,
                 "explanation": match.explanation or "",
                 "matched_at": (
-                    match.matched_at.strftime("%Y-%m-%d %H:%M")
+                    _date_formatters.format_datetime_display(match.matched_at)
                     if match.matched_at
                     else ""
                 ),

@@ -1,7 +1,7 @@
 {% macro reset_history(history) %}
 {% for reset in history %}
 <details class="mt-2">
-    <summary>{{ 'Manual reset' if reset.kind == 'MANUAL' else 'Automatic reset' }} — {{ reset.reset_at.strftime('%Y-%m-%d %H:%M UTC') }}</summary>
+    <summary>{{ 'Manual reset' if reset.kind == 'MANUAL' else 'Automatic reset' }} — {{ (reset.reset_at | format_utc_datetime) }}</summary>
     <div class="mt-2 space-y-1 text-sm">
         <p>{% if reset.kind == "MANUAL" %}Reviewed by {{ reset.reviewer }}. {% endif %}Reason: {{ reset.reason }}</p>
         {% if reset.has_snapshot %}

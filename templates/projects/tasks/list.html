@@ -263,7 +263,7 @@
                             <td class="px-4 py-3">
                                 {% if subtask.due_date %}
                                 <span class="text-xs {{ 'text-red-600' if subtask.is_overdue else 'text-slate-500' }}">
-                                    {{ subtask.due_date.strftime('%d %b') }}
+                                    {{ (subtask.due_date | format_date) }}
                                 </span>
                                 {% else %}
                                 <span class="text-xs text-slate-400">-</span>

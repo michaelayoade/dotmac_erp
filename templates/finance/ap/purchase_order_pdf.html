@@ -143,9 +143,9 @@
     </div>
     <div class="meta">
       <p style="margin: 0; font-size: 16px; font-weight: 700;">{{ po.po_number }}</p>
-      <p class="muted" style="margin: 4px 0 0 0;">PO Date: {{ po.po_date.strftime("%d %b %Y") }}</p>
+      <p class="muted" style="margin: 4px 0 0 0;">PO Date: {{ (po.po_date | format_date) }}</p>
       {% if po.expected_delivery_date %}
-      <p class="muted" style="margin: 4px 0 0 0;">Expected Delivery: {{ po.expected_delivery_date.strftime("%d %b %Y") }}</p>
+      <p class="muted" style="margin: 4px 0 0 0;">Expected Delivery: {{ (po.expected_delivery_date | format_date) }}</p>
       {% endif %}
       <p class="muted" style="margin: 4px 0 0 0;">Currency: {{ po.currency_code }}</p>
       <p class="muted" style="margin: 4px 0 0 0;">Status: {{ po.status.value }}</p>

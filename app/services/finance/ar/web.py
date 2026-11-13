@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, load_only
 
+from app.services import formatters as _date_formatters
 from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.models.finance.ar.customer_payment import (
@@ -888,7 +889,9 @@ class ARWebService:
                 "file_name": att.file_name,
                 "file_size_display": _format_file_size(att.file_size),
                 "content_type": att.content_type,
-                "uploaded_at": att.uploaded_at.strftime("%Y-%m-%d %H:%M"),
+                "uploaded_at": _date_formatters.format_datetime_display(
+                    att.uploaded_at
+                ),
                 "description": att.description or "",
             }
             for att in attachments

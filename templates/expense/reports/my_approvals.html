@@ -75,7 +75,7 @@
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                     {% for item in report.decisions %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        <td class="px-5 py-3 text-sm text-slate-700 dark:text-slate-300">{{ item.action_at.strftime("%Y-%m-%d %H:%M") if item.action_at else "-" }}</td>
+                        <td class="px-5 py-3 text-sm text-slate-700 dark:text-slate-300">{{ (item.action_at | format_datetime) if item.action_at else "-" }}</td>
                         <td class="px-5 py-3 text-sm">
                             <a href="/expense/claims/{{ item.claim_id }}" class="font-mono text-amber-700 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300">{{ item.claim_number }}</a>
                         </td>

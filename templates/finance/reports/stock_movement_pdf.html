@@ -70,7 +70,7 @@ table.report-table td {
     <tr>
       <td class="nowrap">
         {% if row.transaction.transaction_date %}
-          {{ row.transaction.transaction_date.strftime("%d %b %Y") }}
+          {{ (row.transaction.transaction_date | format_date) }}
         {% else %}
           -
         {% endif %}

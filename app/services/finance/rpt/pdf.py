@@ -17,8 +17,10 @@ from typing import Any, cast
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.services.email_branding import get_email_branding
 from app.services.formatters import format_currency_compact
+from app.services.formatting_context import formatting_for_org
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,10 @@ def _get_template_env() -> Environment:
             autoescape=True,
         )
         _template_env.filters["format_currency"] = _format_currency
+        _template_env.filters["format_date"] = _date_formatters.format_date_display
+        _template_env.filters["format_datetime"] = (
+            _date_formatters.format_datetime_display
+        )
     return _template_env
 
 
@@ -102,7 +108,6 @@ class ReportPDFService:
             "primary_color": branding.get("primary_color", "#0d9488"),
             "accent_color": branding.get("accent_color", "#d97706"),
             "currency_code": "NGN",
-            "generated_at": datetime.utcnow().strftime("%d %b %Y %H:%M UTC"),
         }
 
         # Fetch org phone/address if available
@@ -132,7 +137,11 @@ class ReportPDFService:
         # ── Render HTML ──
         template_path = f"finance/reports/{report_name}_pdf.html"
         template = _get_template_env().get_template(template_path)
-        html_content = template.render(**merged)
+        with formatting_for_org(org):
+            merged["generated_at"] = _date_formatters.format_utc_datetime_display(
+                datetime.utcnow()
+            )
+            html_content = template.render(**merged)
 
         # ── Generate PDF ──
         base_url = (

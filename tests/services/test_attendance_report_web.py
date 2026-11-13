@@ -248,7 +248,7 @@ def test_exceptions_report_formats_times_and_builds_section_urls(monkeypatch) ->
 
     context = captured["context"]
     assert context["report"]["late_entries"][0]["check_in_display"] == "08:30"
-    assert context["report"]["absent_entries"][0]["date_display"] == "03 Aug 2026"
+    assert context["report"]["absent_entries"][0]["date_display"] == "03/08/2026"
     absent_url = urlparse(context["section_urls"]["absent"])
     assert absent_url.path == "/people/attendance/reports/late-early"
     assert absent_url.fragment == "absent-employees"

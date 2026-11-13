@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
@@ -562,7 +563,9 @@ class SupplierWebService:
                 "file_name": att.file_name,
                 "file_size_display": format_file_size(att.file_size),
                 "content_type": att.content_type,
-                "uploaded_at": att.uploaded_at.strftime("%Y-%m-%d %H:%M"),
+                "uploaded_at": _date_formatters.format_datetime_display(
+                    att.uploaded_at
+                ),
                 "description": att.description or "",
             }
             for att in attachments

@@ -94,11 +94,13 @@ def test_automatic_reset_does_not_claim_additional_allowance():
 def test_history_template_renders_evidence_and_escapes_reasons():
     from jinja2 import Environment, FileSystemLoader, select_autoescape
     from pathlib import Path
+    from app.templates import templates as app_templates
 
     environment = Environment(
         loader=FileSystemLoader(Path(__file__).parents[2] / "templates"),
         autoescape=select_autoescape(),
     )
+    environment.filters.update(app_templates.env.filters)
     macro = environment.get_template(
         "expense/limits/_reset_history.html"
     ).module.reset_history

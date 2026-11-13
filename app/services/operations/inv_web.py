@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session, selectinload
 from starlette.datastructures import UploadFile
 
 from app.services.common_filters import build_active_filters
+from app.services.formatters import format_datetime_display
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
@@ -613,8 +614,8 @@ class OperationsInventoryWebService:
         attachments = context.get("attachments") or []
         for attachment in attachments:
             if attachment.get("uploaded_at") is not None:
-                attachment["uploaded_at_display"] = attachment["uploaded_at"].strftime(
-                    "%Y-%m-%d %H:%M"
+                attachment["uploaded_at_display"] = format_datetime_display(
+                    attachment["uploaded_at"]
                 )
             else:
                 attachment["uploaded_at_display"] = "-"

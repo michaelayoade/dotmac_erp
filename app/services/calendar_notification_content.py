@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
+from app.services import formatters as _date_formatters
 from app.models.organization_calendar import OrganizationCalendarEvent
 
 
@@ -14,9 +15,9 @@ def calendar_event_message(event: OrganizationCalendarEvent, introduction: str) 
         if event.start_date is None or event.end_date_exclusive is None:
             raise ValueError("All-day calendar event dates are incomplete")
         final_day = event.end_date_exclusive - timedelta(days=1)
-        when = event.start_date.strftime("%d %b %Y")
+        when = _date_formatters.format_date_display(event.start_date)
         if final_day != event.start_date:
-            when += f" to {final_day:%d %b %Y}"
+            when += f" to {_date_formatters.format_date_display(final_day)}"
         when += f" (all day, {event.timezone})"
     else:
         if event.start_at is None or event.end_at is None:
@@ -24,7 +25,11 @@ def calendar_event_message(event: OrganizationCalendarEvent, introduction: str) 
         zone = ZoneInfo(event.timezone)
         start = event.start_at.astimezone(zone)
         end = event.end_at.astimezone(zone)
-        when = f"{start:%d %b %Y, %H:%M} to {end:%d %b %Y, %H:%M} ({event.timezone})"
+        when = (
+            f"{_date_formatters.format_datetime_display(start, convert_timezone=False)} "
+            f"to {_date_formatters.format_datetime_display(end, convert_timezone=False)} "
+            f"({event.timezone})"
+        )
 
     lines = [introduction, "", f"Event: {event.title}", f"When: {when}"]
     for label, value in (

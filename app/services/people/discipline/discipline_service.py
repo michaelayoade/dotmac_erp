@@ -25,8 +25,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.services import formatters as _date_formatters
+from app.services.formatting_context import formatting_for_org
 from app.errors import NotFoundError, ValidationError
 from app.models.finance.audit.audit_log import AuditAction
+from app.models.finance.core_org.organization import Organization
 from app.models.people.discipline import (
     ActionType,
     CaseAction,
@@ -103,6 +106,16 @@ class DisciplineService:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def _display_case_date(self, case: DisciplinaryCase, value: date | None) -> str:
+        with formatting_for_org(self.db.get(Organization, case.organization_id)):
+            return _date_formatters.format_date_display(value)
+
+    def _display_case_datetime(
+        self, case: DisciplinaryCase, value: datetime | None
+    ) -> str:
+        with formatting_for_org(self.db.get(Organization, case.organization_id)):
+            return _date_formatters.format_datetime_display(value)
 
     # =========================================================================
     # Case CRUD Operations
@@ -461,7 +474,7 @@ class DisciplineService:
                 case_id=case.case_id,
                 case_number=case.case_number,
                 employee_id=case.employee.person_id,
-                response_due_date=case.response_due_date.strftime("%B %d, %Y"),
+                response_due_date=self._display_case_date(case, case.response_due_date),
                 actor_id=issued_by_id,
             )
 
@@ -643,7 +656,7 @@ class DisciplineService:
                 case_id=case.case_id,
                 case_number=case.case_number,
                 employee_id=case.employee.person_id,
-                hearing_date=case.hearing_date.strftime("%B %d, %Y at %H:%M"),
+                hearing_date=self._display_case_datetime(case, case.hearing_date),
                 hearing_location=case.hearing_location,
                 actor_id=scheduled_by_id,
             )
@@ -763,7 +776,9 @@ class DisciplineService:
         if case.employee and case.employee.person_id:
             appeal_deadline_str = None
             if case.appeal_deadline:
-                appeal_deadline_str = case.appeal_deadline.strftime("%B %d, %Y")
+                appeal_deadline_str = self._display_case_date(
+                    case, case.appeal_deadline
+                )
             notification_service.notify_discipline_decision_made(
                 self.db,
                 organization_id=case.organization_id,

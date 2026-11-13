@@ -83,12 +83,12 @@
                                 {% endif %}
                             </td>
                             <td class="hidden md:table-cell text-sm text-slate-500 dark:text-slate-400">
-                                {{ appeal.filed_date.strftime('%d %b %Y') if appeal.filed_date else '—' }}
+                                {{ (appeal.filed_date | format_date) if appeal.filed_date else '—' }}
                             </td>
                             <td class="hidden md:table-cell text-sm">
                                 {% if deadline %}
                                 <div class="space-y-1">
-                                    <div class="text-slate-700 dark:text-slate-300">{{ deadline.date.strftime('%d %b %Y') }}</div>
+                                    <div class="text-slate-700 dark:text-slate-300">{{ (deadline.date | format_date) }}</div>
                                     <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
                                         {% if deadline.state == 'overdue' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300
                                         {% elif deadline.state == 'approaching' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300

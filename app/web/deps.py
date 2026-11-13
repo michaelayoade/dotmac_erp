@@ -45,6 +45,7 @@ from app.services.auth_flow import (
 )
 from app.services.common import coerce_uuid
 from app.services.finance.branding import BrandingService, CSSGenerator
+from app.services.formatting_context import organization_date_format
 from app.services.people.perf.performance_mode_policy import (
     get_policy_profile_for_mode,
     is_pms_enabled_for_org,
@@ -923,9 +924,9 @@ def base_context(
             "mode_banner_message": mode_banner_message,
             "mode_banner_variant": mode_banner_variant,
             # Org formatting settings for JS / template use
-            "org_date_format": getattr(organization, "date_format", None)
-            if organization
-            else None,
+            "org_date_format": organization_date_format(
+                getattr(organization, "date_format", None)
+            ),
             "org_number_format": getattr(organization, "number_format", None)
             if organization
             else None,

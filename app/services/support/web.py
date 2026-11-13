@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _date_formatters
 from app.models.expense.expense_claim import ExpenseClaim
 from app.models.person import Person
 from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
@@ -193,7 +194,9 @@ def _format_ticket_for_list(ticket: Ticket) -> dict[str, Any]:
         "priority_label": priority_style["label"],
         "priority_badge": priority_style["badge"],
         "opening_date": ticket.opening_date,
-        "opening_date_formatted": ticket.opening_date.strftime("%b %d, %Y")
+        "opening_date_formatted": _date_formatters.format_date_display(
+            ticket.opening_date
+        )
         if ticket.opening_date
         else "",
         "resolution_date": ticket.resolution_date,
@@ -228,21 +231,25 @@ def _format_ticket_for_detail(
         {
             "description": ticket.description,
             "resolution": ticket.resolution,
-            "resolution_date_formatted": ticket.resolution_date.strftime("%b %d, %Y")
+            "resolution_date_formatted": _date_formatters.format_date_display(
+                ticket.resolution_date
+            )
             if ticket.resolution_date
             else None,
             "project_name": ticket.project.project_name if ticket.project else None,
             "project_code": ticket.project.project_code if ticket.project else None,
             "project_id": str(ticket.project_id) if ticket.project_id else None,
-            "created_at": ticket.created_at.strftime("%b %d, %Y %H:%M")
+            "created_at": _date_formatters.format_datetime_display(ticket.created_at)
             if ticket.created_at
             else "",
-            "updated_at": ticket.updated_at.strftime("%b %d, %Y %H:%M")
+            "updated_at": _date_formatters.format_datetime_display(ticket.updated_at)
             if ticket.updated_at
             else None,
             "status_icon_bg": status_style["icon_bg"],
             "erpnext_id": ticket.erpnext_id,
-            "last_synced_at": ticket.last_synced_at.strftime("%b %d, %Y %H:%M")
+            "last_synced_at": _date_formatters.format_datetime_display(
+                ticket.last_synced_at
+            )
             if ticket.last_synced_at
             else None,
             # Customer info
@@ -279,7 +286,7 @@ def _format_ticket_for_detail(
                     "total_amount": f"{e.currency_code} {e.total_claimed_amount:,.2f}"
                     if e.total_claimed_amount
                     else "",
-                    "claim_date": e.claim_date.strftime("%b %d, %Y")
+                    "claim_date": _date_formatters.format_date_display(e.claim_date)
                     if e.claim_date
                     else "",
                 }
@@ -1161,7 +1168,7 @@ class SupportWebService:
                     "assigned_to_name": b.assigned_to_name,
                     "team_name": b.team_name,
                     "category_name": b.category_name,
-                    "created_at": b.created_at.strftime("%b %d, %Y %H:%M")
+                    "created_at": _date_formatters.format_datetime_display(b.created_at)
                     if b.created_at
                     else "",
                 }
@@ -1257,13 +1264,17 @@ class SupportWebService:
                     "assigned_to_name": b.assigned_to_name,
                     "team_name": b.team_name,
                     "category_name": b.category_name,
-                    "created_at": b.created_at.strftime("%b %d, %Y %H:%M")
+                    "created_at": _date_formatters.format_datetime_display(b.created_at)
                     if b.created_at
                     else "",
-                    "response_due_at": b.response_due_at.strftime("%b %d, %Y %H:%M")
+                    "response_due_at": _date_formatters.format_datetime_display(
+                        b.response_due_at
+                    )
                     if b.response_due_at
                     else "",
-                    "resolution_due_at": b.resolution_due_at.strftime("%b %d, %Y %H:%M")
+                    "resolution_due_at": _date_formatters.format_datetime_display(
+                        b.resolution_due_at
+                    )
                     if b.resolution_due_at
                     else "",
                 }
@@ -1424,11 +1435,13 @@ class SupportWebService:
             # Response SLA
             "response_target_hours": sla_status.response_target_hours,
             "response_target_formatted": format_hours(sla_status.response_target_hours),
-            "response_due_at": sla_status.response_due_at.strftime("%b %d, %Y %H:%M")
+            "response_due_at": _date_formatters.format_datetime_display(
+                sla_status.response_due_at
+            )
             if sla_status.response_due_at
             else None,
-            "first_response_at": sla_status.first_response_at.strftime(
-                "%b %d, %Y %H:%M"
+            "first_response_at": _date_formatters.format_datetime_display(
+                sla_status.first_response_at
             )
             if sla_status.first_response_at
             else None,
@@ -1445,12 +1458,14 @@ class SupportWebService:
             "resolution_target_formatted": format_hours(
                 sla_status.resolution_target_hours
             ),
-            "resolution_due_at": sla_status.resolution_due_at.strftime(
-                "%b %d, %Y %H:%M"
+            "resolution_due_at": _date_formatters.format_datetime_display(
+                sla_status.resolution_due_at
             )
             if sla_status.resolution_due_at
             else None,
-            "resolved_at": sla_status.resolved_at.strftime("%b %d, %Y %H:%M")
+            "resolved_at": _date_formatters.format_datetime_display(
+                sla_status.resolved_at
+            )
             if sla_status.resolved_at
             else None,
             "resolution_hours": sla_status.resolution_hours,
@@ -1559,7 +1574,9 @@ class SupportWebService:
                         "old_value": activity.old_value,
                         "new_value": activity.new_value,
                         "author_name": author_name,
-                        "created_at": activity.created_at.strftime("%b %d, %Y %H:%M")
+                        "created_at": _date_formatters.format_datetime_display(
+                            activity.created_at
+                        )
                         if activity.created_at
                         else "",
                         "icon": config["icon"],
@@ -1580,7 +1597,9 @@ class SupportWebService:
                         "is_internal": activity.is_internal,
                         "comment_id": str(activity.comment_id),
                         "author_name": author_name or "Unknown",
-                        "created_at": activity.created_at.strftime("%b %d, %Y %H:%M")
+                        "created_at": _date_formatters.format_datetime_display(
+                            activity.created_at
+                        )
                         if activity.created_at
                         else "",
                         "icon": config["icon"],

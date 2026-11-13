@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.services import formatters as _date_formatters
 from app.services.finance.banking.reconciliation_parts.base import (
     AutoMatchResult,
     BankAccount,
@@ -1531,7 +1532,9 @@ class ReconciliationMatchingService:
                     "journal_line_id": str(gl_line.line_id),
                     "entry_date": entry.entry_date.isoformat() if entry else "",
                     "entry_date_display": (
-                        entry.entry_date.strftime("%d %b %Y") if entry else ""
+                        _date_formatters.format_date_display(entry.entry_date)
+                        if entry
+                        else ""
                     ),
                     "description": (
                         getattr(entry, "description", "") or gl_line.description or ""
@@ -1737,7 +1740,9 @@ class ReconciliationMatchingService:
                         "journal_line_id": str(gl_line.line_id),
                         "entry_date": entry.entry_date.isoformat() if entry else "",
                         "entry_date_display": (
-                            entry.entry_date.strftime("%d %b %Y") if entry else ""
+                            _date_formatters.format_date_display(entry.entry_date)
+                            if entry
+                            else ""
                         ),
                         "description": description,
                         "reference": reference,

@@ -174,7 +174,7 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                             <a href="/people/leave/applications/{{ app.application_id }}" class="hover:text-violet-600 dark:hover:text-violet-400">
-                                {{ app.from_date.strftime('%d %b') }} - {{ app.to_date | format_date }}
+                                {{ (app.from_date | format_date) }} - {{ app.to_date | format_date }}
                             </a>
                         </td>
                         <td class="px-4 py-3 text-sm text-right font-mono text-slate-700 dark:text-slate-300">{{ app.total_leave_days }}</td>

@@ -547,8 +547,8 @@ Never use pure black (`#000`). Darkest is `slate-900` (`#0f172a`). Shadows incre
 
 | Data Type | Format | CSS Class |
 |-----------|--------|-----------|
-| Date (table) | `DD MMM YYYY` (e.g., "07 Feb 2026") | `text-sm` |
-| Date (form input) | `YYYY-MM-DD` | `form-input` |
+| Date (table) | `DD/MM/YYYY` (e.g., "07/02/2026") | `text-sm` |
+| Date (form input) | ERP calendar uses organization display format; `YYYY-MM-DD` submitted | `form-input` |
 | Currency | Symbol + amount, right-aligned | `text-right font-mono tabular-nums` |
 | Negative amount | Parentheses + rose | `text-rose-600 dark:text-rose-400 font-mono` → `(1,234.56)` |
 | Enum status | `{{ status \| replace('_', ' ') \| title }}` | via `status_badge()` macro |

@@ -88,7 +88,7 @@ class TestFormatDateDisplay:
     def test_display_format(self):
         """Test display format."""
         result = format_date_display(date(2024, 1, 15))
-        assert result == "15 Jan 2024"
+        assert result == "15/01/2024"
 
     def test_none_returns_empty(self):
         """Test formatting None returns empty string."""

@@ -270,9 +270,9 @@ Creates or edits an entity.
 
 | Context | Format | Example |
 |---------|--------|---------|
-| Table cells | `DD MMM YYYY` | `07 Feb 2026` |
-| Form inputs | `YYYY-MM-DD` (HTML5 date input) | `2026-02-07` |
-| Timestamps | `DD MMM YYYY, HH:MM` | `07 Feb 2026, 14:30` |
+| Table cells | `DD/MM/YYYY` | `07/02/2026` |
+| Form inputs | ERP calendar uses the organization format, ISO submitted | `07/02/2026` displayed by default |
+| Timestamps | `DD/MM/YYYY HH:MM` | `07/02/2026 14:30` |
 | Period labels | `MMM YYYY` | `Feb 2026` |
 | Fiscal years | `FY YYYY` | `FY 2026` |
 | Relative (recent) | `Today`, `Yesterday`, `3 days ago` | — |
@@ -761,7 +761,7 @@ Use this checklist when building or reviewing any page:
 ### Financial Data
 - [ ] Currency amounts in `font-mono tabular-nums text-right`
 - [ ] Negative amounts in parentheses with `text-rose-600`
-- [ ] Dates in `DD MMM YYYY` format (tables) or `YYYY-MM-DD` (forms)
+- [ ] Dates use the organization display format (default `DD/MM/YYYY`); date forms use the ERP calendar picker
 - [ ] No `None` rendered — use `—` or empty string
 - [ ] Entity numbers in `font-mono tabular-nums`
 

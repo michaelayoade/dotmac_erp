@@ -154,7 +154,7 @@
                             </div>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                            {{ slip.start_date.strftime('%b %d') }} - {{ slip.end_date | format_date }}
+                            {{ (slip.start_date | format_date) }} - {{ slip.end_date | format_date }}
                         </td>
                         <td class="px-4 py-3 text-right font-mono text-sm text-slate-900 dark:text-white">
                             {{ "{:,.2f}".format(slip.gross_pay) }}

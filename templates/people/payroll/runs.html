@@ -101,7 +101,7 @@
                             </a>
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                            {{ run.start_date.strftime('%d %b') if run.start_date else '' }} - {{ run.end_date | format_date if run.end_date else '' }}
+                            {{ (run.start_date | format_date) if run.start_date else '' }} - {{ run.end_date | format_date if run.end_date else '' }}
                         </td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono">
                             {{ run.employee_count }}

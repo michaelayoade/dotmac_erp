@@ -84,7 +84,7 @@
                             {{ cycle.review_period_start | format_date }} - {{ cycle.review_period_end | format_date }}
                         </td>
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
-                            {{ cycle.start_date.strftime("%b %d") }} - {{ cycle.end_date | format_date }}
+                            {{ (cycle.start_date | format_date) }} - {{ cycle.end_date | format_date }}
                         </td>
                         <td class="px-4 py-3 text-sm">
                             {% set status_colors = {

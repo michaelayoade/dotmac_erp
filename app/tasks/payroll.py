@@ -17,6 +17,8 @@ from typing import Any
 
 from celery import shared_task
 
+from app.services import formatters as _date_formatters
+from app.services.formatting_context import resolve_from_org
 from app.config import settings
 from app.db.session_context import session_for_org
 from app.services.settings_spec import resolve_value
@@ -132,6 +134,9 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
                     employee.organization.trading_name
                     or employee.organization.legal_name
                 )
+            org_date_format = resolve_from_org(
+                db.get(Organization, slip.organization_id or org_uuid)
+            ).date_strftime
 
             pdf_bytes: bytes | None = None
             pdf_error: str | None = None
@@ -183,7 +188,7 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
                     </tr>
                     <tr>
                         <td style="padding: 8px 16px 8px 0; color: #64748b;">Pay Period:</td>
-                        <td style="padding: 8px 0;">{slip.start_date.strftime("%d %b")} - {slip.end_date.strftime("%d %b %Y")}</td>
+                        <td style="padding: 8px 0;">{_date_formatters.format_date_display(slip.start_date, fmt=org_date_format)} - {_date_formatters.format_date_display(slip.end_date, fmt=org_date_format)}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px 16px 8px 0; color: #64748b;">Gross Pay:</td>
@@ -216,7 +221,7 @@ Dear {first_name},
 Your payslip for {period_str} is now available.
 
 Payslip Number: {slip.slip_number}
-Pay Period: {slip.start_date.strftime("%d %b")} - {slip.end_date.strftime("%d %b %Y")}
+Pay Period: {_date_formatters.format_date_display(slip.start_date, fmt=org_date_format)} - {_date_formatters.format_date_display(slip.end_date, fmt=org_date_format)}
 Gross Pay: {slip.currency_code} {slip.gross_pay:,.2f}
 Deductions: ({slip.currency_code} {slip.total_deduction:,.2f})
 Net Pay: {slip.currency_code} {slip.net_pay:,.2f}
@@ -570,6 +575,7 @@ def _notify_draft_ready(
     from app.services.rbac import get_users_with_permission
 
     notification_service = NotificationService()
+    org_date_format = resolve_from_org(org).date_strftime
 
     # Build notification message
     period_name = entry.start_date.strftime("%B %Y")
@@ -639,7 +645,7 @@ def _notify_draft_ready(
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Period</strong></td>
-                        <td style="padding: 10px; border: 1px solid #e2e8f0;">{entry.start_date.strftime("%d %b")} - {entry.end_date.strftime("%d %b %Y")}</td>
+                        <td style="padding: 10px; border: 1px solid #e2e8f0;">{_date_formatters.format_date_display(entry.start_date, fmt=org_date_format)} - {_date_formatters.format_date_display(entry.end_date, fmt=org_date_format)}</td>
                     </tr>
                     <tr style="background-color: #f1f5f9;">
                         <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>Employees</strong></td>
@@ -676,7 +682,7 @@ Draft Payroll Ready
 A draft payroll for {period_name} has been automatically generated and is ready for review.
 
 Payroll Number: {entry.entry_number}
-Period: {entry.start_date.strftime("%d %b")} - {entry.end_date.strftime("%d %b %Y")}
+Period: {_date_formatters.format_date_display(entry.start_date, fmt=org_date_format)} - {_date_formatters.format_date_display(entry.end_date, fmt=org_date_format)}
 Employees: {generation_result.created}
 Flagged for Review: {len(generation_result.flagged_for_review)}
 
