@@ -1031,9 +1031,14 @@ class RunWebService:
             )
 
         # Get all salary slips for this entry
+        db.flush()
         slips = db.scalars(
             select(SalarySlip)
-            .where(SalarySlip.payroll_entry_id == e_id)
+            .where(
+                SalarySlip.organization_id == org_id,
+                SalarySlip.payroll_entry_id == e_id,
+            )
+            .execution_options(populate_existing=True)
             .where(SalarySlip.net_pay > 0)
             .order_by(SalarySlip.employee_name)
         ).all()
@@ -1044,11 +1049,21 @@ class RunWebService:
                 status_code=303,
             )
 
+        from dotmac_payroll import PayrollTotalsViolation
+
+        from app.services.people.payroll.run_totals import validate_run_payment_items
+
         try:
             payment_items = payment_items_for_slips(
                 slips,
                 payroll_month=entry.payroll_month,
                 payroll_year=entry.payroll_year,
+            )
+            validate_run_payment_items(db, entry, payment_items)
+        except PayrollTotalsViolation:
+            return RedirectResponse(
+                url=f"/people/payroll/runs/{entry_id}?error=Payroll payment total does not match the run",
+                status_code=303,
             )
         except PayrollBankFileIncomplete as exc:
             return RedirectResponse(

@@ -689,6 +689,11 @@ class PayrollService:
         created_by_id: UUID,
     ) -> dict:
         entry = self.get_payroll_entry(org_id, entry_id)
+        from app.services.people.payroll.run_totals import lock_run
+
+        lock_run(self.db, entry)
+        self.db.refresh(entry, attribute_names=["salary_slips_created", "salary_slips"])
+
         if entry.salary_slips_created:
             raise PayrollServiceError("Salary slips already created for this entry")
 
@@ -768,6 +773,11 @@ class PayrollService:
         logger = logging.getLogger(__name__)
 
         entry = self.get_payroll_entry(org_id, entry_id)
+        from app.services.people.payroll.run_totals import lock_run
+
+        lock_run(self.db, entry)
+        self.db.refresh(entry, attribute_names=["salary_slips_created", "salary_slips"])
+
         if entry.salary_slips_created:
             raise PayrollServiceError(
                 "Salary slips already created. Use regenerate instead."
@@ -937,6 +947,11 @@ class PayrollService:
         created_by_id: UUID,
     ) -> dict:
         entry = self.get_payroll_entry(org_id, entry_id)
+        from app.services.people.payroll.run_totals import lock_run
+
+        lock_run(self.db, entry)
+        self.db.refresh(entry, attribute_names=["salary_slips_created", "salary_slips"])
+
         slips = list(entry.salary_slips or [])
         if any(slip.status != SalarySlipStatus.DRAFT for slip in slips):
             raise PayrollServiceError("Only draft slips can be regenerated")
@@ -959,6 +974,10 @@ class PayrollService:
     ) -> PayrollEntry:
         """Submit payroll entry for approval."""
         entry = self.get_payroll_entry(org_id, entry_id)
+        from app.services.people.payroll.run_totals import lock_run
+
+        lock_run(self.db, entry)
+        self.db.refresh(entry, attribute_names=["status", "salary_slips"])
         slips = list(entry.salary_slips or [])
         if not slips:
             raise PayrollServiceError("No salary slips found for this payroll entry")
@@ -969,6 +988,7 @@ class PayrollService:
                     f"All slips must be DRAFT to submit (found {slip.status.value})"
                 )
 
+        self._update_entry_totals(entry)
         now = datetime.now(UTC)
         submitted_by_id = coerce_uuid(submitted_by)
         for slip in slips:
@@ -1213,24 +1233,9 @@ class PayrollService:
         return list(self.db.scalars(query).all())
 
     def _update_entry_totals(self, entry: PayrollEntry) -> None:
-        slips = list(
-            self.db.scalars(
-                select(SalarySlip).where(SalarySlip.payroll_entry_id == entry.entry_id)
-            ).all()
-        )
-        entry.employee_count = len(slips)
-        entry.total_gross_pay = sum(
-            ((s.gross_pay or Decimal("0")) for s in slips),
-            Decimal("0"),
-        )
-        entry.total_deductions = sum(
-            ((s.total_deduction or Decimal("0")) for s in slips),
-            Decimal("0"),
-        )
-        entry.total_net_pay = sum(
-            ((s.net_pay or Decimal("0")) for s in slips),
-            Decimal("0"),
-        )
+        from app.services.people.payroll.run_totals import refresh_run_totals
+
+        refresh_run_totals(self.db, entry)
 
     # =========================================================================
     # Reports

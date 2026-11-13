@@ -30,6 +30,7 @@ censuses below exist so that silence is not an answer.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Final
 
 #: The Starter revision the package census was measured at. A census is a claim
@@ -1151,6 +1152,56 @@ EXCLUDED_DISTRIBUTIONS: Final[frozenset[str]] = frozenset(
 
 COMPOSED_DISTRIBUTIONS: Final[frozenset[str]] = frozenset(
     module.distribution for module in SELECTED if module.state == "composed"
+)
+
+
+class ContractConsumerKind(str, Enum):
+    """Installation of a pure contract does not compose its storage owner."""
+
+    CALCULATION = "calculation-contract-consumer"
+
+
+@dataclass(frozen=True)
+class CalculationContractConsumer:
+    distribution: str
+    kind: ContractConsumerKind
+    public_imports: frozenset[str]
+    consumer_paths: tuple[str, ...]
+    rationale: str
+
+
+# These pins install only a reviewed pure public API. Stateful selection,
+# migration plans, runtime admission and live writer ownership stay separate.
+CALCULATION_CONTRACT_CONSUMERS: Final[tuple[CalculationContractConsumer, ...]] = (
+    CalculationContractConsumer(
+        distribution="dotmac-payroll",
+        kind=ContractConsumerKind.CALCULATION,
+        public_imports=frozenset(
+            {
+                "PayrollAmountSnapshot",
+                "PayrollRunTotals",
+                "PayrollTotalsViolation",
+                "aggregate_payroll_run_totals",
+                "validate_payment_total",
+            }
+        ),
+        consumer_paths=(
+            "app/services/people/payroll/run_totals.py",
+            "app/services/people/payroll/web/run_web.py",
+        ),
+        rationale=(
+            "Pure totals arithmetic over caller-read ERP salary facts; ERP remains "
+            "the live payroll writer. No module services, ORM, storage or lineage "
+            "are admitted by this contract-only installation. Requires released "
+            "dotmac-payroll 0.1.0a2; the dependency pin is a release gate."
+        ),
+    ),
+)
+CONTRACT_CONSUMER_DISTRIBUTIONS: Final[frozenset[str]] = frozenset(
+    consumer.distribution for consumer in CALCULATION_CONTRACT_CONSUMERS
+)
+INSTALLED_DISTRIBUTIONS: Final[frozenset[str]] = (
+    COMPOSED_DISTRIBUTIONS | CONTRACT_CONSUMER_DISTRIBUTIONS
 )
 
 
