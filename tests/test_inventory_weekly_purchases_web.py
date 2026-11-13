@@ -31,6 +31,7 @@ from app.services.inventory.weekly_purchases import (
     format_report_number,
 )
 from app.services.inventory.weekly_purchases_web import WeeklyPurchasesWebService
+from app.templates import templates as app_templates
 from app.web.deps import get_db_for_org, require_inventory_access
 from app.web.inventory_weekly_purchases import router
 
@@ -197,6 +198,7 @@ def test_template_empty_state_and_autoescaping(has_rows):
         autoescape=True,
         undefined=StrictUndefined,
     )
+    env.filters.update(app_templates.env.filters)
     context["format_report_number"] = format_report_number
     html = env.get_template("inventory/report_weekly_purchases.html").render(**context)
     assert 'id="purchase-report"' in html
