@@ -759,6 +759,18 @@ class WorkflowService:
                 "Entity is disabled in Admin Automation settings",
             )
 
+        if rule.action_type == ActionType.SEND_EMAIL and not db.scalar(
+            select(WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.rule_id == rule.rule_id,
+                WorkflowRule.organization_id == rule.organization_id,
+                WorkflowRule.is_active.is_(True),
+                WorkflowRule.archived_at.is_(None),
+            )
+            .with_for_update()
+        ):
+            return self._record_skipped(db, rule, context, "Email workflow is disabled")
+
         if (
             context.entity_type == "ATTENDANCE"
             and rule.action_type == ActionType.SEND_EMAIL
@@ -792,6 +804,37 @@ class WorkflowService:
                     LeaveApplication,
                     LeaveApplicationStatus,
                 )
+
+                from app.models.people.scheduling import (
+                    ScheduleStatus,
+                    ShiftSchedule,
+                    WorkSchedule,
+                )
+
+                rostered = db.scalar(
+                    select(ShiftSchedule.shift_schedule_id)
+                    .join(
+                        WorkSchedule,
+                        WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
+                    )
+                    .where(
+                        ShiftSchedule.organization_id == rule.organization_id,
+                        WorkSchedule.organization_id == rule.organization_id,
+                        ShiftSchedule.employee_id == attendance.employee_id,
+                        ShiftSchedule.shift_date == attendance.attendance_date,
+                        ShiftSchedule.status.in_(
+                            [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                        ),
+                        WorkSchedule.status.in_(
+                            [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                        ),
+                    )
+                    .limit(1)
+                )
+                if not rostered:
+                    return self._record_skipped(
+                        db, rule, context, "No published shift for the attendance date"
+                    )
 
                 on_leave = db.scalar(
                     select(LeaveApplication.application_id)
@@ -1897,6 +1940,18 @@ class WorkflowService:
     ) -> None:
         """Write an async action request into the transaction's outbox."""
         from app.services.finance.platform.outbox_publisher import OutboxPublisher
+
+        if rule.action_type == ActionType.SEND_EMAIL and not db.scalar(
+            select(WorkflowRule.rule_id)
+            .where(
+                WorkflowRule.rule_id == rule.rule_id,
+                WorkflowRule.organization_id == rule.organization_id,
+                WorkflowRule.is_active.is_(True),
+                WorkflowRule.archived_at.is_(None),
+            )
+            .with_for_update()
+        ):
+            return
 
         payload = {
             "rule_id": str(rule.rule_id),
