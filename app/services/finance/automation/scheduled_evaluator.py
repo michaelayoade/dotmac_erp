@@ -17,11 +17,13 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import String, case, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.automation import (
+    ExecutionStatus,
     TriggerEvent,
+    WorkflowExecution,
     WorkflowRule,
 )
 
@@ -80,6 +82,20 @@ class ScheduledRuleEvaluator:
 
         for rule in rules:
             try:
+                if (rule.schedule_config or {}).get("missed_checkout"):
+                    locked_rule = db.scalar(
+                        select(WorkflowRule)
+                        .where(
+                            WorkflowRule.rule_id == rule.rule_id,
+                            WorkflowRule.organization_id == rule.organization_id,
+                            WorkflowRule.is_active.is_(True),
+                        )
+                        .with_for_update(skip_locked=True)
+                        .execution_options(populate_existing=True)
+                    )
+                    if locked_rule is None:
+                        continue
+                    rule = locked_rule
                 if not self._is_due(rule):
                     continue
 
@@ -186,6 +202,42 @@ class ScheduledRuleEvaluator:
         # Apply entity_query filters from schedule_config
         config = rule.schedule_config or {}
         entity_query = config.get("entity_query", {})
+        if rule.entity_type.value == "ATTENDANCE" and config.get("missed_checkout"):
+            from app.models.finance.platform.event_outbox import EventOutbox
+            from app.models.people.attendance import Attendance, ShiftType
+            from app.services.people.attendance import AttendanceService
+
+            org_now = AttendanceService(db).get_org_now(rule.organization_id)
+            overnight_days = case(
+                (ShiftType.end_time <= ShiftType.start_time, 1), else_=0
+            )
+            shift_end = (
+                Attendance.attendance_date + overnight_days
+            ) + ShiftType.end_time
+            stmt = stmt.join(
+                ShiftType,
+                (Attendance.shift_type_id == ShiftType.shift_type_id)
+                & (Attendance.organization_id == ShiftType.organization_id),
+            ).where(
+                Attendance.check_in >= rule.created_at,
+                Attendance.check_out.is_(None),
+                shift_end <= org_now.replace(tzinfo=None),
+                ~select(WorkflowExecution.execution_id)
+                .where(
+                    WorkflowExecution.rule_id == rule.rule_id,
+                    WorkflowExecution.entity_id == Attendance.attendance_id,
+                    WorkflowExecution.status == ExecutionStatus.SUCCESS,
+                )
+                .exists(),
+                ~select(EventOutbox.event_id)
+                .where(
+                    EventOutbox.event_name == "automation.workflow.requested",
+                    EventOutbox.aggregate_type == "ATTENDANCE",
+                    EventOutbox.aggregate_id == Attendance.attendance_id.cast(String),
+                    EventOutbox.payload["rule_id"].astext == str(rule.rule_id),
+                )
+                .exists(),
+            )
 
         # Simple status filter
         status_filter = entity_query.get("status")

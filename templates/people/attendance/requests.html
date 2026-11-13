@@ -172,6 +172,9 @@
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-xs truncate">
                                 {{ req.reason or '-' }}
+                                {% if req.explanation %}
+                                <div class="text-sm text-slate-500 dark:text-slate-400">{{ req.explanation }}</div>
+                                {% endif %}
                             </td>
                             <td class="px-4 py-3">
                                 {{ status_badge(req.status, 'sm') }}

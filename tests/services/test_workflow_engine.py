@@ -7,6 +7,8 @@ rate limiter caps.
 """
 
 import uuid
+from datetime import date
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -943,3 +945,40 @@ class TestRateLimiting:
         mock_db = MagicMock()
         mock_db.scalar.return_value = 51  # Over the 50 limit
         assert workflow_service._check_entity_rate_limit(mock_db, uuid.uuid4()) is True
+
+
+@pytest.mark.parametrize(
+    ("reason", "flag"), [("Early exit", "early_exit"), ("Late entry", "late_entry")]
+)
+def test_approved_attendance_exception_skips_email(workflow_service, reason, flag):
+    db = MagicMock()
+    rule = _make_mock_rule(
+        entity_type=WorkflowEntityType.ATTENDANCE,
+        action_type=ActionType.SEND_EMAIL,
+        action_config={"recipient": "entity_owner", "attendance_exception": reason},
+    )
+    context = TriggerContext(
+        entity_type="ATTENDANCE",
+        entity_id=uuid.uuid4(),
+        event=TriggerEvent.ON_FIELD_CHANGE,
+        organization_id=rule.organization_id,
+    )
+    db.get.return_value = SimpleNamespace(
+        organization_id=rule.organization_id,
+        employee_id=uuid.uuid4(),
+        attendance_date=date(2026, 11, 13),
+        **{flag: True},
+    )
+    db.scalar.return_value = uuid.uuid4()
+    with (
+        patch.object(workflow_service, "_run_action") as run_action,
+        patch(
+            "app.services.finance.automation.entity_configuration."
+            "entity_configuration_service.is_enabled",
+            return_value=True,
+        ),
+    ):
+        result = workflow_service.execute_action(db, rule, context)
+    assert result.status == ExecutionStatus.SKIPPED
+    assert result.error_message == "HR approved the attendance exception"
+    run_action.assert_not_called()

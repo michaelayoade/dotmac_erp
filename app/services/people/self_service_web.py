@@ -53,7 +53,7 @@ from app.models.people.leave import (
 )
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
-from app.models.people.scheduling import ScheduleStatus, SwapRequestStatus
+from app.models.people.scheduling import ScheduleStatus, SwapRequestStatus, WorkSchedule
 from app.models.people.scheduling.shift_schedule import ShiftSchedule
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
@@ -74,15 +74,15 @@ from app.services.people.expense import (
     ExpenseService,
     ExpenseServiceError,
 )
-from app.services.people.hr.employees import EmployeeService
 from app.services.people.hr.employee_extended import (
-    EmployeeExtendedDataError,
     EmployeeDocumentService,
+    EmployeeExtendedDataError,
     EmployeeExtendedSelfServiceService,
     _stage_employee_file,
     delete_employee_file,
 )
 from app.services.people.hr.employee_types import EmployeeFilters
+from app.services.people.hr.employees import EmployeeService
 from app.services.people.hr.info_change_service import (
     DocumentBatchItemInput,
     ExtendedBatchItemInput,
@@ -95,6 +95,7 @@ from app.services.people.leave.leave_service import LeaveServiceError
 from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.services.people.payroll.pfa_directory import PFADirectoryService
 from app.services.people.scheduling import SchedulingService, SwapService
+from app.services.people.scheduling.resolver import ScheduleResolver
 from app.services.settings.bank_directory import OrgBankDirectoryService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -304,6 +305,8 @@ class SelfServiceWebService:
         holiday_map: dict[date, str],
         record_by_date: dict[date, Attendance],
         org_tzinfo,
+        scheduled_dates: set[date],
+        approved_leave_dates: set[date],
     ) -> tuple[list[list[dict]], dict[str, int]]:
         """Build a month calendar grid with normalized per-day statuses."""
 
@@ -348,6 +351,10 @@ class SelfServiceWebService:
                 "Missed",
                 "bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700",
             ),
+            "off": (
+                "No scheduled shift",
+                "bg-white text-slate-500 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
+            ),
             "future": (
                 "Upcoming",
                 "bg-white text-slate-500 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
@@ -373,7 +380,20 @@ class SelfServiceWebService:
                 record = record_by_date.get(day_date)
                 holiday_name = holiday_map.get(day_date)
 
-                if record:
+                if day_date in approved_leave_dates and (
+                    record is None or record.status == AttendanceStatus.ABSENT
+                ):
+                    status_key = "on_leave"
+                    note = None
+                elif (
+                    record
+                    and record.status == AttendanceStatus.ABSENT
+                    and record.marked_by == "SYSTEM"
+                    and day_date not in scheduled_dates
+                ):
+                    status_key = "off"
+                    note = None
+                elif record:
                     status_key = {
                         AttendanceStatus.PRESENT: "present",
                         AttendanceStatus.ABSENT: "absent",
@@ -391,9 +411,12 @@ class SelfServiceWebService:
                 elif day_date > today:
                     status_key = "future"
                     note = None
-                else:
+                elif day_date < today and day_date in scheduled_dates:
                     status_key = "missed"
                     note = "Attendance not marked"
+                else:
+                    status_key = "off" if day_date not in scheduled_dates else "future"
+                    note = None
 
                 if day_date.month == month_start.month:
                     if status_key == "present":
@@ -2288,9 +2311,14 @@ class SelfServiceWebService:
             raise
 
         svc = AttendanceService(db)
-        today = svc.get_org_today(org_id)
-        today_record = svc.get_attendance_by_date(org_id, employee_id, today)
-        org_tzinfo = svc.get_org_tzinfo(org_id)
+        org_now = svc.get_org_now(org_id)
+        today = org_now.date()
+        resolved = ScheduleResolver(db).resolve_employee_shift(
+            org_id, employee_id, org_now
+        )
+        shift_date = resolved.assignment.shift_date if resolved else today
+        today_record = svc.get_attendance_by_date(org_id, employee_id, shift_date)
+        org_tzinfo = org_now.tzinfo
 
         def _format_time(value: datetime | None) -> str:
             if not value:
@@ -2319,6 +2347,44 @@ class SelfServiceWebService:
             )
         )
         holiday_map = self._get_holiday_map(db, org_id, month_start, month_end)
+        scheduled_dates = set(
+            db.scalars(
+                select(ShiftSchedule.shift_date)
+                .join(
+                    WorkSchedule,
+                    WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
+                )
+                .where(
+                    ShiftSchedule.organization_id == org_id,
+                    WorkSchedule.organization_id == org_id,
+                    ShiftSchedule.employee_id == employee_id,
+                    ShiftSchedule.shift_date.between(month_start, month_end),
+                    ShiftSchedule.status.in_(
+                        [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                    ),
+                    WorkSchedule.status.in_(
+                        [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
+                    ),
+                )
+            )
+        )
+        approved_leaves = db.scalars(
+            select(LeaveApplication).where(
+                LeaveApplication.organization_id == org_id,
+                LeaveApplication.employee_id == employee_id,
+                LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                LeaveApplication.half_day.is_(False),
+                LeaveApplication.from_date <= month_end,
+                LeaveApplication.to_date >= month_start,
+            )
+        )
+        approved_leave_dates = set()
+        for leave in approved_leaves:
+            day = max(leave.from_date, month_start)
+            while day <= min(leave.to_date, month_end):
+                approved_leave_dates.add(day)
+                day += timedelta(days=1)
+
         calendar_weeks, calendar_counts = self._build_attendance_calendar(
             month_start=month_start,
             month_end=month_end,
@@ -2326,6 +2392,8 @@ class SelfServiceWebService:
             holiday_map=holiday_map,
             record_by_date={record.attendance_date: record for record in month_records},
             org_tzinfo=org_tzinfo,
+            scheduled_dates=scheduled_dates,
+            approved_leave_dates=approved_leave_dates,
         )
 
         recent = svc.list_attendance(
@@ -2378,6 +2446,42 @@ class SelfServiceWebService:
         )
         return templates.TemplateResponse(
             request, "people/self/attendance.html", context
+        )
+
+    def attendance_exception_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        reason: str,
+        requested_date: str,
+        explanation: str,
+    ) -> RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        employee_id = self._get_employee_id(db, org_id, coerce_uuid(auth.person_id))
+        try:
+            if reason not in {"Early exit", "Late entry"} or not explanation.strip():
+                raise ValueError("Select an exception and explain the request.")
+            request_date = date.fromisoformat(requested_date)
+            svc = AttendanceService(db)
+            if request_date < svc.get_org_today(org_id):
+                raise ValueError("Choose today or a future date.")
+            svc.create_attendance_request(
+                org_id,
+                employee_id=employee_id,
+                from_date=request_date,
+                to_date=request_date,
+                reason=f"Attendance exception: {reason}",
+                explanation=explanation.strip(),
+            )
+        except (ValueError, AttendanceServiceError) as exc:
+            return RedirectResponse(
+                url=f"/people/self/attendance?{urlencode({'exception_error': str(exc)})}",
+                status_code=303,
+            )
+        db.commit()
+        return RedirectResponse(
+            url="/people/self/attendance?exception_submitted=1", status_code=303
         )
 
     def check_in_response(
