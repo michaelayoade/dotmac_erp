@@ -82,15 +82,21 @@ class MaintenanceService:
 
     def get_for_update(self, maintenance_id: UUID) -> MaintenanceRecord:
         """Get and lock an organization-scoped maintenance record for mutation."""
-        record = self.db.scalar(
-            select(MaintenanceRecord)
+        # Lock only the primary-key column. Selecting the entity would include
+        # the nullable lazy="joined" supplier relationship, and PostgreSQL
+        # rejects FOR UPDATE on the nullable side of that outer join.
+        locked_id = self.db.scalar(
+            select(MaintenanceRecord.maintenance_id)
             .where(
                 MaintenanceRecord.organization_id == self.organization_id,
                 MaintenanceRecord.maintenance_id == maintenance_id,
             )
             .with_for_update()
         )
-        if record is None:
+        if locked_id is None:
+            raise NotFoundError(f"Maintenance record {maintenance_id} not found")
+        record = self.db.get(MaintenanceRecord, locked_id)
+        if record is None:  # pragma: no cover - the locked row cannot normally vanish
             raise NotFoundError(f"Maintenance record {maintenance_id} not found")
         return record
 

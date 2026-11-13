@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pickle
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -7,6 +8,25 @@ from uuid import uuid4
 
 from app.services.dotmac_sub.client import DotmacSubAuthorizationError
 from app.tasks import dotmac_sub
+
+
+def test_business_failure_survives_celery_pickle_round_trip() -> None:
+    summary = {
+        "success": False,
+        "phase": "post_payments",
+        "error_count": 1,
+    }
+
+    # The payload is created in-process from this fixed test object, not untrusted data.
+    restored = pickle.loads(  # noqa: S301
+        pickle.dumps(dotmac_sub.DotmacSubBusinessFailure(summary))
+    )
+
+    assert type(restored) is dotmac_sub.DotmacSubBusinessFailure
+    assert restored.summary == summary
+    assert str(restored) == (
+        "dotmac_sub post_payments completed with 1 business error(s)"
+    )
 
 
 def test_incremental_sync_has_bounded_execution_time() -> None:
