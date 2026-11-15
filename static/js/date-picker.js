@@ -59,9 +59,10 @@
         const width = Math.min(320, window.innerWidth - 16);
         open.popup.style.width = `${width}px`;
         open.popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
-        const below = window.innerHeight - rect.bottom >= 340 || rect.top < 340;
-        open.popup.style.top = below ? `${rect.bottom + 4}px` : '';
-        open.popup.style.bottom = below ? '' : `${window.innerHeight - rect.top + 4}px`;
+        const height = open.popup.offsetHeight;
+        const below = window.innerHeight - rect.bottom >= height + 12 || rect.top < height + 12;
+        const top = below ? rect.bottom + 4 : rect.top - height - 4;
+        open.popup.style.top = `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`;
     }
 
     function commit(value) {
@@ -96,91 +97,186 @@
         const shifted = new Date(Date.UTC(open.year, open.month - 1 + delta, 1));
         open.year = shifted.getUTCFullYear();
         open.month = shifted.getUTCMonth() + 1;
+        open.firstYear = Math.min(open.firstYear, open.year);
+        open.lastYear = Math.max(open.lastYear, open.year);
         if (isDateTime(open.input)) open.selectedDate = '';
-        render();
+        render(delta < 0 ? '.erp-calendar__previous' : '.erp-calendar__next');
     }
 
-    function render() {
+    function monthAllowed(year, month, min, max) {
+        const value = iso(year, month, 1);
+        return (!min || value >= iso(min.year, min.month, 1)) &&
+            (!max || value <= iso(max.year, max.month, 1));
+    }
+
+    function calendarButton(label, text, callback, className) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = text;
+        button.setAttribute('aria-label', label);
+        button.className = className;
+        button.addEventListener('click', callback);
+        return button;
+    }
+
+    function moveDay(key, shift) {
+        const active = document.activeElement;
+        if (!active.classList.contains('erp-calendar__day')) return;
+        const current = parts(active.dataset.date);
+        const date = new Date(Date.UTC(current.year, current.month - 1, current.day));
+        if (key === 'ArrowLeft') date.setUTCDate(date.getUTCDate() - 1);
+        else if (key === 'ArrowRight') date.setUTCDate(date.getUTCDate() + 1);
+        else if (key === 'ArrowUp') date.setUTCDate(date.getUTCDate() - 7);
+        else if (key === 'ArrowDown') date.setUTCDate(date.getUTCDate() + 7);
+        else if (key === 'Home') date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+        else if (key === 'End') date.setUTCDate(date.getUTCDate() + (6 - ((date.getUTCDay() + 6) % 7)));
+        else if (key === 'PageUp' || key === 'PageDown') {
+            const delta = (key === 'PageUp' ? -1 : 1) * (shift ? 12 : 1);
+            const targetMonth = new Date(Date.UTC(current.year, current.month - 1 + delta, 1));
+            const lastDay = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0)).getUTCDate();
+            date.setTime(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth(), Math.min(current.day, lastDay)));
+        } else return;
+        const value = iso(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+        if (!canChoose(open.input, value)) return;
+        if (isDateTime(open.input) && (open.year !== date.getUTCFullYear() || open.month !== date.getUTCMonth() + 1)) {
+            open.selectedDate = '';
+        }
+        open.year = date.getUTCFullYear();
+        open.month = date.getUTCMonth() + 1;
+        open.firstYear = Math.min(open.firstYear, open.year);
+        open.lastYear = Math.max(open.lastYear, open.year);
+        render(`.erp-calendar__day[data-date="${value}"]`);
+    }
+
+    function render(focusTarget) {
         if (!open) return;
         const { popup, input, year, month } = open;
         const min = parts(input.min.slice(0, 10)), max = parts(input.max.slice(0, 10));
-        const firstYear = min ? min.year : Math.min(year - 100, 1900);
-        const lastYear = max ? max.year : Math.max(year + 20, 2100);
+        const { firstYear, lastYear } = open;
         popup.replaceChildren();
 
         const header = document.createElement('div');
         header.className = 'erp-calendar__header';
-        const previous = document.createElement('button');
-        previous.type = 'button';
-        previous.textContent = '‹';
-        previous.setAttribute('aria-label', 'Previous month');
-        previous.disabled = Boolean(min && iso(year, month, 1) <= iso(min.year, min.month, 1));
-        previous.addEventListener('click', () => changeMonth(-1));
-        const next = document.createElement('button');
-        next.type = 'button';
-        next.textContent = '›';
-        next.setAttribute('aria-label', 'Next month');
-        next.disabled = Boolean(max && iso(year, month, 1) >= iso(max.year, max.month, 1));
-        next.addEventListener('click', () => changeMonth(1));
-        const monthSelect = document.createElement('select');
-        monthSelect.className = 'erp-calendar__month';
-        monthSelect.setAttribute('aria-label', 'Month');
-        months.forEach((name, index) => {
-            const option = new Option(name, String(index + 1));
-            const candidate = iso(year, index + 1, 1);
-            option.disabled = Boolean(
-                (min && candidate < iso(min.year, min.month, 1)) ||
-                (max && candidate > iso(max.year, max.month, 1))
-            );
-            monthSelect.add(option);
-        });
-        monthSelect.value = String(month);
-        monthSelect.addEventListener('change', () => {
-            open.month = Number(monthSelect.value);
-            if (isDateTime(input)) open.selectedDate = '';
-            render();
-        });
-        const yearSelect = document.createElement('select');
-        yearSelect.className = 'erp-calendar__year';
-        yearSelect.setAttribute('aria-label', 'Year');
-        for (let y = firstYear; y <= lastYear; y++) yearSelect.add(new Option(String(y), String(y)));
-        yearSelect.value = String(year);
-        yearSelect.addEventListener('change', () => {
-            open.year = Number(yearSelect.value);
-            if (isDateTime(input)) open.selectedDate = '';
-            render();
-        });
-        header.append(previous, monthSelect, yearSelect, next);
+        const yearPage = Math.floor(year / 12) * 12;
+        const previous = calendarButton(
+            open.view === 'years' ? 'Previous 12 years' : open.view === 'months' ? 'Previous year' : 'Previous month',
+            '‹', () => {
+                if (open.view === 'years') {
+                    open.year -= 12;
+                    render('.erp-calendar__previous');
+                } else if (open.view === 'months') {
+                    open.year -= 1;
+                    render('.erp-calendar__previous');
+                } else changeMonth(-1);
+            }, 'erp-calendar__previous');
+        const next = calendarButton(
+            open.view === 'years' ? 'Next 12 years' : open.view === 'months' ? 'Next year' : 'Next month',
+            '›', () => {
+                if (open.view === 'years') {
+                    open.year += 12;
+                    render('.erp-calendar__next');
+                } else if (open.view === 'months') {
+                    open.year += 1;
+                    render('.erp-calendar__next');
+                } else changeMonth(1);
+            }, 'erp-calendar__next');
+        previous.disabled = open.view === 'years' ? yearPage <= firstYear : year <= firstYear;
+        next.disabled = open.view === 'years' ? yearPage + 11 >= lastYear : year >= lastYear;
+        // Day navigation uses the adjacent month, including the year boundary.
+        if (open.view === 'days') {
+            previous.disabled = Boolean(min && iso(year, month, 1) <= iso(min.year, min.month, 1));
+            next.disabled = Boolean(max && iso(year, month, 1) >= iso(max.year, max.month, 1));
+        }
+        const title = calendarButton(
+            open.view === 'days' ? 'Choose month and year' : open.view === 'months' ? 'Choose year' : 'Year range',
+            open.view === 'years' ? `${yearPage}–${yearPage + 11}` :
+                open.view === 'months' ? String(year) : `${months[month - 1]} ${year}`,
+            () => {
+                if (open.view === 'days' || open.view === 'months') {
+                    open.view = 'years';
+                    render('.erp-calendar__title');
+                }
+            }, 'erp-calendar__title');
+        title.setAttribute('aria-live', 'polite');
+        if (open.view === 'years') title.disabled = true;
+        header.append(previous, title, next);
         popup.append(header);
 
-        const grid = document.createElement('div');
-        grid.className = 'erp-calendar__grid';
-        ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(name => {
-            const label = document.createElement('span');
-            label.className = 'erp-calendar__weekday';
-            label.textContent = name;
-            grid.append(label);
-        });
-        const offset = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
-        for (let index = 0; index < offset; index++) grid.append(document.createElement('span'));
-        const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
-        for (let day = 1; day <= days; day++) {
-            const value = iso(year, month, day);
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'erp-calendar__day';
-            button.textContent = String(day);
-            button.setAttribute('aria-label', displayDate(value));
-            button.setAttribute('aria-pressed', String(
-                (isDateTime(input) ? open.selectedDate : input.value) === value
-            ));
-            button.disabled = !canChoose(input, value);
-            button.addEventListener('click', () => choose(value));
-            grid.append(button);
+        if (open.view === 'years') {
+            const grid = document.createElement('div');
+            grid.className = 'erp-calendar__choices';
+            for (let value = yearPage; value < yearPage + 12; value++) {
+                const choice = calendarButton(`Choose ${value}`, String(value), () => {
+                    open.year = value;
+                    if (isDateTime(input)) open.selectedDate = '';
+                    open.view = 'months';
+                    render('.erp-calendar__choice[aria-pressed="true"]');
+                }, 'erp-calendar__choice');
+                choice.disabled = value < firstYear || value > lastYear;
+                choice.setAttribute('aria-pressed', String(value === year));
+                grid.append(choice);
+            }
+            popup.append(grid);
+        } else if (open.view === 'months') {
+            const grid = document.createElement('div');
+            grid.className = 'erp-calendar__choices';
+            months.forEach((name, index) => {
+                const value = index + 1;
+                const choice = calendarButton(`Choose ${name} ${year}`, name.slice(0, 3), () => {
+                    open.month = value;
+                    if (isDateTime(input)) open.selectedDate = '';
+                    open.view = 'days';
+                    render('.erp-calendar__day[tabindex="0"]');
+                }, 'erp-calendar__choice');
+                choice.disabled = !monthAllowed(year, value, min, max);
+                choice.setAttribute('aria-pressed', String(value === month));
+                grid.append(choice);
+            });
+            popup.append(grid);
+        } else {
+            const grid = document.createElement('div');
+            grid.className = 'erp-calendar__grid';
+            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(name => {
+                const label = document.createElement('span');
+                label.className = 'erp-calendar__weekday';
+                label.textContent = name;
+                grid.append(label);
+            });
+            const offset = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
+            for (let index = 0; index < offset; index++) grid.append(document.createElement('span'));
+            const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+            const today = new Date();
+            const todayValue = iso(today.getFullYear(), today.getMonth() + 1, today.getDate());
+            const selectedValue = isDateTime(input) ? open.selectedDate : input.value;
+            const focusedValue = parts(selectedValue)?.month === month && parts(selectedValue)?.year === year ?
+                selectedValue : parts(todayValue)?.month === month && parts(todayValue)?.year === year ? todayValue : iso(year, month, 1);
+            for (let day = 1; day <= days; day++) {
+                const value = iso(year, month, day);
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'erp-calendar__day';
+                button.dataset.date = value;
+                button.tabIndex = -1;
+                button.textContent = String(day);
+                button.setAttribute('aria-label', displayDate(value));
+                button.setAttribute('aria-pressed', String(selectedValue === value));
+                button.disabled = !canChoose(input, value);
+                button.addEventListener('click', () => choose(value));
+                button.addEventListener('keydown', event => {
+                    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+                        event.preventDefault();
+                        moveDay(event.key, event.shiftKey);
+                    }
+                });
+                grid.append(button);
+            }
+            const focusDay = grid.querySelector(`.erp-calendar__day[data-date="${focusedValue}"]:not(:disabled)`) ||
+                grid.querySelector('.erp-calendar__day:not(:disabled)');
+            if (focusDay) focusDay.tabIndex = 0;
+            popup.append(grid);
         }
-        popup.append(grid);
 
-        if (isDateTime(input)) {
+        if (open.view === 'days' && isDateTime(input)) {
             const timeRow = document.createElement('label');
             timeRow.className = 'erp-calendar__time';
             timeRow.textContent = 'Time';
@@ -210,9 +306,13 @@
         clearButton.type = 'button';
         clearButton.textContent = 'Clear';
         clearButton.addEventListener('click', () => choose(''));
-        footer.append(todayButton, clearButton);
+        if (open.view === 'days') footer.append(todayButton, clearButton);
+        else footer.append(calendarButton('Back to calendar', 'Back to calendar', () => {
+            open.view = 'days';
+            render('.erp-calendar__day[tabindex="0"]');
+        }, 'erp-calendar__back'));
         let apply;
-        if (isDateTime(input)) {
+        if (open.view === 'days' && isDateTime(input)) {
             apply = document.createElement('button');
             apply.type = 'button';
             apply.textContent = 'Apply';
@@ -223,6 +323,11 @@
             footer.append(apply);
         }
         popup.append(footer);
+        position();
+        if (focusTarget) {
+            const target = popup.querySelector(focusTarget);
+            (target && !target.disabled ? target : popup.querySelector('button:not(:disabled)'))?.focus();
+        }
     }
 
     function canApply() {
@@ -245,17 +350,21 @@
         popup.id = 'erp-calendar-popup';
         popup.setAttribute('role', 'dialog');
         popup.setAttribute('aria-label', isDateTime(input) ? 'Choose date and time' : 'Choose date');
+        popup.setAttribute('aria-modal', 'true');
+        const min = parts(input.min.slice(0, 10)), max = parts(input.max.slice(0, 10));
         open = {
             input, trigger, popup, year: selected.year, month: selected.month,
+            view: 'days',
+            firstYear: min ? min.year : Math.min(selected.year - 100, 1900),
+            lastYear: max ? max.year : Math.max(selected.year + 20, 2100),
             selectedDate: input.value.slice(0, 10) || iso(today.getFullYear(), today.getMonth() + 1, today.getDate()),
             time: input.value.slice(11, 16) || `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`
         };
         document.body.append(popup);
         trigger.setAttribute('aria-expanded', 'true');
         trigger.setAttribute('aria-controls', popup.id);
-        position();
         render();
-        popup.querySelector('.erp-calendar__month').focus();
+        (popup.querySelector('.erp-calendar__day[tabindex="0"]') || popup.querySelector('.erp-calendar__title')).focus();
     }
 
     function enhance(input) {
@@ -331,6 +440,16 @@
         if (open && event.key === 'Escape') {
             event.preventDefault();
             close(true);
+        } else if (open && event.key === 'Tab') {
+            const controls = [...open.popup.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
+            const first = controls[0], last = controls[controls.length - 1];
+            if (event.shiftKey && (document.activeElement === first || !open.popup.contains(document.activeElement))) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && (document.activeElement === last || !open.popup.contains(document.activeElement))) {
+                event.preventDefault();
+                first.focus();
+            }
         }
     });
     window.addEventListener('resize', position);
