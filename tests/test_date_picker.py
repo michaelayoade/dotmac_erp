@@ -1,4 +1,4 @@
-"""Browser contract for organization-formatted native calendar fields."""
+"""Browser contract for organization-formatted calendar fields."""
 
 from pathlib import Path
 
@@ -44,8 +44,14 @@ def test_calendar_uses_organization_display_and_iso_form_value() -> None:
         page.get_by_role("button", name="Date of Birth").click()
         calendar = page.get_by_role("dialog", name="Choose date")
         assert calendar.is_visible()
-        calendar.get_by_role("combobox", name="Year").select_option("2024")
-        calendar.get_by_role("combobox", name="Month").select_option("2")
+        assert calendar.locator("select").count() == 0
+        calendar.get_by_role("button", name="Choose month and year").click()
+        assert calendar.get_by_role("button", name="Choose 2000").is_visible()
+        assert calendar.get_by_role("button", name="Choose 1991").count() == 0
+        calendar.get_by_role("button", name="Next 12 years").click()
+        calendar.get_by_role("button", name="Next 12 years").click()
+        calendar.get_by_role("button", name="Choose 2024").click()
+        calendar.get_by_role("button", name="Choose February 2024").click()
         calendar.get_by_role("button", name="29/02/2024").click()
         assert visible.inner_text() == "29/02/2024"
         assert original.input_value() == "2024-02-29"
@@ -57,6 +63,9 @@ def test_calendar_uses_organization_display_and_iso_form_value() -> None:
         )
         original.evaluate("element => { element.max = '2024-02-28'; }")
         page.get_by_role("button", name="Date of Birth").click()
+        assert calendar.get_by_role("button", name="29/02/2024").is_disabled()
+        calendar.get_by_role("button", name="Choose month and year").click()
+        calendar.get_by_role("button", name="Back to calendar").click()
         assert calendar.get_by_role("button", name="29/02/2024").is_disabled()
         page.keyboard.press("Escape")
         original.evaluate("element => { element.max = '2026-12-31'; }")
@@ -83,4 +92,28 @@ def test_calendar_uses_organization_display_and_iso_form_value() -> None:
         page.evaluate("document.documentElement.dataset.dateFormat = 'DD MMM YYYY'")
         hearing.dispatch_event("change")
         assert hearing_display.inner_text() == "14 Nov 2026 14:45"
+        page.get_by_role("button", name="Hearing Date & Time").click()
+        date_time_calendar.get_by_role("button", name="14 Nov 2026").focus()
+        page.keyboard.press("ArrowRight")
+        assert date_time_calendar.get_by_role("button", name="15 Nov 2026").evaluate(
+            "element => document.activeElement === element"
+        )
+        page.keyboard.press("PageDown")
+        assert date_time_calendar.get_by_role("button", name="15 Dec 2026").evaluate(
+            "element => document.activeElement === element"
+        )
+        assert date_time_calendar.get_by_role("button", name="Apply").is_disabled()
+        page.keyboard.press("Escape")
+        page.set_viewport_size({"width": 375, "height": 667})
+        page.get_by_role("button", name="Date of Birth").click()
+        assert calendar.evaluate(
+            "element => { const box = element.getBoundingClientRect(); "
+            "return box.left >= 0 && box.right <= innerWidth && "
+            "box.top >= 0 && box.bottom <= innerHeight && "
+            "element.scrollHeight <= element.clientHeight; }"
+        )
+        calendar.get_by_role("button", name="Choose month and year").click()
+        assert calendar.evaluate(
+            "element => element.scrollHeight <= element.clientHeight"
+        )
         browser.close()
