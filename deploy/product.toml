@@ -56,11 +56,11 @@ manifest_digest = "sha256:cf1c33e9cfab4d17dfeac8b5ca1187f5b215f81328a8614dc14861
 # `source_revision`. Deliberately NOT a resolution of `:latest` or of a
 # `sha-<short>` tag: those are mutable references, which is the exact shape the
 # first line refuses.
-reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:b994d0104e983962b2cba8b8e23a290cc175458935dd937dbf9401869d83991d"
+reference = "ghcr.io/michaelayoade/dotmac_erp@sha256:8e8ed14b91f7ead1ad469beb4aa3c1343854dd4932df607f9fd233d0904f87ee"
 # The exact protected-main revision the bound image was built from. Changing
 # either this or the digest without the other breaks the pairing that makes the
 # image identifiable, so they move together or not at all.
-source_revision = "0dcaf5a63d049818bd051de2fd29abc247c2ab25" # pragma: allowlist secret
+source_revision = "eb8ada35408615b68b5839830b758f449b42a4e4" # pragma: allowlist secret
 
 # ─────────────────────────────────────────────────────────────────────────
 # Runtime materials — the exact env var NAMES ERP's app/worker/beat services
