@@ -953,7 +953,7 @@ class InvoiceWebService:
                 "list_title": "Supplier Credit Notes",
                 "new_url": "/finance/ap/credit-notes/new",
                 "new_label": "New Credit Note",
-                "export_url": "/finance/ap/invoices/export",
+                "export_url": "/finance/ap/invoices/export?invoice_type=CREDIT_NOTE",
                 "empty_title": "No supplier credit notes",
                 "empty_desc": "Raise a supplier credit note to record a purchase return.",
             }

@@ -17,10 +17,13 @@ from sqlalchemy.orm import Session
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
+    SupplierInvoiceType,
 )
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
 from app.services.finance.ap.supplier_invoice import SupplierInvoiceService
+from app.services.finance.invoice_xlsx import build_invoice_xlsx
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
     Supported actions:
     - delete: Remove invoices (only DRAFT status with no payments)
     - void: Mark invoices as VOID
-    - export: Export to CSV
+    - export: Export to XLSX or CSV
     """
 
     model = SupplierInvoice
@@ -68,18 +71,20 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         start_date: str = "",
         end_date: str = "",
         extra_filters: dict[str, object] | None = None,
-        format: str = "csv",
+        format: str = "xlsx",
     ) -> Response:
         """
-        Export all supplier invoices matching filters to CSV.
+        Export all supplier invoices matching filters.
 
         Uses the shared query builder to match list-page filtering.
         """
         from app.services.finance.ap.invoice_query import build_invoice_query
 
         supplier_id = ""
+        invoice_type = ""
         if extra_filters:
             supplier_id = str(extra_filters.get("supplier_id") or "")
+            invoice_type = str(extra_filters.get("invoice_type") or "")
 
         stmt = build_invoice_query(
             db=self.db,
@@ -90,9 +95,52 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
             start_date=start_date,
             end_date=end_date,
         )
+        if invoice_type:
+            try:
+                stmt = stmt.where(
+                    SupplierInvoice.invoice_type == SupplierInvoiceType(invoice_type)
+                )
+            except ValueError as exc:
+                from fastapi import HTTPException
+
+                raise HTTPException(
+                    status_code=400, detail="Invalid invoice type"
+                ) from exc
 
         entities = list(self.db.scalars(stmt).all())
-        return self._build_csv(entities)
+        return self._export_invoices(entities, format)
+
+    def _export_invoices(
+        self, entities: list[SupplierInvoice], format: str
+    ) -> Response:
+        if format.lower() == "csv":
+            return self._build_csv(entities)
+        if format.lower() != "xlsx":
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=400, detail="Unsupported export format")
+        return build_invoice_xlsx(
+            self.db,
+            self.organization_id,
+            entities,
+            SupplierInvoice,
+            SupplierInvoiceLine,
+            self.export_fields,
+            self._get_export_value,
+            lambda invoice: self._resolve_supplier_name(invoice.supplier_id),
+            self._get_export_filename().removesuffix(".csv") + ".xlsx",
+            party_header="Supplier",
+        )
+
+    async def bulk_export(self, ids: list[UUID], format: str = "xlsx") -> Response:
+        from fastapi import HTTPException
+
+        if not ids:
+            raise HTTPException(status_code=400, detail="No IDs provided")
+        entities = self._get_entities(ids)
+        if not entities:
+            raise HTTPException(status_code=404, detail="No invoices found")
+        return self._export_invoices(entities, format)
 
     def can_delete(self, entity: SupplierInvoice) -> tuple[bool, str]:
         """
