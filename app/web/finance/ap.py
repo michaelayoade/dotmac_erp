@@ -392,12 +392,22 @@ async def export_all_ap_invoices(
     supplier_id: str = "",
     start_date: str = "",
     end_date: str = "",
+    format: str = "xlsx",
+    invoice_type: str = "",
     auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
     db: Session = Depends(get_db_for_org),
 ):
-    """Export all AP invoices matching filters to CSV."""
+    """Export all AP invoices matching filters."""
     return await ap_web_service.export_all_invoices_response(
-        auth, db, search, status, start_date, end_date, supplier_id
+        auth,
+        db,
+        search,
+        status,
+        start_date,
+        end_date,
+        supplier_id,
+        format,
+        invoice_type,
     )
 
 
@@ -408,10 +418,12 @@ def queue_ap_invoices_export(
     supplier_id: str = "",
     start_date: str = "",
     end_date: str = "",
+    format: str = "xlsx",
+    invoice_type: str = "",
     auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
     db: Session = Depends(get_db_for_org),
 ) -> JSONResponse:
-    """Queue all AP invoices matching filters for CSV export."""
+    """Queue all AP invoices matching filters for export."""
     instance = queue_background_export(
         db,
         auth.organization_id,
@@ -423,8 +435,9 @@ def queue_ap_invoices_export(
             "supplier_id": supplier_id,
             "start_date": start_date,
             "end_date": end_date,
+            "invoice_type": invoice_type,
         },
-        output_format="CSV",
+        output_format=format,
     )
     return JSONResponse(
         {
@@ -625,7 +638,7 @@ async def bulk_export_invoices(
     auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
     db: Session = Depends(get_db_for_org),
 ):
-    """Export selected AP invoices to CSV."""
+    """Export selected AP invoices."""
     return await ap_web_service.bulk_export_invoices_response(request, auth, db)
 
 

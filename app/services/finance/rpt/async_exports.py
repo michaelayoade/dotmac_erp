@@ -5,8 +5,10 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.finance.rpt.report_definition import ReportDefinition
 from app.models.finance.rpt.report_instance import ReportInstance, ReportStatus
 from app.services.common import coerce_uuid
 from app.services.finance.rpt.report_instance import (
@@ -48,7 +50,7 @@ EXPORT_DEFINITIONS = {
         "filename_prefix": "ar_invoices",
         "label": "AR Invoices",
         "task": "process_ar_invoices_export",
-        "formats": {"CSV"},
+        "formats": {"CSV", "XLSX"},
     },
     "AR_RECEIPTS": {
         "download_base": "/finance/ar/receipts/exports",
@@ -62,7 +64,7 @@ EXPORT_DEFINITIONS = {
         "filename_prefix": "ap_invoices",
         "label": "AP Invoices",
         "task": "process_ap_invoices_export",
-        "formats": {"CSV"},
+        "formats": {"CSV", "XLSX"},
     },
     "AP_PAYMENTS": {
         "download_base": "/finance/ap/payments/exports",
@@ -155,6 +157,7 @@ def get_completed_export_for_download(
         or instance.generated_by_user_id != requested_by
     ):
         raise HTTPException(status_code=404, detail="Export not found")
+    _check_report_code(db, instance, report_code)
 
     if instance.status != ReportStatus.COMPLETED or not instance.output_file_path:
         raise HTTPException(status_code=409, detail="Export is not ready")
@@ -162,8 +165,11 @@ def get_completed_export_for_download(
     code = (report_code or "").upper()
     config = EXPORT_DEFINITIONS.get(code, EXPORT_DEFINITIONS["GENERAL_LEDGER"])
     fmt = instance.output_format.upper()
-    suffix = "pdf" if fmt == "PDF" else "csv"
-    media_type = "application/pdf" if fmt == "PDF" else "text/csv"
+    suffix = {"PDF": "pdf", "XLSX": "xlsx"}.get(fmt, "csv")
+    media_type = {
+        "PDF": "application/pdf",
+        "XLSX": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }.get(fmt, "text/csv")
     filename = f"{config['filename_prefix']}_{instance.instance_id}.{suffix}"
     output_path = instance.output_file_path
 
@@ -205,6 +211,7 @@ def get_export_status(
         or instance.generated_by_user_id != requested_by
     ):
         raise HTTPException(status_code=404, detail="Export not found")
+    _check_report_code(db, instance, report_code)
 
     code = (report_code or "").upper()
     config = EXPORT_DEFINITIONS.get(code, EXPORT_DEFINITIONS["GENERAL_LEDGER"])
@@ -219,3 +226,20 @@ def get_export_status(
         "download_url": download_url,
         "error": instance.error_message,
     }
+
+
+def _check_report_code(
+    db: Session, instance: ReportInstance, report_code: str | None
+) -> None:
+    """Keep a report download URL from serving a different report type."""
+    if (
+        report_code
+        and db.scalar(
+            select(ReportDefinition.report_code).where(
+                ReportDefinition.report_def_id == instance.report_def_id,
+                ReportDefinition.organization_id == instance.organization_id,
+            )
+        )
+        != report_code.upper()
+    ):
+        raise HTTPException(status_code=404, detail="Export not found")

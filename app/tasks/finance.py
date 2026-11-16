@@ -32,6 +32,7 @@ from app.db.session_context import (
 )
 from app.models.email_profile import EmailModule
 from app.models.finance.rpt.report_instance import ReportInstance, ReportStatus
+from app.models.finance.rpt.report_definition import ReportDefinition
 from app.models.notification import EntityType, NotificationType
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
@@ -226,6 +227,8 @@ def _export_action_url(report_code: str, instance_id: UUID) -> str:
         "GL_LEDGER": "/finance/gl/ledger/exports",
         "AR_INVOICES": "/finance/ar/invoices/exports",
         "AR_RECEIPTS": "/finance/ar/receipts/exports",
+        "AP_INVOICES": "/finance/ap/invoices/exports",
+        "AP_PAYMENTS": "/finance/ap/payments/exports",
     }
     return f"{bases[report_code]}/{instance_id}/download"
 
@@ -236,6 +239,8 @@ def _export_label(report_code: str) -> str:
         "GL_LEDGER": "Ledger Transactions",
         "AR_INVOICES": "AR Invoices",
         "AR_RECEIPTS": "AR Receipts",
+        "AP_INVOICES": "AP Invoices",
+        "AP_PAYMENTS": "AP Payments",
     }[report_code]
 
 
@@ -245,6 +250,8 @@ def _export_filename_prefix(report_code: str) -> str:
         "GL_LEDGER": "gl_ledger",
         "AR_INVOICES": "ar_invoices",
         "AR_RECEIPTS": "ar_receipts",
+        "AP_INVOICES": "ap_invoices",
+        "AP_PAYMENTS": "ap_payments",
     }[report_code]
 
 
@@ -299,6 +306,7 @@ async def _build_list_export_response(
             start_date,
             end_date,
             {"customer_id": params.get("customer_id") or ""},
+            format=instance.output_format,
         )
 
     if report_code == "AR_RECEIPTS":
@@ -330,7 +338,11 @@ async def _build_list_export_response(
             status,
             start_date,
             end_date,
-            {"supplier_id": params.get("supplier_id") or ""},
+            {
+                "supplier_id": params.get("supplier_id") or "",
+                "invoice_type": params.get("invoice_type") or "",
+            },
+            format=instance.output_format,
         )
 
     if report_code == "AP_PAYMENTS":
@@ -360,7 +372,16 @@ def _process_list_export(instance_id: str, report_code: str) -> dict[str, Any]:
 
     with session_for_org(owning_org_id) as db:
         instance = _get_export_instance(db, instance_id)
-        if not instance:
+        if (
+            not instance
+            or db.scalar(
+                select(ReportDefinition.report_code).where(
+                    ReportDefinition.report_def_id == instance.report_def_id,
+                    ReportDefinition.organization_id == instance.organization_id,
+                )
+            )
+            != report_code
+        ):
             return {"success": False, "error": "Report instance not found"}
 
         if instance.status not in {ReportStatus.QUEUED, ReportStatus.FAILED}:
@@ -372,11 +393,17 @@ def _process_list_export(instance_id: str, report_code: str) -> dict[str, Any]:
                 _build_list_export_response(db, instance, report_code)
             )
             data = _response_body_bytes(response)
+            extension = "xlsx" if instance.output_format.upper() == "XLSX" else "csv"
+            media_type = (
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                if extension == "xlsx"
+                else "text/csv"
+            )
             storage_key = (
                 f"generated_reports/{instance.organization_id}/"
-                f"{_export_filename_prefix(report_code)}_{instance.instance_id}.csv"
+                f"{_export_filename_prefix(report_code)}_{instance.instance_id}.{extension}"
             )
-            get_storage().upload(storage_key, data, "text/csv")
+            get_storage().upload(storage_key, data, media_type)
 
             instance = ReportInstanceService.complete_generation(
                 db=db,

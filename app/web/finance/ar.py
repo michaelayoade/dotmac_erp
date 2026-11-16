@@ -15,6 +15,7 @@ from fastapi.responses import (
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import ar_web_service
+from app.services.finance.ar.web.base import normalize_date_range_filters
 from app.services.finance.rpt.async_exports import (
     get_completed_export_for_download,
     get_export_status,
@@ -302,26 +303,35 @@ async def export_all_invoices(
     customer_id: str = "",
     start_date: str = "",
     end_date: str = "",
+    format: str = "xlsx",
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Export all invoices matching filters to CSV."""
+    """Export all invoices matching filters."""
+    start_date, end_date = normalize_date_range_filters(
+        start_date, end_date, request.query_params
+    )
     return await ar_web_service.export_all_invoices_response(
-        auth, db, search, status, start_date, end_date, customer_id
+        auth, db, search, status, start_date, end_date, customer_id, format
     )
 
 
 @router.post("/invoices/export")
 def queue_invoices_export(
+    request: Request,
     search: str = "",
     status: str = "",
     customer_id: str = "",
     start_date: str = "",
     end_date: str = "",
+    format: str = "xlsx",
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ) -> JSONResponse:
-    """Queue all AR invoices matching filters for CSV export."""
+    """Queue all AR invoices matching filters for export."""
+    start_date, end_date = normalize_date_range_filters(
+        start_date, end_date, request.query_params
+    )
     instance = queue_background_export(
         db,
         auth.organization_id,
@@ -334,7 +344,7 @@ def queue_invoices_export(
             "start_date": start_date,
             "end_date": end_date,
         },
-        output_format="CSV",
+        output_format=format,
     )
     return JSONResponse(
         {
@@ -507,7 +517,7 @@ async def bulk_export_invoices(
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
 ):
-    """Export selected AR invoices to CSV."""
+    """Export selected AR invoices."""
     return await ar_web_service.bulk_export_invoices_response(request, auth, db)
 
 

@@ -161,7 +161,7 @@ function bulkActions(config = {}) {
                     const contentType = response.headers.get('content-type');
 
                     // Handle file download (export)
-                    if (contentType && (contentType.includes('text/csv') || contentType.includes('application/octet-stream'))) {
+                    if (contentType && (contentType.includes('text/csv') || contentType.includes('application/octet-stream') || contentType.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))) {
                         const blob = await response.blob();
                         const filename = this.getFilenameFromResponse(response) || `${this.entityName}_export.csv`;
                         this.downloadBlob(blob, filename);
@@ -299,6 +299,10 @@ const BACKGROUND_EXPORTS = {
         label: 'AR Invoices',
         statusBase: '/finance/ar/invoices/exports'
     },
+    '/finance/ap/invoices/export': {
+        label: 'AP Invoices',
+        statusBase: '/finance/ap/invoices/exports'
+    },
     '/finance/ar/receipts/export': {
         label: 'AR Receipts',
         statusBase: '/finance/ar/receipts/exports'
@@ -375,7 +379,7 @@ function queueBackgroundExport(baseUrl, url) {
             var contentType = response.headers.get('content-type') || '';
             // Small result set: the server decided to export inline and
             // returned the CSV directly (200). Download it now — no polling.
-            if (response.ok && contentType.indexOf('text/csv') !== -1) {
+            if (response.ok && (contentType.indexOf('text/csv') !== -1 || contentType.indexOf('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') !== -1)) {
                 return saveResponseAsDownload(response).then(function() {
                     exportToast(config.label + ' export downloaded successfully', 'success');
                     return null;
@@ -445,7 +449,7 @@ function downloadExportNow(url) {
 }
 
 /**
- * Export All - downloads CSV of all records matching current search/filters.
+ * Export All - downloads records matching applied search/filters.
  * Works independently of the bulkActions component (no selection needed).
  *
  * Uses native browser download (window.location) instead of fetch+blob,
@@ -465,7 +469,8 @@ function exportAll(baseUrl) {
     }
 
     const params = new URLSearchParams(window.location.search);
-    const exportParams = new URLSearchParams();
+    const target = new URL(baseUrl, window.location.origin);
+    const exportParams = new URLSearchParams(target.search);
 
     // Forward known filter params from the URL first.
     for (const key of filterKeys) {
@@ -475,31 +480,12 @@ function exportAll(baseUrl) {
         }
     }
 
-    // Then let the current filter form override the URL. This keeps export in
-    // sync with HTMX-updated lists where the visible controls are the source of truth.
-    document.querySelectorAll('form[action], form[hx-get]').forEach(function(form) {
-        const action = form.getAttribute('action') || form.getAttribute('hx-get') || '';
-        const actionPath = action.split('?')[0];
-        if (actionPath !== baseUrl.replace(/\/export$/, '')) {
-            return;
-        }
-        const formParams = new URLSearchParams(new FormData(form));
-        for (const key of filterKeys) {
-            const val = collectFilterValue(formParams, key);
-            if (val) {
-                exportParams.set(key, val);
-            } else {
-                exportParams.delete(key);
-            }
-        }
-    });
-
     const url = exportParams.toString()
-        ? `${baseUrl}?${exportParams.toString()}`
-        : baseUrl;
+        ? `${target.pathname}?${exportParams.toString()}`
+        : target.pathname;
 
-    if (BACKGROUND_EXPORTS[baseUrl]) {
-        queueBackgroundExport(baseUrl, url);
+    if (BACKGROUND_EXPORTS[target.pathname]) {
+        queueBackgroundExport(target.pathname, url);
         return;
     }
 

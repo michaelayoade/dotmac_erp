@@ -11,12 +11,16 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.invoice_line import InvoiceLine
 from app.schemas.bulk_actions import BulkActionResult
 from app.services.bulk_actions import BulkActionService
 from app.services.finance.ar.invoice import ARInvoiceService
+from app.services.finance.invoice_xlsx import build_invoice_xlsx
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +32,7 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
     Supported actions:
     - delete: Remove invoices (only DRAFT status with no payments)
     - void: Mark invoices as VOID
-    - export: Export to CSV
+    - export: Export to XLSX or CSV
     """
 
     model = Invoice
@@ -59,10 +63,10 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         start_date: str = "",
         end_date: str = "",
         extra_filters: dict[str, object] | None = None,
-        format: str = "csv",
+        format: str = "xlsx",
     ) -> Response:
         """
-        Export all invoices matching filters to CSV.
+        Export all invoices matching filters.
 
         Uses the shared query builder to match list-page filtering.
         """
@@ -83,7 +87,38 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         )
 
         entities = list(self.db.scalars(query).all())
-        return self._build_csv(entities)
+        return self._export_invoices(entities, format)
+
+    def _export_invoices(self, entities: list[Invoice], format: str) -> Response:
+        if format.lower() == "csv":
+            return self._build_csv(entities)
+        if format.lower() != "xlsx":
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=400, detail="Unsupported export format")
+        return build_invoice_xlsx(
+            self.db,
+            self.organization_id,
+            entities,
+            Invoice,
+            InvoiceLine,
+            self.export_fields,
+            self._get_export_value,
+            lambda invoice: self._get_export_value(invoice, "customer_name"),
+            self._get_export_filename().removesuffix(".csv") + ".xlsx",
+            ar_discounts=True,
+            party_header="Customer",
+        )
+
+    async def bulk_export(self, ids: list[UUID], format: str = "xlsx") -> Response:
+        from fastapi import HTTPException
+
+        if not ids:
+            raise HTTPException(status_code=400, detail="No IDs provided")
+        entities = self._get_entities(ids)
+        if not entities:
+            raise HTTPException(status_code=404, detail="No invoices found")
+        return self._export_invoices(entities, format)
 
     def can_delete(self, entity: Invoice) -> tuple[bool, str]:
         """
@@ -129,11 +164,24 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         if field_name == "balance_due":
             return str(entity.balance_due)
         if field_name == "customer_name":
-            if entity.customer:
-                return entity.customer.trading_name or entity.customer.legal_name or ""
-            return ""
+            return self._resolve_customer_name(entity.customer_id)
 
         return str(super()._get_export_value(entity, field_name))
+
+    _customer_names: dict[str, str] | None = None
+
+    def _resolve_customer_name(self, customer_id: object) -> str:
+        """Resolve customer names once, restricted to this organization."""
+        if self._customer_names is None:
+            rows = self.db.execute(
+                select(
+                    Customer.customer_id,
+                    Customer.trading_name,
+                    Customer.legal_name,
+                ).where(Customer.organization_id == self.organization_id)
+            ).all()
+            self._customer_names = {str(row[0]): row[1] or row[2] or "" for row in rows}
+        return self._customer_names.get(str(customer_id), "")
 
     def _get_export_filename(self) -> str:
         """Get invoice export filename."""

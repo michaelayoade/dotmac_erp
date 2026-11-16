@@ -294,7 +294,9 @@ class ARWebService(  # type: ignore[misc]
             coerce_uuid(auth.organization_id),
             coerce_uuid(auth.user_id),
         )
-        return await service.bulk_export(req.ids, req.format)
+        return await service.bulk_export(
+            req.ids, req.format if "format" in body else "xlsx"
+        )
 
     async def export_all_invoices_response(
         self,
@@ -305,8 +307,9 @@ class ARWebService(  # type: ignore[misc]
         start_date: str = "",
         end_date: str = "",
         customer_id: str = "",
+        format: str = "xlsx",
     ):
-        """Export all invoices matching filters to CSV."""
+        """Export all invoices matching filters."""
         from app.services.finance.ar.invoice_bulk import get_ar_invoice_bulk_service
 
         service = get_ar_invoice_bulk_service(
@@ -323,6 +326,7 @@ class ARWebService(  # type: ignore[misc]
             start_date=start_date,
             end_date=end_date,
             extra_filters=extra,
+            format=format,
         )
 
     async def bulk_approve_invoices_response(
