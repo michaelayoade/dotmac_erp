@@ -53,8 +53,8 @@ def build_invoice_xlsx(
     db: Session,
     organization_id: UUID,
     invoices: list[Any],
-    invoice_model: type,
-    line_model: type,
+    invoice_model: Any,
+    line_model: Any,
     export_fields: list[tuple[str, str]],
     export_value: Callable[[Any, str], str],
     party_name: Callable[[Any], str],
@@ -88,15 +88,17 @@ def build_invoice_xlsx(
     ids = sorted(by_id)
     for start in range(0, len(ids), 500):
         batch = ids[start : start + 500]
-        lines = db.scalars(
-            select(line_model)
-            .join(invoice_model, line_model.invoice_id == invoice_model.invoice_id)
-            .where(
-                invoice_model.organization_id == organization_id,
-                line_model.invoice_id.in_(batch),
-            )
-            .order_by(line_model.invoice_id, line_model.line_number)
-        ).all()
+        lines: list[Any] = list(
+            db.scalars(
+                select(line_model)
+                .join(invoice_model, line_model.invoice_id == invoice_model.invoice_id)
+                .where(
+                    invoice_model.organization_id == organization_id,
+                    line_model.invoice_id.in_(batch),
+                )
+                .order_by(line_model.invoice_id, line_model.line_number)
+            ).all()
+        )
         for line in lines:
             invoice = by_id[line.invoice_id]
             row = [

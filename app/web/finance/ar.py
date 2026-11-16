@@ -308,11 +308,18 @@ async def export_all_invoices(
     db: Session = Depends(get_db_for_org),
 ):
     """Export all invoices matching filters."""
-    start_date, end_date = normalize_date_range_filters(
+    normalized_start, normalized_end = normalize_date_range_filters(
         start_date, end_date, request.query_params
     )
     return await ar_web_service.export_all_invoices_response(
-        auth, db, search, status, start_date, end_date, customer_id, format
+        auth,
+        db,
+        search,
+        status,
+        normalized_start or "",
+        normalized_end or "",
+        customer_id,
+        format,
     )
 
 
@@ -329,7 +336,7 @@ def queue_invoices_export(
     db: Session = Depends(get_db_for_org),
 ) -> JSONResponse:
     """Queue all AR invoices matching filters for export."""
-    start_date, end_date = normalize_date_range_filters(
+    normalized_start, normalized_end = normalize_date_range_filters(
         start_date, end_date, request.query_params
     )
     instance = queue_background_export(
@@ -341,8 +348,8 @@ def queue_invoices_export(
             "search": search,
             "status": status,
             "customer_id": customer_id,
-            "start_date": start_date,
-            "end_date": end_date,
+            "start_date": normalized_start or "",
+            "end_date": normalized_end or "",
         },
         output_format=format,
     )
