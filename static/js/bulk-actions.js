@@ -484,6 +484,15 @@ function exportAll(baseUrl) {
         ? `${target.pathname}?${exportParams.toString()}`
         : target.pathname;
 
+    // Invoice list downloads use the existing GET routes. They return the XLSX
+    // directly, without depending on a background worker or status polling.
+    if (target.pathname === '/finance/ar/invoices/export' ||
+        target.pathname === '/finance/ap/invoices/export') {
+        exportToast('Preparing export...', 'info');
+        window.location.assign(url);
+        return;
+    }
+
     if (BACKGROUND_EXPORTS[target.pathname]) {
         queueBackgroundExport(target.pathname, url);
         return;
