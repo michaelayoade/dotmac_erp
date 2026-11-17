@@ -8,7 +8,7 @@ from uuid import uuid4
 import json
 
 import pytest
-from fastapi import Request
+from fastapi import Request, Response
 
 pytest.importorskip("dotmac_files")
 pytest.importorskip("dotmac_kernel")
@@ -85,6 +85,7 @@ async def test_immediate_invoice_route_passes_format_and_applied_filters(
     assert result == "file"
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "module,route_name,party_key",
     [
@@ -92,11 +93,18 @@ async def test_immediate_invoice_route_passes_format_and_applied_filters(
         (ar_routes, "queue_invoices_export", "customer_id"),
     ],
 )
-def test_queued_invoice_route_preserves_filters_and_defaults_to_xlsx(
+async def test_queued_invoice_route_preserves_filters_and_defaults_to_xlsx(
     monkeypatch, module, route_name, party_key
 ):
     queued = MagicMock(return_value=SimpleNamespace(instance_id=uuid4()))
     monkeypatch.setattr(module, "queue_background_export", queued)
+    bulk_service = SimpleNamespace(count_export_rows=MagicMock(return_value=5001))
+    factory_name = (
+        "get_ap_invoice_bulk_service"
+        if module is ap_routes
+        else "get_ar_invoice_bulk_service"
+    )
+    monkeypatch.setattr(module, factory_name, lambda *args: bulk_service)
     auth = SimpleNamespace(organization_id=uuid4(), user_id=uuid4())
     kwargs = {
         "search": "Acme",
@@ -110,7 +118,7 @@ def test_queued_invoice_route_preserves_filters_and_defaults_to_xlsx(
     }
     if module is ar_routes:
         kwargs["request"] = Request({"type": "http", "query_string": b""})
-    response = getattr(module, route_name)(**kwargs)
+    response = await getattr(module, route_name)(**kwargs)
     assert response.status_code == 202
     assert json.loads(response.body)["status_url"].endswith("/status")
     assert queued.call_args.kwargs["output_format"] == "xlsx"
@@ -122,6 +130,58 @@ def test_queued_invoice_route_preserves_filters_and_defaults_to_xlsx(
         "end_date": "2026-01-31",
         **({"invoice_type": ""} if module is ap_routes else {}),
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "module,route_name,party_key",
+    [
+        (ap_routes, "queue_ap_invoices_export", "supplier_id"),
+        (ar_routes, "queue_invoices_export", "customer_id"),
+    ],
+)
+async def test_small_invoice_export_returns_xlsx_without_queue(
+    monkeypatch, module, route_name, party_key
+):
+    workbook = Response(
+        b"PK",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    bulk_service = SimpleNamespace(
+        count_export_rows=MagicMock(return_value=5000),
+        export_all=AsyncMock(return_value=workbook),
+    )
+    factory_name = (
+        "get_ap_invoice_bulk_service"
+        if module is ap_routes
+        else "get_ar_invoice_bulk_service"
+    )
+    monkeypatch.setattr(module, factory_name, lambda *args: bulk_service)
+    queued = MagicMock()
+    monkeypatch.setattr(module, "queue_background_export", queued)
+    auth = SimpleNamespace(organization_id=uuid4(), user_id=uuid4())
+    kwargs = {
+        "search": "INV-123",
+        "status": "POSTED",
+        party_key: str(uuid4()),
+        "start_date": "2026-01-01",
+        "end_date": "2026-01-31",
+        "format": "xlsx",
+        "auth": auth,
+        "db": MagicMock(),
+    }
+    if module is ar_routes:
+        kwargs["request"] = Request({"type": "http", "query_string": b""})
+
+    response = await getattr(module, route_name)(**kwargs)
+
+    assert response is workbook
+    assert bulk_service.count_export_rows.call_args.args[0:2] == (
+        "INV-123",
+        "POSTED",
+    )
+    bulk_service.export_all.assert_awaited_once()
+    queued.assert_not_called()
 
 
 def test_ar_customer_names_are_loaded_once_for_current_organization():
