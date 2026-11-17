@@ -274,7 +274,11 @@ class MaintenanceService:
 
         record.status = MaintenanceStatus.COMPLETED
         record.completed_date = data.completed_date or date.today()
-        record.actual_cost = data.actual_cost
+        record.actual_cost = (
+            record.estimated_cost
+            if record.estimated_cost is not None
+            else data.actual_cost
+        )
         record.odometer_at_service = data.odometer_at_service
         record.work_performed = data.work_performed
         record.parts_replaced = data.parts_replaced
@@ -321,7 +325,7 @@ class MaintenanceService:
             new_values={
                 "status": "COMPLETED",
                 "completed_date": str(record.completed_date),
-                "actual_cost": str(data.actual_cost) if data.actual_cost else None,
+                "actual_cost": str(record.actual_cost),
             },
             reason="Maintenance completed",
         )
