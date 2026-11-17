@@ -17,6 +17,7 @@ from app.services.finance.ap import invoice_bulk as ap_bulk  # noqa: E402
 from app.services.finance.ap.web import ap_web_service  # noqa: E402
 from app.services.finance.ar import invoice_bulk as ar_bulk  # noqa: E402
 from app.services.finance.ar.web import ar_web_service  # noqa: E402
+from app.services.finance.rpt.report_instance import ReportInstanceService  # noqa: E402
 from app.web.finance import ap as ap_routes  # noqa: E402
 from app.web.finance import ar as ar_routes  # noqa: E402
 
@@ -134,3 +135,11 @@ def test_ar_customer_names_are_loaded_once_for_current_organization():
     assert service._resolve_customer_name(customer_id) == "Trading Name"
     db.execute.assert_called_once()
     assert organization_id in db.execute.call_args.args[0].compile().params.values()
+
+
+def test_ap_invoices_can_create_a_queued_report_definition():
+    definition = ReportInstanceService._standard_definition("AP_INVOICES")
+
+    assert definition is not None
+    assert definition["report_code"] == "AP_INVOICES"
+    assert definition["data_source_type"] == "AP"
