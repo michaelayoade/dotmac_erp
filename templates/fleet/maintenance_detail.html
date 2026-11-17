@@ -214,7 +214,10 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="actual_cost" class="form-label">Actual Cost <span class="text-rose-500">*</span></label>
-                        <input id="actual_cost" name="actual_cost" type="number" min="0" step="0.01" required class="form-input" value="{{ record.actual_cost if record.actual_cost is not none else '' }}">
+                        <input id="actual_cost" name="actual_cost" type="number" min="0" step="0.01" required class="form-input" value="{{ record.estimated_cost if record.estimated_cost is not none else '' }}" {% if record.estimated_cost is not none %}readonly aria-describedby="actual_cost_help"{% endif %}>
+                        {% if record.estimated_cost is not none %}
+                        <p id="actual_cost_help" class="mt-1 text-xs text-slate-500 dark:text-slate-400">Set from the estimated cost and cannot be changed.</p>
+                        {% endif %}
                     </div>
                     <div>
                         <label for="completed_date" class="form-label">Completed Date</label>
