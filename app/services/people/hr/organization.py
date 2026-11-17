@@ -992,7 +992,6 @@ class OrganizationService:
             geofence_enabled=geofence_enabled,
             geofence_polygon=geofence_polygon,
             is_active=is_active,
-            created_by_id=self.principal.id if self.principal else None,
         )
         self.db.add(location)
         self.db.flush()
