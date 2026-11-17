@@ -20,8 +20,18 @@ def location_db(tmp_path):
         URL.create("sqlite+pysqlite", database=str(tmp_path / "locations.db")),
         execution_options={"schema_translate_map": {"core_org": None}},
     )
-    Organization.__table__.create(engine)
-    Location.__table__.create(engine)
+    organization_id_column = Organization.__table__.c.organization_id
+    location_id_column = Location.__table__.c.location_id
+    organization_default = organization_id_column.server_default
+    location_default = location_id_column.server_default
+    try:
+        organization_id_column.server_default = None
+        location_id_column.server_default = None
+        Organization.__table__.create(engine)
+        Location.__table__.create(engine)
+    finally:
+        organization_id_column.server_default = organization_default
+        location_id_column.server_default = location_default
     organization_id = uuid4()
     with Session(engine) as db:
         db.add(
