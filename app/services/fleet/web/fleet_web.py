@@ -1278,10 +1278,11 @@ class FleetWebService:
             form = await request.form()
         service = MaintenanceService(self.db, coerce_uuid(auth.organization_id))
         try:
-            data = MaintenanceComplete.model_validate(
-                self._coerce_fleet_form_data(form)
-            )
-            service.get_for_update(record_id)
+            record = service.get_for_update(record_id)
+            form_data = self._coerce_fleet_form_data(form)
+            if record.estimated_cost is not None:
+                form_data["actual_cost"] = record.estimated_cost
+            data = MaintenanceComplete.model_validate(form_data)
             service.complete(record_id, data)
             self.db.commit()
             message = "Maintenance completed."

@@ -505,6 +505,7 @@ async def test_complete_maintenance_from_detail_validates_and_commits(monkeypatc
     db = _FakeDb()
     maintenance_id = uuid4()
     service = Mock()
+    service.get_for_update.return_value = SimpleNamespace(estimated_cost=None)
     monkeypatch.setattr(
         "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
     )
@@ -547,6 +548,7 @@ async def test_complete_maintenance_requires_actual_cost(monkeypatch):
     db = _FakeDb()
     maintenance_id = uuid4()
     service = Mock()
+    service.get_for_update.return_value = SimpleNamespace(estimated_cost=None)
     monkeypatch.setattr(
         "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
     )
@@ -562,6 +564,97 @@ async def test_complete_maintenance_requires_actual_cost(monkeypatch):
     assert db.committed is False
     service.complete.assert_not_called()
     assert "?error=" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("estimated_cost", [Decimal("100.50"), Decimal("0")])
+async def test_complete_maintenance_uses_estimate_even_if_form_cost_changes(
+    monkeypatch, estimated_cost
+):
+    from unittest.mock import Mock
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    service = Mock()
+    service.get_for_update.return_value = SimpleNamespace(estimated_cost=estimated_cost)
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+    request = SimpleNamespace(
+        state=SimpleNamespace(csrf_form=FormData({"actual_cost": "999.99"}))
+    )
+
+    response = await FleetWebService(db).complete_maintenance_response(
+        request, _Auth(organization_id=TEST_ORG_ID), maintenance_id
+    )
+
+    assert service.complete.call_args.args[1].actual_cost == estimated_cost
+    assert db.committed is True
+    assert "?success=" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_complete_maintenance_accepts_missing_form_cost_when_estimated(
+    monkeypatch,
+):
+    from unittest.mock import Mock
+
+    db = _FakeDb()
+    maintenance_id = uuid4()
+    service = Mock()
+    service.get_for_update.return_value = SimpleNamespace(
+        estimated_cost=Decimal("100.50")
+    )
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.MaintenanceService", lambda *_: service
+    )
+
+    response = await FleetWebService(db).complete_maintenance_response(
+        SimpleNamespace(state=SimpleNamespace(csrf_form=FormData({}))),
+        _Auth(organization_id=TEST_ORG_ID),
+        maintenance_id,
+    )
+
+    assert service.complete.call_args.args[1].actual_cost == Decimal("100.50")
+    assert db.committed is True
+    assert "?success=" in response.headers["location"]
+
+
+@pytest.mark.parametrize(
+    ("estimated_cost", "submitted_cost", "expected_cost"),
+    [
+        (Decimal("100.50"), Decimal("999"), Decimal("100.50")),
+        (Decimal("0"), Decimal("999"), Decimal("0")),
+        (None, Decimal("80"), Decimal("80")),
+    ],
+)
+def test_maintenance_service_complete_uses_saved_estimate(
+    monkeypatch, estimated_cost, submitted_cost, expected_cost
+):
+    from app.services.fleet.maintenance_service import MaintenanceService
+
+    record = SimpleNamespace(
+        maintenance_id=uuid4(),
+        vehicle_id=uuid4(),
+        status=MaintenanceStatus.IN_PROGRESS,
+        estimated_cost=estimated_cost,
+    )
+    db = SimpleNamespace(get=lambda *_: None)
+    service = MaintenanceService(db, TEST_ORG_ID)
+    monkeypatch.setattr(service, "get_or_raise", lambda _: record)
+    monkeypatch.setattr(
+        "app.services.fleet.maintenance_service.fire_audit_event",
+        lambda *_a, **_k: None,
+    )
+
+    from app.schemas.fleet.maintenance import MaintenanceComplete
+
+    service.complete(
+        record.maintenance_id, MaintenanceComplete(actual_cost=submitted_cost)
+    )
+
+    assert record.actual_cost == expected_cost
+    assert record.status == MaintenanceStatus.COMPLETED
 
 
 def test_cancel_maintenance_rolls_back_when_finance_requires_reversal(monkeypatch):
