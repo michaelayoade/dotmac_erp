@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier_invoice import (
@@ -78,6 +78,48 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
 
         Uses the shared query builder to match list-page filtering.
         """
+        stmt = self._filtered_export_query(
+            search, status, start_date, end_date, extra_filters
+        )
+        entities = list(self.db.scalars(stmt).all())
+        return self._export_invoices(entities, format)
+
+    def count_export_rows(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+    ) -> int:
+        """Count matching invoice and line rows using the export filters."""
+        stmt = self._filtered_export_query(
+            search, status, start_date, end_date, extra_filters
+        )
+        filtered = stmt.subquery()
+        invoice_count = int(
+            self.db.scalar(select(func.count()).select_from(filtered)) or 0
+        )
+        line_count = int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(SupplierInvoiceLine)
+                .where(
+                    SupplierInvoiceLine.invoice_id.in_(select(filtered.c.invoice_id))
+                )
+            )
+            or 0
+        )
+        return invoice_count + line_count
+
+    def _filtered_export_query(
+        self,
+        search: str,
+        status: str,
+        start_date: str,
+        end_date: str,
+        extra_filters: dict[str, object] | None,
+    ) -> Select:
         from app.services.finance.ap.invoice_query import build_invoice_query
 
         supplier_id = ""
@@ -107,8 +149,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
                     status_code=400, detail="Invalid invoice type"
                 ) from exc
 
-        entities = list(self.db.scalars(stmt).all())
-        return self._export_invoices(entities, format)
+        return stmt
 
     def _export_invoices(
         self, entities: list[SupplierInvoice], format: str

@@ -26,8 +26,10 @@ from fastapi.responses import (
 )
 from sqlalchemy.orm import Session
 
+from app.services.finance.ap.invoice_bulk import get_ap_invoice_bulk_service
 from app.services.finance.ap.web import ap_web_service
 from app.services.finance.rpt.async_exports import (
+    INLINE_EXPORT_ROW_THRESHOLD,
     get_completed_export_for_download,
     get_export_status,
     queue_background_export,
@@ -412,7 +414,7 @@ async def export_all_ap_invoices(
 
 
 @router.post("/invoices/export")
-def queue_ap_invoices_export(
+async def queue_ap_invoices_export(
     search: str = "",
     status: str = "",
     supplier_id: str = "",
@@ -422,8 +424,20 @@ def queue_ap_invoices_export(
     invoice_type: str = "",
     auth: WebAuthContext = Depends(require_web_permission("ap:invoices:read")),
     db: Session = Depends(get_db_for_org),
-) -> JSONResponse:
-    """Queue all AP invoices matching filters for export."""
+) -> Response:
+    """Export small filtered sets inline; queue larger AP invoice sets."""
+    invoice_service = get_ap_invoice_bulk_service(
+        db, auth.organization_id, auth.user_id
+    )
+    filters = {"supplier_id": supplier_id, "invoice_type": invoice_type}
+    if (
+        invoice_service.count_export_rows(search, status, start_date, end_date, filters)
+        <= INLINE_EXPORT_ROW_THRESHOLD
+    ):
+        return await invoice_service.export_all(
+            search, status, start_date, end_date, filters, format=format
+        )
+
     instance = queue_background_export(
         db,
         auth.organization_id,

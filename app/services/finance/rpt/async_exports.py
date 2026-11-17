@@ -18,9 +18,8 @@ from app.services.finance.rpt.report_instance import (
 from app.services.storage import get_storage
 
 
-# Result sets at or below this row count are exported inline (synchronous CSV
-# response); larger sets are queued to a background worker and the requester is
-# emailed a download link when ready.
+# Invoice exports at or below this combined invoice-and-line row count return
+# the XLSX or CSV response inline. Larger sets use the background worker.
 INLINE_EXPORT_ROW_THRESHOLD = 5000
 
 EXPORT_DEFINITIONS = {
