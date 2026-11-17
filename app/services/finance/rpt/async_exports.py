@@ -107,7 +107,10 @@ def queue_background_export(
 
     from app.tasks import finance as finance_tasks
 
-    getattr(finance_tasks, str(config["task"])).delay(str(instance.instance_id))
+    getattr(finance_tasks, str(config["task"])).delay(
+        str(instance.instance_id),
+        str(instance.organization_id),
+    )
     return instance
 
 
