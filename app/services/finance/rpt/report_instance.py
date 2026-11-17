@@ -520,6 +520,13 @@ class ReportInstanceService(ListResponseMixin):
                 "data_source_type": "AR",
                 "category": "operational",
             },
+            "AP_INVOICES": {
+                "report_code": "AP_INVOICES",
+                "report_name": "AP Invoices Export",
+                "report_type": ReportType.CUSTOM,
+                "data_source_type": "AP",
+                "category": "operational",
+            },
             "AR_RECEIPTS": {
                 "report_code": "AR_RECEIPTS",
                 "report_name": "AR Receipts Export",

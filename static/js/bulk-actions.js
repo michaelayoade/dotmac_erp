@@ -347,8 +347,16 @@ function pollBackgroundExport(statusUrl, label, attempt) {
                 return;
             }
             if (currentAttempt >= 180) {
-                exportToast(label + ' export is still processing. You will be notified when it is ready.', 'info');
+                exportToast(
+                    data.status === 'QUEUED'
+                        ? label + ' export has not started. Please contact an administrator to check the background worker.'
+                        : label + ' export is still processing. You will be notified when it is ready.',
+                    data.status === 'QUEUED' ? 'error' : 'info'
+                );
                 return;
+            }
+            if (data.status === 'QUEUED' && currentAttempt === 20) {
+                exportToast(label + ' export is still queued. The background worker may be unavailable.', 'warning');
             }
             var delay = currentAttempt < 2 ? 1500 : 3000;
             setTimeout(function() {
@@ -377,13 +385,15 @@ function queueBackgroundExport(baseUrl, url) {
     })
         .then(function(response) {
             var contentType = response.headers.get('content-type') || '';
-            // Small result set: the server decided to export inline and
-            // returned the CSV directly (200). Download it now — no polling.
+            // Small result set: download the file returned inline.
             if (response.ok && (contentType.indexOf('text/csv') !== -1 || contentType.indexOf('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') !== -1)) {
                 return saveResponseAsDownload(response).then(function() {
                     exportToast(config.label + ' export downloaded successfully', 'success');
                     return null;
                 });
+            }
+            if (contentType.indexOf('application/json') === -1) {
+                throw new Error(config.label + ' export request failed (HTTP ' + response.status + ').');
             }
             // Large result set: the server queued a background job (202 JSON).
             return response.json().then(function(data) {
@@ -402,9 +412,8 @@ function queueBackgroundExport(baseUrl, url) {
             pollBackgroundExport(statusUrl, config.label, 0);
         })
         .catch(function(error) {
-            console.warn('Background export failed, falling back to immediate export:', error);
-            exportToast(error.message || 'Export failed. Trying immediate download...', 'warning');
-            downloadExportNow(url);
+            console.warn('Background export failed:', error);
+            exportToast(error.message || 'Export failed. Please try again.', 'error');
         });
 }
 
@@ -452,9 +461,8 @@ function downloadExportNow(url) {
  * Export All - downloads records matching applied search/filters.
  * Works independently of the bulkActions component (no selection needed).
  *
- * Uses native browser download (window.location) instead of fetch+blob,
- * which is more reliable across browsers (no popup blocker issues,
- * no blob URL failures, no silent redirect-following).
+ * Invoice exports return small files inline and queue larger files. Applied
+ * filters come from the list URL, never unsubmitted filter form values.
  *
  * @param {string} baseUrl - GET endpoint path (e.g. "/finance/ar/invoices/export")
  */

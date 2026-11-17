@@ -40,6 +40,5 @@ public.sessions	denied-no-grant	false	false
 public.tenants	denied-no-grant	false	false
 public.user_credentials	denied-no-grant	false	false
 rpt.analysis_cube	denied-no-grant	false	false
-rpt.report_instance	denied-no-grant	true	true
 sync.integration_config	denied-no-grant	false	false
 sync.sync_history	denied-no-grant	false	false

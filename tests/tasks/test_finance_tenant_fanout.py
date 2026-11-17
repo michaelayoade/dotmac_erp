@@ -375,11 +375,11 @@ def test_the_converted_sweeps_no_longer_reach_across_tenants(task_name: str) -> 
     """The bypass is gone from each converted sweep, not merely unused.
 
     Asserted per function rather than per module on purpose: this module still
-    has three deliberate ``cross_org_session`` callers, and they are a different
-    shape. ``_resolve_report_instance_org`` and ``sync_mono_account`` resolve
-    *which tenant owns one given row*, and ``refresh_analysis_cubes`` has a
-    genuine org-less cube. Tenant resolution is not tenant enumeration, it has
-    no contract yet, and forcing it into this one would be a guess.
+    has two deliberate ``cross_org_session`` callers, and they are a different
+    shape. ``sync_mono_account`` resolves which tenant owns one given row, and
+    ``refresh_analysis_cubes`` has a genuine org-less cube. Tenant resolution
+    is not tenant enumeration, it has no contract yet, and forcing it into this
+    one would be a guess.
     """
     referenced = _referenced_names(_function_node(finance, task_name))
 
@@ -396,14 +396,14 @@ def test_the_converted_sweeps_no_longer_reach_across_tenants(task_name: str) -> 
 
 @pytest.mark.parametrize(
     "task_name",
-    ["sync_mono_account", "refresh_analysis_cubes", "_resolve_report_instance_org"],
+    ["sync_mono_account", "refresh_analysis_cubes"],
 )
 def test_the_retired_seam_detector_still_fires(task_name: str) -> None:
     """The sensitivity proof ADR-0018 asks for, using the real deliberate callers.
 
     A guard that reports "no bypass here" is only worth reading if it would
-    have said otherwise. These three keep ``cross_org_session`` on purpose —
-    two resolve which tenant owns one given row, and ``refresh_analysis_cubes``
+    have said otherwise. These two keep ``cross_org_session`` on purpose — one
+    resolves which tenant owns one given row, and ``refresh_analysis_cubes``
     has a genuine org-less cube — so they are the honest oracle: if the
     detector goes quiet on THEM, it has stopped working and the assertion above
     is passing for the wrong reason.

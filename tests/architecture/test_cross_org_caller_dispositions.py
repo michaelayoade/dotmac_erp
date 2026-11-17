@@ -455,7 +455,7 @@ UNDISPOSITIONED: Mapping[tuple[str, str], str] = {
 # being made — that is the whole point of asserting the distribution rather
 # than only the backlog.
 RESOLUTION_CENSUS: Mapping[str, int] = {
-    "fix": 113,
+    "fix": 112,
     "isolate": 19,
     "retire_with_domain_cutover": 2,
     "disable": 0,
@@ -549,12 +549,11 @@ def test_the_app_user_blocker_count_is_a_two_directional_ratchet() -> None:
     REFUTED again: ``rpt.analysis_cube.organization_id`` is NULLABLE, so a
     fan-out would permanently orphan every fleet-wide cube.  It stays
     ``undecided`` and stays in :data:`UNDISPOSITIONED`, for the reason recorded
-    there.  ``sync_mono_account`` and ``_resolve_report_instance_org`` keep
-    their rows too: both resolve WHICH tenant owns one given row, which is
-    tenant resolution, not tenant enumeration.
+    there. ``sync_mono_account`` keeps its row too: it resolves WHICH tenant
+    owns one given row, which is tenant resolution, not tenant enumeration.
     """
     # MFA setup, confirmation, and tenant authentication now use scoped reads.
-    baseline = 46
+    baseline = 45
     blocked = [
         f"{row['path']}::{row['symbol']}"
         for row in _inventory_rows()

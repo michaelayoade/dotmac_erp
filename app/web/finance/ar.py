@@ -14,9 +14,11 @@ from fastapi.responses import (
 )
 from sqlalchemy.orm import Session
 
+from app.services.finance.ar.invoice_bulk import get_ar_invoice_bulk_service
 from app.services.finance.ar.web import ar_web_service
 from app.services.finance.ar.web.base import normalize_date_range_filters
 from app.services.finance.rpt.async_exports import (
+    INLINE_EXPORT_ROW_THRESHOLD,
     get_completed_export_for_download,
     get_export_status,
     queue_background_export,
@@ -324,7 +326,7 @@ async def export_all_invoices(
 
 
 @router.post("/invoices/export")
-def queue_invoices_export(
+async def queue_invoices_export(
     request: Request,
     search: str = "",
     status: str = "",
@@ -334,11 +336,30 @@ def queue_invoices_export(
     format: str = "xlsx",
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db_for_org),
-) -> JSONResponse:
-    """Queue all AR invoices matching filters for export."""
+) -> Response:
+    """Export small filtered sets inline; queue larger AR invoice sets."""
     normalized_start, normalized_end = normalize_date_range_filters(
         start_date, end_date, request.query_params
     )
+    invoice_service = get_ar_invoice_bulk_service(
+        db, auth.organization_id, auth.user_id
+    )
+    filters = {"customer_id": customer_id}
+    if (
+        invoice_service.count_export_rows(
+            search, status, normalized_start or "", normalized_end or "", filters
+        )
+        <= INLINE_EXPORT_ROW_THRESHOLD
+    ):
+        return await invoice_service.export_all(
+            search,
+            status,
+            normalized_start or "",
+            normalized_end or "",
+            filters,
+            format=format,
+        )
+
     instance = queue_background_export(
         db,
         auth.organization_id,

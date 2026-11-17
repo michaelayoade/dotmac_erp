@@ -49,12 +49,6 @@ def _list_active_organization_ids() -> list[UUID]:
     return active_organization_ids()
 
 
-def _resolve_report_instance_org(instance_id: str) -> UUID | None:
-    with cross_org_session() as db:
-        instance = db.get(ReportInstance, UUID(instance_id))
-        return instance.organization_id if instance else None
-
-
 def _get_export_instance(db: Session, instance_id: str) -> ReportInstance | None:
     """Load a queued report instance from an already tenant-scoped session."""
     return db.get(ReportInstance, UUID(instance_id))
@@ -118,13 +112,10 @@ def _notify_export_result(
 @shared_task
 def process_general_ledger_export(
     instance_id: str,
+    organization_id: str,
 ) -> dict[str, Any]:
     """Generate a queued General Ledger export and notify the requester."""
-    owning_org_id = _resolve_report_instance_org(instance_id)
-    if owning_org_id is None:
-        return {"success": False, "error": "Report instance not found"}
-
-    with session_for_org(owning_org_id) as db:
+    with session_for_org(UUID(organization_id)) as db:
         instance = _get_export_instance(db, instance_id)
         if not instance:
             return {"success": False, "error": "Report instance not found"}
@@ -364,13 +355,13 @@ async def _build_list_export_response(
     raise ValueError(f"Unsupported export report code: {report_code}")
 
 
-def _process_list_export(instance_id: str, report_code: str) -> dict[str, Any]:
+def _process_list_export(
+    instance_id: str,
+    organization_id: str,
+    report_code: str,
+) -> dict[str, Any]:
     label = _export_label(report_code)
-    owning_org_id = _resolve_report_instance_org(instance_id)
-    if owning_org_id is None:
-        return {"success": False, "error": "Report instance not found"}
-
-    with session_for_org(owning_org_id) as db:
+    with session_for_org(UUID(organization_id)) as db:
         instance = _get_export_instance(db, instance_id)
         if (
             not instance
@@ -448,39 +439,49 @@ def _process_list_export(instance_id: str, report_code: str) -> dict[str, Any]:
 
 
 @shared_task
-def process_gl_journals_export(instance_id: str) -> dict[str, Any]:
+def process_gl_journals_export(
+    instance_id: str, organization_id: str
+) -> dict[str, Any]:
     """Generate a queued GL Journals export and notify the requester."""
-    return _process_list_export(instance_id, "GL_JOURNALS")
+    return _process_list_export(instance_id, organization_id, "GL_JOURNALS")
 
 
 @shared_task
-def process_gl_ledger_export(instance_id: str) -> dict[str, Any]:
+def process_gl_ledger_export(instance_id: str, organization_id: str) -> dict[str, Any]:
     """Generate a queued Ledger Transactions export and notify the requester."""
-    return _process_list_export(instance_id, "GL_LEDGER")
+    return _process_list_export(instance_id, organization_id, "GL_LEDGER")
 
 
 @shared_task
-def process_ar_invoices_export(instance_id: str) -> dict[str, Any]:
+def process_ar_invoices_export(
+    instance_id: str, organization_id: str
+) -> dict[str, Any]:
     """Generate a queued AR Invoices export and notify the requester."""
-    return _process_list_export(instance_id, "AR_INVOICES")
+    return _process_list_export(instance_id, organization_id, "AR_INVOICES")
 
 
 @shared_task
-def process_ar_receipts_export(instance_id: str) -> dict[str, Any]:
+def process_ar_receipts_export(
+    instance_id: str, organization_id: str
+) -> dict[str, Any]:
     """Generate a queued AR Receipts export and notify the requester."""
-    return _process_list_export(instance_id, "AR_RECEIPTS")
+    return _process_list_export(instance_id, organization_id, "AR_RECEIPTS")
 
 
 @shared_task
-def process_ap_invoices_export(instance_id: str) -> dict[str, Any]:
+def process_ap_invoices_export(
+    instance_id: str, organization_id: str
+) -> dict[str, Any]:
     """Generate a queued AP Invoices export and notify the requester."""
-    return _process_list_export(instance_id, "AP_INVOICES")
+    return _process_list_export(instance_id, organization_id, "AP_INVOICES")
 
 
 @shared_task
-def process_ap_payments_export(instance_id: str) -> dict[str, Any]:
+def process_ap_payments_export(
+    instance_id: str, organization_id: str
+) -> dict[str, Any]:
     """Generate a queued AP Payments export and notify the requester."""
-    return _process_list_export(instance_id, "AP_PAYMENTS")
+    return _process_list_export(instance_id, organization_id, "AP_PAYMENTS")
 
 
 def _get_finance_recipients(

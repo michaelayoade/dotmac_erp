@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -70,6 +70,46 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
 
         Uses the shared query builder to match list-page filtering.
         """
+        query = self._filtered_export_query(
+            search, status, start_date, end_date, extra_filters
+        )
+        entities = list(self.db.scalars(query).all())
+        return self._export_invoices(entities, format)
+
+    def count_export_rows(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+    ) -> int:
+        """Count matching invoice and line rows using the export filters."""
+        query = self._filtered_export_query(
+            search, status, start_date, end_date, extra_filters
+        )
+        filtered = query.subquery()
+        invoice_count = int(
+            self.db.scalar(select(func.count()).select_from(filtered)) or 0
+        )
+        line_count = int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(InvoiceLine)
+                .where(InvoiceLine.invoice_id.in_(select(filtered.c.invoice_id)))
+            )
+            or 0
+        )
+        return invoice_count + line_count
+
+    def _filtered_export_query(
+        self,
+        search: str,
+        status: str,
+        start_date: str,
+        end_date: str,
+        extra_filters: dict[str, object] | None,
+    ) -> Select:
         from app.services.finance.ar.invoice_query import build_invoice_query
 
         customer_id = ""
@@ -86,8 +126,7 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
             end_date=end_date,
         )
 
-        entities = list(self.db.scalars(query).all())
-        return self._export_invoices(entities, format)
+        return query
 
     def _export_invoices(self, entities: list[Invoice], format: str) -> Response:
         if format.lower() == "csv":
