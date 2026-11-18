@@ -4,6 +4,7 @@ import hashlib
 import json
 import smtplib
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -11,9 +12,11 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from app.models.email_profile import EmailModule
 from app.models.people.hr.employee import EmployeeStatus
 from app.models.finance.platform.event_outbox import EventStatus
 from app.models.person import PersonStatus
+from app.services.expense.expense_notifications import ExpenseNotificationService
 from app.services.email import (
     _env_bool,
     _env_int,
@@ -28,6 +31,82 @@ from app.services.email import (
     validate_email_attachments,
     validate_smtp_config,
 )
+
+
+def test_expense_approval_email_is_queued_without_smtp() -> None:
+    db = MagicMock()
+    organization_id = uuid4()
+    with (
+        patch(
+            "app.services.expense.expense_notifications.render_branded_email",
+            return_value=("<p>Approved</p>", "Approved"),
+        ),
+        patch("app.services.expense.expense_notifications.enqueue_email") as enqueue,
+        patch("app.services.expense.expense_notifications.send_email") as send,
+    ):
+        queued = ExpenseNotificationService(db)._send(
+            "emails/expense/claim_approved.html",
+            {},
+            to_email="claimant@example.com",
+            subject="Expense approved",
+            organization_id=organization_id,
+            delivery_id="expense-claim-approved:claim:decision",
+        )
+
+    assert queued is True
+    enqueue.assert_called_once_with(
+        db,
+        delivery_id="expense-claim-approved:claim:decision",
+        organization_id=organization_id,
+        to_email="claimant@example.com",
+        subject="Expense approved",
+        body_html="<p>Approved</p>",
+        body_text="Approved",
+        module=EmailModule.EXPENSE,
+    )
+    send.assert_not_called()
+
+
+def test_expense_rejection_email_is_queued_without_smtp() -> None:
+    db = MagicMock()
+    organization_id = uuid4()
+    claim = SimpleNamespace(
+        claim_id=uuid4(),
+        claim_number="CLM-1",
+        organization_id=organization_id,
+        employee=SimpleNamespace(
+            work_email="claimant@example.com",
+            person=SimpleNamespace(first_name="Alex"),
+        ),
+        currency_code="NGN",
+        total_claimed_amount=Decimal("100.00"),
+        purpose="Travel",
+    )
+    with (
+        patch(
+            "app.services.expense.expense_notifications.employee_can_receive_email",
+            return_value=True,
+        ),
+        patch(
+            "app.services.expense.expense_notifications.render_branded_email",
+            return_value=("<p>Rejected</p>", "Rejected"),
+        ),
+        patch("app.services.expense.expense_notifications.enqueue_email") as enqueue,
+        patch("app.services.expense.expense_notifications.send_email") as send,
+    ):
+        queued = ExpenseNotificationService(db).notify_claim_rejected(
+            claim,
+            "Missing details",
+            delivery_id="expense-claim-rejected:claim:decision",
+            approver_name="Manager",
+        )
+
+    assert queued is True
+    assert enqueue.call_args.kwargs["delivery_id"] == (
+        "expense-claim-rejected:claim:decision"
+    )
+    assert enqueue.call_args.kwargs["module"] == EmailModule.EXPENSE
+    send.assert_not_called()
 
 
 def test_enqueue_email_records_attachment_in_caller_transaction() -> None:

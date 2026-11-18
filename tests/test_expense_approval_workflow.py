@@ -28,7 +28,7 @@ from app.models.people.hr.position_assignment import (
     PositionAssignment,
     PositionAssignmentType,
 )
-from app.models.notification import Notification, NotificationType
+from app.models.notification import Notification, NotificationChannel, NotificationType
 from app.models.person import Person
 from app.services.expense import (
     ExpenseApprovalService,
@@ -465,15 +465,39 @@ def test_multi_approval_claim_remains_pending_until_all_steps_complete(
     assert refreshed.status == ExpenseClaimStatus.PENDING_APPROVAL
     assert refreshed.approver_id is None
 
+    queued_final_ids = []
+
+    def fail_final_email_queue(db, **kwargs):
+        # A PostgreSQL error outside a savepoint would abort the approval
+        # transaction even though the notification service catches it.
+        assert db.in_nested_transaction()
+        queued_final_ids.append(kwargs["delivery_id"])
+        db.execute(text("SELECT * FROM missing_expense_email_outbox"))
+
+    monkeypatch.setattr(
+        "app.services.expense.expense_notifications.render_branded_email",
+        lambda *args: ("<p>Approved</p>", "Approved"),
+    )
+    monkeypatch.setattr(
+        "app.services.expense.expense_notifications.enqueue_email",
+        fail_final_email_queue,
+    )
     second = svc.approve_claim(
         org_id,
         claim.claim_id,
         approver_id=approver2.employee_id,
-        send_notification=False,
     )
     db_session.commit()
 
     assert second.status == ExpenseClaimStatus.APPROVED
+    assert len(queued_final_ids) == 1
+    approved_notification = db_session.scalar(
+        select(Notification).where(
+            Notification.entity_id == claim.claim_id,
+            Notification.notification_type == NotificationType.APPROVED,
+        )
+    )
+    assert approved_notification.channel == NotificationChannel.BOTH
     steps = list(
         db_session.scalars(
             select(ExpenseClaimApprovalStep)
@@ -682,9 +706,25 @@ def test_resubmit_preserves_prior_approval_round_and_submit_creates_new_round(
         "app.services.finance.automation.event_dispatcher.fire_workflow_event",
         lambda *args, **kwargs: None,
     )
+    queued_approval_ids = []
+
+    def queue_approval_email(self, claim, approver, *, delivery_id):
+        queued_approval_ids.append(delivery_id)
+        return True
+
     monkeypatch.setattr(
         "app.services.expense.expense_notifications.ExpenseNotificationService.notify_approval_needed",
-        lambda self, claim, approver: True,
+        queue_approval_email,
+    )
+    queued_rejection_ids = []
+
+    def queue_rejection_email(self, claim, reason, *, delivery_id, approver_name):
+        queued_rejection_ids.append(delivery_id)
+        return True
+
+    monkeypatch.setattr(
+        "app.services.expense.expense_notifications.ExpenseNotificationService.notify_claim_rejected",
+        queue_rejection_email,
     )
 
     svc = ExpenseService(db_session)
@@ -702,17 +742,25 @@ def test_resubmit_preserves_prior_approval_round_and_submit_creates_new_round(
     )
     assert len(first_round_notifications) == 1
     assert first_round_notifications[0].recipient_id == approver.person_id
-    assert first_round_notifications[0].email_sent is True
+    assert first_round_notifications[0].channel == NotificationChannel.IN_APP
+    assert first_round_notifications[0].email_sent is False
 
     rejected = svc.reject_claim(
         org_id,
         claim.claim_id,
         approver_id=approver.employee_id,
         reason="Missing details",
-        send_notification=False,
     )
     db_session.commit()
     assert rejected.status == ExpenseClaimStatus.REJECTED
+    assert len(queued_rejection_ids) == 1
+    rejected_notification = db_session.scalar(
+        select(Notification).where(
+            Notification.entity_id == claim.claim_id,
+            Notification.notification_type == NotificationType.REJECTED,
+        )
+    )
+    assert rejected_notification.channel == NotificationChannel.IN_APP
 
     reset = svc.resubmit_claim(org_id, claim.claim_id)
     db_session.commit()
@@ -721,6 +769,8 @@ def test_resubmit_preserves_prior_approval_round_and_submit_creates_new_round(
     resubmitted = svc.submit_claim(org_id, claim.claim_id, skip_limit_check=True)
     db_session.commit()
     assert resubmitted.claim.status == ExpenseClaimStatus.PENDING_APPROVAL
+    assert len(queued_approval_ids) == 2
+    assert queued_approval_ids[0] != queued_approval_ids[1]
 
     rounds = list(
         db_session.execute(

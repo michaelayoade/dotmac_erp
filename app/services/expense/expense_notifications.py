@@ -24,7 +24,7 @@ from app.models.expense import (
     ExpenseClaim,
     ExpenseLimitRule,
 )
-from app.services.email import employee_can_receive_email, send_email
+from app.services.email import employee_can_receive_email, enqueue_email, send_email
 from app.services.email_branding import render_branded_email
 
 if TYPE_CHECKING:
@@ -110,9 +110,33 @@ class ExpenseNotificationService:
         to_email: str,
         subject: str,
         organization_id: UUID | None,
+        delivery_id: str | None = None,
     ) -> bool:
-        """Render a branded email template and send it."""
+        """Render a branded email and optionally queue it for delivery."""
         try:
+            if delivery_id is not None:
+                if organization_id is None:
+                    raise ValueError("Queued expense email requires an organization")
+                # Protect the caller transaction even if the outbox lookup or
+                # branding query fails before enqueue_email's own savepoint.
+                with self.db.begin_nested():
+                    body_html, body_text = render_branded_email(
+                        template,
+                        context,
+                        self.db,
+                        organization_id,
+                    )
+                    enqueue_email(
+                        self.db,
+                        delivery_id=delivery_id,
+                        organization_id=organization_id,
+                        to_email=to_email,
+                        subject=subject,
+                        body_html=body_html,
+                        body_text=body_text,
+                        module=EmailModule.EXPENSE,
+                    )
+                return True
             body_html, body_text = render_branded_email(
                 template,
                 context,
@@ -129,7 +153,7 @@ class ExpenseNotificationService:
                 organization_id=organization_id,
             )
         except Exception as e:
-            logger.error("Failed to send %s: %s", template, e)
+            logger.error("Failed to prepare expense email %s: %s", template, e)
             return False
 
     # =========================================================================
@@ -141,6 +165,7 @@ class ExpenseNotificationService:
         claim: ExpenseClaim,
         approver: Employee,
         *,
+        delivery_id: str,
         is_escalation: bool = False,
         escalated_from: str | None = None,
     ) -> bool:
@@ -150,11 +175,12 @@ class ExpenseNotificationService:
         Args:
             claim: The expense claim pending approval
             approver: The employee who needs to approve
+            delivery_id: Stable identity for this notification
             is_escalation: Whether this is an escalated approval
             escalated_from: Name of person who escalated (if applicable)
 
         Returns:
-            True if notification was sent successfully
+            True if the email was queued
         """
         approver_email = _employee_work_email(approver)
         if not approver_email:
@@ -197,12 +223,14 @@ class ExpenseNotificationService:
             to_email=approver_email,
             subject=subject,
             organization_id=claim.organization_id,
+            delivery_id=delivery_id,
         )
 
     def notify_claim_approved(
         self,
         claim: ExpenseClaim,
         *,
+        delivery_id: str,
         approver_name: str | None = None,
     ) -> bool:
         """
@@ -210,10 +238,11 @@ class ExpenseNotificationService:
 
         Args:
             claim: The approved expense claim
+            delivery_id: Stable identity for this notification
             approver_name: Name of the approver (optional)
 
         Returns:
-            True if notification was sent successfully
+            True if the email was queued
         """
         if not claim.employee or not _employee_work_email(claim.employee):
             logger.warning("No email for claimant on claim %s", claim.claim_id)
@@ -253,6 +282,7 @@ class ExpenseNotificationService:
             to_email=to_email,
             subject=f"Expense Claim Approved: {claim.claim_number}",
             organization_id=claim.organization_id,
+            delivery_id=delivery_id,
         )
 
     def notify_claim_rejected(
@@ -260,6 +290,7 @@ class ExpenseNotificationService:
         claim: ExpenseClaim,
         reason: str,
         *,
+        delivery_id: str,
         approver_name: str | None = None,
     ) -> bool:
         """
@@ -268,10 +299,11 @@ class ExpenseNotificationService:
         Args:
             claim: The rejected expense claim
             reason: Reason for rejection
+            delivery_id: Stable identity for this notification
             approver_name: Name of the approver (optional)
 
         Returns:
-            True if notification was sent successfully
+            True if the email was queued
         """
         if not claim.employee or not _employee_work_email(claim.employee):
             logger.warning("No email for claimant on claim %s", claim.claim_id)
@@ -301,6 +333,7 @@ class ExpenseNotificationService:
             to_email=to_email,
             subject=f"Expense Claim Rejected: {claim.claim_number}",
             organization_id=claim.organization_id,
+            delivery_id=delivery_id,
         )
 
     # =========================================================================
