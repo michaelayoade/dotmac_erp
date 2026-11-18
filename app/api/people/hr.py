@@ -4,7 +4,6 @@ HR API Router.
 Thin API wrapper for HR Core endpoints. All business logic is in services.
 """
 
-import json
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from uuid import UUID
@@ -326,11 +325,7 @@ def create_location(
         longitude=float(payload.longitude) if payload.longitude is not None else None,
         geofence_radius_m=payload.geofence_radius_m,
         geofence_enabled=payload.geofence_enabled,
-        geofence_polygon=(
-            json.dumps(payload.geofence_polygon)
-            if payload.geofence_polygon is not None
-            else None
-        ),
+        geofence_polygon=payload.geofence_polygon,
         is_active=payload.is_active,
     )
     return LocationRead.model_validate(location)
