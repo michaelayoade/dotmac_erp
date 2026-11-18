@@ -467,12 +467,19 @@ def test_multi_approval_claim_remains_pending_until_all_steps_complete(
 
     queued_final_ids = []
 
-    def fail_final_email_queue(self, claim, *, approver_name, delivery_id):
-        queued_final_ids.append(delivery_id)
-        raise RuntimeError("email outbox unavailable")
+    def fail_final_email_queue(db, **kwargs):
+        # A PostgreSQL error outside a savepoint would abort the approval
+        # transaction even though the notification service catches it.
+        assert db.in_nested_transaction()
+        queued_final_ids.append(kwargs["delivery_id"])
+        db.execute(text("SELECT * FROM missing_expense_email_outbox"))
 
     monkeypatch.setattr(
-        "app.services.expense.expense_notifications.ExpenseNotificationService.notify_claim_approved",
+        "app.services.expense.expense_notifications.render_branded_email",
+        lambda *args: ("<p>Approved</p>", "Approved"),
+    )
+    monkeypatch.setattr(
+        "app.services.expense.expense_notifications.enqueue_email",
         fail_final_email_queue,
     )
     second = svc.approve_claim(
@@ -709,6 +716,16 @@ def test_resubmit_preserves_prior_approval_round_and_submit_creates_new_round(
         "app.services.expense.expense_notifications.ExpenseNotificationService.notify_approval_needed",
         queue_approval_email,
     )
+    queued_rejection_ids = []
+
+    def queue_rejection_email(self, claim, reason, *, delivery_id, approver_name):
+        queued_rejection_ids.append(delivery_id)
+        return True
+
+    monkeypatch.setattr(
+        "app.services.expense.expense_notifications.ExpenseNotificationService.notify_claim_rejected",
+        queue_rejection_email,
+    )
 
     svc = ExpenseService(db_session)
     submit_result = svc.submit_claim(org_id, claim.claim_id, skip_limit_check=True)
@@ -733,10 +750,17 @@ def test_resubmit_preserves_prior_approval_round_and_submit_creates_new_round(
         claim.claim_id,
         approver_id=approver.employee_id,
         reason="Missing details",
-        send_notification=False,
     )
     db_session.commit()
     assert rejected.status == ExpenseClaimStatus.REJECTED
+    assert len(queued_rejection_ids) == 1
+    rejected_notification = db_session.scalar(
+        select(Notification).where(
+            Notification.entity_id == claim.claim_id,
+            Notification.notification_type == NotificationType.REJECTED,
+        )
+    )
+    assert rejected_notification.channel == NotificationChannel.IN_APP
 
     reset = svc.resubmit_claim(org_id, claim.claim_id)
     db_session.commit()

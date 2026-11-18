@@ -856,19 +856,22 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                     )
             if approver.person_id:
                 try:
-                    notification = inapp_service.notify_expense_submitted(
-                        self.db,
-                        organization_id=claim.organization_id,
-                        claim_id=claim.claim_id,
-                        claim_number=claim.claim_number,
-                        recipient_id=approver.person_id,
-                        submitter_name=submitter_name,
-                        amount=str(claim.total_claimed_amount),
-                        actor_id=claim.employee.person_id if claim.employee else None,
-                    )
-                    # The central dispatcher is the fallback if branded queueing failed.
-                    if email_queued:
-                        notification.channel = NotificationChannel.IN_APP
+                    with self.db.begin_nested():
+                        notification = inapp_service.notify_expense_submitted(
+                            self.db,
+                            organization_id=claim.organization_id,
+                            claim_id=claim.claim_id,
+                            claim_number=claim.claim_number,
+                            recipient_id=approver.person_id,
+                            submitter_name=submitter_name,
+                            amount=str(claim.total_claimed_amount),
+                            actor_id=claim.employee.person_id
+                            if claim.employee
+                            else None,
+                        )
+                        # The dispatcher is the fallback if branded queueing failed.
+                        if email_queued:
+                            notification.channel = NotificationChannel.IN_APP
                 except Exception as exc:
                     logger.exception(
                         "In-app notification failed for approver %s: %s",
@@ -1212,17 +1215,18 @@ class ExpenseClaimMixin(ExpenseServiceBase):
                 logger.exception("Email approval queueing failed: %s", exc)
         if claim.employee and claim.employee.person_id:
             try:
-                notification = NotificationService().notify_expense_approved(
-                    self.db,
-                    organization_id=org_id,
-                    claim_id=claim.claim_id,
-                    claim_number=claim.claim_number,
-                    recipient_id=claim.employee.person_id,
-                    approver_name=approver_name or "Manager",
-                    actor_id=approver.person_id if approver else None,
-                )
-                if email_queued:
-                    notification.channel = NotificationChannel.IN_APP
+                with self.db.begin_nested():
+                    notification = NotificationService().notify_expense_approved(
+                        self.db,
+                        organization_id=org_id,
+                        claim_id=claim.claim_id,
+                        claim_number=claim.claim_number,
+                        recipient_id=claim.employee.person_id,
+                        approver_name=approver_name or "Manager",
+                        actor_id=approver.person_id if approver else None,
+                    )
+                    if email_queued:
+                        notification.channel = NotificationChannel.IN_APP
             except Exception as exc:
                 logger.exception("In-app approval notification failed: %s", exc)
 
@@ -1392,6 +1396,7 @@ class ExpenseClaimMixin(ExpenseServiceBase):
             claim.approver_id = approver_id
             claim.rejection_reason = reason
             self._stamp_status_change(claim, actor_id)
+            self.db.flush()
 
             if send_notification:
                 self._notify_claim_rejected(claim, org_id, approver, reason)
@@ -1631,37 +1636,44 @@ class ExpenseClaimMixin(ExpenseServiceBase):
     def _notify_claim_rejected(
         self, claim: ExpenseClaim, org_id: UUID, approver, reason: str
     ) -> None:
+        from app.models.notification import NotificationChannel
         from app.services.expense.expense_notifications import (
             ExpenseNotificationService,
         )
         from app.services.notification import NotificationService
 
         approver_name = approver.full_name if approver else None
-        email_sent = False
+        email_queued = False
         if claim.employee and claim.employee.work_email:
             try:
-                email_sent = ExpenseNotificationService(self.db).notify_claim_rejected(
+                email_queued = ExpenseNotificationService(
+                    self.db
+                ).notify_claim_rejected(
                     claim,
                     reason,
+                    delivery_id=(
+                        f"expense-claim-rejected:{claim.claim_id}:"
+                        f"{claim.status_changed_at}"
+                    ),
                     approver_name=approver_name,
                 )
             except Exception as exc:
-                logger.exception("Email rejection notification failed: %s", exc)
+                logger.exception("Email rejection queueing failed: %s", exc)
         if claim.employee and claim.employee.person_id:
             try:
-                notification = NotificationService().notify_expense_rejected(
-                    self.db,
-                    organization_id=org_id,
-                    claim_id=claim.claim_id,
-                    claim_number=claim.claim_number,
-                    recipient_id=claim.employee.person_id,
-                    rejector_name=approver_name or "Manager",
-                    reason=reason,
-                    actor_id=approver.person_id if approver else None,
-                )
-                if email_sent:
-                    notification.email_sent = True
-                    notification.email_sent_at = datetime.now(UTC)
+                with self.db.begin_nested():
+                    notification = NotificationService().notify_expense_rejected(
+                        self.db,
+                        organization_id=org_id,
+                        claim_id=claim.claim_id,
+                        claim_number=claim.claim_number,
+                        recipient_id=claim.employee.person_id,
+                        rejector_name=approver_name or "Manager",
+                        reason=reason,
+                        actor_id=approver.person_id if approver else None,
+                    )
+                    if email_queued:
+                        notification.channel = NotificationChannel.IN_APP
             except Exception as exc:
                 logger.exception("In-app rejection notification failed: %s", exc)
 
