@@ -45,6 +45,12 @@ The authenticated OpenBao readiness fix in PR #708 adds one conserved
 test-only and not imported by runtime source. Its whole-module fingerprint
 is recorded below; no production category baseline or scope rule changes.
 
+Reviewed again for PR #802 after adding expense decision email outbox tests to
+`tests/test_email_services.py`. The conserved `TestSendEmail` class is unchanged,
+but the pinned engine fingerprints its containing source file. Re-declare that
+fingerprint to match the reviewed file; no baseline or conserved finding is
+added or removed.
+
 | Category | Baseline |
 | --- | ---: |
 | `outbound_transport` | 20 |
@@ -135,7 +141,7 @@ revision, so its two entries also preserve that stronger dead-code signal.
 | `tests/services/test_paystack_relay_resilience.py` | `test_relay_retries_transient_server_error_with_exact_body` | `delivery_retry` | `900e8c9e8d8f0b56ea27f97233219a06e311fa829455bc0e2f8f82c3ec030912` |
 | `tests/tasks/test_hooks_tasks.py` | `TestExecuteAsyncHook` | `delivery_retry` | `2b429df85fe39fe006f8bf5c79a2038cbddefd5ff91c2388910fa6f17eba1597` |
 | `tests/tasks/test_outbox_relay.py` | `test_email_handler_dead_letters_permanent_smtp_error` | `outbound_transport` | `b775e17fadfcaca7f8f710e2af679aaff5420895d3fe7fe39d273e56a1f3accb` |
-| `tests/test_email_services.py` | `TestSendEmail` | `outbound_transport` | `940f495c96637f0a97e7e96ac826447d79914a2ad09998132aeb81d0142499d3` |
+| `tests/test_email_services.py` | `TestSendEmail` | `outbound_transport` | `10868f6d6e4c654934069781ffb10739cbac98c51888c83fb87e47db0cc6d5a7` |
 | `tests/test_dependency_health.py` | `<module>` | `delivery_retry` | `d6eaf86b5e22277b2e50e5ff6b216607b2118c7f52f74cd277cf58a7cdc58807` |
 
 ## Review rule
