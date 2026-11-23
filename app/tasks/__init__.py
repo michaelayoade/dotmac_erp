@@ -70,7 +70,6 @@ from app.tasks.email import (
     run_employee_nextcloud_provisioning,
     send_employee_mailbox_activation,
     send_email_async,
-    sync_employee_mailcow_profile,
 )
 from app.tasks.expense import (
     calculate_expense_analytics,
@@ -194,7 +193,6 @@ __all__ = [
     "run_employee_mailcow_provisioning",
     "run_employee_nextcloud_provisioning",
     "send_employee_mailbox_activation",
-    "sync_employee_mailcow_profile",
     "reconcile_employee_mailcow_provisioning",
     "reconcile_employee_mailcow_profiles",
     # Fleet module tasks

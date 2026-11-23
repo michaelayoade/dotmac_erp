@@ -19,8 +19,8 @@ signature content and SOGo preferences.
 ## Flow
 
 1. An employee designation assignment or designation name changes in ERP.
-2. ERP queues an idempotent profile-sync task after the transaction is
-   expected to commit.
+2. ERP queues the existing grandfathered Mailcow provisioning task in an
+   idempotent profile-only mode after the transaction is expected to commit.
 3. The existing direct Mailcow API integration reads the complete mailbox
    custom-attribute map, merges `designation`, writes the complete map, and
    reads it back to verify the result.

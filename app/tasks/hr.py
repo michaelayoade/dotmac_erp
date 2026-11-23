@@ -172,7 +172,7 @@ def reconcile_employee_mailcow_provisioning() -> dict[str, Any]:
 def reconcile_employee_mailcow_profiles() -> dict[str, Any]:
     """Queue an idempotent designation projection for every eligible employee."""
     from app.config import settings
-    from app.tasks.email import sync_employee_mailcow_profile
+    from app.tasks.email import run_employee_mailcow_provisioning
 
     if not settings.mailcow_provisioning_enabled:
         return {"queued": 0, "errors": [], "skipped": "integration disabled"}
@@ -194,9 +194,9 @@ def reconcile_employee_mailcow_profiles() -> dict[str, Any]:
             ).all()
         for employee_id in employee_ids:
             try:
-                sync_employee_mailcow_profile.delay(
-                    str(employee_id),
-                    str(org_id),
+                run_employee_mailcow_provisioning.apply_async(
+                    args=[str(employee_id), str(org_id)],
+                    kwargs={"profile_only": True},
                 )
                 queued += 1
             except Exception as exc:  # noqa: BLE001 -- continue the repair sweep

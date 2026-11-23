@@ -142,17 +142,35 @@ def _record_workforce_stage(
     retry_jitter=True,
 )
 def run_employee_mailcow_provisioning(
-    self, employee_id: str, organization_id: str
+    self,
+    employee_id: str,
+    organization_id: str,
+    *,
+    profile_only: bool = False,
 ) -> dict[str, Any]:
-    """Create the mailbox, then start independent activation and cloud relays."""
+    """Run the existing Mailcow relay or only repair its profile projection."""
     from app.config import settings
     from app.services.people.hr.mailbox_provisioning import (
         EmployeeMailboxProvisioningService,
     )
 
-    _record_workforce_stage(organization_id, employee_id, "mailcow", "running")
     org_uuid = uuid.UUID(organization_id)
     employee_uuid = uuid.UUID(employee_id)
+    if profile_only:
+        with session_for_org(org_uuid) as db:
+            profile = EmployeeMailboxProvisioningService(db).sync_mailbox_profile(
+                org_uuid,
+                employee_uuid,
+            )
+        return {
+            "employee_id": profile.employee_id,
+            "email": profile.email,
+            "mailbox_found": profile.mailbox_found,
+            "designation_changed": profile.designation_changed,
+            "skipped": profile.skipped,
+        }
+
+    _record_workforce_stage(organization_id, employee_id, "mailcow", "running")
     try:
         with session_for_org(org_uuid) as db:
             result = EmployeeMailboxProvisioningService(db).ensure_mailbox(
@@ -189,41 +207,6 @@ def run_employee_mailcow_provisioning(
         "email": result.email,
         "created": result.created,
         "already_exists": result.already_exists,
-        "skipped": result.skipped,
-    }
-
-
-@shared_task(
-    name="app.tasks.hr.sync_employee_mailcow_profile",
-    bind=True,
-    max_retries=5,
-    autoretry_for=(httpx.TransportError, RuntimeError),
-    retry_backoff=True,
-    retry_backoff_max=900,
-    retry_jitter=True,
-)
-def sync_employee_mailcow_profile(
-    self,
-    employee_id: str,
-    organization_id: str,
-) -> dict[str, Any]:
-    """Project the current ERP designation onto an existing mailbox."""
-    from app.services.people.hr.mailbox_provisioning import (
-        EmployeeMailboxProvisioningService,
-    )
-
-    org_uuid = uuid.UUID(organization_id)
-    employee_uuid = uuid.UUID(employee_id)
-    with session_for_org(org_uuid) as db:
-        result = EmployeeMailboxProvisioningService(db).sync_mailbox_profile(
-            org_uuid,
-            employee_uuid,
-        )
-    return {
-        "employee_id": result.employee_id,
-        "email": result.email,
-        "mailbox_found": result.mailbox_found,
-        "designation_changed": result.designation_changed,
         "skipped": result.skipped,
     }
 
