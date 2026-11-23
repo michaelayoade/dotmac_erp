@@ -8,11 +8,17 @@ from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
-from app.models.people.attendance import AttendanceStatus
+from app.models.people.attendance import Attendance, AttendanceStatus
 from app.services.common import ValidationError
 from app.services.people.attendance import AttendanceService, CheckInRequirementError
-from app.services.people.attendance.attendance_service import AttendanceServiceError
+from app.services.people.attendance.attendance_service import (
+    AttendanceCardTotals,
+    AttendanceServiceError,
+)
+from app.services.people.scheduling.resolver import ScheduleResolver
 
 ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 EMPLOYEE_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
@@ -174,6 +180,123 @@ def test_monthly_summary_excludes_leave_days_from_percentage() -> None:
 
     assert summary["on_leave"] == 1
     assert summary["attendance_percentage"] == Decimal("8.62")
+
+
+def test_published_shift_dates_use_latest_workspace_and_direct_publications() -> None:
+    # Exercise the read query in SQLite using just the columns it reads.
+    engine = create_engine(
+        "sqlite://", execution_options={"schema_translate_map": {"scheduling": None}}
+    )
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "CREATE TABLE work_schedule (work_schedule_id TEXT, organization_id TEXT, "
+            "department_id TEXT, period_start DATE, period_end DATE, "
+            "revision INTEGER, status TEXT)"
+        )
+        conn.exec_driver_sql(
+            "CREATE TABLE shift_schedule (work_schedule_id TEXT, organization_id TEXT, "
+            "employee_id TEXT, shift_date DATE, status TEXT)"
+        )
+        roster_ids = [str(uuid.UUID(int=value)) for value in range(10, 13)]
+        conn.exec_driver_sql(
+            "INSERT INTO work_schedule VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    roster_id,
+                    str(ORG_ID),
+                    str(DEPARTMENT_ID),
+                    "2026-04-01",
+                    "2026-04-07",
+                    revision,
+                    status,
+                )
+                for revision, (roster_id, status) in enumerate(
+                    zip(roster_ids, ("PUBLISHED", "PUBLISHED", "DRAFT"), strict=True),
+                    start=1,
+                )
+            ],
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO shift_schedule VALUES (?, ?, ?, ?, ?)",
+            [
+                (roster_id, str(ORG_ID), str(EMPLOYEE_ID), shift_day, status)
+                for roster_id, shift_day, status in [
+                    (roster_ids[0], "2026-04-01", "PUBLISHED"),
+                    (roster_ids[1], "2026-04-02", "PUBLISHED"),
+                    (roster_ids[2], "2026-04-03", "DRAFT"),
+                    (None, "2026-04-02", "PUBLISHED"),
+                    (None, "2026-04-04", "COMPLETED"),
+                    (None, "2026-04-05", "DRAFT"),
+                ]
+            ],
+        )
+
+    with Session(engine) as db:
+        dates = ScheduleResolver(db).get_published_shift_dates(
+            organization_id=ORG_ID,
+            employee_id=EMPLOYEE_ID,
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 30),
+        )
+
+    assert dates == frozenset({date(2026, 4, 2), date(2026, 4, 4)})
+
+
+def test_rostered_card_counts_only_scheduled_days_without_approved_leave() -> None:
+    service, db = _make_service()
+    days = [date(2026, 4, day) for day in range(1, 22)]
+    # The query returns all published shifts, including the day covered by leave.
+    db.execute.return_value.all.return_value = [(day, True) for day in days]
+
+    records = [
+        Attendance(attendance_date=day, status=AttendanceStatus.PRESENT)
+        for day in days[:7]
+    ]
+    records.extend(
+        Attendance(attendance_date=day, status=AttendanceStatus.HALF_DAY)
+        for day in days[7:9]
+    )
+    for day in (days[-1], date(2026, 4, 25)):
+        records.append(Attendance(attendance_date=day, status=AttendanceStatus.PRESENT))
+
+    card = service.get_rostered_attendance_card(
+        organization_id=ORG_ID,
+        employee_id=EMPLOYEE_ID,
+        start_date=date(2026, 4, 1),
+        end_date=date(2026, 4, 30),
+        records=records,
+        approved_leave_dates={days[-1], date(2026, 4, 26)},
+    )
+
+    assert card is not None
+    assert card.attendance_credit_days == Decimal("8.0")
+    assert card.eligible_days == 20
+    assert card.attendance_percentage == Decimal("40.00")
+
+
+def test_rostered_card_distinguishes_missing_roster_from_zero_shifts() -> None:
+    service, db = _make_service()
+    db.execute.return_value.all.side_effect = [
+        [],
+        [(date(2026, 4, 1), False)],
+    ]
+
+    def get_card() -> AttendanceCardTotals | None:
+        return service.get_rostered_attendance_card(
+            organization_id=ORG_ID,
+            employee_id=EMPLOYEE_ID,
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 30),
+            records=[],
+            approved_leave_dates=set(),
+        )
+
+    assert get_card() is None
+    empty_card = get_card()
+    assert empty_card is not None
+    assert empty_card.eligible_days == 0
+    assert empty_card.attendance_credit_days == Decimal("0.0")
+    assert empty_card.attendance_percentage == Decimal("0.00")
 
 
 def test_list_attendance_applies_department_and_organization_scope() -> None:
