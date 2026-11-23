@@ -146,6 +146,22 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
                     "outbox events as interactive HR transitions."
                 ),
             ),
+            SOTService(
+                name="hr.mailbox_profile_projection",
+                module="app.services.people.hr.mailbox_provisioning",
+                owns=(
+                    "ERP designation projection into Mailcow mailbox attributes",
+                    "idempotent Mailcow mailbox-profile drift repair",
+                ),
+                notes=(
+                    "Employee.designation.designation_name remains authoritative. "
+                    "Mailcow custom_attributes.designation and the SOGo managed "
+                    "signature block are rebuildable projections. This preserves "
+                    "the grandfathered direct Mailcow integration for production; "
+                    "docs/operations/mailcow-designation-sync.md records the "
+                    "boundary and migration debt."
+                ),
+            ),
             # No external-identity protocol owner is registered: ERP's
             # unshipped OIDC adapter was deleted, and the registry records
             # as-built owners only. Reintroduction adopts the released
@@ -203,7 +219,8 @@ DOMAIN_SOT_RELATIONSHIPS: tuple[DomainSOT, ...] = (
             "identity assertion today. External authorization claims and "
             "counterparties (Customer, Supplier) are not ERP identities or "
             "permission owners. Staff-access projections are rebuildable from "
-            "ERP-owned employee and approved-leave facts."
+            "ERP-owned employee and approved-leave facts. Mailbox designation "
+            "projections are rebuildable from the ERP designation assignment."
         ),
     ),
     DomainSOT(

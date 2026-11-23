@@ -1,9 +1,15 @@
-# Mailcow SOGo forwarding cleanup
+# Mailcow SOGo profile projections
 
 These scripts remove forwarding references to an offboarded employee from
 other SOGo profiles. The ERP sends only the employee email to a private HTTP
 receiver. The receiver adds it to a local SQLite queue, and a systemd timer
 processes the queue every 15 minutes.
+
+They also project the Mailcow mailbox custom attribute `designation` into an
+ERP-managed block in the mailbox owner's SOGo signature. ERP writes the
+attribute through Mailcow's API; the Mailcow-local timer reconciles it into
+SOGo every five minutes. Existing signature content and unrelated SOGo
+preferences are preserved.
 
 The receiver never accesses SOGo. The processor reaches MariaDB only through
 Mailcow's local `mysql-mailcow` Docker Compose service; no database port or
@@ -14,7 +20,10 @@ credentials need to be exposed to the ERP or public network.
 - `sogo_cleanup_queue.py`: shared SQLite schema, queue functions, and CLI.
 - `sogo_cleanup_receiver.py`: authenticated private HTTP receiver.
 - `sogo_forward_cleanup.py`: queued SOGo forwarding cleanup processor.
+- `sogo_designation_sync.py`: Mailcow designation to SOGo signature projector.
 - `dotmac-sogo-cleanup.service` and `.timer`: 15-minute processor schedule.
+- `dotmac-sogo-designation-sync.service` and `.timer`: five-minute signature
+  reconciliation schedule.
 - `dotmac-sogo-cleanup-receiver.service`: long-running HTTP receiver.
 - `sogo_cleanup_config.env.sample`: shared configuration example.
 
@@ -34,11 +43,14 @@ install -m 0755 \
   sogo_cleanup_queue.py \
   sogo_cleanup_receiver.py \
   sogo_forward_cleanup.py \
+  sogo_designation_sync.py \
   /opt/dotmac-mailcow-offboarding/
 install -m 0644 \
   dotmac-sogo-cleanup.service \
   dotmac-sogo-cleanup.timer \
   dotmac-sogo-cleanup-receiver.service \
+  dotmac-sogo-designation-sync.service \
+  dotmac-sogo-designation-sync.timer \
   /etc/systemd/system/
 install -d -m 0700 /var/lib/dotmac-mailcow-offboarding
 install -m 0600 sogo_cleanup_config.env.sample /etc/dotmac-sogo-cleanup.env
@@ -104,6 +116,31 @@ journalctl -u dotmac-sogo-cleanup.service -n 100 --no-pager
 When no work is waiting, the service logs `No pending cleanup requests`.
 Failed requests remain pending with `last_error` populated so a later timer run
 can retry them.
+
+## Designation signature projector
+
+Preview the number of SOGo profiles that would change:
+
+```sh
+/opt/dotmac-mailcow-offboarding/sogo_designation_sync.py \
+  --config /etc/dotmac-sogo-cleanup.env --dry-run
+```
+
+Apply once, then enable continuous reconciliation:
+
+```sh
+/opt/dotmac-mailcow-offboarding/sogo_designation_sync.py \
+  --config /etc/dotmac-sogo-cleanup.env --apply
+systemctl daemon-reload
+systemctl enable --now dotmac-sogo-designation-sync.timer
+systemctl status dotmac-sogo-designation-sync.timer
+```
+
+The projector changes only a
+`<span data-dotmac-erp-designation="true">...</span>` block inside the matching
+SOGo identity signature. A designation rename replaces that block; removing an
+ERP designation removes the block. It never replaces the rest of a user's
+signature.
 
 ## Private receiver
 

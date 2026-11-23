@@ -153,3 +153,74 @@ class MailcowClient:
             ]
             if failures:
                 raise MailcowClientError(f"Mailbox update failed: {failures}")
+
+    def set_mailbox_custom_attribute(
+        self,
+        email: str,
+        attribute: str,
+        value: str | None,
+    ) -> bool | None:
+        """Set one mailbox custom attribute without discarding unrelated values.
+
+        Mailcow's custom-attribute endpoint replaces the complete attribute map,
+        so this method always reads, merges, writes, and verifies the projection.
+        ``None`` means that the mailbox does not exist; the boolean return value
+        reports whether a write was required.
+        """
+        mailbox = self.get_mailbox(email)
+        if mailbox is None:
+            return None
+
+        raw_attributes = mailbox.get("custom_attributes")
+        current = (
+            {
+                str(key): str(existing_value)
+                for key, existing_value in raw_attributes.items()
+            }
+            if isinstance(raw_attributes, dict)
+            else {}
+        )
+        expected = dict(current)
+        if value is None or not value.strip():
+            expected.pop(attribute, None)
+        else:
+            expected[attribute] = value.strip()
+
+        if expected == current:
+            return False
+
+        payload = {
+            "items": [email],
+            "attr": {
+                "attribute": list(expected),
+                "value": list(expected.values()),
+            },
+        }
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.post(
+                f"{self.base_url}/edit/mailbox/custom-attribute",
+                headers=self._headers(),
+                json=payload,
+            )
+            self._raise_for_http_error(response)
+        self._raise_for_api_failure(response.json(), "custom attribute update")
+
+        verified_mailbox = self.get_mailbox(email)
+        verified_raw = (
+            verified_mailbox.get("custom_attributes")
+            if isinstance(verified_mailbox, dict)
+            else None
+        )
+        verified = (
+            {
+                str(key): str(existing_value)
+                for key, existing_value in verified_raw.items()
+            }
+            if isinstance(verified_raw, dict)
+            else {}
+        )
+        if verified != expected:
+            raise MailcowClientError(
+                "Mailbox custom attribute update could not be verified"
+            )
+        return True

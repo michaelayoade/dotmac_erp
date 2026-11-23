@@ -1152,6 +1152,7 @@ class EmployeeService:
             employee.department_id,
         )
         prior_department_id = employee.department_id
+        prior_designation_id = employee.designation_id
 
         provided_fields: set[str] = set(getattr(data, "provided_fields", set()))
         use_provided_fields = bool(provided_fields)
@@ -1394,6 +1395,8 @@ class EmployeeService:
                 employee,
                 allow_active_access_revocation=allow_active_access_revocation,
             )
+        if employee.designation_id != prior_designation_id:
+            self._enqueue_mailcow_profile_sync(employee)
 
         return employee
 
@@ -1640,6 +1643,26 @@ class EmployeeService:
                 exc_info=True,
             )
         return True
+
+    def _enqueue_mailcow_profile_sync(self, employee: Employee) -> None:
+        """Queue the idempotent Mailcow designation projection after commit."""
+        from app.config import settings as app_settings
+
+        if not getattr(app_settings, "mailcow_provisioning_enabled", False):
+            return
+        try:
+            from app.tasks.email import sync_employee_mailcow_profile
+
+            sync_employee_mailcow_profile.apply_async(
+                args=[str(employee.employee_id), str(employee.organization_id)],
+                countdown=10,
+            )
+        except Exception:  # noqa: BLE001 -- reconciliation repairs broker failure
+            logger.warning(
+                "Could not enqueue Mailcow profile sync for employee %s",
+                employee.employee_id,
+                exc_info=True,
+            )
 
     def _refresh_staff_access_projection(self, employee: Employee) -> None:
         """Refresh ERP-owned Selfcare-facing staff access projections."""

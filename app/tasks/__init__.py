@@ -70,6 +70,7 @@ from app.tasks.email import (
     run_employee_nextcloud_provisioning,
     send_employee_mailbox_activation,
     send_email_async,
+    sync_employee_mailcow_profile,
 )
 from app.tasks.expense import (
     calculate_expense_analytics,
@@ -113,6 +114,7 @@ from app.tasks.hr import (
     process_contract_expiry_notifications,
     process_performance_review_reminders,
     process_probation_ending_notifications,
+    reconcile_employee_mailcow_profiles,
     reconcile_employee_mailcow_provisioning,
     run_employee_mailcow_offboarding,
     process_work_anniversary_notifications,
@@ -192,7 +194,9 @@ __all__ = [
     "run_employee_mailcow_provisioning",
     "run_employee_nextcloud_provisioning",
     "send_employee_mailbox_activation",
+    "sync_employee_mailcow_profile",
     "reconcile_employee_mailcow_provisioning",
+    "reconcile_employee_mailcow_profiles",
     # Fleet module tasks
     "process_document_expiry_notifications",
     # Performance module tasks
