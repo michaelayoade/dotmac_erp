@@ -85,5 +85,6 @@ punches carry `marked_by=SELFCARE` for check-in and explicit audit evidence that
 omits precise coordinates from generic audit metadata.
 
 The v1 adapter rejects overnight shifts and prior-day open overnight attendance
-with `overnight_shift_not_supported`. Correct next-morning overnight checkout is
-a separate ERP domain change and must precede lifting that pilot exclusion.
+with `overnight_shift_not_supported`. It uses the effective published roster
+before falling back to dated or default shifts. The overnight pilot exclusion
+remains in effect.

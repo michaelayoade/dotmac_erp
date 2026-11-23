@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, time
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -138,6 +139,27 @@ def test_punch_rate_limit_is_per_service_subject_and_idempotency_key(
     redis_client.incr.assert_called_once()
     assert str(auth["api_key_id"]) in redis_client.incr.call_args.args[0]
     assert str(SUBJECT) in redis_client.incr.call_args.args[0]
+
+
+def test_selfcare_overnight_guard_uses_directly_published_shift() -> None:
+    service, db = _service_with_matches()
+    service.attendance = MagicMock()
+    employee = _employee()
+    now = datetime(2026, 8, 3, 23, 0, tzinfo=UTC)
+    service.attendance.get_org_now.return_value = now
+    service.attendance.get_attendance_by_date.return_value = None
+    db.scalars.return_value.all.return_value = [
+        SimpleNamespace(
+            shift_date=now.date(),
+            shift_type=SimpleNamespace(start_time=time(22), end_time=time(6)),
+            work_schedule_id=None,
+        )
+    ]
+
+    assert (
+        service._overnight_reason(ORG_ID, employee) == "overnight_shift_not_supported"
+    )
+    service.attendance.get_employee_shift.assert_not_called()
 
 
 @pytest.mark.parametrize("action", ["check_in", "check_out"])

@@ -805,35 +805,25 @@ class WorkflowService:
                     LeaveApplicationStatus,
                 )
 
-                from app.models.people.scheduling import (
-                    ScheduleStatus,
-                    ShiftSchedule,
-                    WorkSchedule,
-                )
+                from app.services.people.scheduling.resolver import ScheduleResolver
 
-                rostered = db.scalar(
-                    select(ShiftSchedule.shift_schedule_id)
-                    .join(
-                        WorkSchedule,
-                        WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
-                    )
-                    .where(
-                        ShiftSchedule.organization_id == rule.organization_id,
-                        WorkSchedule.organization_id == rule.organization_id,
-                        ShiftSchedule.employee_id == attendance.employee_id,
-                        ShiftSchedule.shift_date == attendance.attendance_date,
-                        ShiftSchedule.status.in_(
-                            [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
-                        ),
-                        WorkSchedule.status.in_(
-                            [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
-                        ),
-                    )
-                    .limit(1)
+                assignment = ScheduleResolver(db).get_effective_assignment(
+                    organization_id=rule.organization_id,
+                    employee_id=attendance.employee_id,
+                    shift_date=attendance.attendance_date,
                 )
-                if not rostered:
+                if assignment is None:
                     return self._record_skipped(
                         db, rule, context, "No published shift for the attendance date"
+                    )
+
+                if (
+                    attendance.marked_by == "SYSTEM"
+                    and attendance.shift_schedule_id is not None
+                    and attendance.shift_schedule_id != assignment.shift_schedule_id
+                ):
+                    return self._record_skipped(
+                        db, rule, context, "Absence belongs to a superseded shift"
                     )
 
                 on_leave = db.scalar(

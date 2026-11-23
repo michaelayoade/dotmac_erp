@@ -985,16 +985,17 @@ def test_approved_attendance_exception_skips_email(workflow_service, reason, fla
 
 
 @pytest.mark.parametrize(
-    ("active", "rostered", "on_leave", "expected_reason"),
+    ("active", "rostered", "on_leave", "superseded", "expected_reason"),
     [
-        (False, False, False, "Email workflow is disabled"),
-        (True, False, False, "No published shift for the attendance date"),
-        (True, True, True, "Approved full-day leave"),
-        (True, True, False, None),
+        (False, False, False, False, "Email workflow is disabled"),
+        (True, False, False, False, "No published shift for the attendance date"),
+        (True, True, True, False, "Approved full-day leave"),
+        (True, True, False, True, "Absence belongs to a superseded shift"),
+        (True, True, False, False, None),
     ],
 )
 def test_absence_email_rechecks_rule_and_roster(
-    workflow_service, active, rostered, on_leave, expected_reason
+    workflow_service, active, rostered, on_leave, superseded, expected_reason
 ):
     from app.services.finance.automation.workflow import ActionResult
 
@@ -1016,12 +1017,16 @@ def test_absence_email_rechecks_rule_and_roster(
         employee_id=uuid.uuid4(),
         attendance_date=date(2026, 11, 14),
         status="ABSENT",
+        marked_by="SYSTEM",
+        shift_schedule_id=uuid.uuid4() if superseded else None,
     )
     db.scalar.side_effect = [
         rule.rule_id if active else None,
-        uuid.uuid4() if rostered else None,
         uuid.uuid4() if on_leave else None,
     ]
+    db.scalars.return_value.all.return_value = (
+        [SimpleNamespace(shift_schedule_id=uuid.uuid4())] if rostered else []
+    )
     with (
         patch.object(
             workflow_service, "_run_action", return_value=ActionResult(success=True)
