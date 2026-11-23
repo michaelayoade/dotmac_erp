@@ -74,6 +74,64 @@ def test_mailbox_completion_fans_out_activation_and_nextcloud(monkeypatch) -> No
     )
 
 
+def test_profile_only_reuses_mailcow_task_without_provisioning_fanout(
+    monkeypatch,
+) -> None:
+    organization_id = uuid4()
+    employee_id = uuid4()
+    db = MagicMock()
+
+    @contextmanager
+    def session_for_org(_organization_id):
+        yield db
+
+    class MailboxService:
+        def __init__(self, _db):
+            pass
+
+        def sync_mailbox_profile(self, _organization_id, _employee_id):
+            return SimpleNamespace(
+                employee_id=str(employee_id),
+                email="person@dotmac.ng",
+                mailbox_found=True,
+                designation_changed=True,
+                skipped=[],
+            )
+
+        def ensure_mailbox(self, _organization_id, _employee_id):
+            raise AssertionError("profile-only mode must not provision a mailbox")
+
+    activation_task = MagicMock()
+    nextcloud_task = MagicMock()
+    monkeypatch.setattr(email_tasks, "session_for_org", session_for_org)
+    monkeypatch.setattr(
+        email_tasks, "send_employee_mailbox_activation", activation_task
+    )
+    monkeypatch.setattr(
+        email_tasks, "run_employee_nextcloud_provisioning", nextcloud_task
+    )
+    monkeypatch.setattr(
+        "app.services.people.hr.mailbox_provisioning.EmployeeMailboxProvisioningService",
+        MailboxService,
+    )
+
+    result = email_tasks.run_employee_mailcow_provisioning.run(
+        str(employee_id),
+        str(organization_id),
+        profile_only=True,
+    )
+
+    assert result == {
+        "employee_id": str(employee_id),
+        "email": "person@dotmac.ng",
+        "mailbox_found": True,
+        "designation_changed": True,
+        "skipped": [],
+    }
+    activation_task.apply_async.assert_not_called()
+    nextcloud_task.apply_async.assert_not_called()
+
+
 def test_nextcloud_task_enqueues_selfcare_after_binding(monkeypatch) -> None:
     organization_id = uuid4()
     employee_id = uuid4()

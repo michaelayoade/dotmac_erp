@@ -30,7 +30,9 @@ def test_designation_rename_queues_every_assigned_employee() -> None:
             True,
             create=True,
         ),
-        patch("app.tasks.email.sync_employee_mailcow_profile.apply_async") as enqueue,
+        patch(
+            "app.tasks.email.run_employee_mailcow_provisioning.apply_async"
+        ) as enqueue,
     ):
         service.update_designation(
             designation_id,
@@ -42,3 +44,7 @@ def test_designation_rename_queues_every_assigned_employee() -> None:
     assert [call.kwargs["args"][0] for call in enqueue.call_args_list] == [
         str(employee_id) for employee_id in employee_ids
     ]
+    assert all(
+        call.kwargs["kwargs"] == {"profile_only": True}
+        for call in enqueue.call_args_list
+    )

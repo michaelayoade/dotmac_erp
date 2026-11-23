@@ -739,11 +739,12 @@ class OrganizationService:
             )
         ).all()
         try:
-            from app.tasks.email import sync_employee_mailcow_profile
+            from app.tasks.email import run_employee_mailcow_provisioning
 
             for employee_id in employee_ids:
-                sync_employee_mailcow_profile.apply_async(
+                run_employee_mailcow_provisioning.apply_async(
                     args=[str(employee_id), str(self.organization_id)],
+                    kwargs={"profile_only": True},
                     countdown=10,
                 )
         except Exception:  # noqa: BLE001 -- nightly reconciliation repairs this

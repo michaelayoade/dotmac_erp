@@ -1651,10 +1651,11 @@ class EmployeeService:
         if not getattr(app_settings, "mailcow_provisioning_enabled", False):
             return
         try:
-            from app.tasks.email import sync_employee_mailcow_profile
+            from app.tasks.email import run_employee_mailcow_provisioning
 
-            sync_employee_mailcow_profile.apply_async(
+            run_employee_mailcow_provisioning.apply_async(
                 args=[str(employee.employee_id), str(employee.organization_id)],
+                kwargs={"profile_only": True},
                 countdown=10,
             )
         except Exception:  # noqa: BLE001 -- reconciliation repairs broker failure
