@@ -1152,7 +1152,7 @@ class EmployeeService:
             employee.department_id,
         )
         prior_department_id = employee.department_id
-        prior_designation_id = employee.designation_id
+        prior_designation_id = getattr(employee, "designation_id", None)
 
         provided_fields: set[str] = set(getattr(data, "provided_fields", set()))
         use_provided_fields = bool(provided_fields)
@@ -1395,7 +1395,7 @@ class EmployeeService:
                 employee,
                 allow_active_access_revocation=allow_active_access_revocation,
             )
-        if employee.designation_id != prior_designation_id:
+        if getattr(employee, "designation_id", None) != prior_designation_id:
             self._enqueue_mailcow_profile_sync(employee)
 
         return employee
