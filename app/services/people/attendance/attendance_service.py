@@ -43,7 +43,7 @@ from app.services.people import (
     PEOPLE_SETTINGS_DOMAIN,
     REQUIRE_DOB_FOR_CHECKIN_SETTING,
 )
-from app.services.people.scheduling.resolver import ScheduleResolver
+from app.services.people.scheduling.resolver import ResolvedShift, ScheduleResolver
 from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
@@ -945,7 +945,15 @@ class AttendanceService:
             resolved_schedule.assignment.shift_date if resolved_schedule else now.date()
         )
 
-        # Check if already checked in
+        # Serialize with scheduled absence generation before reading this day's row.
+        self.db.execute(
+            select(Employee.employee_id)
+            .where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == employee_id,
+            )
+            .with_for_update()
+        )
         existing = self.get_attendance_by_date(org_id, employee_id, attendance_date)
         if existing and existing.check_in:
             raise AttendanceServiceError(
@@ -993,7 +1001,7 @@ class AttendanceService:
             else None
         )
         work_schedule_id = (
-            resolved_schedule.schedule.work_schedule_id if resolved_schedule else None
+            resolved_schedule.assignment.work_schedule_id if resolved_schedule else None
         )
 
         if existing:
@@ -1051,6 +1059,13 @@ class AttendanceService:
         attendance = self.get_attendance_by_date(
             org_id, employee_id, today, for_update=True
         )
+        if (attendance is None or not attendance.check_in) and today == now.date():
+            # A published amendment may have removed an overnight assignment
+            # after the employee punched in. The saved attendance identifies it.
+            attendance = (
+                self._find_previous_overnight_attendance(org_id, employee_id, now)
+                or attendance
+            )
         if not attendance:
             raise AttendanceServiceError(f"No check-in found for {today}")
 
@@ -1094,6 +1109,27 @@ class AttendanceService:
             attendance.working_hours = Decimal(str(delta.total_seconds() / 3600))
 
         self.db.flush()
+        return attendance
+
+    def _find_previous_overnight_attendance(
+        self, org_id: UUID, employee_id: UUID, now: datetime
+    ) -> Attendance | None:
+        yesterday = now.date() - timedelta(days=1)
+        attendance = self.get_attendance_by_date(
+            org_id, employee_id, yesterday, for_update=True
+        )
+        if (
+            attendance is None
+            or not attendance.check_in
+            or not attendance.shift_type_id
+        ):
+            return None
+        shift = self.get_shift_type(org_id, attendance.shift_type_id)
+        if shift.end_time > shift.start_time:
+            return None
+        scheduled_end = self._combine_date_time(now.date(), shift.end_time, now.tzinfo)
+        if now > scheduled_end + timedelta(hours=6):
+            return None
         return attendance
 
     def check_in_by_attendance_id(
@@ -1278,11 +1314,6 @@ class AttendanceService:
             LeaveApplication,
             LeaveApplicationStatus,
         )
-        from app.models.people.scheduling import (
-            ScheduleStatus,
-            ShiftSchedule,
-            WorkSchedule,
-        )
 
         org_now = as_of or self.get_org_now(org_id)
         if org_now.tzinfo is None:
@@ -1291,35 +1322,16 @@ class AttendanceService:
             org_now = org_now.astimezone(self._org_tzinfo(org_id))
         target_date = attendance_date or (org_now.date() - timedelta(days=1))
 
-        schedule_rows = self.db.execute(
-            select(ShiftSchedule, WorkSchedule)
-            .join(
-                WorkSchedule,
-                WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
-            )
-            .options(joinedload(ShiftSchedule.shift_type))
-            .where(
-                ShiftSchedule.organization_id == org_id,
-                ShiftSchedule.shift_date == target_date,
-                ShiftSchedule.status.in_(
-                    [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
-                ),
-                WorkSchedule.organization_id == org_id,
-                WorkSchedule.status.in_(
-                    [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
-                ),
-            )
-            .order_by(
-                WorkSchedule.revision.desc(),
-                ShiftSchedule.revision.desc(),
-            )
-        ).all()
-
-        schedules_by_employee: dict[UUID, tuple[Any, Any]] = {}
-        for assignment, schedule in schedule_rows:
+        assignments = ScheduleResolver(self.db).list_effective_assignments(
+            organization_id=org_id,
+            start_date=target_date,
+            end_date=target_date,
+        )
+        schedules_by_employee: dict[UUID, ResolvedShift] = {}
+        for assignment in assignments:
             schedules_by_employee.setdefault(
                 assignment.employee_id,
-                (assignment, schedule),
+                ResolvedShift.from_assignment(assignment, org_now.tzinfo),
             )
 
         employee_ids = set(schedules_by_employee)
@@ -1333,9 +1345,11 @@ class AttendanceService:
                 "shift_not_ended": 0,
             }
 
+        # Lock before reading attendance so a concurrent punch can finish first.
         eligible_employee_ids = set(
             self.db.scalars(
-                select(Employee.employee_id).where(
+                select(Employee.employee_id)
+                .where(
                     Employee.organization_id == org_id,
                     Employee.employee_id.in_(employee_ids),
                     Employee.status == EmployeeStatus.ACTIVE,
@@ -1345,6 +1359,8 @@ class AttendanceService:
                         Employee.date_of_leaving >= target_date,
                     ),
                 )
+                .order_by(Employee.employee_id)
+                .with_for_update()
             ).all()
         )
         leave_employee_ids = set(
@@ -1377,7 +1393,7 @@ class AttendanceService:
             "ineligible": 0,
             "shift_not_ended": 0,
         }
-        for employee_id, (assignment, schedule) in schedules_by_employee.items():
+        for employee_id, shift in schedules_by_employee.items():
             if employee_id not in eligible_employee_ids:
                 result["ineligible"] += 1
                 continue
@@ -1388,18 +1404,11 @@ class AttendanceService:
                 result["existing"] += 1
                 continue
 
-            shift = assignment.shift_type
-            scheduled_end = self._combine_date_time(
-                target_date,
-                shift.end_time,
-                org_now.tzinfo,
-            )
-            if shift.end_time <= shift.start_time:
-                scheduled_end += timedelta(days=1)
-            if org_now < scheduled_end:
+            if org_now < shift.scheduled_end:
                 result["shift_not_ended"] += 1
                 continue
 
+            assignment = shift.assignment
             self.db.add(
                 Attendance(
                     organization_id=org_id,
@@ -1408,7 +1417,7 @@ class AttendanceService:
                     status=AttendanceStatus.ABSENT,
                     shift_type_id=assignment.shift_type_id,
                     shift_schedule_id=assignment.shift_schedule_id,
-                    work_schedule_id=schedule.work_schedule_id,
+                    work_schedule_id=assignment.work_schedule_id,
                     late_entry=False,
                     late_entry_minutes=0,
                     early_exit=False,

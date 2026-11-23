@@ -12,6 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.models.people.attendance import Attendance, AttendanceStatus
+from app.models.people.scheduling import ShiftSchedule
 from app.services.common import ValidationError
 from app.services.people.attendance import AttendanceService, CheckInRequirementError
 from app.services.people.attendance.attendance_service import AttendanceServiceError
@@ -192,7 +193,7 @@ def test_published_shift_dates_use_latest_workspace_and_direct_publications() ->
         )
         conn.exec_driver_sql(
             "CREATE TABLE shift_schedule (work_schedule_id TEXT, organization_id TEXT, "
-            "employee_id TEXT, shift_date DATE, status TEXT)"
+            "employee_id TEXT, shift_date DATE, status TEXT, revision INTEGER)"
         )
         roster_ids = [str(uuid.UUID(int=value)) for value in range(10, 13)]
         conn.exec_driver_sql(
@@ -214,9 +215,9 @@ def test_published_shift_dates_use_latest_workspace_and_direct_publications() ->
             ],
         )
         conn.exec_driver_sql(
-            "INSERT INTO shift_schedule VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO shift_schedule VALUES (?, ?, ?, ?, ?, ?)",
             [
-                (roster_id, str(ORG_ID), str(EMPLOYEE_ID), shift_day, status)
+                (roster_id, str(ORG_ID), str(EMPLOYEE_ID), shift_day, status, 1)
                 for roster_id, shift_day, status in [
                     (roster_ids[0], "2026-04-01", "PUBLISHED"),
                     (roster_ids[1], "2026-04-02", "PUBLISHED"),
@@ -236,7 +237,55 @@ def test_published_shift_dates_use_latest_workspace_and_direct_publications() ->
             end_date=date(2026, 4, 30),
         )
 
+        query_db = MagicMock()
+        resolver = ScheduleResolver(query_db)
+        # Use the production assignment filters against the same fixture. The
+        # projection avoids hydrating ORM relationships outside this fixture.
+        query_db.scalars.return_value.all.return_value = []
+        resolver.list_effective_assignments(
+            organization_id=ORG_ID,
+            employee_id=EMPLOYEE_ID,
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 30),
+        )
+        statement = query_db.scalars.call_args.args[0].with_only_columns(
+            ShiftSchedule.shift_date, ShiftSchedule.work_schedule_id
+        )
+        rows = db.execute(statement).all()
+
     assert dates == frozenset({date(2026, 4, 2), date(2026, 4, 4)})
+    assert rows == [
+        (date(2026, 4, 2), uuid.UUID(roster_ids[1])),
+        (date(2026, 4, 4), None),
+        (date(2026, 4, 2), None),
+    ]
+
+
+def test_punch_prefers_shift_in_progress_over_another_shifts_grace_window() -> None:
+    db = MagicMock()
+    today = date(2026, 8, 4)
+    yesterday_night = SimpleNamespace(
+        shift_date=date(2026, 8, 3),
+        shift_type=SimpleNamespace(start_time=time(22), end_time=time(6)),
+    )
+    today_day = SimpleNamespace(
+        shift_date=today,
+        shift_type=SimpleNamespace(start_time=time(8), end_time=time(17)),
+    )
+    db.scalars.return_value.all.return_value = [yesterday_night, today_day]
+    resolver = ScheduleResolver(db)
+
+    overnight = resolver.resolve_employee_shift(
+        ORG_ID, EMPLOYEE_ID, datetime(2026, 8, 4, 3, tzinfo=UTC)
+    )
+    assert overnight is not None
+    assert overnight.assignment is yesterday_night
+
+    day = resolver.resolve_employee_shift(
+        ORG_ID, EMPLOYEE_ID, datetime(2026, 8, 4, 9, tzinfo=UTC)
+    )
+    assert day is not None
+    assert day.assignment is today_day
 
 
 def test_rostered_card_counts_only_scheduled_days_without_approved_leave() -> None:
@@ -729,9 +778,9 @@ def test_check_in_links_published_schedule_assignment(monkeypatch) -> None:
         shift_type_id=shift_id,
         shift_type=shift,
         shift_date=date(2026, 8, 3),
+        work_schedule_id=work_schedule_id,
     )
-    schedule = SimpleNamespace(work_schedule_id=work_schedule_id)
-    resolved = SimpleNamespace(assignment=assignment, schedule=schedule)
+    resolved = SimpleNamespace(assignment=assignment)
     monkeypatch.setattr(
         "app.services.people.attendance.attendance_service.ScheduleResolver",
         lambda db: SimpleNamespace(resolve_employee_shift=lambda *_args: resolved),
@@ -753,6 +802,7 @@ def test_check_in_links_published_schedule_assignment(monkeypatch) -> None:
         date(2026, 8, 3),
     )
     service.get_employee_shift.assert_not_called()
+    assert "FOR UPDATE" in str(db.execute.call_args.args[0])
     assert attendance.shift_type_id == shift_id
     assert attendance.shift_schedule_id == shift_schedule_id
     assert attendance.work_schedule_id == work_schedule_id
@@ -848,21 +898,53 @@ def test_check_out_stores_calculated_early_exit_minutes() -> None:
     db.flush.assert_called_once()
 
 
-def test_generate_scheduled_absences_uses_published_schedule() -> None:
+def test_checkout_uses_saved_overnight_punch_after_amendment(monkeypatch) -> None:
+    service, db = _make_service()
+    shift = SimpleNamespace(
+        start_time=time(22), end_time=time(6), early_exit_grace_period=0
+    )
+    saved = SimpleNamespace(
+        attendance_date=date(2026, 8, 3),
+        check_in=datetime(2026, 8, 3, 22, 0, tzinfo=UTC),
+        check_out=None,
+        shift_type_id=uuid.uuid4(),
+    )
+    monkeypatch.setattr(ScheduleResolver, "resolve_employee_shift", lambda *_: None)
+    monkeypatch.setattr(
+        service, "get_attendance_by_date", MagicMock(side_effect=[None, saved])
+    )
+    monkeypatch.setattr(service, "get_shift_type", lambda *_: shift)
+    monkeypatch.setattr(service, "_validate_geofence", lambda *_, **__: None)
+    monkeypatch.setattr(service, "_normalize_in_org_tz", lambda _org_id, value: value)
+
+    result = service.check_out(
+        ORG_ID, EMPLOYEE_ID, check_out_time=datetime(2026, 8, 4, 6, tzinfo=UTC)
+    )
+
+    assert result is saved
+    assert saved.check_out == datetime(2026, 8, 4, 6, tzinfo=UTC)
+    assert saved.working_hours == Decimal("8")
+    db.flush.assert_called_once()
+
+
+@pytest.mark.parametrize("work_schedule_id", [None, uuid.UUID(int=5)])
+def test_generate_scheduled_absences_uses_published_schedule(
+    work_schedule_id: uuid.UUID | None,
+) -> None:
     service, db = _make_service()
     shift_type_id = uuid.uuid4()
     shift_schedule_id = uuid.uuid4()
-    work_schedule_id = uuid.uuid4()
     shift = SimpleNamespace(start_time=time(8, 0), end_time=time(17, 0))
     assignment = SimpleNamespace(
         employee_id=EMPLOYEE_ID,
         shift_type_id=shift_type_id,
         shift_schedule_id=shift_schedule_id,
         shift_type=shift,
+        shift_date=date(2026, 8, 3),
+        work_schedule_id=work_schedule_id,
     )
-    schedule = SimpleNamespace(work_schedule_id=work_schedule_id)
-    db.execute.return_value.all.return_value = [(assignment, schedule)]
     db.scalars.side_effect = [
+        SimpleNamespace(all=lambda: [assignment]),
         SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
         SimpleNamespace(all=lambda: []),
         SimpleNamespace(all=lambda: []),
@@ -890,6 +972,7 @@ def test_generate_scheduled_absences_uses_published_schedule() -> None:
     assert attendance.shift_schedule_id == shift_schedule_id
     assert attendance.work_schedule_id == work_schedule_id
     assert attendance.marked_by == "SYSTEM"
+    assert "FOR UPDATE" in str(db.scalars.call_args_list[1].args[0])
     db.flush.assert_called_once()
 
 
@@ -906,10 +989,11 @@ def test_generate_scheduled_absences_preserves_leave_and_attendance(
         shift_type_id=uuid.uuid4(),
         shift_schedule_id=uuid.uuid4(),
         shift_type=shift,
+        shift_date=date(2026, 8, 3),
+        work_schedule_id=uuid.uuid4(),
     )
-    schedule = SimpleNamespace(work_schedule_id=uuid.uuid4())
-    db.execute.return_value.all.return_value = [(assignment, schedule)]
     db.scalars.side_effect = [
+        SimpleNamespace(all=lambda: [assignment]),
         SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
         SimpleNamespace(all=lambda: [EMPLOYEE_ID] if approved_leave else []),
         SimpleNamespace(all=lambda: [] if approved_leave else [EMPLOYEE_ID]),
@@ -926,6 +1010,33 @@ def test_generate_scheduled_absences_preserves_leave_and_attendance(
     assert result["created"] == 0
     db.add.assert_not_called()
     db.flush.assert_not_called()
+
+
+def test_absence_job_waits_for_the_published_overnight_shift_to_end() -> None:
+    service, db = _make_service()
+    assignment = SimpleNamespace(
+        employee_id=EMPLOYEE_ID,
+        shift_date=date(2026, 8, 3),
+        shift_type=SimpleNamespace(start_time=time(22), end_time=time(6)),
+        shift_type_id=uuid.uuid4(),
+        shift_schedule_id=uuid.uuid4(),
+        work_schedule_id=None,
+    )
+    db.scalars.side_effect = [
+        SimpleNamespace(all=lambda: [assignment]),
+        SimpleNamespace(all=lambda: [EMPLOYEE_ID]),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(all=lambda: []),
+    ]
+    service._org_tzinfo = lambda _org_id: UTC  # type: ignore[method-assign]
+
+    result = service.generate_scheduled_absences(
+        ORG_ID, as_of=datetime(2026, 8, 4, 5, 59, tzinfo=UTC)
+    )
+
+    assert result["shift_not_ended"] == 1
+    assert result["created"] == 0
+    db.add.assert_not_called()
 
 
 def test_late_early_report_counts_only_verified_exceptions() -> None:

@@ -24,6 +24,7 @@ from app.services.people.attendance.attendance_service import (
     AttendanceServiceError,
     CheckInRequirementError,
 )
+from app.services.people.scheduling.resolver import ScheduleResolver
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,8 @@ class SelfcareAttendanceIntegrationService:
     def _overnight_reason(
         self, organization_id: UUID, employee: Employee
     ) -> str | None:
-        today = self.attendance.get_org_today(organization_id)
+        now = self.attendance.get_org_now(organization_id)
+        today = now.date()
         yesterday = today - timedelta(days=1)
         previous = self.attendance.get_attendance_by_date(
             organization_id, employee.employee_id, yesterday
@@ -230,8 +232,25 @@ class SelfcareAttendanceIntegrationService:
             )
             if shift and shift.end_time <= shift.start_time:
                 return "overnight_shift_not_supported"
-        shift = self.attendance.get_employee_shift(
-            organization_id, employee.employee_id, today
+        resolver = ScheduleResolver(self.db)
+        resolved = resolver.resolve_employee_shift(
+            organization_id, employee.employee_id, now
+        )
+        assignment = (
+            resolved.assignment
+            if resolved
+            else resolver.get_effective_assignment(
+                organization_id=organization_id,
+                employee_id=employee.employee_id,
+                shift_date=today,
+            )
+        )
+        shift = (
+            assignment.shift_type
+            if assignment
+            else self.attendance.get_employee_shift(
+                organization_id, employee.employee_id, today
+            )
         )
         if shift and shift.end_time <= shift.start_time:
             return "overnight_shift_not_supported"
