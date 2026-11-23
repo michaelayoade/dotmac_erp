@@ -110,9 +110,10 @@
             </div>
         </div>
         <div class="card p-5">
+            {% set card_totals = attendance_card or summary %}
             <p class="text-sm text-slate-500 dark:text-slate-400">Attendance %</p>
-            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.attendance_percentage }}%</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400">{{ summary.attendance_credit_days }}/{{ summary.eligible_days }} eligible days • leave excluded</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ card_totals.attendance_percentage }}%</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">{{ card_totals.attendance_credit_days }}/{{ card_totals.eligible_days }} eligible days • leave excluded</p>
         </div>
         <div class="card p-5">
             <p class="text-sm text-slate-500 dark:text-slate-400">Total Hours</p>

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.models.people.scheduling import ScheduleStatus, ShiftSchedule, WorkSchedule
 
@@ -25,6 +25,69 @@ class ScheduleResolver:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def get_published_shift_dates(
+        self,
+        *,
+        organization_id: UUID,
+        employee_id: UUID,
+        start_date: date,
+        end_date: date,
+    ) -> frozenset[date] | None:
+        """Return published workdays, or None when there is no employee roster."""
+        published = (ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED)
+        revision = aliased(WorkSchedule)
+        latest_revision = (
+            select(func.max(revision.revision))
+            .where(
+                revision.organization_id == organization_id,
+                revision.department_id == WorkSchedule.department_id,
+                revision.period_start == WorkSchedule.period_start,
+                revision.period_end == WorkSchedule.period_end,
+                revision.status.in_(published),
+            )
+            .correlate(WorkSchedule)
+            .scalar_subquery()
+        )
+        rows = self.db.execute(
+            select(
+                ShiftSchedule.shift_date,
+                or_(
+                    ShiftSchedule.work_schedule_id.is_(None),
+                    WorkSchedule.revision == latest_revision,
+                ),
+            )
+            .outerjoin(
+                WorkSchedule,
+                WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
+            )
+            .where(
+                ShiftSchedule.organization_id == organization_id,
+                ShiftSchedule.employee_id == employee_id,
+                ShiftSchedule.status.in_(published),
+                or_(
+                    and_(
+                        ShiftSchedule.work_schedule_id.is_(None),
+                        ShiftSchedule.shift_date.between(start_date, end_date),
+                    ),
+                    and_(
+                        WorkSchedule.organization_id == organization_id,
+                        WorkSchedule.status.in_(published),
+                        WorkSchedule.period_start <= end_date,
+                        WorkSchedule.period_end >= start_date,
+                    ),
+                ),
+            )
+        ).all()
+        if not rows:
+            return None
+        # Prior revisions establish roster membership even if the latest
+        # publication removed every shift for this employee.
+        return frozenset(
+            shift_date
+            for shift_date, is_effective in rows
+            if is_effective and start_date <= shift_date <= end_date
+        )
 
     def resolve_employee_shift(
         self,

@@ -2385,6 +2385,15 @@ class SelfServiceWebService:
                 approved_leave_dates.add(day)
                 day += timedelta(days=1)
 
+        attendance_card = svc.get_rostered_attendance_card(
+            organization_id=org_id,
+            employee_id=employee_id,
+            start_date=month_start,
+            end_date=month_end,
+            records=month_records,
+            approved_leave_dates=approved_leave_dates,
+        )
+
         calendar_weeks, calendar_counts = self._build_attendance_calendar(
             month_start=month_start,
             month_end=month_end,
@@ -2415,6 +2424,7 @@ class SelfServiceWebService:
                     today_record.check_out if today_record else None
                 ),
                 "summary": summary,
+                "attendance_card": attendance_card,
                 "calendar_weeks": calendar_weeks,
                 "calendar_counts": calendar_counts,
                 "selected_month": selected_month,

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import math
+from collections.abc import Sequence, Set
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from datetime import tzinfo as dt_tzinfo
 from decimal import Decimal
@@ -59,6 +61,13 @@ if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
 
 __all__ = ["AttendanceService", "CheckInRequirementError"]
+
+
+@dataclass(frozen=True)
+class AttendanceCardTotals:
+    attendance_credit_days: Decimal
+    eligible_days: int
+    attendance_percentage: Decimal
 
 
 class AttendanceServiceError(Exception):
@@ -1781,6 +1790,44 @@ class AttendanceService:
             "late_entries": late_entries,
             "early_exits": early_exits,
         }
+
+    def get_rostered_attendance_card(
+        self,
+        *,
+        organization_id: UUID,
+        employee_id: UUID,
+        start_date: date,
+        end_date: date,
+        records: Sequence[Attendance],
+        approved_leave_dates: Set[date],
+    ) -> AttendanceCardTotals | None:
+        """Calculate card totals from the roster, when one is available."""
+        shift_dates = ScheduleResolver(self.db).get_published_shift_dates(
+            organization_id=organization_id,
+            employee_id=employee_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if shift_dates is None:
+            return None
+
+        eligible_dates = shift_dates - approved_leave_dates
+        present = half_days = 0
+        for record in records:
+            if record.attendance_date in eligible_dates:
+                if record.status == AttendanceStatus.PRESENT:
+                    present += 1
+                elif record.status == AttendanceStatus.HALF_DAY:
+                    half_days += 1
+
+        eligible_days = len(eligible_dates)
+        return AttendanceCardTotals(
+            attendance_credit_days=Decimal(present) + Decimal("0.5") * half_days,
+            eligible_days=eligible_days,
+            attendance_percentage=round(
+                self._attendance_percentage(present, half_days, eligible_days), 2
+            ),
+        )
 
     def get_employee_monthly_summary(
         self,
