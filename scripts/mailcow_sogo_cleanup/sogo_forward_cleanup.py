@@ -41,6 +41,13 @@ class SogoProfile:
     defaults: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class MailboxProfile:
+    username: str
+    full_name: str
+    custom_attributes: dict[str, Any]
+
+
 def remove_forward_address(
     defaults: dict[str, Any],
     email: str,
@@ -142,6 +149,38 @@ class MailcowSogoDatabase:
             if isinstance(defaults, dict):
                 profiles.append(SogoProfile(uid=uid, defaults=defaults))
         return profiles
+
+    def list_mailboxes(self) -> list[MailboxProfile]:
+        output = self._run_mysql(
+            """
+            SELECT
+                REPLACE(TO_BASE64(`username`), CHAR(10), ''),
+                REPLACE(TO_BASE64(COALESCE(`name`, '')), CHAR(10), ''),
+                REPLACE(TO_BASE64(`custom_attributes`), CHAR(10), '')
+            FROM `mailbox`
+            WHERE `active` IN (1, 2);
+            """
+        )
+        mailboxes: list[MailboxProfile] = []
+        for line in output.splitlines():
+            columns = line.split("\t", 2)
+            if len(columns) != 3 or columns[2] == "NULL":
+                continue
+            try:
+                attributes = json.loads(self._decode_column(columns[2]))
+            except (json.JSONDecodeError, ValueError):
+                logger.warning("Skipping a mailbox with invalid custom attributes")
+                continue
+            mailboxes.append(
+                MailboxProfile(
+                    username=self._decode_column(columns[0]),
+                    full_name=self._decode_column(columns[1]),
+                    custom_attributes=(
+                        attributes if isinstance(attributes, dict) else {}
+                    ),
+                )
+            )
+        return mailboxes
 
     def update_profiles(self, profiles: list[SogoProfile]) -> None:
         if not profiles:

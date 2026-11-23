@@ -670,6 +670,44 @@ def test_employee_department_update_syncs_active_primary_position(
     assert position.department_id == new_department.department_id
 
 
+def test_employee_designation_change_queues_mailbox_profile_sync(
+    db_session, monkeypatch
+):
+    _ensure_hr_position_tables(db_session.bind)
+    org_id = uuid.uuid4()
+    old_designation = Designation(
+        designation_id=uuid.uuid4(),
+        organization_id=org_id,
+        designation_code="OLD",
+        designation_name="Engineer",
+    )
+    new_designation = Designation(
+        designation_id=uuid.uuid4(),
+        organization_id=org_id,
+        designation_code="NEW",
+        designation_name="Network Engineer",
+    )
+    employee = _make_employee(db_session, org_id, "EMP-001")
+    employee.designation_id = old_designation.designation_id
+    db_session.add_all([old_designation, new_designation])
+    db_session.flush()
+    queued: list[uuid.UUID] = []
+    service = EmployeeService(db_session, org_id)
+    monkeypatch.setattr(
+        service,
+        "_enqueue_mailcow_profile_sync",
+        lambda changed_employee: queued.append(changed_employee.employee_id),
+    )
+
+    service.update_employee(
+        employee.employee_id,
+        EmployeeUpdateData(designation_id=new_designation.designation_id),
+    )
+
+    assert employee.designation_id == new_designation.designation_id
+    assert queued == [employee.employee_id]
+
+
 def test_employee_manager_clear_syncs_position_parent_and_legacy_cache(db_session):
     _ensure_hr_position_tables(db_session.bind)
     org_id = uuid.uuid4()

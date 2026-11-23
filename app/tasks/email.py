@@ -194,6 +194,41 @@ def run_employee_mailcow_provisioning(
 
 
 @shared_task(
+    name="app.tasks.hr.sync_employee_mailcow_profile",
+    bind=True,
+    max_retries=5,
+    autoretry_for=(httpx.TransportError, RuntimeError),
+    retry_backoff=True,
+    retry_backoff_max=900,
+    retry_jitter=True,
+)
+def sync_employee_mailcow_profile(
+    self,
+    employee_id: str,
+    organization_id: str,
+) -> dict[str, Any]:
+    """Project the current ERP designation onto an existing mailbox."""
+    from app.services.people.hr.mailbox_provisioning import (
+        EmployeeMailboxProvisioningService,
+    )
+
+    org_uuid = uuid.UUID(organization_id)
+    employee_uuid = uuid.UUID(employee_id)
+    with session_for_org(org_uuid) as db:
+        result = EmployeeMailboxProvisioningService(db).sync_mailbox_profile(
+            org_uuid,
+            employee_uuid,
+        )
+    return {
+        "employee_id": result.employee_id,
+        "email": result.email,
+        "mailbox_found": result.mailbox_found,
+        "designation_changed": result.designation_changed,
+        "skipped": result.skipped,
+    }
+
+
+@shared_task(
     name="app.tasks.hr.send_employee_mailbox_activation",
     bind=True,
     max_retries=5,

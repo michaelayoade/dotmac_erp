@@ -1,0 +1,11 @@
+[Unit]
+Description=Reconcile Mailcow designations into SOGo signatures every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=dotmac-sogo-designation-sync.service
+
+[Install]
+WantedBy=timers.target

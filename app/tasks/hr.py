@@ -169,6 +169,46 @@ def reconcile_employee_mailcow_provisioning() -> dict[str, Any]:
 
 
 @shared_task
+def reconcile_employee_mailcow_profiles() -> dict[str, Any]:
+    """Queue an idempotent designation projection for every eligible employee."""
+    from app.config import settings
+    from app.tasks.email import sync_employee_mailcow_profile
+
+    if not settings.mailcow_provisioning_enabled:
+        return {"queued": 0, "errors": [], "skipped": "integration disabled"}
+
+    queued = 0
+    errors: list[dict[str, str]] = []
+    excluded_statuses = (
+        EmployeeStatus.RESIGNED,
+        EmployeeStatus.TERMINATED,
+        EmployeeStatus.RETIRED,
+    )
+    for org_id in _list_organization_ids():
+        with session_for_org(org_id) as db:
+            employee_ids = db.scalars(
+                select(Employee.employee_id).where(
+                    Employee.organization_id == org_id,
+                    Employee.status.notin_(excluded_statuses),
+                )
+            ).all()
+        for employee_id in employee_ids:
+            try:
+                sync_employee_mailcow_profile.delay(
+                    str(employee_id),
+                    str(org_id),
+                )
+                queued += 1
+            except Exception as exc:  # noqa: BLE001 -- continue the repair sweep
+                logger.exception(
+                    "Could not queue Mailcow profile reconciliation for employee %s",
+                    employee_id,
+                )
+                errors.append({"employee_id": str(employee_id), "error": str(exc)})
+    return {"queued": queued, "errors": errors}
+
+
+@shared_task
 def process_probation_ending_notifications() -> dict:
     """
     Send notifications for employees whose probation period is ending soon.

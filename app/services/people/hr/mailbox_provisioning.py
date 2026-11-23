@@ -32,6 +32,16 @@ class EmployeeMailboxProvisioningResult:
     skipped: list[str] = field(default_factory=list)
 
 
+@dataclass
+class EmployeeMailboxProfileSyncResult:
+    employee_id: str
+    email: str | None = None
+    designation: str | None = None
+    mailbox_found: bool = False
+    designation_changed: bool = False
+    skipped: list[str] = field(default_factory=list)
+
+
 def generate_initial_mailbox_password(length: int = 32) -> str:
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
     return "".join(secrets.choice(alphabet) for _ in range(length))
@@ -70,7 +80,10 @@ class EmployeeMailboxProvisioningService:
     ) -> EmployeeMailboxProvisioningResult:
         employee = self.db.scalar(
             select(Employee)
-            .options(joinedload(Employee.person))
+            .options(
+                joinedload(Employee.person),
+                joinedload(Employee.designation),
+            )
             .where(
                 Employee.organization_id == organization_id,
                 Employee.employee_id == employee_id,
@@ -126,6 +139,7 @@ class EmployeeMailboxProvisioningService:
             # the checkpoint is safe and lets the downstream relay continue.
             if employee.mailcow_mailbox_provisioned_at is None:
                 employee.mailcow_mailbox_provisioned_at = datetime.now(timezone.utc)
+            self._sync_designation(mailcow, employee, email)
             self._issue_activation_if_needed(employee, result)
             return result
 
@@ -142,8 +156,94 @@ class EmployeeMailboxProvisioningService:
             )
         result.created = True
         employee.mailcow_mailbox_provisioned_at = datetime.now(timezone.utc)
+        self._sync_designation(mailcow, employee, email)
         self._issue_activation_if_needed(employee, result)
         return result
+
+    def sync_mailbox_profile(
+        self,
+        organization_id: UUID,
+        employee_id: UUID,
+    ) -> EmployeeMailboxProfileSyncResult:
+        """Project the ERP designation onto an existing Mailcow mailbox."""
+        employee = self.db.scalar(
+            select(Employee)
+            .options(
+                joinedload(Employee.person),
+                joinedload(Employee.designation),
+            )
+            .where(
+                Employee.organization_id == organization_id,
+                Employee.employee_id == employee_id,
+            )
+        )
+        if not employee:
+            raise RuntimeError(f"Employee {employee_id} is not committed yet")
+
+        result = EmployeeMailboxProfileSyncResult(employee_id=str(employee_id))
+        if not self.config.enabled:
+            result.skipped.append("mailcow provisioning integration disabled")
+            return result
+        if not self.config.mailcow_api_configured:
+            raise RuntimeError("Mailcow provisioning API is not configured")
+        if employee.status in {
+            EmployeeStatus.RESIGNED,
+            EmployeeStatus.TERMINATED,
+            EmployeeStatus.RETIRED,
+        }:
+            result.skipped.append("employee is no longer profile-sync eligible")
+            return result
+
+        person = employee.person
+        email = ((person.email if person else "") or "").strip().lower()
+        result.email = email or None
+        local_part, separator, domain = email.partition("@")
+        if not separator or not local_part or not domain:
+            result.skipped.append("employee has no valid work email")
+            return result
+        if domain != self.config.domain:
+            result.skipped.append(
+                f"work email domain {domain} is not managed by Mailcow"
+            )
+            return result
+
+        designation = self._designation_name(employee)
+        result.designation = designation
+        changed = self._get_mailcow_client().set_mailbox_custom_attribute(
+            email,
+            "designation",
+            designation,
+        )
+        if changed is None:
+            result.skipped.append("mailbox does not exist")
+            return result
+        result.mailbox_found = True
+        result.designation_changed = changed
+        return result
+
+    @staticmethod
+    def _designation_name(employee: Employee) -> str | None:
+        designation = employee.designation
+        raw_name = designation.designation_name if designation else ""
+        name = raw_name if isinstance(raw_name, str) else ""
+        normalized = name.strip()
+        return normalized or None
+
+    def _sync_designation(
+        self,
+        mailcow: MailcowClient,
+        employee: Employee,
+        email: str,
+    ) -> None:
+        mailbox_found = mailcow.set_mailbox_custom_attribute(
+            email,
+            "designation",
+            self._designation_name(employee),
+        )
+        if mailbox_found is None:
+            raise RuntimeError(
+                f"Mailcow mailbox {email} disappeared during profile sync"
+            )
 
     def _issue_activation_if_needed(
         self,

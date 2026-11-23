@@ -689,6 +689,7 @@ class OrganizationService:
             ValidationError: If designation code already exists.
         """
         designation = self.get_designation(designation_id)
+        prior_name = designation.designation_name
 
         if data.designation_code is not None:
             existing = self.get_designation_by_code(data.designation_code)
@@ -710,7 +711,47 @@ class OrganizationService:
         designation.updated_at = datetime.now(UTC)
         designation.updated_by_id = self.principal.id if self.principal else None
 
+        if designation.designation_name != prior_name:
+            self._enqueue_designation_mailcow_profile_syncs(designation_id)
+
         return designation
+
+    def _enqueue_designation_mailcow_profile_syncs(
+        self,
+        designation_id: uuid.UUID,
+    ) -> None:
+        """Refresh every mailbox after the shared designation name changes."""
+        from app.config import settings as app_settings
+
+        if not getattr(app_settings, "mailcow_provisioning_enabled", False):
+            return
+        employee_ids = self.db.scalars(
+            select(Employee.employee_id).where(
+                Employee.organization_id == self.organization_id,
+                Employee.designation_id == designation_id,
+                Employee.status.notin_(
+                    (
+                        EmployeeStatus.RESIGNED,
+                        EmployeeStatus.TERMINATED,
+                        EmployeeStatus.RETIRED,
+                    )
+                ),
+            )
+        ).all()
+        try:
+            from app.tasks.email import sync_employee_mailcow_profile
+
+            for employee_id in employee_ids:
+                sync_employee_mailcow_profile.apply_async(
+                    args=[str(employee_id), str(self.organization_id)],
+                    countdown=10,
+                )
+        except Exception:  # noqa: BLE001 -- nightly reconciliation repairs this
+            logger.warning(
+                "Could not enqueue Mailcow profile sync for designation %s",
+                designation_id,
+                exc_info=True,
+            )
 
     def delete_designation(self, designation_id: uuid.UUID) -> None:
         """Soft delete a designation.

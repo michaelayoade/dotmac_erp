@@ -110,6 +110,83 @@ def test_get_mailbox_reports_authentication_error(mock_client_class: Mock) -> No
         client.get_mailbox("ada@dotmac.ng")
 
 
+@patch("app.services.mailcow.client.httpx.Client")
+def test_set_mailbox_custom_attribute_preserves_and_verifies_other_values(
+    mock_client_class: Mock,
+) -> None:
+    initial = Mock()
+    initial.status_code = 200
+    initial.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "custom_attributes": {"department": "Engineering"},
+    }
+    initial.raise_for_status.return_value = None
+    write = Mock()
+    write.status_code = 200
+    write.json.return_value = {"type": "success", "msg": "mailbox_modified"}
+    write.raise_for_status.return_value = None
+    verified = Mock()
+    verified.status_code = 200
+    verified.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "custom_attributes": {
+            "department": "Engineering",
+            "designation": "Network Engineer",
+        },
+    }
+    verified.raise_for_status.return_value = None
+    http_client = mock_client_class.return_value.__enter__.return_value
+    http_client.get.side_effect = [initial, verified]
+    http_client.post.return_value = write
+    client = MailcowClient(
+        base_url="https://mail.dotmac.ng/api/v1",
+        api_key="test-key",
+    )
+
+    changed = client.set_mailbox_custom_attribute(
+        "ada@dotmac.ng",
+        "designation",
+        "Network Engineer",
+    )
+
+    assert changed is True
+    assert http_client.post.call_args.kwargs["json"] == {
+        "items": ["ada@dotmac.ng"],
+        "attr": {
+            "attribute": ["department", "designation"],
+            "value": ["Engineering", "Network Engineer"],
+        },
+    }
+
+
+@patch("app.services.mailcow.client.httpx.Client")
+def test_set_mailbox_custom_attribute_is_idempotent(
+    mock_client_class: Mock,
+) -> None:
+    response = Mock()
+    response.status_code = 200
+    response.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "custom_attributes": {"designation": "Network Engineer"},
+    }
+    response.raise_for_status.return_value = None
+    http_client = mock_client_class.return_value.__enter__.return_value
+    http_client.get.return_value = response
+    client = MailcowClient(
+        base_url="https://mail.dotmac.ng/api/v1",
+        api_key="test-key",
+    )
+
+    changed = client.set_mailbox_custom_attribute(
+        "ada@dotmac.ng",
+        "designation",
+        "Network Engineer",
+    )
+
+    assert changed is False
+    http_client.post.assert_not_called()
+
+
 def test_ensure_mailbox_is_idempotent() -> None:
     employee_id = uuid4()
     employee = Mock()
@@ -238,6 +315,37 @@ def test_ensure_mailbox_skips_exited_employee() -> None:
 
     assert result.skipped == ["employee is no longer provisionable"]
     mailcow.get_mailbox.assert_not_called()
+
+
+def test_sync_mailbox_profile_projects_employee_designation() -> None:
+    employee_id = uuid4()
+    organization_id = uuid4()
+    employee = Mock()
+    employee.employee_id = employee_id
+    employee.organization_id = organization_id
+    employee.status = EmployeeStatus.ACTIVE
+    employee.person.email = "ada@dotmac.ng"
+    employee.designation.designation_name = "Network Engineer"
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    mailcow.set_mailbox_custom_attribute.return_value = True
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(),
+        mailcow_client=mailcow,
+    )
+
+    result = service.sync_mailbox_profile(organization_id, employee_id)
+
+    assert result.mailbox_found
+    assert result.designation_changed
+    assert result.designation == "Network Engineer"
+    mailcow.set_mailbox_custom_attribute.assert_called_once_with(
+        "ada@dotmac.ng",
+        "designation",
+        "Network Engineer",
+    )
 
 
 def test_activation_locks_only_employee_row(monkeypatch) -> None:
