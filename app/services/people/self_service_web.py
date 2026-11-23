@@ -7,7 +7,7 @@ from __future__ import annotations
 import calendar
 import json
 import logging
-from collections.abc import AsyncIterable, Iterable
+from collections.abc import AsyncIterable, Iterable, Set
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any, cast
@@ -53,7 +53,7 @@ from app.models.people.leave import (
 )
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
-from app.models.people.scheduling import ScheduleStatus, SwapRequestStatus, WorkSchedule
+from app.models.people.scheduling import ScheduleStatus, SwapRequestStatus
 from app.models.people.scheduling.shift_schedule import ShiftSchedule
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
@@ -305,7 +305,7 @@ class SelfServiceWebService:
         holiday_map: dict[date, str],
         record_by_date: dict[date, Attendance],
         org_tzinfo,
-        scheduled_dates: set[date],
+        scheduled_dates: Set[date],
         approved_leave_dates: set[date],
     ) -> tuple[list[list[dict]], dict[str, int]]:
         """Build a month calendar grid with normalized per-day statuses."""
@@ -2313,7 +2313,8 @@ class SelfServiceWebService:
         svc = AttendanceService(db)
         org_now = svc.get_org_now(org_id)
         today = org_now.date()
-        resolved = ScheduleResolver(db).resolve_employee_shift(
+        schedule_resolver = ScheduleResolver(db)
+        resolved = schedule_resolver.resolve_employee_shift(
             org_id, employee_id, org_now
         )
         shift_date = resolved.assignment.shift_date if resolved else today
@@ -2347,26 +2348,11 @@ class SelfServiceWebService:
             )
         )
         holiday_map = self._get_holiday_map(db, org_id, month_start, month_end)
-        scheduled_dates = set(
-            db.scalars(
-                select(ShiftSchedule.shift_date)
-                .join(
-                    WorkSchedule,
-                    WorkSchedule.work_schedule_id == ShiftSchedule.work_schedule_id,
-                )
-                .where(
-                    ShiftSchedule.organization_id == org_id,
-                    WorkSchedule.organization_id == org_id,
-                    ShiftSchedule.employee_id == employee_id,
-                    ShiftSchedule.shift_date.between(month_start, month_end),
-                    ShiftSchedule.status.in_(
-                        [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
-                    ),
-                    WorkSchedule.status.in_(
-                        [ScheduleStatus.PUBLISHED, ScheduleStatus.COMPLETED]
-                    ),
-                )
-            )
+        shift_dates = schedule_resolver.get_published_shift_dates(
+            organization_id=org_id,
+            employee_id=employee_id,
+            start_date=month_start,
+            end_date=month_end,
         )
         approved_leaves = db.scalars(
             select(LeaveApplication).where(
@@ -2385,11 +2371,8 @@ class SelfServiceWebService:
                 approved_leave_dates.add(day)
                 day += timedelta(days=1)
 
-        attendance_card = svc.get_rostered_attendance_card(
-            organization_id=org_id,
-            employee_id=employee_id,
-            start_date=month_start,
-            end_date=month_end,
+        attendance_card = svc.calculate_rostered_attendance_card(
+            shift_dates=shift_dates,
             records=month_records,
             approved_leave_dates=approved_leave_dates,
         )
@@ -2401,7 +2384,7 @@ class SelfServiceWebService:
             holiday_map=holiday_map,
             record_by_date={record.attendance_date: record for record in month_records},
             org_tzinfo=org_tzinfo,
-            scheduled_dates=scheduled_dates,
+            scheduled_dates=shift_dates or frozenset(),
             approved_leave_dates=approved_leave_dates,
         )
 

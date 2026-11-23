@@ -14,10 +14,7 @@ from sqlalchemy.orm import Session
 from app.models.people.attendance import Attendance, AttendanceStatus
 from app.services.common import ValidationError
 from app.services.people.attendance import AttendanceService, CheckInRequirementError
-from app.services.people.attendance.attendance_service import (
-    AttendanceCardTotals,
-    AttendanceServiceError,
-)
+from app.services.people.attendance.attendance_service import AttendanceServiceError
 from app.services.people.scheduling.resolver import ScheduleResolver
 
 ORG_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -243,10 +240,8 @@ def test_published_shift_dates_use_latest_workspace_and_direct_publications() ->
 
 
 def test_rostered_card_counts_only_scheduled_days_without_approved_leave() -> None:
-    service, db = _make_service()
+    service, _ = _make_service()
     days = [date(2026, 4, day) for day in range(1, 22)]
-    # The query returns all published shifts, including the day covered by leave.
-    db.execute.return_value.all.return_value = [(day, True) for day in days]
 
     records = [
         Attendance(attendance_date=day, status=AttendanceStatus.PRESENT)
@@ -259,11 +254,8 @@ def test_rostered_card_counts_only_scheduled_days_without_approved_leave() -> No
     for day in (days[-1], date(2026, 4, 25)):
         records.append(Attendance(attendance_date=day, status=AttendanceStatus.PRESENT))
 
-    card = service.get_rostered_attendance_card(
-        organization_id=ORG_ID,
-        employee_id=EMPLOYEE_ID,
-        start_date=date(2026, 4, 1),
-        end_date=date(2026, 4, 30),
+    card = service.calculate_rostered_attendance_card(
+        shift_dates=frozenset(days),
         records=records,
         approved_leave_dates={days[-1], date(2026, 4, 26)},
     )
@@ -275,24 +267,17 @@ def test_rostered_card_counts_only_scheduled_days_without_approved_leave() -> No
 
 
 def test_rostered_card_distinguishes_missing_roster_from_zero_shifts() -> None:
-    service, db = _make_service()
-    db.execute.return_value.all.side_effect = [
-        [],
-        [(date(2026, 4, 1), False)],
-    ]
+    service, _ = _make_service()
 
-    def get_card() -> AttendanceCardTotals | None:
-        return service.get_rostered_attendance_card(
-            organization_id=ORG_ID,
-            employee_id=EMPLOYEE_ID,
-            start_date=date(2026, 4, 1),
-            end_date=date(2026, 4, 30),
-            records=[],
-            approved_leave_dates=set(),
+    assert (
+        service.calculate_rostered_attendance_card(
+            shift_dates=None, records=[], approved_leave_dates=set()
         )
-
-    assert get_card() is None
-    empty_card = get_card()
+        is None
+    )
+    empty_card = service.calculate_rostered_attendance_card(
+        shift_dates=frozenset(), records=[], approved_leave_dates=set()
+    )
     assert empty_card is not None
     assert empty_card.eligible_days == 0
     assert empty_card.attendance_credit_days == Decimal("0.0")

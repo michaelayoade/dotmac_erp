@@ -1791,23 +1791,14 @@ class AttendanceService:
             "early_exits": early_exits,
         }
 
-    def get_rostered_attendance_card(
+    def calculate_rostered_attendance_card(
         self,
         *,
-        organization_id: UUID,
-        employee_id: UUID,
-        start_date: date,
-        end_date: date,
+        shift_dates: Set[date] | None,
         records: Sequence[Attendance],
         approved_leave_dates: Set[date],
     ) -> AttendanceCardTotals | None:
-        """Calculate card totals from the roster, when one is available."""
-        shift_dates = ScheduleResolver(self.db).get_published_shift_dates(
-            organization_id=organization_id,
-            employee_id=employee_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
+        """Calculate card totals from the published dates used by the page."""
         if shift_dates is None:
             return None
 
