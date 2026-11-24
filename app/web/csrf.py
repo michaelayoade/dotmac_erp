@@ -7,8 +7,7 @@ from urllib.parse import urlsplit
 
 from fastapi import Request
 from starlette.middleware.base import RequestResponseEndpoint
-from starlette.responses import JSONResponse
-from starlette.responses import Response
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from app.net import get_request_scheme, is_from_trusted_proxy
 
@@ -21,7 +20,25 @@ _SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 logger = logging.getLogger(__name__)
 
 
-def _csrf_error(detail: str) -> JSONResponse:
+def _csrf_error(detail: str, request: Request) -> Response:
+    if (
+        request.method == "POST"
+        and request.url.path == "/people/hr/employees/new"
+        and "text/html" in request.headers.get("accept", "")
+    ):
+        logger.warning(
+            "Employee creation form security check failed",
+            extra={
+                "request_id": getattr(request.state, "request_id", None),
+                "path": request.url.path,
+                "status": 400,
+                "field": "csrf_token",
+                "reason": detail,
+            },
+        )
+        return RedirectResponse(
+            "/people/hr/employees/new?form_error=session_expired", status_code=303
+        )
     return JSONResponse(
         status_code=400,
         content={
@@ -261,7 +278,7 @@ async def csrf_middleware(
                     request.headers.get("origin"),
                     request.headers.get("referer"),
                 )
-            return _csrf_error("Missing CSRF token")
+            return _csrf_error("Missing CSRF token", request)
         csrf_cookie = request_token
         request.state.csrf_token = csrf_cookie
         set_csrf_cookie = True
@@ -284,7 +301,7 @@ async def csrf_middleware(
                 request.headers.get("x-forwarded-host"),
                 request.headers.get("x-forwarded-proto"),
             )
-        return _csrf_error("Invalid CSRF origin")
+        return _csrf_error("Invalid CSRF origin", request)
 
     if request_token is None:
         request_token = await _extract_csrf_token(request)
@@ -302,7 +319,7 @@ async def csrf_middleware(
                 request.headers.get("origin"),
                 request.headers.get("referer"),
             )
-        return _csrf_error("Missing CSRF token")
+        return _csrf_error("Missing CSRF token", request)
     if request_token != csrf_cookie:
         logger.warning(
             "CSRF token mismatch: path=%s",
@@ -317,7 +334,7 @@ async def csrf_middleware(
                 request.headers.get("origin"),
                 request.headers.get("referer"),
             )
-        return _csrf_error("Invalid CSRF token")
+        return _csrf_error("Invalid CSRF token", request)
 
     response = await call_next(request)
     if set_csrf_cookie:

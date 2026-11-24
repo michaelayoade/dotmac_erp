@@ -20,6 +20,7 @@ from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
     base_context,
+    can_view_hr_provisioning,
     get_db_for_org,
     require_hr_access,
 )
@@ -52,6 +53,7 @@ def hr_index(
 ):
     """Human Resources landing page."""
     context = base_context(request, auth, "Human Resources", "hr", db=db)
+    context["can_view_hr_provisioning"] = can_view_hr_provisioning(auth)
     return templates.TemplateResponse(request, "people/hr/index.html", context)
 
 

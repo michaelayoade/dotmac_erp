@@ -92,6 +92,12 @@
         x-init="restoreState(); updateDesignationMeta()">
         {{ request.state.csrf_form | safe }}
         <input type="hidden" name="current_tab" :value="activeTab">
+        {% if not employee %}
+        <div id="employee-client-errors" class="hidden rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-300" role="alert" aria-live="polite" tabindex="-1">
+            <p class="font-medium">Please fix the following before creating the employee:</p>
+            <ul class="mt-2 list-disc space-y-1 pl-5"></ul>
+        </div>
+        {% endif %}
 
         {% set nigeria_states = nigeria_states if nigeria_states is defined else [
             "Abia",
@@ -198,7 +204,7 @@
             </div>
         </template>
 
-        <div x-show="!loadingTab && activeTab === 'personal'" x-cloak class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div x-show="!loadingTab && activeTab === 'personal'" x-cloak data-form-tab="personal" class="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <div class="card h-fit">
                 <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Personal Information</h3>
@@ -310,15 +316,15 @@
                     </div>
                 </div>
             </div>
-            <div class="card h-fit" x-data="{ expanded: {{ 'true' if employee and (employee.personal_email or employee.emergency_contact_name) else 'false' }} }">
+            <div class="card h-fit" x-data="{ expanded: {{ 'true' if (not employee and mailcow_provisioning_enabled) or (employee and (employee.personal_email or employee.emergency_contact_name)) or errors.personal_email else 'false' }} }" @show-personal-contact.window="expanded = true">
                 <div class="card-header cursor-pointer flex items-center justify-between px-6 pt-6" @click="expanded = !expanded">
                     <h3 class="font-medium text-slate-900 dark:text-white">Personal Contact & Emergency</h3>
-                    <div class="flex items-center gap-2"><span class="text-slate-400 text-sm">(Optional)</span><svg class="w-5 h-5 text-slate-400 transition-transform" :class="{ 'rotate-180': expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></div>
+                    <div class="flex items-center gap-2">{% if not employee and mailcow_provisioning_enabled %}<span class="text-rose-500 text-sm">Personal email required</span>{% else %}<span class="text-slate-400 text-sm">(Optional)</span>{% endif %}<svg class="w-5 h-5 text-slate-400 transition-transform" :class="{ 'rotate-180': expanded }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></div>
                 </div>
                 <div class="card-body space-y-4 px-6 pb-6" x-show="expanded" x-collapse>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Personal contact info separate from work email/phone on Person record.</p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label for="personal_email" class="form-label form-label-required">Personal Email</label><input type="email" name="personal_email" id="personal_email" value="{{ personal_email_value }}" class="form-input w-full" placeholder="personal@example.com" required><p class="form-hint">Used only to deliver the one-time work-email activation link.</p></div>
+                        <div><label for="personal_email" class="form-label{% if not employee and mailcow_provisioning_enabled %} form-label-required{% endif %}">Personal Email{% if not employee and mailcow_provisioning_enabled %} <span class="text-rose-500">*</span>{% endif %}</label><input type="email" name="personal_email" id="personal_email" value="{{ personal_email_value }}" class="form-input w-full {% if errors.personal_email %}border-red-500{% endif %}" placeholder="personal@example.com" {% if not employee and mailcow_provisioning_enabled %}required{% endif %}><p class="form-hint">Used only to deliver the one-time work-email activation link.</p>{% if errors.personal_email %}<p class="mt-1 text-sm text-red-500">{{ errors.personal_email }}</p>{% endif %}</div>
                         <div><label for="personal_phone" class="form-label">Personal Phone</label><input type="text" name="personal_phone" id="personal_phone" value="{{ personal_phone_value }}" class="form-input w-full" placeholder="+234 xxx xxx xxxx"></div>
                     </div>
                     <div class="pt-2 border-t border-slate-200 dark:border-slate-700">
@@ -332,7 +338,7 @@
             </div>
         </div>
 
-        <div x-show="!loadingTab && activeTab === 'employment'" x-cloak class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div x-show="!loadingTab && activeTab === 'employment'" x-cloak data-form-tab="employment" class="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <div class="card h-fit">
             <div class="card-header px-6 pt-6">
                 <h3 class="font-medium text-slate-900 dark:text-white">Employment Details</h3>
@@ -475,7 +481,7 @@
                 {% if not employee %}
                 <div>
                     <label for="salary_structure_id" class="form-label">Salary Structure <span class="text-red-500">*</span></label>
-                    <select name="salary_structure_id" id="salary_structure_id" class="form-input w-full">
+                    <select name="salary_structure_id" id="salary_structure_id" class="form-input w-full" required>
                         <option value="">Select salary structure</option>
                         {% for structure in salary_structures %}
                         <option value="{{ structure.structure_id }}"
@@ -706,7 +712,7 @@
             </div>
         </div>
 
-        <div x-show="!loadingTab && activeTab === 'statutory'" x-cloak class="space-y-6">
+        <div x-show="!loadingTab && activeTab === 'statutory'" x-cloak data-form-tab="statutory" class="space-y-6">
             <div class="card h-fit">
                 <div class="card-header px-6 pt-6">
                     <h3 class="font-medium text-slate-900 dark:text-white">Tax, Pension & NHF</h3>
@@ -765,7 +771,11 @@
         if (!form) return;
         const stateKey = "employee-form-state:" + {{ ((employee.employee_id | string) if employee else "new") | tojson }};
         const hasServerValidation = {{ (true if error or errors else false) | tojson }};
+        const isNewEmployee = {{ (not employee) | tojson }};
+        const personalEmailRequired = {{ (not employee and mailcow_provisioning_enabled) | tojson }};
         const currentTabInput = form.querySelector('input[name="current_tab"]');
+        const clientSummary = document.getElementById("employee-client-errors");
+        const clientErrors = new Map();
         const tabButtons = Array.from(
             document.querySelectorAll("[data-tab-trigger]")
         );
@@ -784,6 +794,128 @@
                 scrollY: window.scrollY || 0,
             };
             window.sessionStorage.setItem(stateKey, JSON.stringify(payload));
+        }
+
+        function fieldById(id) {
+            return form.querySelector("#" + id);
+        }
+
+        function fieldTab(field) {
+            const panel = field.closest("[data-form-tab]");
+            return panel ? panel.dataset.formTab : "personal";
+        }
+
+        function updateErrorSummary() {
+            if (!clientSummary) return;
+            const list = clientSummary.querySelector("ul");
+            list.replaceChildren();
+            for (const message of clientErrors.values()) {
+                const item = document.createElement("li");
+                item.textContent = message;
+                list.appendChild(item);
+            }
+            clientSummary.classList.toggle("hidden", clientErrors.size === 0);
+        }
+
+        function clearFieldError(id) {
+            const field = fieldById(id);
+            if (!field || !clientErrors.has(id)) return;
+            clientErrors.delete(id);
+            field.classList.remove("border-red-500");
+            field.removeAttribute("aria-invalid");
+            const original = field.dataset.originalDescribedBy;
+            if (original) field.setAttribute("aria-describedby", original);
+            else field.removeAttribute("aria-describedby");
+            field.nextElementSibling?.matches("[data-client-error]") && field.nextElementSibling.remove();
+            updateErrorSummary();
+        }
+
+        function addFieldError(id, message) {
+            const field = fieldById(id);
+            if (!field || clientErrors.has(id)) return;
+            clientErrors.set(id, message);
+            field.classList.add("border-red-500");
+            field.setAttribute("aria-invalid", "true");
+            field.dataset.originalDescribedBy = field.getAttribute("aria-describedby") || "";
+            const hint = document.createElement("p");
+            hint.id = id + "-client-error";
+            hint.dataset.clientError = "";
+            hint.className = "mt-1 text-sm text-red-600 dark:text-red-400";
+            hint.textContent = message;
+            field.insertAdjacentElement("afterend", hint);
+            field.setAttribute(
+                "aria-describedby",
+                [field.dataset.originalDescribedBy, hint.id].filter(Boolean).join(" ")
+            );
+        }
+
+        function validateNewEmployee() {
+            for (const id of Array.from(clientErrors.keys())) clearFieldError(id);
+
+            const linkedPerson = fieldById("linked_person_id")?.value;
+            const requiredFields = [
+                ["date_of_joining", "Select a date of joining."],
+                ["employment_type_id", "Select a contract type."],
+                ["assigned_location_id", "Select an assigned branch."],
+                ["salary_mode", "Select a salary mode."],
+                ["salary_structure_id", "Select a salary structure."]
+            ];
+            if (!linkedPerson) {
+                requiredFields.unshift(
+                    ["first_name", "Enter a first name."],
+                    ["last_name", "Enter a last name."],
+                    ["email", "Enter a work email address."]
+                );
+            }
+            if (personalEmailRequired) {
+                requiredFields.push(["personal_email", "Enter a personal email address."]);
+            }
+            for (const [id, message] of requiredFields) {
+                if (!fieldById(id)?.value.trim()) addFieldError(id, message);
+            }
+
+            const workEmail = fieldById("email");
+            const personalEmail = fieldById("personal_email");
+            if (workEmail?.value.trim() && !workEmail.checkValidity()) {
+                addFieldError("email", "Enter a valid work email address.");
+            }
+            if (personalEmail?.value.trim() && !personalEmail.checkValidity()) {
+                addFieldError("personal_email", "Enter a valid personal email address.");
+            }
+            if (
+                personalEmail?.value.trim() && workEmail?.value.trim()
+                && personalEmail.value.trim().toLowerCase() === workEmail.value.trim().toLowerCase()
+            ) {
+                addFieldError("personal_email", "Personal email must differ from the work email.");
+            }
+
+            const countryCode = fieldById("country_code");
+            if (countryCode?.value.trim() && !/^[A-Za-z]{2}$/.test(countryCode.value.trim())) {
+                addFieldError("country_code", "Enter a two-letter country code, such as NG.");
+            }
+
+            const designation = fieldById("designation_id");
+            const isNysc = designation?.selectedOptions[0]?.dataset.isNysc === "true";
+            if (isNysc) {
+                const start = fieldById("nysc_start_date")?.value;
+                const end = fieldById("nysc_end_date")?.value;
+                if (!start) addFieldError("nysc_start_date", "Select an NYSC start date.");
+                if (!end) addFieldError("nysc_end_date", "Select an NYSC end date.");
+                if (start && end && end < start) {
+                    addFieldError("nysc_end_date", "NYSC end date must be on or after the start date.");
+                }
+            }
+
+            for (const field of form.querySelectorAll('input[type="date"], input[type="number"]')) {
+                if ((field.value || field.validity.badInput) && !field.checkValidity()) {
+                    addFieldError(
+                        field.id,
+                        field.type === "date" ? "Enter a valid date." : "Enter a valid number."
+                    );
+                }
+            }
+            updateErrorSummary();
+            return clientErrors.size === 0;
         }
 
         tabButtons.forEach(function(button) {
@@ -817,18 +949,36 @@
         }
 
         form.addEventListener("submit", function(event) {
-            const assignedBranch = form.querySelector("#assigned_location_id");
-            if (assignedBranch && assignedBranch.required && !assignedBranch.value) {
+            if (isNewEmployee && !validateNewEmployee()) {
                 event.preventDefault();
-                activateTab("employment");
+                const firstId = clientErrors.keys().next().value;
+                const firstField = fieldById(firstId);
+                if (firstId === "personal_email") {
+                    window.dispatchEvent(new Event("show-personal-contact"));
+                }
+                activateTab(fieldTab(firstField));
                 window.setTimeout(function() {
-                    assignedBranch.focus();
-                    assignedBranch.reportValidity();
-                }, 0);
+                    firstField.focus();
+                    firstField.scrollIntoView({ block: "center" });
+                }, 350);
                 return;
             }
             persistState();
         });
+
+        if (isNewEmployee) {
+            form.addEventListener("input", function(event) {
+                if (event.target.id) clearFieldError(event.target.id);
+                if (event.target.id === "email") clearFieldError("personal_email");
+            });
+            form.addEventListener("change", function(event) {
+                if (event.target.id) clearFieldError(event.target.id);
+                if (event.target.id === "designation_id") {
+                    clearFieldError("nysc_start_date");
+                    clearFieldError("nysc_end_date");
+                }
+            });
+        }
 
         window.addEventListener("beforeunload", persistState);
     })();

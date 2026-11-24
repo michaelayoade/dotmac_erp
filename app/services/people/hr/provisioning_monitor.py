@@ -16,6 +16,24 @@ STAGES = ("mailcow", "activation_email", "nextcloud", "selfcare", "talk")
 FINAL_STATUSES = frozenset({"completed", "skipped", "disabled"})
 
 
+def provisioning_status(employee: Employee) -> str:
+    """Derive the aggregate from every stage shown in the UI."""
+    state = employee.workforce_provisioning_state or {}
+    statuses = {
+        stage: (state.get(stage) or {}).get("status", "not_started") for stage in STAGES
+    }
+    if "failed" in statuses.values():
+        return "failed"
+    if any(
+        status in {"running", "pending", "retry_scheduled"}
+        for status in statuses.values()
+    ):
+        return "in_progress"
+    if all(status in FINAL_STATUSES for status in statuses.values()):
+        return "completed"
+    return "pending"
+
+
 def _safe_error(exc: BaseException | str | None) -> str | None:
     if exc is None:
         return None
@@ -53,18 +71,7 @@ def record_stage(
         previous["completed_at"] = now.isoformat()
     state[stage] = previous
     employee.workforce_provisioning_state = state
-    statuses = {
-        str(item.get("status")) for item in state.values() if isinstance(item, dict)
-    }
-    if "failed" in statuses:
-        aggregate = "failed"
-    elif statuses & {"running", "pending", "retry_scheduled"}:
-        aggregate = "in_progress"
-    elif state and statuses.issubset(FINAL_STATUSES):
-        aggregate = "completed"
-    else:
-        aggregate = "pending"
-    employee.workforce_provisioning_status = aggregate
+    employee.workforce_provisioning_status = provisioning_status(employee)
 
 
 def stage_rows(employee: Employee) -> list[dict[str, Any]]:
@@ -101,6 +108,14 @@ def list_provisioning_employees(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     """Return tenant-scoped employee relay snapshots for the HR monitor."""
+    if limit <= 0 or status not in {
+        None,
+        "failed",
+        "in_progress",
+        "completed",
+        "pending",
+    }:
+        return []
     stmt = (
         select(Employee, Person)
         .join(Person, Person.id == Employee.person_id)
@@ -109,10 +124,7 @@ def list_provisioning_employees(
             Employee.mailcow_provisioning_requested_at.is_not(None),
         )
         .order_by(Employee.mailcow_provisioning_requested_at.desc())
-        .limit(limit)
     )
-    if status:
-        stmt = stmt.where(Employee.workforce_provisioning_status == status)
     if search:
         term = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -122,7 +134,19 @@ def list_provisioning_employees(
                 Person.email.ilike(term),
             )
         )
-    return [
-        {"employee": employee, "person": person, "stages": stage_rows(employee)}
-        for employee, person in db.execute(stmt).all()
-    ]
+    if not status:
+        stmt = stmt.limit(limit)
+    rows: list[dict[str, Any]] = []
+    result = db.execute(stmt.execution_options(yield_per=100))
+    try:
+        for employee, person in result:
+            if status and provisioning_status(employee) != status:
+                continue
+            rows.append(
+                {"employee": employee, "person": person, "stages": stage_rows(employee)}
+            )
+            if len(rows) >= limit:
+                break
+    finally:
+        result.close()
+    return rows
