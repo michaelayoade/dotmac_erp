@@ -78,7 +78,7 @@ from app.services.people.hr.employment_types import (
     EmploymentTypeView,
 )
 from app.services.people.hr.org_resolver import OrgResolver
-from app.services.people.hr.provisioning_monitor import stage_rows
+from app.services.people.hr.provisioning_monitor import provisioning_status, stage_rows
 from app.services.people.hr.offboarding import (
     queue_employee_mailcow_offboarding,
     should_offboard_status,
@@ -86,7 +86,12 @@ from app.services.people.hr.offboarding import (
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.services.recent_activity import get_recent_activity_for_record
 from app.templates import templates
-from app.web.deps import WebAuthContext, base_context
+from app.web.deps import (
+    WebAuthContext,
+    base_context,
+    can_retry_hr_provisioning,
+    can_view_hr_provisioning,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2790,6 +2795,10 @@ class HRWebService:
             if can_view_assigned_assets
             else []
         )
+        provisioning_monitored = (
+            getattr(employee, "mailcow_provisioning_requested_at", None) is not None
+        )
+        can_view_provisioning = can_view_hr_provisioning(auth)
 
         return {
             **base_context(request, auth, "Employee Details", "employees"),
@@ -2819,9 +2828,15 @@ class HRWebService:
             "assigned_assets": assigned_assets,
             "can_view_assigned_assets": can_view_assigned_assets,
             "can_manage_final_payroll": self._can_manage_final_payroll(auth),
-            "provisioning_stages": stage_rows(employee),
-            "provisioning_has_failure": employee.workforce_provisioning_status
-            == "failed",
+            "can_view_provisioning": can_view_provisioning,
+            "can_retry_provisioning": can_retry_hr_provisioning(auth),
+            "provisioning_stages": stage_rows(employee)
+            if can_view_provisioning
+            else [],
+            "provisioning_monitored": provisioning_monitored,
+            "provisioning_has_failure": can_view_provisioning
+            and provisioning_monitored
+            and provisioning_status(employee) == "failed",
         }
 
     def employee_detail_response(

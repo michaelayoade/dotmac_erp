@@ -14,7 +14,13 @@ from app.services.people.hr.provisioning_monitor import (
     record_stage,
 )
 from app.templates import templates
-from app.web.deps import WebAuthContext, base_context, get_db_for_org, require_hr_access
+from app.web.deps import (
+    WebAuthContext,
+    base_context,
+    get_db_for_org,
+    require_hr_provisioning_retry,
+    require_hr_provisioning_view,
+)
 
 router = APIRouter(tags=["workforce-provisioning"])
 
@@ -24,7 +30,7 @@ def provisioning_monitor(
     request: Request,
     search: str | None = None,
     status: str | None = Query(default=None),
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_hr_provisioning_view),
     db: Session = Depends(get_db_for_org),
 ):
     org_id = coerce_uuid(auth.organization_id)
@@ -42,7 +48,7 @@ def provisioning_monitor(
 def retry_provisioning_stage(
     employee_id: UUID,
     stage: str,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_hr_provisioning_retry),
     db: Session = Depends(get_db_for_org),
 ):
     org_id = coerce_uuid(auth.organization_id)
@@ -82,7 +88,7 @@ def retry_provisioning_stage(
 @router.post("/employees/{employee_id}/mailbox-activation/resend")
 def resend_mailbox_activation(
     employee_id: UUID,
-    auth: WebAuthContext = Depends(require_hr_access),
+    auth: WebAuthContext = Depends(require_hr_provisioning_retry),
     db: Session = Depends(get_db_for_org),
 ):
     return retry_provisioning_stage(employee_id, "activation_email", auth, db)

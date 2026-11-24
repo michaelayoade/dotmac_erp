@@ -1881,6 +1881,45 @@ def require_hr_access(
     return auth
 
 
+HR_PROVISIONING_VIEW_ROLES = frozenset(
+    {"hr_director", "hr_manager", "hr_officer", "hr_assistant", "hr_viewer"}
+)
+HR_PROVISIONING_RETRY_ROLES = frozenset({"hr_director", "hr_manager"})
+
+
+def can_view_hr_provisioning(auth: WebAuthContext) -> bool:
+    """Limit provisioning details to administrators and named HR roles."""
+    return auth.has_module_access("people") and (
+        auth.is_admin or any(auth.has_role(role) for role in HR_PROVISIONING_VIEW_ROLES)
+    )
+
+
+def can_retry_hr_provisioning(auth: WebAuthContext) -> bool:
+    """Limit account provisioning retries to HR management."""
+    return auth.has_module_access("people") and (
+        auth.is_admin
+        or any(auth.has_role(role) for role in HR_PROVISIONING_RETRY_ROLES)
+    )
+
+
+def require_hr_provisioning_view(
+    auth: WebAuthContext = Depends(require_hr_access),
+) -> WebAuthContext:
+    if not can_view_hr_provisioning(auth):
+        raise HTTPException(status_code=403, detail="HR provisioning access required")
+    return auth
+
+
+def require_hr_provisioning_retry(
+    auth: WebAuthContext = Depends(require_hr_access),
+) -> WebAuthContext:
+    if not can_retry_hr_provisioning(auth):
+        raise HTTPException(
+            status_code=403, detail="HR provisioning retry access required"
+        )
+    return auth
+
+
 def require_scheduler_access(
     auth: WebAuthContext = Depends(require_web_auth),
 ) -> WebAuthContext:
