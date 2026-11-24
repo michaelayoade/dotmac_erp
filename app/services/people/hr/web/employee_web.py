@@ -3006,6 +3006,7 @@ class HRWebService:
             "tax_profile": None,
             "nigeria_states": NIGERIA_STATES,
             "can_edit_tax": auth.has_permission("people:write"),
+            "mailcow_provisioning_enabled": settings.mailcow_provisioning_enabled,
         }
 
         return templates.TemplateResponse(
