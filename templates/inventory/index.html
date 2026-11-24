@@ -31,7 +31,104 @@
             </a>
             {% endif %}
         </div>
+    {% endif %}
 
+    <details class="group card">
+        <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 p-4 sm:p-6">
+            <span>
+                <span class="block text-xl font-semibold text-slate-900 dark:text-white">Inventory areas</span>
+                <span class="mt-1 block text-sm text-slate-500 dark:text-slate-400">Choose an inventory area to continue.</span>
+            </span>
+            {{ icon_svg("chevron-down", "h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 group-open:rotate-180 dark:text-slate-400") }}
+        </summary>
+        <div class="border-t border-slate-200 p-4 dark:border-slate-700 sm:p-6">
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <a href="/inventory/items" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">{{ icon_svg("box", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Items</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage stock items, definitions, costing, and reorder settings.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/categories" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">{{ icon_svg("tag", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Categories</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Organize items by category structure and stock grouping.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/warehouses" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">{{ icon_svg("building", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Warehouses</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage warehouse locations, storage rules, and balances.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/transactions" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">{{ icon_svg("switch-horizontal", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Transactions</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review receipts, issues, transfers, and stock adjustments.</p></div>
+                    </div>
+                </a>
+                {% if auth.has_permission("inventory:receipt_approvals:read") %}
+                <a href="/inventory/receipt-approvals" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">{{ icon_svg("clipboard-check", "h-5 w-5") }}</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center justify-between gap-3">
+                                <h3 class="text-base font-semibold text-slate-900 dark:text-white">Receipt Approvals</h3>
+                                {% if pending_receipt_approval_count %}
+                                <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ pending_receipt_approval_count }}</span>
+                                {% endif %}
+                            </div>
+                            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Confirm AP invoice stock received before inventory is posted.</p>
+                        </div>
+                    </div>
+                </a>
+                {% endif %}
+                <a href="/inventory/counts" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">{{ icon_svg("clipboard-check", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Stock Counts</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Run stock counts, compare variances, and adjust balances.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/boms" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400">{{ icon_svg("collection", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Bill of Materials</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Maintain BOM structures for assemblies and production items.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/price-lists" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-900/30 dark:text-fuchsia-400">{{ icon_svg("cash", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Price Lists</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage item pricing references and valuation support lists.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/lots" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">{{ icon_svg("ticket", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Lots</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Track lot-controlled inventory, balances, expiry, and batch reporting.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/serials" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">{{ icon_svg("list-bullet", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Serials</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">View serial-controlled units, availability, warehouse, item, and movement history.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/material-requests" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-lime-100 text-lime-600 dark:bg-lime-900/30 dark:text-lime-400">{{ icon_svg("document-text", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Material Requests</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review requested stock issues and internal material demand.</p></div>
+                    </div>
+                </a>
+                <a href="/inventory/reports" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">{{ icon_svg("chart", "h-5 w-5") }}</div>
+                        <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Reports</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Open stock-on-hand and inventory reporting views.</p></div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </details>
+    {% if show_reorder_dashboard %}
         <div class="grid gap-4 sm:grid-cols-3">
             {% for card in reorder_cards %}
                 {{ stats_card(
@@ -152,94 +249,5 @@
     </section>
     {% endif %}
 
-    <div class="card p-6">
-        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Inventory areas</h2>
-        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Choose an inventory area to continue.</p>
-    </div>
-
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <a href="/inventory/items" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">{{ icon_svg("box", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Items</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage stock items, definitions, costing, and reorder settings.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/categories" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">{{ icon_svg("tag", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Categories</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Organize items by category structure and stock grouping.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/warehouses" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">{{ icon_svg("building", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Warehouses</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage warehouse locations, storage rules, and balances.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/transactions" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400">{{ icon_svg("switch-horizontal", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Transactions</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review receipts, issues, transfers, and stock adjustments.</p></div>
-            </div>
-        </a>
-        {% if auth.has_permission("inventory:receipt_approvals:read") %}
-        <a href="/inventory/receipt-approvals" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">{{ icon_svg("clipboard-check", "h-5 w-5") }}</div>
-                <div class="min-w-0 flex-1">
-                    <div class="flex items-center justify-between gap-3">
-                        <h3 class="text-base font-semibold text-slate-900 dark:text-white">Receipt Approvals</h3>
-                        {% if pending_receipt_approval_count %}
-                        <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">{{ pending_receipt_approval_count }}</span>
-                        {% endif %}
-                    </div>
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Confirm AP invoice stock received before inventory is posted.</p>
-                </div>
-            </div>
-        </a>
-        {% endif %}
-        <a href="/inventory/counts" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">{{ icon_svg("clipboard-check", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Stock Counts</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Run stock counts, compare variances, and adjust balances.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/boms" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400">{{ icon_svg("collection", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Bill of Materials</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Maintain BOM structures for assemblies and production items.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/price-lists" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-900/30 dark:text-fuchsia-400">{{ icon_svg("cash", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Price Lists</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage item pricing references and valuation support lists.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/lots" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">{{ icon_svg("ticket", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Lots</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Track lot-controlled inventory, balances, expiry, and batch reporting.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/serials" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">{{ icon_svg("list-bullet", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Serials</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">View serial-controlled units, availability, warehouse, item, and movement history.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/material-requests" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-lime-100 text-lime-600 dark:bg-lime-900/30 dark:text-lime-400">{{ icon_svg("document-text", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Material Requests</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Review requested stock issues and internal material demand.</p></div>
-            </div>
-        </a>
-        <a href="/inventory/reports" class="card p-5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-900/20">
-            <div class="flex items-start gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">{{ icon_svg("chart", "h-5 w-5") }}</div>
-                <div><h3 class="text-base font-semibold text-slate-900 dark:text-white">Reports</h3><p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Open stock-on-hand and inventory reporting views.</p></div>
-            </div>
-        </a>
-    </div>
 </div>
 {% endblock %}
