@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
+from app.services.common import ServiceError
 from app.services.people.hr.web import hr_web_service
 from app.web.deps import get_db_for_org, WebAuthContext, require_hr_access
 
@@ -141,12 +142,20 @@ async def create_employee(
     db: Session = Depends(get_db_for_org),
 ):
     """Handle new employee form submission."""
-    return await hr_web_service.create_employee_response(
-        request=request,
-        auth=auth,
-        db=db,
-        background_tasks=background_tasks,
-    )
+    try:
+        return await hr_web_service.create_employee_response(
+            request=request,
+            auth=auth,
+            db=db,
+            background_tasks=background_tasks,
+        )
+    except ServiceError as exc:
+        if exc.status_code not in (400, 404, 409):
+            raise
+        db.rollback()
+        return await hr_web_service.employee_create_failure_response(
+            request=request, auth=auth, db=db, error=exc
+        )
 
 
 @router.get("/employees/{employee_id}", response_class=HTMLResponse)

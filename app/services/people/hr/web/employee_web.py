@@ -94,6 +94,19 @@ DEPARTMENT_MANAGE_ROLES = frozenset({"admin", "hr_director", "hr_manager"})
 EMPLOYEE_MOVEMENT_PERIOD_VALUES = frozenset(
     {"last_6_months", "last_12_months", "this_year", "previous_year"}
 )
+EMPLOYEE_CREATE_REFERENCE_LABELS = {
+    "linked_person_id": "user account",
+    "department_id": "department",
+    "designation_id": "designation",
+    "employment_type_id": "contract type",
+    "grade_id": "employee grade",
+    "position_id": "position",
+    "reports_to_id": "manager",
+    "expense_approver_id": "expense approver",
+    "assigned_location_id": "assigned branch",
+    "default_shift_type_id": "shift type",
+    "cost_center_id": "cost center",
+}
 
 
 def _can_manage_departments(auth: WebAuthContext) -> bool:
@@ -1230,6 +1243,29 @@ class HRWebService:
             )
 
         org_id = coerce_uuid(auth.organization_id)
+        for field, label in EMPLOYEE_CREATE_REFERENCE_LABELS.items():
+            value = self._form_str(form, field)
+            if not value:
+                continue
+            try:
+                UUID(value)
+            except (TypeError, ValueError):
+                self._log_employee_create_validation(
+                    request,
+                    reason="invalid_reference_id",
+                    current_tab=current_tab,
+                    has_salary_structure=bool(salary_structure_id),
+                    field=field,
+                )
+                message = f"The selected {label} is invalid. Choose it again."
+                return self.employee_new_form_response(
+                    request,
+                    auth,
+                    db,
+                    error=message,
+                    form_data=self._employee_create_form_data(form),
+                    errors={field: message},
+                )
         normalized_country_code = country_code.upper() if country_code else ""
         if normalized_country_code and len(normalized_country_code) != 2:
             self._log_employee_create_validation(
@@ -1780,6 +1816,83 @@ class HRWebService:
             url=f"/people/hr/employees/{employee_id}?{query}",
             status_code=303,
         )
+
+    async def employee_create_failure_response(
+        self,
+        *,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        error: ServiceError,
+    ) -> HTMLResponse:
+        """Show a safe service error on the employee form after rollback."""
+        form = await self._request_form(request)
+        detail = error.message.lower()
+        field = None
+        if detail.startswith("personal email") or "valid personal email" in detail:
+            field = "personal_email"
+            message = error.message
+        elif "employee with code" in detail:
+            field = "employee_code"
+            message = "This employee code is already in use. Enter another code."
+        elif "already has an employee record" in detail:
+            field = "linked_person_id"
+            message = "This person already has an employee record."
+        elif "employment type" in detail:
+            field = "employment_type_id"
+            message = (
+                "The selected contract type is no longer available. Choose another."
+            )
+        elif "manager with id" in detail:
+            field = "reports_to_id"
+            message = "The selected manager is no longer available. Choose another."
+        elif "expense approver with id" in detail:
+            field = "expense_approver_id"
+            message = (
+                "The selected expense approver is no longer available. Choose another."
+            )
+        elif "position already has" in detail or "position with id" in detail:
+            field = "position_id"
+            message = "The selected position is unavailable. Choose another."
+        elif detail.startswith("person "):
+            field = "linked_person_id"
+            message = "We could not find the selected person. Choose the account again."
+        elif detail.startswith("location "):
+            field = "assigned_location_id"
+            message = (
+                "The selected assigned branch is no longer available. Choose another."
+            )
+        else:
+            message = "Please check the employee details and try again."
+            for reference_field, label in EMPLOYEE_CREATE_REFERENCE_LABELS.items():
+                if detail.startswith(f"{label} "):
+                    field = reference_field
+                    message = (
+                        f"The selected {label} is no longer available. Choose another."
+                    )
+                    break
+        logger.warning(
+            "Employee creation rejected",
+            extra={
+                "request_id": getattr(request.state, "request_id", None),
+                "path": request.url.path,
+                "status": error.status_code,
+                "reason": type(error).__name__,
+                "field": field,
+            },
+        )
+        return self.employee_new_form_response(
+            request,
+            auth,
+            db,
+            error=message,
+            form_data=self._employee_create_form_data(form),
+            errors={field: message} if field else None,
+        )
+
+    @classmethod
+    def _employee_create_form_data(cls, form: Any) -> dict[str, str]:
+        return {key: cls._form_str(form, key) for key in form if key != "csrf_token"}
 
     @staticmethod
     def _employee_create_required_employment_message(errors: dict[str, str]) -> str:
@@ -2767,6 +2880,8 @@ class HRWebService:
             form_data: Previously submitted form data (for re-populating on error).
             errors: Field-level validation errors.
         """
+        if request.query_params.get("form_error") == "session_expired" and not error:
+            error = "We could not verify the form. Please fill it in and submit again."
         org_id = coerce_uuid(auth.organization_id)
         org_svc = OrganizationService(db, org_id)
 
@@ -2927,6 +3042,7 @@ class HRWebService:
         reason: str,
         current_tab: str,
         has_salary_structure: bool,
+        field: str | None = None,
     ) -> None:
         logger.info(
             "Employee create form re-rendered after validation failure",
@@ -2935,6 +3051,7 @@ class HRWebService:
                 "reason": reason,
                 "current_tab": current_tab or None,
                 "has_salary_structure": has_salary_structure,
+                "field": field,
             },
         )
 

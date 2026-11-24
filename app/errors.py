@@ -175,6 +175,8 @@ def register_error_handlers(app) -> None:
             if request.url.query:
                 next_url += f"?{request.url.query}"
             login_url = f"/login?next={quote(next_url, safe='')}"
+            if request.url.path == "/people/hr/employees/new":
+                login_url += "&error=employee_session_expired"
             return RedirectResponse(url=login_url, status_code=302)
 
         # For 403 errors on web routes, render a user-friendly forbidden page

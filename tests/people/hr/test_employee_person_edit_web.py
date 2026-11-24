@@ -599,6 +599,71 @@ async def test_create_employee_response_passes_selected_position_id(
 
 
 @pytest.mark.asyncio
+async def test_create_employee_names_invalid_selection_and_logs_field(
+    db_session, person, monkeypatch, caplog
+):
+    caplog.set_level("INFO")
+    _stub_new_employee_form_dependencies(monkeypatch, db_session)
+    request = _make_new_employee_request(
+        {
+            "linked_person_id": str(person.id),
+            "date_of_joining": "2026-01-01",
+            "employment_type_id": str(uuid4()),
+            "assigned_location_id": "not-a-uuid",
+            "salary_mode": "BANK",
+            "salary_structure_id": str(uuid4()),
+        }
+    )
+    request.state.request_id = "test-request-id"
+
+    response = await HRWebService().create_employee_response(
+        request=request,
+        auth=_make_auth(person.id, person.organization_id, ["people:write"]),
+        db=db_session,
+    )
+
+    assert response.status_code == 200
+    assert response.context["errors"]["assigned_location_id"] == (
+        "The selected assigned branch is invalid. Choose it again."
+    )
+    assert response.context["form_data"]["date_of_joining"] == "2026-01-01"
+    assert any(
+        record.getMessage()
+        == "Employee create form re-rendered after validation failure"
+        and record.reason == "invalid_reference_id"
+        and record.field == "assigned_location_id"
+        and record.request_id == "test-request-id"
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_employee_create_service_error_stays_on_form(
+    db_session, person, monkeypatch, caplog
+):
+    _stub_new_employee_form_dependencies(monkeypatch, db_session)
+    request = _make_new_employee_request(
+        {"employee_code": "EMP-1", "date_of_joining": "2026-01-01"}
+    )
+    response = await HRWebService().employee_create_failure_response(
+        request=request,
+        auth=_make_auth(person.id, person.organization_id, ["people:write"]),
+        db=db_session,
+        error=ValidationError(f"Designation {uuid4()} not found"),
+    )
+
+    assert response.context["errors"]["designation_id"] == (
+        "The selected designation is no longer available. Choose another."
+    )
+    assert response.context["form_data"]["employee_code"] == "EMP-1"
+    assert any(
+        record.field == "designation_id" and record.status == 400
+        for record in caplog.records
+        if record.getMessage() == "Employee creation rejected"
+    )
+
+
+@pytest.mark.asyncio
 async def test_create_employee_response_creates_initial_salary_assignment(
     db_session, person, monkeypatch
 ):
