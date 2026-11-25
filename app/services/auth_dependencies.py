@@ -1,5 +1,6 @@
 import logging
 import os
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from typing import cast
 from uuid import UUID
@@ -42,6 +43,26 @@ SESSION_ACTIVITY_TIMEOUT_DAYS = int(os.getenv("SESSION_ACTIVITY_TIMEOUT_DAYS", "
 
 # Session validation cache TTL in seconds (5 minutes default)
 SESSION_CACHE_TTL_SECONDS = int(os.getenv("SESSION_CACHE_TTL_SECONDS", "300"))
+
+
+def has_people_module_claims(roles: Iterable[str], scopes: Iterable[str]) -> bool:
+    """Check the role and scope grants used for HR module access."""
+    role_names = {role.strip().lower() for role in roles if role}
+    scope_names = set(scopes)
+    return (
+        bool(
+            role_names
+            & {
+                "admin",
+                "hr_manager",
+                "hr_director",
+                "payroll_admin",
+                "payroll_approver",
+            }
+        )
+        or "hr:access" in scope_names
+        or any(scope.startswith("hr:schedule:") for scope in scope_names)
+    )
 
 
 def _session_cache_key(session_id: UUID) -> str:

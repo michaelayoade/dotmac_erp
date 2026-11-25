@@ -9,7 +9,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Index, Text, func, text
+from sqlalchemy import JSON, Boolean, Date, Enum, ForeignKey, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +18,12 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingM
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
+
+
+ATTENDANCE_EXCEPTION_REASONS = {
+    "Early exit": "Attendance exception: Early exit",
+    "Late entry": "Attendance exception: Late entry",
+}
 
 
 class AttendanceRequestStatus(str, enum.Enum):
@@ -96,6 +102,10 @@ class AttendanceRequest(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin)
         default=AttendanceRequestStatus.DRAFT,
     )
 
+    review_notification_state: Mapped[dict[str, str | list[str] | None] | None] = (
+        mapped_column(JSON(none_as_null=True), nullable=True)
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
@@ -109,6 +119,14 @@ class AttendanceRequest(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin)
         "Employee",
         foreign_keys=[employee_id],
     )
+
+    @property
+    def is_attendance_exception(self) -> bool:
+        return (
+            self.reason in ATTENDANCE_EXCEPTION_REASONS.values()
+            and self.from_date == self.to_date
+            and not self.half_day
+        )
 
     def __repr__(self) -> str:
         return (

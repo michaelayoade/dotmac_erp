@@ -84,7 +84,9 @@
             </div>
             <div>
                 <p class="text-sm font-medium text-amber-800 dark:text-amber-200">{{ pending_count }} pending request{{ 's' if pending_count != 1 else '' }} awaiting review</p>
+                {% if actionable_ids %}
                 <p class="text-xs text-amber-600 dark:text-amber-400">Select requests below to approve or reject in bulk</p>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -145,7 +147,7 @@
                         {% for req in requests %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                             <td class="px-4 py-3">
-                                {% if req.status == "PENDING" %}
+                                {% if req.attendance_request_id in actionable_ids %}
                                 <input aria-label="Select request" type="checkbox" name="request_ids" value="{{ req.attendance_request_id }}"
                                        @change="updateSelection($event)"
                                        class="request-checkbox rounded border-slate-300 text-teal-600 focus:ring-teal-500 dark:border-slate-600 dark:bg-slate-700">
@@ -184,7 +186,7 @@
                             </td>
                             <td class="px-4 py-3 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    {% if req.status == "PENDING" %}
+                                    {% if req.attendance_request_id in actionable_ids %}
                                     {# Avoid nested <form> tags (invalid HTML). Use the bulk form with per-row formaction. #}
                                     <button type="submit"
                                             formaction="/people/attendance/requests/{{ req.attendance_request_id }}/approve"

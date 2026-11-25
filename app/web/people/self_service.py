@@ -301,7 +301,7 @@ async def request_attendance_exception(
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db_for_org),
 ) -> RedirectResponse:
-    """Submit an attendance exception for HR approval."""
+    """Submit an attendance exception for approval."""
     form = getattr(request.state, "csrf_form", None)
     if form is None:
         form = await request.form()
@@ -1407,6 +1407,40 @@ async def delete_expense_claim(
         auth,
         db,
         claim_id=claim_id,
+    )
+
+
+@router.get("/team/attendance", response_class=HTMLResponse)
+def team_attendance_requests(
+    request: Request,
+    request_id: UUID | None = None,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db_for_org),
+) -> HTMLResponse:
+    return self_service_web_service.team_attendance_response(
+        request, auth, db, request_id=request_id
+    )
+
+
+@router.post("/team/attendance/{request_id}/approve")
+def approve_team_attendance(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db_for_org),
+) -> RedirectResponse:
+    return self_service_web_service.team_attendance_decision_response(
+        auth, db, request_id=request_id, approve=True
+    )
+
+
+@router.post("/team/attendance/{request_id}/reject")
+def reject_team_attendance(
+    request_id: UUID,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db_for_org),
+) -> RedirectResponse:
+    return self_service_web_service.team_attendance_decision_response(
+        auth, db, request_id=request_id, approve=False
     )
 
 

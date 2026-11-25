@@ -36,7 +36,7 @@ from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.observability import actor_id_var
 from app.rls import set_current_organization
-from app.services.auth_dependencies import is_session_inactive
+from app.services.auth_dependencies import has_people_module_claims, is_session_inactive
 from app.services.auth_flow import (
     AuthFlow,
     _load_rbac_claims,
@@ -1052,7 +1052,6 @@ class WebAuthContext:
 
         modules = []
         scopes_set = set(self.scopes)
-        roles_set = {r.strip().lower() for r in self.roles if r and r.strip()}
 
         has_fixed_assets_scope = any(
             scope == "fa"
@@ -1064,16 +1063,7 @@ class WebAuthContext:
 
         if self.is_admin or "finance:access" in scopes_set:
             modules.append("finance")
-        # HR/People: allow either scope-based access or named HR roles.
-        # Role names come from JWT claims (Role.name in DB, e.g. "hr_manager").
-        if (
-            self.is_admin
-            or "hr:access" in scopes_set
-            or any(scope.startswith("hr:schedule:") for scope in scopes_set)
-            or roles_set.intersection(
-                {"hr_manager", "hr_director", "payroll_admin", "payroll_approver"}
-            )
-        ):
+        if has_people_module_claims(self.roles, scopes_set):
             modules.append("people")
         if self.is_admin or "training:access" in scopes_set:
             modules.append("training")
