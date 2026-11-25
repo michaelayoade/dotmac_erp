@@ -37,12 +37,19 @@ from app.models.people.attendance import (
     ShiftAssignment,
     ShiftType,
 )
+from app.models.people.attendance.attendance_request import ATTENDANCE_EXCEPTION_REASONS
 from app.models.people.hr.employee import Employee
-from app.services.common import PaginatedResult, PaginationParams, ValidationError
+from app.services.common import (
+    ForbiddenError,
+    PaginatedResult,
+    PaginationParams,
+    ValidationError,
+)
 from app.services.people import (
     PEOPLE_SETTINGS_DOMAIN,
     REQUIRE_DOB_FOR_CHECKIN_SETTING,
 )
+from app.services.people.attendance.exception_routing import AttendanceExceptionRouting
 from app.services.people.scheduling.resolver import ResolvedShift, ScheduleResolver
 from app.services.settings_spec import resolve_value
 
@@ -1565,18 +1572,60 @@ class AttendanceService:
         )
 
     def get_attendance_request(
-        self, org_id: UUID, request_id: UUID
+        self, org_id: UUID, request_id: UUID, *, lock: bool = False
     ) -> AttendanceRequest:
         """Get an attendance request by ID."""
-        request = self.db.scalar(
-            select(AttendanceRequest).where(
-                AttendanceRequest.attendance_request_id == request_id,
-                AttendanceRequest.organization_id == org_id,
-            )
+        query = select(AttendanceRequest).where(
+            AttendanceRequest.attendance_request_id == request_id,
+            AttendanceRequest.organization_id == org_id,
         )
+        if lock:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        request = self.db.scalar(query)
         if not request:
             raise AttendanceRequestNotFoundError(request_id)
         return request
+
+    def exception_routing(self, org_id: UUID) -> AttendanceExceptionRouting:
+        return AttendanceExceptionRouting(self.db, org_id, self.get_org_today(org_id))
+
+    def create_attendance_exception(
+        self,
+        org_id: UUID,
+        *,
+        employee_id: UUID,
+        requested_date: date,
+        reason: str,
+        explanation: str,
+        person_id: UUID,
+    ) -> AttendanceRequest:
+        """Submit a single-day exception to the current reporting officer or HR."""
+        if reason not in ATTENDANCE_EXCEPTION_REASONS or not explanation.strip():
+            raise AttendanceServiceError("Select an exception and explain the request.")
+        routing = self.exception_routing(org_id)
+        if requested_date < routing.as_of:
+            raise AttendanceServiceError("Choose today or a future date.")
+        request = AttendanceRequest(
+            organization_id=org_id,
+            employee_id=employee_id,
+            from_date=requested_date,
+            to_date=requested_date,
+            reason=ATTENDANCE_EXCEPTION_REASONS[reason],
+            explanation=explanation.strip(),
+            status=AttendanceRequestStatus.PENDING,
+            created_by_id=person_id,
+        )
+        self.db.add(request)
+        self.db.flush()
+        routing.notify_reviewers(request)
+        return request
+
+    def refresh_attendance_exception_reviews(self, org_id: UUID) -> int:
+        routing = self.exception_routing(org_id)
+        return sum(
+            routing.notify_reviewers(request)
+            for request in routing.pending_requests(lock=True)
+        )
 
     def create_attendance_request(
         self,
@@ -1591,6 +1640,8 @@ class AttendanceService:
         explanation: str | None = None,
     ) -> AttendanceRequest:
         """Create a new attendance request."""
+        if reason in ATTENDANCE_EXCEPTION_REASONS.values():
+            raise ValidationError("Submit early exit or late entry from Self Service.")
         if to_date < from_date:
             raise AttendanceServiceError("from_date must be on or before to_date")
         if half_day and not half_day_date:
@@ -1620,7 +1671,12 @@ class AttendanceService:
         **kwargs,
     ) -> AttendanceRequest:
         """Update an attendance request."""
-        request = self.get_attendance_request(org_id, request_id)
+        request = self.get_attendance_request(org_id, request_id, lock=True)
+        if (
+            request.reason in ATTENDANCE_EXCEPTION_REASONS.values()
+            or kwargs.get("reason") in ATTENDANCE_EXCEPTION_REASONS.values()
+        ):
+            raise ForbiddenError("Use the attendance exception review workflow.")
 
         for key, value in kwargs.items():
             if value is not None and hasattr(request, key):
@@ -1640,7 +1696,9 @@ class AttendanceService:
         self, org_id: UUID, request_id: UUID
     ) -> AttendanceRequest:
         """Submit an attendance request for approval."""
-        request = self.get_attendance_request(org_id, request_id)
+        request = self.get_attendance_request(org_id, request_id, lock=True)
+        if request.is_attendance_exception:
+            raise ForbiddenError("Submit early exit or late entry from Self Service.")
         if request.status != AttendanceRequestStatus.DRAFT:
             raise AttendanceRequestStatusError(
                 request_id,
@@ -1653,78 +1711,130 @@ class AttendanceService:
         return request
 
     def approve_attendance_request(
-        self, org_id: UUID, request_id: UUID
+        self,
+        org_id: UUID,
+        request_id: UUID,
+        *,
+        person_id: UUID | None = None,
+        has_hr_access: bool = False,
+        exception_only: bool = False,
     ) -> AttendanceRequest:
-        """Approve an attendance request and create attendance records."""
-        request = self.get_attendance_request(org_id, request_id)
-        if request.status != AttendanceRequestStatus.PENDING:
-            raise AttendanceRequestStatusError(
-                request_id,
-                request.status.value,
-                AttendanceRequestStatus.APPROVED.value,
-            )
-
-        request.status = AttendanceRequestStatus.APPROVED
-        request.status_changed_at = datetime.now()
-        if not (
-            request.reason
-            in {
-                "Attendance exception: Early exit",
-                "Attendance exception: Late entry",
-            }
-            and request.from_date == request.to_date
-            and not request.half_day
-        ):
-            self._process_attendance_request(org_id, request)
-        self.db.flush()
-        return request
+        """Approve an attendance request."""
+        return self._decide_attendance_request(
+            org_id,
+            request_id,
+            AttendanceRequestStatus.APPROVED,
+            person_id=person_id,
+            has_hr_access=has_hr_access,
+            exception_only=exception_only,
+        )
 
     def reject_attendance_request(
-        self, org_id: UUID, request_id: UUID
+        self,
+        org_id: UUID,
+        request_id: UUID,
+        *,
+        person_id: UUID | None = None,
+        has_hr_access: bool = False,
+        exception_only: bool = False,
     ) -> AttendanceRequest:
         """Reject an attendance request."""
-        request = self.get_attendance_request(org_id, request_id)
+        return self._decide_attendance_request(
+            org_id,
+            request_id,
+            AttendanceRequestStatus.REJECTED,
+            person_id=person_id,
+            has_hr_access=has_hr_access,
+            exception_only=exception_only,
+        )
+
+    def _decide_attendance_request(
+        self,
+        org_id: UUID,
+        request_id: UUID,
+        status: AttendanceRequestStatus,
+        *,
+        person_id: UUID | None,
+        has_hr_access: bool,
+        exception_only: bool,
+    ) -> AttendanceRequest:
+        request = self.get_attendance_request(org_id, request_id, lock=True)
+        is_exception = request.is_attendance_exception
+        if exception_only and not is_exception:
+            raise AttendanceRequestNotFoundError(request_id)
+        if is_exception and (
+            person_id is None
+            or not self.exception_routing(org_id).can_decide(
+                request, person_id, has_hr_access=has_hr_access
+            )
+        ):
+            raise ForbiddenError("This request is assigned to another reviewer.")
         if request.status != AttendanceRequestStatus.PENDING:
             raise AttendanceRequestStatusError(
-                request_id,
-                request.status.value,
-                AttendanceRequestStatus.REJECTED.value,
+                request_id, request.status.value, status.value
             )
 
-        request.status = AttendanceRequestStatus.REJECTED
-        request.status_changed_at = datetime.now()
+        request.status = status
+        request.status_changed_at = datetime.now(UTC)
+        request.status_changed_by_id = person_id
+        if status == AttendanceRequestStatus.APPROVED and not is_exception:
+            self._process_attendance_request(org_id, request)
         self.db.flush()
         return request
 
     def delete_attendance_request(self, org_id: UUID, request_id: UUID) -> None:
         """Delete an attendance request."""
-        request = self.get_attendance_request(org_id, request_id)
+        request = self.get_attendance_request(org_id, request_id, lock=True)
+        if request.is_attendance_exception:
+            raise ForbiddenError("Use the attendance exception review workflow.")
         self.db.delete(request)
         self.db.flush()
 
     def bulk_approve_attendance_requests(
-        self, org_id: UUID, request_ids: list[UUID]
+        self,
+        org_id: UUID,
+        request_ids: list[UUID],
+        *,
+        person_id: UUID | None = None,
+        has_hr_access: bool = False,
     ) -> dict:
         """Bulk approve attendance requests."""
         updated = 0
-        for req_id in request_ids:
+        for req_id in sorted(set(request_ids)):
             try:
-                self.approve_attendance_request(org_id, req_id)
+                self.approve_attendance_request(
+                    org_id, req_id, person_id=person_id, has_hr_access=has_hr_access
+                )
                 updated += 1
-            except (AttendanceRequestNotFoundError, AttendanceRequestStatusError):
+            except (
+                AttendanceRequestNotFoundError,
+                AttendanceRequestStatusError,
+                ForbiddenError,
+            ):
                 continue
         return {"updated": updated, "requested": len(request_ids)}
 
     def bulk_reject_attendance_requests(
-        self, org_id: UUID, request_ids: list[UUID]
+        self,
+        org_id: UUID,
+        request_ids: list[UUID],
+        *,
+        person_id: UUID | None = None,
+        has_hr_access: bool = False,
     ) -> dict:
         """Bulk reject attendance requests."""
         updated = 0
-        for req_id in request_ids:
+        for req_id in sorted(set(request_ids)):
             try:
-                self.reject_attendance_request(org_id, req_id)
+                self.reject_attendance_request(
+                    org_id, req_id, person_id=person_id, has_hr_access=has_hr_access
+                )
                 updated += 1
-            except (AttendanceRequestNotFoundError, AttendanceRequestStatusError):
+            except (
+                AttendanceRequestNotFoundError,
+                AttendanceRequestStatusError,
+                ForbiddenError,
+            ):
                 continue
         return {"updated": updated, "requested": len(request_ids)}
 

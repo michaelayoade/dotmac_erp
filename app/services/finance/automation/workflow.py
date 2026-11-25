@@ -781,6 +781,9 @@ class WorkflowService:
                 AttendanceRequestStatus,
                 AttendanceStatus,
             )
+            from app.models.people.attendance.attendance_request import (
+                ATTENDANCE_EXCEPTION_REASONS,
+            )
 
             attendance = db.get(Attendance, context.entity_id)
             if not attendance or attendance.organization_id != rule.organization_id:
@@ -844,7 +847,7 @@ class WorkflowService:
                     )
 
             exception_reason = rule.action_config.get("attendance_exception")
-            if exception_reason in {"Early exit", "Late entry"}:
+            if exception_reason in ATTENDANCE_EXCEPTION_REASONS:
                 is_exception = (
                     attendance.early_exit
                     if exception_reason == "Early exit"
@@ -862,7 +865,7 @@ class WorkflowService:
                         AttendanceRequest.from_date == attendance.attendance_date,
                         AttendanceRequest.to_date == attendance.attendance_date,
                         AttendanceRequest.reason
-                        == f"Attendance exception: {exception_reason}",
+                        == ATTENDANCE_EXCEPTION_REASONS[exception_reason],
                         AttendanceRequest.half_day.is_(False),
                         AttendanceRequest.status == AttendanceRequestStatus.APPROVED,
                     )
@@ -870,7 +873,7 @@ class WorkflowService:
                 )
                 if approved:
                     return self._record_skipped(
-                        db, rule, context, "HR approved the attendance exception"
+                        db, rule, context, "Attendance exception approved"
                     )
 
         execution = WorkflowExecution(

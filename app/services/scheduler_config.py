@@ -329,6 +329,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.hr.generate_scheduled_absences",
             "schedule": crontab(minute=30),  # Hourly, after leave sync
         },
+        "attendance-exception-review-refresh": {
+            "task": "app.tasks.hr.refresh_attendance_exception_reviews",
+            "schedule": crontab(minute="*/5"),
+        },
         "fleet-document-expiry-reminders": {
             "task": "app.tasks.fleet.process_document_expiry_notifications",
             "schedule": crontab(hour=7, minute=0),  # 7 AM daily

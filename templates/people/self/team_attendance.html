@@ -1,0 +1,62 @@
+{% extends "people/base_people.html" %}
+
+{% block page_title %}Team Attendance Requests{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/people/self" class="hover:text-violet-600 dark:hover:text-violet-400">Self Service</a>
+    <span class="mx-2" aria-hidden="true">/</span>
+    <span aria-current="page">Team Attendance Requests</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    {% set decision = request.query_params.get("decision") %}
+    {% if decision in ("approved", "rejected") %}
+    <p role="status" class="text-sm text-slate-700 dark:text-slate-300">Attendance request {{ decision }}.</p>
+    {% endif %}
+    {% if request_selected %}
+    <a href="/people/self/team/attendance" class="btn btn-secondary">All pending requests</a>
+    {% endif %}
+    {% if attendance_requests %}
+    <div class="card overflow-hidden">
+        <div class="table-container">
+            <table class="min-w-full divide-y divide-slate-200 text-left text-sm dark:divide-slate-700">
+                <thead class="bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    <tr>
+                        <th scope="col" class="px-4 py-3">Employee</th>
+                        <th scope="col" class="px-4 py-3">Shift date</th>
+                        <th scope="col" class="px-4 py-3">Exception and reason</th>
+                        <th scope="col" class="px-4 py-3 text-right">Decision</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    {% for item in attendance_requests %}
+                    <tr>
+                        <td class="px-4 py-3 font-medium">{{ item.employee.full_name }}</td>
+                        <td class="px-4 py-3">{{ item.from_date | format_date }}</td>
+                        <td class="px-4 py-3">
+                            <p class="font-medium">{{ item.reason | replace("Attendance exception: ", "") }}</p>
+                            <p class="whitespace-pre-wrap break-words text-slate-600 dark:text-slate-400">{{ item.explanation }}</p>
+                        </td>
+                        <td class="px-4 py-3">
+                            <form method="post" class="flex justify-end gap-2">
+                                {{ request.state.csrf_form | safe }}
+                                <button type="submit" formaction="/people/self/team/attendance/{{ item.attendance_request_id }}/approve" class="btn btn-sm btn-primary">Approve</button>
+                                <button type="submit" formaction="/people/self/team/attendance/{{ item.attendance_request_id }}/reject" class="btn btn-sm btn-secondary">Reject</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <p class="card p-6 text-sm text-slate-600 dark:text-slate-400">
+        {% if request_selected %}This request is no longer pending in your queue.{% else %}You have no attendance requests awaiting your review.{% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

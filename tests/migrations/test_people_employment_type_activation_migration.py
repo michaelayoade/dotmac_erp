@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import tomllib
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -137,6 +138,18 @@ def _revision_parents() -> dict[str, tuple[str, ...]]:
     return parents
 
 
+def _ancestors(parents: dict[str, tuple[str, ...]], revision: str) -> set[str]:
+    seen: set[str] = set()
+    frontier = list(parents[revision])
+    while frontier:
+        current = frontier.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        frontier.extend(parents.get(current, ()))
+    return seen
+
+
 def test_activation_descends_the_bootstrap_gate() -> None:
     module = _load()
     assert module.revision == "20260828_people_et_activation"
@@ -145,17 +158,8 @@ def test_activation_descends_the_bootstrap_gate() -> None:
     # Positive control: the parser really does see both endpoints of the walk,
     # so an ancestry miss below would be a real absence and not a parse miss.
     assert "20260828_people_et_bootstrap" in parents
-    assert parents["20260828_people_et_activation"] == (module.down_revision,)
-
-    seen: set[str] = set()
-    frontier = [module.down_revision]
-    while frontier:
-        current = frontier.pop()
-        if current in seen:
-            continue
-        seen.add(current)
-        frontier.extend(parents.get(current, ()))
-    assert "20260828_people_et_bootstrap" in seen
+    assert parents[module.revision] == (module.down_revision,)
+    assert "20260828_people_et_bootstrap" in _ancestors(parents, module.revision)
 
 
 def test_the_erp_lineage_stays_single_headed_after_this_activation() -> None:
@@ -163,8 +167,13 @@ def test_the_erp_lineage_stays_single_headed_after_this_activation() -> None:
     parents = _revision_parents()
     assert len(parents) > 100, len(parents)
     referenced = {parent for values in parents.values() for parent in values}
-    heads = sorted(revision for revision in parents if revision not in referenced)
-    assert heads == ["20261104_sub_vendor_supplier_identity"], heads
+    heads = parents.keys() - referenced
+    with (PROJECT_ROOT / "deploy" / "product.toml").open("rb") as descriptor:
+        declared = set(tomllib.load(descriptor)["migration"]["expected_heads"])
+    assert len(heads) == 1, heads
+    assert heads == declared & parents.keys()
+    head = next(iter(heads))
+    assert "20260828_people_et_activation" in _ancestors(parents, head)
 
 
 def test_rbac_contract_is_a_frozen_exact_copy_of_the_authored_seed() -> None:

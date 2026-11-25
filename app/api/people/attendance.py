@@ -42,6 +42,7 @@ from app.schemas.people.attendance import (
     ShiftTypeRead,
     ShiftTypeUpdate,
 )
+from app.services.auth_dependencies import has_people_module_claims
 from app.services.common import PaginationParams
 from app.services.people.attendance import AttendanceService
 
@@ -594,10 +595,16 @@ def approve_attendance_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
+    auth: dict = Depends(require_tenant_auth),
 ):
     """Approve an attendance request."""
     svc = AttendanceService(db)
-    request = svc.approve_attendance_request(organization_id, request_id)
+    request = svc.approve_attendance_request(
+        organization_id,
+        request_id,
+        person_id=UUID(auth["person_id"]),
+        has_hr_access=has_people_module_claims(auth["roles"], auth["scopes"]),
+    )
     return AttendanceRequestRead.model_validate(request)
 
 
@@ -606,10 +613,16 @@ def reject_attendance_request(
     request_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
+    auth: dict = Depends(require_tenant_auth),
 ):
     """Reject an attendance request."""
     svc = AttendanceService(db)
-    request = svc.reject_attendance_request(organization_id, request_id)
+    request = svc.reject_attendance_request(
+        organization_id,
+        request_id,
+        person_id=UUID(auth["person_id"]),
+        has_hr_access=has_people_module_claims(auth["roles"], auth["scopes"]),
+    )
     return AttendanceRequestRead.model_validate(request)
 
 
@@ -618,10 +631,16 @@ def bulk_approve_attendance_requests(
     payload: AttendanceRequestBulkAction,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
+    auth: dict = Depends(require_tenant_auth),
 ):
     """Bulk approve attendance requests."""
     svc = AttendanceService(db)
-    result = svc.bulk_approve_attendance_requests(organization_id, payload.request_ids)
+    result = svc.bulk_approve_attendance_requests(
+        organization_id,
+        payload.request_ids,
+        person_id=UUID(auth["person_id"]),
+        has_hr_access=has_people_module_claims(auth["roles"], auth["scopes"]),
+    )
     return result
 
 
@@ -630,10 +649,16 @@ def bulk_reject_attendance_requests(
     payload: AttendanceRequestBulkAction,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_with_org),
+    auth: dict = Depends(require_tenant_auth),
 ):
     """Bulk reject attendance requests."""
     svc = AttendanceService(db)
-    result = svc.bulk_reject_attendance_requests(organization_id, payload.request_ids)
+    result = svc.bulk_reject_attendance_requests(
+        organization_id,
+        payload.request_ids,
+        person_id=UUID(auth["person_id"]),
+        has_hr_access=has_people_module_claims(auth["roles"], auth["scopes"]),
+    )
     return result
 
 
