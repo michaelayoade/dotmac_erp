@@ -211,23 +211,24 @@ def reconcile_employee_mailcow_profiles() -> dict[str, Any]:
 @shared_task
 def refresh_attendance_exception_reviews() -> dict[str, int]:
     """Notify the new reviewer when a pending exception changes hands."""
+    from app.db import transaction
     from app.services.people.attendance import AttendanceService
 
     updated = 0
     failed = 0
     for org_id in _list_organization_ids(include_inactive=False):
         try:
-            with session_for_org(org_id) as db:
+            with session_for_org(org_id) as db, transaction(db):
                 changed = AttendanceService(db).refresh_attendance_exception_reviews(
                     org_id
                 )
-                db.commit()
-                updated += changed
         except Exception:  # noqa: BLE001 -- continue processing other tenants
             logger.exception(
                 "Could not refresh attendance exception reviews for org %s", org_id
             )
             failed += 1
+        else:
+            updated += changed
     return {"updated": updated, "failed": failed}
 
 
