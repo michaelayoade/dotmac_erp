@@ -27,6 +27,7 @@ from app.models.finance.tax.tax_transaction import (
 )
 from app.services.common import coerce_uuid
 from app.services.finance.platform.org_context import org_context_service
+from app.services.finance.rpt.common import _build_csv
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -764,12 +765,12 @@ class TaxTransactionService(ListResponseMixin):
     def get_vat_register(
         db: Session,
         organization_id: str,
-        start_date: date,
-        end_date: date,
+        start_date: date | None = None,
+        end_date: date | None = None,
         transaction_type: TaxTransactionType | None = None,
         tax_code_id: str | None = None,
         page: int = 1,
-        limit: int = 50,
+        limit: int | None = 50,
     ) -> tuple[builtins.list[dict[str, Any]], int]:
         """
         Get VAT register - detailed list of all tax transactions.
@@ -788,16 +789,19 @@ class TaxTransactionService(ListResponseMixin):
             Tuple of (list of transaction dicts, total count)
         """
         org_id = coerce_uuid(organization_id)
-        offset = (page - 1) * limit
 
         # Base query with join to tax code
         query = (
             select(TaxTransaction, TaxCode)
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
             .where(TaxTransaction.organization_id == org_id)
-            .where(TaxTransaction.transaction_date >= start_date)
-            .where(TaxTransaction.transaction_date <= end_date)
+            .where(TaxCode.organization_id == org_id)
         )
+
+        if start_date:
+            query = query.where(TaxTransaction.transaction_date >= start_date)
+        if end_date:
+            query = query.where(TaxTransaction.transaction_date <= end_date)
 
         if transaction_type:
             query = query.where(TaxTransaction.transaction_type == transaction_type)
@@ -808,12 +812,13 @@ class TaxTransactionService(ListResponseMixin):
         # Get total count
         total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
-        # Get paginated results
-        results = db.execute(
-            query.order_by(TaxTransaction.transaction_date.desc())
-            .offset(offset)
-            .limit(limit)
-        ).all()
+        # The screen and export share one query; None exports every match.
+        query = query.order_by(
+            TaxTransaction.transaction_date.desc(), TaxTransaction.transaction_id
+        )
+        if limit is not None:
+            query = query.offset((page - 1) * limit).limit(limit)
+        results = db.execute(query).all()
 
         transactions = []
         for txn, code in results:
@@ -848,6 +853,71 @@ class TaxTransactionService(ListResponseMixin):
             )
 
         return transactions, total
+
+    @staticmethod
+    def export_vat_register_csv(
+        db: Session,
+        organization_id: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        transaction_type: TaxTransactionType | None = None,
+        tax_code_id: str | None = None,
+    ) -> str:
+        """Export all register matches through the shared financial CSV writer."""
+        transactions, _ = TaxTransactionService.get_vat_register(
+            db=db,
+            organization_id=organization_id,
+            start_date=start_date,
+            end_date=end_date,
+            transaction_type=transaction_type,
+            tax_code_id=tax_code_id,
+            limit=None,
+        )
+        headers = [
+            "Date",
+            "Type",
+            "Reference",
+            "Counterparty",
+            "Base Amount",
+            "Rate",
+            "Tax Amount",
+            "Currency",
+            "Tax Code",
+            "Tax Name",
+            "Counterparty Tax ID",
+            "Transaction ID",
+        ]
+
+        # Quote untrusted text as spreadsheet literals; retain numeric amounts.
+        def text_cell(value: object) -> str:
+            value = str(value) if value is not None else ""
+            if value.lstrip().startswith(("=", "+", "-", "@")) or value.startswith(
+                ("\t", "\r", "\n")
+            ):
+                return "'" + value
+            return value
+
+        rows: builtins.list[builtins.list[str]] = []
+        for txn in transactions:
+            rows.append(
+                [
+                    txn["transaction_date"],
+                    txn["transaction_type"],
+                    text_cell(
+                        txn["source_document_reference"] or txn["transaction_id"][:8]
+                    ),
+                    text_cell(txn["counterparty_name"] or "-"),
+                    txn["base_amount"],
+                    txn["tax_rate"],
+                    txn["tax_amount"],
+                    text_cell(txn["currency_code"]),
+                    text_cell(txn["tax_code"]),
+                    text_cell(txn["tax_name"]),
+                    text_cell(txn["counterparty_tax_id"]),
+                    txn["transaction_id"],
+                ]
+            )
+        return _build_csv(headers, rows)
 
     @staticmethod
     def get_tax_liability_summary(

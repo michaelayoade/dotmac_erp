@@ -12,7 +12,7 @@ from decimal import Decimal
 from urllib.parse import quote_plus
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -53,6 +53,41 @@ from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
+
+
+def _vat_register_dates(
+    start_date: str | None,
+    end_date: str | None,
+) -> tuple[date | None, date | None]:
+    """Blank dates mean no bound for both the screen and the export."""
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="Enter valid filter dates."
+        ) from exc
+    if start and end and start > end:
+        raise HTTPException(
+            status_code=422, detail="Start date must not follow end date."
+        )
+    return start, end
+
+
+def _vat_register_type(value: str | None) -> TaxTransactionType | None:
+    try:
+        return TaxTransactionType(value) if value else None
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="Invalid transaction type."
+        ) from exc
+
+
+def _vat_register_tax_code(value: str | None) -> str | None:
+    try:
+        return str(UUID(value)) if value else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid tax code.") from exc
 
 
 def _get_accounts(
@@ -224,8 +259,8 @@ class TaxWebService:
     def vat_register_context(
         db: Session,
         organization_id: str,
-        start_date: date,
-        end_date: date,
+        start_date: date | None,
+        end_date: date | None,
         transaction_type: str | None = None,
         tax_code_id: str | None = None,
         page: int = 1,
@@ -238,16 +273,8 @@ class TaxWebService:
         """
         org_id = coerce_uuid(organization_id)
 
-        # Convert transaction type string to enum if provided
-        txn_type = None
-        if transaction_type:
-            try:
-                txn_type = TaxTransactionType(transaction_type)
-            except ValueError:
-                logger.warning(
-                    "Invalid transaction_type filter for VAT register: %s",
-                    transaction_type,
-                )
+        txn_type = _vat_register_type(transaction_type)
+        tax_code_id = _vat_register_tax_code(tax_code_id)
 
         transactions, total_count = tax_transaction_service.get_vat_register(
             db=db,
@@ -283,8 +310,8 @@ class TaxWebService:
             "total_pages": total_pages,
             "has_previous": page > 1,
             "has_next": page < total_pages,
-            "start_date": _format_date(start_date),
-            "end_date": _format_date(end_date),
+            "start_date": start_date.isoformat() if start_date else "",
+            "end_date": end_date.isoformat() if end_date else "",
             "transaction_type": transaction_type or "",
             "tax_code_id": tax_code_id or "",
             "summary": {
@@ -1187,17 +1214,7 @@ class TaxWebService:
         page: int,
         db: Session,
     ) -> HTMLResponse:
-        today = date.today()
-        if not start_date:
-            start = today.replace(day=1)
-        else:
-            start = date.fromisoformat(start_date)
-
-        if not end_date:
-            next_month = today.replace(day=28) + timedelta(days=4)
-            end = next_month.replace(day=1) - timedelta(days=1)
-        else:
-            end = date.fromisoformat(end_date)
+        start, end = _vat_register_dates(start_date, end_date)
 
         tax_codes = tax_code_service.list(
             db=db,
@@ -1223,6 +1240,25 @@ class TaxWebService:
 
         return templates.TemplateResponse(
             request, "finance/tax/vat_register.html", context
+        )
+
+    @staticmethod
+    def export_vat_register_csv(
+        db: Session,
+        organization_id: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        transaction_type: str | None = None,
+        tax_code_id: str | None = None,
+    ) -> str:
+        start, end = _vat_register_dates(start_date, end_date)
+        return tax_transaction_service.export_vat_register_csv(
+            db=db,
+            organization_id=organization_id,
+            start_date=start,
+            end_date=end,
+            transaction_type=_vat_register_type(transaction_type),
+            tax_code_id=_vat_register_tax_code(tax_code_id),
         )
 
     def tax_liability_summary_response(
