@@ -1321,6 +1321,18 @@ class AttendanceWebService:
             status=AttendanceRequestStatus.PENDING,
             pagination=PaginationParams(offset=0, limit=1),
         )
+        routing = svc.exception_routing(org_id)
+        person_id = coerce_uuid(auth.person_id)
+        has_hr_access = auth.has_module_access("people")
+        actionable_ids = {
+            item.attendance_request_id
+            for item in result.items
+            if item.status == AttendanceRequestStatus.PENDING
+            and (
+                not item.is_attendance_exception
+                or routing.can_decide(item, person_id, has_hr_access=has_hr_access)
+            )
+        }
 
         context = base_context(
             request, auth, "Attendance Requests", "attendance", db=db
@@ -1333,6 +1345,7 @@ class AttendanceWebService:
             {
                 "requests": result.items,
                 "pending_count": pending_result.total,
+                "actionable_ids": actionable_ids,
                 "statuses": [s.value for s in AttendanceRequestStatus],
                 "status": status,
                 "start_date": start_date,
@@ -1459,7 +1472,12 @@ class AttendanceWebService:
         """Approve an attendance request."""
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
-        svc.approve_attendance_request(org_id, coerce_uuid(request_id))
+        svc.approve_attendance_request(
+            org_id,
+            coerce_uuid(request_id),
+            person_id=coerce_uuid(auth.person_id),
+            has_hr_access=auth.has_module_access("people"),
+        )
         db.commit()
         success_msg = quote("Attendance request approved successfully")
         return RedirectResponse(
@@ -1475,7 +1493,12 @@ class AttendanceWebService:
         """Reject an attendance request."""
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
-        svc.reject_attendance_request(org_id, coerce_uuid(request_id))
+        svc.reject_attendance_request(
+            org_id,
+            coerce_uuid(request_id),
+            person_id=coerce_uuid(auth.person_id),
+            has_hr_access=auth.has_module_access("people"),
+        )
         db.commit()
         success_msg = quote("Attendance request rejected")
         return RedirectResponse(
@@ -1515,10 +1538,15 @@ class AttendanceWebService:
 
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
-        result = svc.bulk_approve_attendance_requests(org_id, valid_ids)
+        result = svc.bulk_approve_attendance_requests(
+            org_id,
+            valid_ids,
+            person_id=coerce_uuid(auth.person_id),
+            has_hr_access=auth.has_module_access("people"),
+        )
         db.commit()
 
-        success_msg = quote(f"Approved {result['approved']} request(s)")
+        success_msg = quote(f"Approved {result['updated']} request(s)")
         return RedirectResponse(
             url=f"/people/attendance/requests?success={success_msg}", status_code=303
         )
@@ -1556,10 +1584,15 @@ class AttendanceWebService:
 
         org_id = coerce_uuid(auth.organization_id)
         svc = AttendanceService(db)
-        result = svc.bulk_reject_attendance_requests(org_id, valid_ids)
+        result = svc.bulk_reject_attendance_requests(
+            org_id,
+            valid_ids,
+            person_id=coerce_uuid(auth.person_id),
+            has_hr_access=auth.has_module_access("people"),
+        )
         db.commit()
 
-        success_msg = quote(f"Rejected {result['rejected']} request(s)")
+        success_msg = quote(f"Rejected {result['updated']} request(s)")
         return RedirectResponse(
             url=f"/people/attendance/requests?success={success_msg}", status_code=303
         )

@@ -980,7 +980,7 @@ def test_approved_attendance_exception_skips_email(workflow_service, reason, fla
     ):
         result = workflow_service.execute_action(db, rule, context)
     assert result.status == ExecutionStatus.SKIPPED
-    assert result.error_message == "HR approved the attendance exception"
+    assert result.error_message == "Attendance exception approved"
     run_action.assert_not_called()
 
 

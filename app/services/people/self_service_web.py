@@ -58,7 +58,13 @@ from app.models.people.scheduling.shift_schedule import ShiftSchedule
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
-from app.services.common import PaginationParams, ValidationError, coerce_uuid
+from app.services.common import (
+    ConflictError,
+    NotFoundError,
+    PaginationParams,
+    ValidationError,
+    coerce_uuid,
+)
 from app.services.common_filters import build_active_filters
 from app.services.expense.limit_service import (
     ExpenseLimitService,
@@ -67,7 +73,12 @@ from app.services.expense.limit_service import (
 from app.services.file_upload import FileUploadError
 from app.services.finance.banking.bank_directory import BankDirectoryService
 from app.services.people.attendance import AttendanceService, CheckInRequirementError
-from app.services.people.attendance.attendance_service import AttendanceServiceError
+from app.services.people.attendance.attendance_service import (
+    AttendanceRequestNotFoundError,
+    AttendanceRequestStatusError,
+    AttendanceServiceError,
+)
+from app.services.people.attendance.exception_routing import TEAM_ATTENDANCE_URL
 from app.services.people.expense import (
     ApproverAuthorityError,
     ExpenseClaimStatusError,
@@ -164,6 +175,7 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
+        context["can_team_attendance"] = has_direct_reports
         context["can_team_expenses"] = (
             not auth.is_technician
             and self._has_team_expense_approvals(
@@ -2451,21 +2463,16 @@ class SelfServiceWebService:
         explanation: str,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
-        employee_id = self._get_employee_id(db, org_id, coerce_uuid(auth.person_id))
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
         try:
-            if reason not in {"Early exit", "Late entry"} or not explanation.strip():
-                raise ValueError("Select an exception and explain the request.")
-            request_date = date.fromisoformat(requested_date)
-            svc = AttendanceService(db)
-            if request_date < svc.get_org_today(org_id):
-                raise ValueError("Choose today or a future date.")
-            svc.create_attendance_request(
+            AttendanceService(db).create_attendance_exception(
                 org_id,
                 employee_id=employee_id,
-                from_date=request_date,
-                to_date=request_date,
-                reason=f"Attendance exception: {reason}",
-                explanation=explanation.strip(),
+                requested_date=date.fromisoformat(requested_date),
+                reason=reason,
+                explanation=explanation,
+                person_id=person_id,
             )
         except (ValueError, AttendanceServiceError) as exc:
             return RedirectResponse(
@@ -2475,6 +2482,56 @@ class SelfServiceWebService:
         db.commit()
         return RedirectResponse(
             url="/people/self/attendance?exception_submitted=1", status_code=303
+        )
+
+    def team_attendance_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        request_id: UUID | None = None,
+    ) -> HTMLResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        routing = AttendanceService(db).exception_routing(org_id)
+        context = base_context(request, auth, "Team Attendance Requests", "self", db=db)
+        context["attendance_requests"] = routing.manager_queue(
+            person_id, request_id=request_id
+        )
+        context["request_selected"] = request_id is not None
+        return templates.TemplateResponse(
+            request, "people/self/team_attendance.html", context
+        )
+
+    def team_attendance_decision_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        request_id: UUID,
+        approve: bool,
+    ) -> RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        service = AttendanceService(db)
+        decide = (
+            service.approve_attendance_request
+            if approve
+            else service.reject_attendance_request
+        )
+        try:
+            decide(org_id, request_id, person_id=person_id, exception_only=True)
+        except AttendanceRequestNotFoundError as exc:
+            raise NotFoundError("Attendance request not found.") from exc
+        except AttendanceRequestStatusError as exc:
+            raise ConflictError(
+                "This attendance request has already been reviewed."
+            ) from exc
+        db.commit()
+        decision = "approved" if approve else "rejected"
+        return RedirectResponse(
+            url=f"{TEAM_ATTENDANCE_URL}?decision={decision}", status_code=303
         )
 
     def check_in_response(
