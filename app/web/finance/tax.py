@@ -300,6 +300,27 @@ def vat_register(
     )
 
 
+@router.get("/vat-register/export")
+def export_vat_register(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    transaction_type: str | None = None,
+    tax_code_id: str | None = None,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db_for_org),
+) -> StreamingResponse:
+    """Download all matching VAT register rows, without pagination."""
+    csv = tax_web_service.export_vat_register_csv(
+        db=db,
+        organization_id=str(auth.organization_id),
+        start_date=start_date,
+        end_date=end_date,
+        transaction_type=transaction_type,
+        tax_code_id=tax_code_id,
+    )
+    return _csv_response(csv, "vat_register.csv")
+
+
 @router.get("/liability-summary", response_class=HTMLResponse)
 def tax_liability_summary(
     request: Request,
