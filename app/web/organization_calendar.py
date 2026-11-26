@@ -246,7 +246,7 @@ def _form_context(
             "error": error,
             "can_add_everyone": auth.has_permission("calendar:participants:add_all"),
             "participant_options": selected_options,
-            "participant_search_url": "/calendar/participant-options",
+            "participant_search_url": "/people/calendar/participant-options",
         }
     )
     return context

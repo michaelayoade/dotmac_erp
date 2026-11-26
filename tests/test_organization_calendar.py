@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, time, timedelta
+from importlib import import_module
 from pathlib import Path
+import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 from app.models.organization_calendar import (
     CalendarBusinessStatus,
@@ -20,11 +25,13 @@ from app.models.notification import Notification, NotificationChannel
 from app.models.people.hr.employee import EmployeeStatus
 from app.models.person import PersonStatus
 from app.services.organization_calendar import (
+    CalendarError,
     CalendarEventData,
     OrganizationCalendarService,
     ParticipantCandidate,
     build_event_data,
 )
+from app.web.deps import get_db_for_org, require_web_auth
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -248,7 +255,8 @@ def test_participant_search_service_contract_is_tenant_safe_and_bounded() -> Non
     assert "Employee.organization_id == self.organization_id" in method
     assert "Department.organization_id == self.organization_id" in method
     assert "Designation.organization_id == self.organization_id" in method
-    assert "EmployeeStatus.ACTIVE" in method
+    assert "self._eligible_employee_sql(today)" in method
+    assert "Employee.status.in_(CALENDAR_ELIGIBLE_STATUSES)" in method
     assert "Department.is_active.is_(True)" in method
     assert "Designation.is_active.is_(True)" in method
     assert "return items[:bounded_limit]" in method
@@ -359,6 +367,233 @@ def test_participant_search_excludes_inactive_and_self_and_deduplicates() -> Non
         "engine", exclude_person_id=owner_id
     )
     assert items == []
+
+
+@pytest.mark.parametrize(
+    ("module_name", "picker_id"),
+    [
+        ("app.web.organization_calendar", "organization-participant-picker"),
+        ("app.web.people.self_service_calendar", "self-participant-picker"),
+    ],
+)
+@pytest.mark.parametrize("is_edit", [False, True])
+def test_participant_picker_search_url_reaches_mounted_route(
+    module_name: str, picker_id: str, is_edit: bool
+) -> None:
+    from app.web.people import router as people_router
+
+    module = import_module(module_name)
+    auth = SimpleNamespace(
+        organization_id=uuid4(),
+        person_id=uuid4(),
+        has_permission=lambda _permission: True,
+        has_any_permission=lambda _permissions: True,
+        has_module_access=lambda _module: True,
+    )
+    db = MagicMock()
+    event = (
+        OrganizationCalendarEvent(
+            event_id=uuid4(),
+            organization_id=auth.organization_id,
+            ical_uid="calendar-route-test@example.test",
+            title="Team meeting",
+            timezone="Africa/Lagos",
+            all_day=True,
+            start_date=date(2026, 12, 1),
+            end_date_exclusive=date(2026, 12, 2),
+            color="#4F46E5",
+            business_status=CalendarBusinessStatus.PUBLISHED.value,
+            version=1,
+            created_by_id=auth.person_id,
+            updated_by_id=auth.person_id,
+        )
+        if is_edit
+        else None
+    )
+    with (
+        patch.object(module, "OrganizationCalendarService") as service_type,
+        patch.object(module, "base_context", return_value={}),
+    ):
+        service_type.return_value.eligible_participants.return_value = ([], [])
+        service_type.return_value.recipient_groups.return_value = {
+            "departments": [],
+            "designations": [],
+        }
+        service_type.return_value.participant_options_for_selection.return_value = []
+        context = module._form_context(
+            SimpleNamespace(query_params={}), auth, db, event=event
+        )
+
+    picker_context = {**context, "picker_id": picker_id, "can_add_everyone": False}
+    picker_html = module.templates.env.get_template(
+        "components/calendar_participant_picker.html"
+    ).render(**picker_context)
+    match = re.search(r"fetch\('([^']+)\?q=", picker_html)
+    assert match is not None
+    search_url = match.group(1)
+
+    app = FastAPI()
+    app.include_router(people_router)
+    assert any(route.path == search_url for route in app.routes)
+    app.dependency_overrides[require_web_auth] = lambda: auth
+    app.dependency_overrides[get_db_for_org] = lambda: db
+    expected = [{"kind": "employee", "id": str(uuid4()), "label": "Ada"}]
+    with patch.object(
+        OrganizationCalendarService, "search_participant_options", return_value=expected
+    ) as search:
+        response = TestClient(app).get(search_url, params={"q": "Ada"})
+
+    assert response.status_code == 200
+    assert response.json() == {"items": expected}
+    if module_name.endswith("self_service_calendar"):
+        assert search.call_args.kwargs["exclude_person_id"] == auth.person_id
+
+
+def test_calendar_participant_status_policy_covers_search_selection_and_groups() -> (
+    None
+):
+    organization_id = uuid4()
+    department_id = uuid4()
+    designation_id = uuid4()
+    rows = []
+    ids = {}
+    for status in EmployeeStatus:
+        person_id = uuid4()
+        ids[status] = person_id
+        rows.append(
+            (
+                SimpleNamespace(
+                    employee_id=uuid4(),
+                    employee_code=status.value,
+                    status=status,
+                    date_of_leaving=None,
+                ),
+                SimpleNamespace(
+                    id=person_id,
+                    name=f"Engineer {status.value}",
+                    email=f"{status.value.lower()}@example.com",
+                    is_active=True,
+                    status=PersonStatus.active,
+                    nextcloud_user_id=None,
+                ),
+            )
+        )
+    active_employee, active_person = next(
+        (employee, person)
+        for employee, person in rows
+        if employee.status == EmployeeStatus.ACTIVE
+    )
+    inactive_employee = SimpleNamespace(**vars(active_employee))
+    inactive_employee.employee_id = uuid4()
+    inactive_person = SimpleNamespace(**vars(active_person))
+    inactive_person.id = uuid4()
+    inactive_person.is_active = False
+    rows.append((inactive_employee, inactive_person))
+    on_leave_employee, on_leave_person = next(
+        (employee, person)
+        for employee, person in rows
+        if employee.status == EmployeeStatus.ON_LEAVE
+    )
+    departed_employee = SimpleNamespace(**vars(on_leave_employee))
+    departed_employee.employee_id = uuid4()
+    departed_employee.date_of_leaving = date.today() - timedelta(days=1)
+    departed_person = SimpleNamespace(**vars(on_leave_person))
+    departed_person.id = uuid4()
+    rows.append((departed_employee, departed_person))
+    db = MagicMock()
+    db.scalars.return_value = _Rows([])
+    service = OrganizationCalendarService(db, organization_id)
+    db.execute.return_value.all.return_value = [
+        (employee, person, "Engineering", "Engineer") for employee, person in rows
+    ]
+
+    items = service.search_participant_options("Engineer")
+    assert {item["id"] for item in items} == {
+        str(ids[EmployeeStatus.ACTIVE]),
+        str(ids[EmployeeStatus.ON_LEAVE]),
+    }
+    search_sql = str(
+        db.execute.call_args.args[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert str(organization_id) in search_sql
+    assert "people.organization_id" in search_sql
+    assert "IN ('ACTIVE', 'ON_LEAVE')" in search_sql
+    assert "date_of_leaving" in search_sql
+    assert "people.is_active is true" in search_sql.lower()
+
+    db.execute.return_value.all.return_value = [
+        (employee, person, department_id, "Engineering", designation_id, "Engineer")
+        for employee, person in rows
+    ]
+    eligible, excluded = service.eligible_participants()
+    eligible_sql = str(
+        db.execute.call_args.args[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "people.organization_id" in eligible_sql
+    assert {candidate.person_id for candidate in eligible} == {
+        ids[EmployeeStatus.ACTIVE],
+        ids[EmployeeStatus.ON_LEAVE],
+    }
+    assert len(excluded) == len(EmployeeStatus)
+    selected = service.participant_options_for_selection(
+        {str(person_id) for person_id in ids.values()}, set(), set()
+    )
+    assert {item["id"] for item in selected} == {
+        str(ids[EmployeeStatus.ACTIVE]),
+        str(ids[EmployeeStatus.ON_LEAVE]),
+    }
+    expanded, _targets = service._resolve_candidates([], False, [department_id], [])
+    assert {candidate.person_id for candidate in expanded} == {
+        ids[EmployeeStatus.ACTIVE],
+        ids[EmployeeStatus.ON_LEAVE],
+    }
+    by_designation, _targets = service._resolve_candidates(
+        [], False, [], [designation_id]
+    )
+    assert {candidate.person_id for candidate in by_designation} == {
+        ids[EmployeeStatus.ACTIVE],
+        ids[EmployeeStatus.ON_LEAVE],
+    }
+    with pytest.raises(CalendarError, match="not eligible"):
+        service._resolve_candidates([ids[EmployeeStatus.RESIGNED]], False, [], [])
+
+
+def test_on_leave_employee_matches_dynamic_department_target() -> None:
+    organization_id = uuid4()
+    person_id = uuid4()
+    department_id = uuid4()
+    db = MagicMock()
+    db.scalar.return_value = SimpleNamespace(
+        status=EmployeeStatus.ON_LEAVE,
+        department_id=department_id,
+        designation_id=None,
+    )
+    service = OrganizationCalendarService(db, organization_id)
+    event = SimpleNamespace(
+        participants=[], recipient_targets={"departments": [str(department_id)]}
+    )
+
+    assert service._event_matches_current_target(event, person_id)
+    target_sql = str(
+        service._dynamic_target_exists(person_id).compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    lookup_sql = str(
+        db.scalar.call_args.args[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "IN ('ACTIVE', 'ON_LEAVE')" in target_sql
+    assert "IN ('ACTIVE', 'ON_LEAVE')" in lookup_sql
+    assert "date_of_leaving" in target_sql
+    assert "date_of_leaving" in lookup_sql
+    assert "people.is_active is true" in target_sql.lower()
+    assert "people.is_active is true" in lookup_sql.lower()
 
 
 def test_talk_notification_boundary_is_documented() -> None:
