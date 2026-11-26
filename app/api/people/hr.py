@@ -887,6 +887,7 @@ def update_employee(
         bank_account_name=payload.bank_account_name,
         notes=payload.notes,
         eligible_for_final_payroll=payload.eligible_for_final_payroll,
+        provided_fields=set(payload.model_fields_set),
     )
     emp = svc.update_employee(employee_id, data)
     return EmployeeRead.model_validate(emp)
