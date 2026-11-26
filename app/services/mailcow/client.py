@@ -69,8 +69,21 @@ class MailcowClient:
             if response.status_code == 404:
                 return None
             self._raise_for_http_error(response)
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise MailcowClientError("Mailbox lookup returned invalid JSON") from exc
+        if (
+            isinstance(payload, dict)
+            and str(payload.get("type", "")).lower() == "error"
+        ):
+            raise MailcowClientError("Mailbox lookup failed")
         if isinstance(payload, list):
+            if any(
+                isinstance(item, dict) and str(item.get("type", "")).lower() == "error"
+                for item in payload
+            ):
+                raise MailcowClientError("Mailbox lookup failed")
             if len(payload) > 1:
                 raise MailcowAmbiguousMailboxError(
                     "Mailbox lookup returned multiple records"
@@ -219,7 +232,13 @@ class MailcowClient:
                 json=payload,
             )
             self._raise_for_http_error(response)
-        self._raise_for_api_failure(response.json(), "custom attribute update")
+        try:
+            outcome = response.json()
+        except ValueError as exc:
+            raise MailcowClientError(
+                "Mailbox custom attribute update returned invalid JSON"
+            ) from exc
+        self._raise_for_api_failure(outcome, "custom attribute update")
 
         verified_mailbox = self.get_mailbox(email)
         if not verified_mailbox or (

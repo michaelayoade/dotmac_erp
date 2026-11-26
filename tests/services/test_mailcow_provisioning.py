@@ -173,6 +173,23 @@ def test_get_mailbox_rejects_ambiguous_response(mock_client_class: Mock) -> None
 
 
 @patch("app.services.mailcow.client.httpx.Client")
+@pytest.mark.parametrize("payload", [ValueError("bad JSON"), {"type": "error"}])
+def test_get_mailbox_reports_invalid_api_response(
+    mock_client_class: Mock, payload
+) -> None:
+    response = Mock(status_code=200)
+    if isinstance(payload, Exception):
+        response.json.side_effect = payload
+    else:
+        response.json.return_value = payload
+    mock_client_class.return_value.__enter__.return_value.get.return_value = response
+    client = MailcowClient(base_url="https://mail.dotmac.ng/api/v1", api_key="test-key")
+
+    with pytest.raises(MailcowClientError, match="Mailbox lookup"):
+        client.get_mailbox("ada@dotmac.ng")
+
+
+@patch("app.services.mailcow.client.httpx.Client")
 def test_set_mailbox_custom_attribute_preserves_and_verifies_other_values(
     mock_client_class: Mock,
 ) -> None:
@@ -325,6 +342,27 @@ def test_custom_attribute_readback_mismatch_fails(
     client = MailcowClient(base_url="https://mail.dotmac.ng/api/v1", api_key="test-key")
 
     with pytest.raises(MailcowClientError, match="could not be verified"):
+        client.set_mailbox_custom_attribute("ada@dotmac.ng", "designation", "Engineer")
+
+
+@patch("app.services.mailcow.client.httpx.Client")
+def test_custom_attribute_invalid_write_response_is_retryable(
+    mock_client_class: Mock,
+) -> None:
+    initial = Mock(status_code=200)
+    initial.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+        "custom_attributes": {},
+    }
+    write = Mock(status_code=200)
+    write.json.side_effect = ValueError("bad JSON")
+    http_client = mock_client_class.return_value.__enter__.return_value
+    http_client.get.return_value = initial
+    http_client.post.return_value = write
+    client = MailcowClient(base_url="https://mail.dotmac.ng/api/v1", api_key="test-key")
+
+    with pytest.raises(MailcowClientError, match="returned invalid JSON"):
         client.set_mailbox_custom_attribute("ada@dotmac.ng", "designation", "Engineer")
 
 
