@@ -10,7 +10,9 @@ from starlette.requests import Request
 
 from app.web.deps import WebAuthContext
 from app.web.fleet import (
+    fleet_reports_expenses,
     fleet_reports_expense_vehicle_detail,
+    fleet_reports_invoices,
     fleet_reports_invoice_vehicle_detail,
 )
 
@@ -59,6 +61,94 @@ def _install_template_stub(monkeypatch):
         "app.web.fleet.templates.TemplateResponse",
         _template_response,
     )
+
+
+@pytest.mark.parametrize(
+    ("route", "path"),
+    [
+        (fleet_reports_expenses, "/fleet/reports/expenses"),
+        (fleet_reports_invoices, "/fleet/reports/invoices"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("start_date", "end_date", "expected_start", "expected_end"),
+    [
+        ("", "", None, None),
+        ("2026-04-01", "2026-04-30", date(2026, 4, 1), date(2026, 4, 30)),
+    ],
+)
+def test_report_list_routes_pass_date_range(
+    monkeypatch, route, path, start_date, end_date, expected_start, expected_end
+):
+    captured = {}
+
+    class FakeFleetWebService:
+        def __init__(self, db):
+            self.db = db
+
+        def reports_expenses_context(self, organization_id, **kwargs):
+            captured.update(kwargs)
+            return {}
+
+        reports_invoices_context = reports_expenses_context
+
+    _install_template_stub(monkeypatch)
+    monkeypatch.setattr("app.web.fleet.FleetWebService", FakeFleetWebService)
+
+    response = route(
+        request=_make_request(path),
+        start_date=start_date,
+        end_date=end_date,
+        auth=_make_auth(),
+        db=object(),
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "start_date": expected_start,
+        "end_date": expected_end,
+    }
+
+
+@pytest.mark.parametrize("route", [fleet_reports_expenses, fleet_reports_invoices])
+@pytest.mark.parametrize(
+    ("start_date", "end_date"),
+    [
+        ("invalid", ""),
+        ("2026-05-01", "2026-04-30"),
+    ],
+)
+def test_report_list_routes_show_invalid_ranges(
+    monkeypatch, route, start_date, end_date
+):
+    captured = {}
+
+    class FakeFleetWebService:
+        def __init__(self, db):
+            self.db = db
+
+        def reports_expenses_context(self, organization_id, **kwargs):
+            captured.update(kwargs)
+            return {"filter_start_date": "", "filter_end_date": ""}
+
+        reports_invoices_context = reports_expenses_context
+
+    _install_template_stub(monkeypatch)
+    monkeypatch.setattr("app.web.fleet.FleetWebService", FakeFleetWebService)
+
+    response = route(
+        request=_make_request("/fleet/reports"),
+        start_date=start_date,
+        end_date=end_date,
+        auth=_make_auth(),
+        db=object(),
+    )
+
+    assert response.status_code == 200
+    assert response.context["filter_error"]
+    assert response.context["filter_start_date"] == start_date
+    assert response.context["filter_end_date"] == end_date
+    assert captured == {"start_date": None, "end_date": None}
 
 
 def test_expense_detail_route_accepts_blank_filters_and_parses_month(monkeypatch):
