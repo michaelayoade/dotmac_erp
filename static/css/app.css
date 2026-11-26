@@ -14080,6 +14080,10 @@ a.stat-hero-link:active { transform: scale(0.98); }
         padding-top: 1.5rem;
     }
 
+    .sm\:text-right {
+        text-align: right;
+    }
+
     .sm\:align-middle {
         vertical-align: middle;
     }
