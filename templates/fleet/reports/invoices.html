@@ -2,6 +2,7 @@
 {% from "components/macros.html" import icon_svg, currency, data_table %}
 
 {% block page_title %}Fleet Invoice Reports{% endblock %}
+{% block back_fallback %}/fleet/reports{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
@@ -22,15 +23,36 @@
 {% block content %}
 <div class="space-y-6 page-enter">
     <div class="card p-6">
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
                 <h2 class="text-xl font-semibold text-slate-900 dark:text-white">Invoices by Vehicle</h2>
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
                     Shows AP invoices where a Fleet vehicle was selected.
                 </p>
             </div>
-            <a href="/fleet/reports" class="btn btn-secondary">Back</a>
+            <div class="sm:text-right">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Total Invoice Amount</p>
+                <p class="mt-1 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-white">{{ currency(total_amount) }}</p>
+            </div>
         </div>
+        <a href="/fleet/reports" x-show="viewportWidth < 560" x-cloak class="btn btn-secondary mt-4">Back to Reports</a>
+        <search aria-label="Filter invoices by date">
+            {% if filter_error %}
+            <p id="invoice-date-error" role="alert" class="mt-4 text-sm text-red-700 dark:text-red-300">{{ filter_error }}</p>
+            {% endif %}
+            <form method="get" action="/fleet/reports/invoices" class="mt-5 flex flex-wrap items-end gap-3">
+                <div class="w-full sm:w-44">
+                    <label for="invoice-start-date" class="form-label text-xs">Start date</label>
+                    <input id="invoice-start-date" type="date" name="start_date" value="{{ filter_start_date }}" class="form-input w-full"{% if filter_error %} aria-invalid="true" aria-describedby="invoice-date-error" autofocus{% endif %}>
+                </div>
+                <div class="w-full sm:w-44">
+                    <label for="invoice-end-date" class="form-label text-xs">End date</label>
+                    <input id="invoice-end-date" type="date" name="end_date" value="{{ filter_end_date }}" class="form-input w-full"{% if filter_error %} aria-invalid="true" aria-describedby="invoice-date-error"{% endif %}>
+                </div>
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <a href="/fleet/reports/invoices" class="btn btn-secondary">Clear</a>
+            </form>
+        </search>
         {% if not tables_ready %}
         <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
             Fleet tables are not initialized in this database yet.
@@ -50,7 +72,7 @@
         {% for row in vehicle_rows %}
         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
             <td class="px-4 py-3">
-                <a href="/fleet/reports/invoices/{{ row.vehicle_id }}" class="font-medium text-slate-900 dark:text-white hover:text-amber-700 dark:hover:text-amber-300">
+                <a href="/fleet/reports/invoices/{{ row.vehicle_id }}{% if not filter_error and (filter_start_date or filter_end_date) %}?start_date={{ filter_start_date }}&amp;end_date={{ filter_end_date }}{% endif %}" class="font-medium text-slate-900 dark:text-white hover:text-amber-700 dark:hover:text-amber-300">
                     {{ row.registration_number }}
                 </a>
                 {% if row.vehicle_label %}

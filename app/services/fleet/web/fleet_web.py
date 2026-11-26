@@ -39,6 +39,7 @@ from app.models.fleet.enums import (
     VehicleStatus,
     VehicleType,
 )
+from app.models.fleet.vehicle import Vehicle
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.schemas.fleet.maintenance import MaintenanceComplete
 from app.services.common import (
@@ -380,22 +381,22 @@ class FleetWebService:
     def reports_expenses_context(
         self,
         organization_id: UUID,
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict[str, Any]:
         """Context for Fleet → Reports → Expenses."""
         if not self._fleet_tables_ready():
             return {
                 "tables_ready": False,
                 "vehicle_rows": [],
+                "total_amount": Decimal("0"),
+                "filter_start_date": start_date.isoformat() if start_date else "",
+                "filter_end_date": end_date.isoformat() if end_date else "",
             }
 
         org_id = coerce_uuid(organization_id)
         inspector = inspect(self.db.get_bind())
-
-        vehicles = (
-            VehicleService(self.db, org_id)
-            .list_vehicles(params=PaginationParams(offset=0, limit=500))
-            .items
-        )
 
         vehicle_totals: dict[UUID, dict[str, Any]] = {}
         if inspector.has_table("expense_claim_item", schema="expense"):
@@ -430,6 +431,11 @@ class FleetWebService:
                     ExpenseCategory.category_name.in_(
                         self.REPORT_EXPENSE_CATEGORY_NAMES
                     ),
+                    *self._report_date_conditions(
+                        ExpenseClaim.claim_date,
+                        start_date=start_date,
+                        end_date=end_date,
+                    ),
                 )
                 .group_by(ExpenseClaim.vehicle_id)
             ).all()
@@ -440,6 +446,17 @@ class FleetWebService:
                         "total_amount": total_amount or Decimal("0"),
                     }
 
+        vehicles = (
+            self.db.scalars(
+                sa_select(Vehicle).where(
+                    Vehicle.organization_id == org_id,
+                    Vehicle.vehicle_id.in_(tuple(vehicle_totals)),
+                    Vehicle.status != VehicleStatus.DISPOSED,
+                )
+            ).all()
+            if vehicle_totals
+            else []
+        )
         vehicle_rows: list[dict[str, Any]] = []
         for v in vehicles:
             vid = getattr(v, "vehicle_id", None)
@@ -460,6 +477,11 @@ class FleetWebService:
         return {
             "tables_ready": True,
             "vehicle_rows": vehicle_rows,
+            "total_amount": sum(
+                (row["total_amount"] for row in vehicle_rows), Decimal("0")
+            ),
+            "filter_start_date": start_date.isoformat() if start_date else "",
+            "filter_end_date": end_date.isoformat() if end_date else "",
         }
 
     def reports_expense_vehicle_context(
@@ -653,22 +675,22 @@ class FleetWebService:
     def reports_invoices_context(
         self,
         organization_id: UUID,
+        *,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict[str, Any]:
         """Context for Fleet → Reports → Invoices."""
         if not self._fleet_tables_ready():
             return {
                 "tables_ready": False,
                 "vehicle_rows": [],
+                "total_amount": Decimal("0"),
+                "filter_start_date": start_date.isoformat() if start_date else "",
+                "filter_end_date": end_date.isoformat() if end_date else "",
             }
 
         org_id = coerce_uuid(organization_id)
         inspector = inspect(self.db.get_bind())
-
-        vehicles = (
-            VehicleService(self.db, org_id)
-            .list_vehicles(params=PaginationParams(offset=0, limit=500))
-            .items
-        )
 
         vehicle_totals: dict[UUID, dict[str, Any]] = {}
         if inspector.has_table("supplier_invoice", schema="ap"):
@@ -686,6 +708,11 @@ class FleetWebService:
                     SupplierInvoice.organization_id == org_id,
                     SupplierInvoice.vehicle_id.is_not(None),
                     SupplierInvoice.status != SupplierInvoiceStatus.VOID,
+                    *self._report_date_conditions(
+                        SupplierInvoice.invoice_date,
+                        start_date=start_date,
+                        end_date=end_date,
+                    ),
                 )
                 .group_by(SupplierInvoice.vehicle_id)
             ).all()
@@ -697,6 +724,17 @@ class FleetWebService:
                         "total_amount": total_amount or Decimal("0"),
                     }
 
+        vehicles = (
+            self.db.scalars(
+                sa_select(Vehicle).where(
+                    Vehicle.organization_id == org_id,
+                    Vehicle.vehicle_id.in_(tuple(vehicle_totals)),
+                    Vehicle.status != VehicleStatus.DISPOSED,
+                )
+            ).all()
+            if vehicle_totals
+            else []
+        )
         vehicle_rows: list[dict[str, Any]] = []
         for v in vehicles:
             vid = getattr(v, "vehicle_id", None)
@@ -717,6 +755,11 @@ class FleetWebService:
         return {
             "tables_ready": True,
             "vehicle_rows": vehicle_rows,
+            "total_amount": sum(
+                (row["total_amount"] for row in vehicle_rows), Decimal("0")
+            ),
+            "filter_start_date": start_date.isoformat() if start_date else "",
+            "filter_end_date": end_date.isoformat() if end_date else "",
         }
 
     def reports_invoice_vehicle_context(

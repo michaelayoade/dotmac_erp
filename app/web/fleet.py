@@ -142,6 +142,23 @@ def fleet_dashboard(
 # =============================================================================
 
 
+def _parse_report_date_range(
+    start_date: str | None, end_date: str | None
+) -> tuple[date | None, date | None, str | None]:
+    try:
+        parsed_start = date.fromisoformat(start_date) if start_date else None
+        parsed_end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        return None, None, "Enter valid start and end dates. Showing all dates."
+    if parsed_start and parsed_end and parsed_start > parsed_end:
+        return (
+            None,
+            None,
+            "Start date must be on or before end date. Showing all dates.",
+        )
+    return parsed_start, parsed_end, None
+
+
 @router.get("/reports", response_class=HTMLResponse)
 def fleet_reports_index(
     request: Request,
@@ -158,13 +175,26 @@ def fleet_reports_index(
 @router.get("/reports/expenses", response_class=HTMLResponse)
 def fleet_reports_expenses(
     request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet expense reports (expense claims linked to vehicles)."""
+    parsed_start, parsed_end, filter_error = _parse_report_date_range(
+        start_date, end_date
+    )
     context = base_context(request, auth, "Fleet Expense Reports", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(web_service.reports_expenses_context(auth.organization_id))
+    context.update(
+        web_service.reports_expenses_context(
+            auth.organization_id, start_date=parsed_start, end_date=parsed_end
+        )
+    )
+    context["filter_error"] = filter_error
+    if filter_error:
+        context["filter_start_date"] = start_date or ""
+        context["filter_end_date"] = end_date or ""
     return templates.TemplateResponse(request, "fleet/reports/expenses.html", context)
 
 
@@ -229,13 +259,26 @@ def fleet_reports_expense_vehicle_detail(
 @router.get("/reports/invoices", response_class=HTMLResponse)
 def fleet_reports_invoices(
     request: Request,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
     """Fleet invoice reports (AP invoices linked to vehicles)."""
+    parsed_start, parsed_end, filter_error = _parse_report_date_range(
+        start_date, end_date
+    )
     context = base_context(request, auth, "Fleet Invoice Reports", "fleet", db=db)
     web_service = FleetWebService(db)
-    context.update(web_service.reports_invoices_context(auth.organization_id))
+    context.update(
+        web_service.reports_invoices_context(
+            auth.organization_id, start_date=parsed_start, end_date=parsed_end
+        )
+    )
+    context["filter_error"] = filter_error
+    if filter_error:
+        context["filter_start_date"] = start_date or ""
+        context["filter_end_date"] = end_date or ""
     return templates.TemplateResponse(request, "fleet/reports/invoices.html", context)
 
 
