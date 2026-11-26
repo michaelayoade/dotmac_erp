@@ -9,6 +9,10 @@ class MailcowClientError(RuntimeError):
     """Raised when Mailcow API operations fail."""
 
 
+class MailcowAmbiguousMailboxError(MailcowClientError):
+    """Raised when an email lookup does not identify one mailbox."""
+
+
 class MailcowClient:
     def __init__(
         self,
@@ -67,10 +71,24 @@ class MailcowClient:
             self._raise_for_http_error(response)
         payload = response.json()
         if isinstance(payload, list):
-            return payload[0] if payload else None
+            if len(payload) > 1:
+                raise MailcowAmbiguousMailboxError(
+                    "Mailbox lookup returned multiple records"
+                )
+            return payload[0] if payload and isinstance(payload[0], dict) else None
         if isinstance(payload, dict) and payload:
             return payload
         return None
+
+    @staticmethod
+    def _custom_attributes(mailbox: dict | None) -> dict[str, str]:
+        raw = mailbox.get("custom_attributes") if mailbox else None
+        if not isinstance(raw, dict) or any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in raw.items()
+        ):
+            raise MailcowClientError("Mailbox custom attributes are not a string map")
+        return dict(raw)
 
     def list_mailboxes(self, domain: str | None = None) -> list[dict]:
         endpoint = f"{self.base_url}/get/mailbox/all"
@@ -170,16 +188,14 @@ class MailcowClient:
         mailbox = self.get_mailbox(email)
         if mailbox is None:
             return None
+        if str(
+            mailbox.get("username", "")
+        ).strip().lower() != email.strip().lower() or str(
+            mailbox.get("active", "")
+        ).lower() not in {"1", "true"}:
+            raise MailcowClientError("Mailbox is not an active exact email match")
 
-        raw_attributes = mailbox.get("custom_attributes")
-        current = (
-            {
-                str(key): str(existing_value)
-                for key, existing_value in raw_attributes.items()
-            }
-            if isinstance(raw_attributes, dict)
-            else {}
-        )
+        current = self._custom_attributes(mailbox)
         expected = dict(current)
         if value is None or not value.strip():
             expected.pop(attribute, None)
@@ -206,19 +222,15 @@ class MailcowClient:
         self._raise_for_api_failure(response.json(), "custom attribute update")
 
         verified_mailbox = self.get_mailbox(email)
-        verified_raw = (
-            verified_mailbox.get("custom_attributes")
-            if isinstance(verified_mailbox, dict)
-            else None
-        )
-        verified = (
-            {
-                str(key): str(existing_value)
-                for key, existing_value in verified_raw.items()
-            }
-            if isinstance(verified_raw, dict)
-            else {}
-        )
+        if not verified_mailbox or (
+            str(verified_mailbox.get("username", "")).strip().lower()
+            != email.strip().lower()
+            or str(verified_mailbox.get("active", "")).lower() not in {"1", "true"}
+        ):
+            raise MailcowClientError(
+                "Mailbox custom attribute update could not be verified"
+            )
+        verified = self._custom_attributes(verified_mailbox)
         if verified != expected:
             raise MailcowClientError(
                 "Mailbox custom attribute update could not be verified"

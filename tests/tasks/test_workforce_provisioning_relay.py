@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+
 from app.config import settings
 from app.tasks import email as email_tasks
 
@@ -74,8 +76,16 @@ def test_mailbox_completion_fans_out_activation_and_nextcloud(monkeypatch) -> No
     )
 
 
+@pytest.mark.parametrize(
+    ("changed", "skipped", "outcome"),
+    [
+        (True, [], "updated"),
+        (False, [], "unchanged"),
+        (False, ["mailcow profile sync disabled"], "skipped"),
+    ],
+)
 def test_profile_only_reuses_mailcow_task_without_provisioning_fanout(
-    monkeypatch,
+    monkeypatch, changed: bool, skipped: list[str], outcome: str
 ) -> None:
     organization_id = uuid4()
     employee_id = uuid4()
@@ -93,9 +103,9 @@ def test_profile_only_reuses_mailcow_task_without_provisioning_fanout(
             return SimpleNamespace(
                 employee_id=str(employee_id),
                 email="person@dotmac.ng",
-                mailbox_found=True,
-                designation_changed=True,
-                skipped=[],
+                mailbox_found=not skipped,
+                designation_changed=changed,
+                skipped=skipped,
             )
 
         def ensure_mailbox(self, _organization_id, _employee_id):
@@ -103,6 +113,7 @@ def test_profile_only_reuses_mailcow_task_without_provisioning_fanout(
 
     activation_task = MagicMock()
     nextcloud_task = MagicMock()
+    stage = MagicMock()
     monkeypatch.setattr(email_tasks, "session_for_org", session_for_org)
     monkeypatch.setattr(
         email_tasks, "send_employee_mailbox_activation", activation_task
@@ -110,6 +121,7 @@ def test_profile_only_reuses_mailcow_task_without_provisioning_fanout(
     monkeypatch.setattr(
         email_tasks, "run_employee_nextcloud_provisioning", nextcloud_task
     )
+    monkeypatch.setattr(email_tasks, "_record_workforce_stage", stage)
     monkeypatch.setattr(
         "app.services.people.hr.mailbox_provisioning.EmployeeMailboxProvisioningService",
         MailboxService,
@@ -124,12 +136,14 @@ def test_profile_only_reuses_mailcow_task_without_provisioning_fanout(
     assert result == {
         "employee_id": str(employee_id),
         "email": "person@dotmac.ng",
-        "mailbox_found": True,
-        "designation_changed": True,
-        "skipped": [],
+        "mailbox_found": not skipped,
+        "designation_changed": changed,
+        "skipped": skipped,
+        "outcome": outcome,
     }
     activation_task.apply_async.assert_not_called()
     nextcloud_task.apply_async.assert_not_called()
+    stage.assert_not_called()
 
 
 def test_nextcloud_task_enqueues_selfcare_after_binding(monkeypatch) -> None:

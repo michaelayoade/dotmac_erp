@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -9,8 +9,16 @@ import httpx
 import pytest
 
 from app.models.people.hr.employee import EmployeeStatus
-from app.services.mailcow.client import MailcowClient, MailcowClientError
-from app.services.mailcow.config import MailcowProvisioningConfig
+from app.models.person import PersonStatus
+from app.services.mailcow.client import (
+    MailcowAmbiguousMailboxError,
+    MailcowClient,
+    MailcowClientError,
+)
+from app.services.mailcow.config import (
+    MailcowProvisioningConfig,
+    get_mailcow_provisioning_config,
+)
 from app.services.people.hr.mailbox_provisioning import (
     EmployeeMailboxProvisioningService,
     activate_employee_mailbox,
@@ -18,7 +26,9 @@ from app.services.people.hr.mailbox_provisioning import (
 )
 
 
-def _config(*, enabled: bool = True) -> MailcowProvisioningConfig:
+def _config(
+    *, enabled: bool = True, profile_sync_enabled: bool = False
+) -> MailcowProvisioningConfig:
     return MailcowProvisioningConfig(
         enabled=enabled,
         base_url="https://mail.dotmac.ng/api/v1",
@@ -26,7 +36,48 @@ def _config(*, enabled: bool = True) -> MailcowProvisioningConfig:
         request_timeout=20.0,
         domain="dotmac.ng",
         quota_mb=1024,
+        profile_sync_enabled=profile_sync_enabled,
     )
+
+
+def _profile_employee(organization_id):
+    return SimpleNamespace(
+        employee_id=uuid4(),
+        organization_id=organization_id,
+        status=EmployeeStatus.ACTIVE,
+        date_of_leaving=None,
+        designation_id=uuid4(),
+        designation=SimpleNamespace(
+            organization_id=organization_id,
+            is_active=True,
+            designation_name="Network Engineer",
+        ),
+        person=SimpleNamespace(
+            organization_id=organization_id,
+            is_active=True,
+            status=PersonStatus.active,
+            email="ada@dotmac.ng",
+            name="Ada Lovelace",
+        ),
+    )
+
+
+def test_profile_sync_config_is_independent_of_provisioning() -> None:
+    settings = SimpleNamespace(
+        mailcow_provisioning_enabled=False,
+        mailcow_profile_sync_enabled=True,
+        mailcow_base_url="https://mail.dotmac.ng/api/v1",
+        mailcow_api_key="test-key",
+        mailcow_request_timeout=20.0,
+        mailcow_provisioning_domain="dotmac.ng",
+        mailcow_provisioning_quota_mb=1024,
+        mailcow_activation_ttl_hours=24,
+    )
+    with patch("app.services.mailcow.config.settings", settings):
+        config = get_mailcow_provisioning_config()
+
+    assert config.enabled is False
+    assert config.profile_sync_enabled is True
 
 
 @patch("app.services.mailcow.client.httpx.Client")
@@ -111,6 +162,17 @@ def test_get_mailbox_reports_authentication_error(mock_client_class: Mock) -> No
 
 
 @patch("app.services.mailcow.client.httpx.Client")
+def test_get_mailbox_rejects_ambiguous_response(mock_client_class: Mock) -> None:
+    response = Mock(status_code=200)
+    response.json.return_value = [{"username": "ada@dotmac.ng"}] * 2
+    mock_client_class.return_value.__enter__.return_value.get.return_value = response
+    client = MailcowClient(base_url="https://mail.dotmac.ng/api/v1", api_key="test-key")
+
+    with pytest.raises(MailcowAmbiguousMailboxError):
+        client.get_mailbox("ada@dotmac.ng")
+
+
+@patch("app.services.mailcow.client.httpx.Client")
 def test_set_mailbox_custom_attribute_preserves_and_verifies_other_values(
     mock_client_class: Mock,
 ) -> None:
@@ -118,6 +180,7 @@ def test_set_mailbox_custom_attribute_preserves_and_verifies_other_values(
     initial.status_code = 200
     initial.json.return_value = {
         "username": "ada@dotmac.ng",
+        "active": "1",
         "custom_attributes": {"department": "Engineering"},
     }
     initial.raise_for_status.return_value = None
@@ -129,6 +192,7 @@ def test_set_mailbox_custom_attribute_preserves_and_verifies_other_values(
     verified.status_code = 200
     verified.json.return_value = {
         "username": "ada@dotmac.ng",
+        "active": "1",
         "custom_attributes": {
             "department": "Engineering",
             "designation": "Network Engineer",
@@ -167,6 +231,7 @@ def test_set_mailbox_custom_attribute_is_idempotent(
     response.status_code = 200
     response.json.return_value = {
         "username": "ada@dotmac.ng",
+        "active": "1",
         "custom_attributes": {"designation": "Network Engineer"},
     }
     response.raise_for_status.return_value = None
@@ -185,6 +250,82 @@ def test_set_mailbox_custom_attribute_is_idempotent(
 
     assert changed is False
     http_client.post.assert_not_called()
+
+
+@patch("app.services.mailcow.client.httpx.Client")
+def test_custom_attribute_rejects_unsupported_map_without_write(
+    mock_client_class: Mock,
+) -> None:
+    response = Mock(status_code=200)
+    response.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+        "custom_attributes": ["department", "Engineering"],
+    }
+    http_client = mock_client_class.return_value.__enter__.return_value
+    http_client.get.return_value = response
+    client = MailcowClient(base_url="https://mail.dotmac.ng/api/v1", api_key="test-key")
+
+    with pytest.raises(MailcowClientError, match="not a string map"):
+        client.set_mailbox_custom_attribute("ada@dotmac.ng", "designation", "Engineer")
+
+    http_client.post.assert_not_called()
+
+
+@patch("app.services.mailcow.client.httpx.Client")
+def test_custom_attribute_removal_preserves_other_values(
+    mock_client_class: Mock,
+) -> None:
+    initial = Mock(status_code=200)
+    initial.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+        "custom_attributes": {
+            "designation": "Engineer",
+            "department": "Engineering",
+            "Designation": "Legacy",
+        },
+    }
+    verified = Mock(status_code=200)
+    verified.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+        "custom_attributes": {"department": "Engineering", "Designation": "Legacy"},
+    }
+    write = Mock(status_code=200)
+    write.json.return_value = {"type": "success", "msg": "mailbox_modified"}
+    http_client = mock_client_class.return_value.__enter__.return_value
+    http_client.get.side_effect = [initial, verified]
+    http_client.post.return_value = write
+    client = MailcowClient(base_url="https://mail.dotmac.ng/api/v1", api_key="test-key")
+
+    assert client.set_mailbox_custom_attribute("ada@dotmac.ng", "designation", None)
+
+    assert http_client.post.call_args.kwargs["json"]["attr"] == {
+        "attribute": ["department", "Designation"],
+        "value": ["Engineering", "Legacy"],
+    }
+
+
+@patch("app.services.mailcow.client.httpx.Client")
+def test_custom_attribute_readback_mismatch_fails(
+    mock_client_class: Mock,
+) -> None:
+    response = Mock(status_code=200)
+    response.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+        "custom_attributes": {"department": "Engineering"},
+    }
+    write = Mock(status_code=200)
+    write.json.return_value = {"type": "success", "msg": "mailbox_modified"}
+    http_client = mock_client_class.return_value.__enter__.return_value
+    http_client.get.return_value = response
+    http_client.post.return_value = write
+    client = MailcowClient(base_url="https://mail.dotmac.ng/api/v1", api_key="test-key")
+
+    with pytest.raises(MailcowClientError, match="could not be verified"):
+        client.set_mailbox_custom_attribute("ada@dotmac.ng", "designation", "Engineer")
 
 
 def test_ensure_mailbox_is_idempotent() -> None:
@@ -318,25 +459,23 @@ def test_ensure_mailbox_skips_exited_employee() -> None:
 
 
 def test_sync_mailbox_profile_projects_employee_designation() -> None:
-    employee_id = uuid4()
     organization_id = uuid4()
-    employee = Mock()
-    employee.employee_id = employee_id
-    employee.organization_id = organization_id
-    employee.status = EmployeeStatus.ACTIVE
-    employee.person.email = "ada@dotmac.ng"
-    employee.designation.designation_name = "Network Engineer"
+    employee = _profile_employee(organization_id)
     db = Mock()
     db.scalar.return_value = employee
     mailcow = Mock()
+    mailcow.get_mailbox.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+    }
     mailcow.set_mailbox_custom_attribute.return_value = True
     service = EmployeeMailboxProvisioningService(
         db,
-        config=_config(),
+        config=_config(enabled=False, profile_sync_enabled=True),
         mailcow_client=mailcow,
     )
 
-    result = service.sync_mailbox_profile(organization_id, employee_id)
+    result = service.sync_mailbox_profile(organization_id, employee.employee_id)
 
     assert result.mailbox_found
     assert result.designation_changed
@@ -346,6 +485,239 @@ def test_sync_mailbox_profile_projects_employee_designation() -> None:
         "designation",
         "Network Engineer",
     )
+
+
+@pytest.mark.parametrize(
+    ("provisioning_enabled", "profile_sync_enabled", "writes"),
+    [
+        (False, False, False),
+        (False, True, True),
+        (True, False, False),
+        (True, True, True),
+    ],
+)
+def test_profile_sync_has_independent_control(
+    provisioning_enabled: bool, profile_sync_enabled: bool, writes: bool
+) -> None:
+    organization_id = uuid4()
+    employee = _profile_employee(organization_id)
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    mailcow.get_mailbox.return_value = {"username": "ada@dotmac.ng", "active": "1"}
+    mailcow.set_mailbox_custom_attribute.return_value = False
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(
+            enabled=provisioning_enabled,
+            profile_sync_enabled=profile_sync_enabled,
+        ),
+        mailcow_client=mailcow,
+    )
+
+    result = service.sync_mailbox_profile(organization_id, employee.employee_id)
+
+    assert result.mailbox_found is writes
+    assert result.skipped == ([] if writes else ["mailcow profile sync disabled"])
+    assert mailcow.set_mailbox_custom_attribute.called is writes
+    mailcow.create_mailbox.assert_not_called()
+
+
+@patch("app.services.mailcow.client.httpx.Client")
+def test_profile_sync_with_provisioning_disabled_verifies_http_write(
+    mock_client_class: Mock,
+) -> None:
+    organization_id = uuid4()
+    employee = _profile_employee(organization_id)
+    db = Mock()
+    db.scalar.return_value = employee
+    initial = Mock(status_code=200)
+    initial.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+        "custom_attributes": {"department": "Engineering"},
+    }
+    verified = Mock(status_code=200)
+    verified.json.return_value = {
+        "username": "ada@dotmac.ng",
+        "active": "1",
+        "custom_attributes": {
+            "department": "Engineering",
+            "designation": "Network Engineer",
+        },
+    }
+    write = Mock(status_code=200)
+    write.json.return_value = {"type": "success", "msg": "mailbox_modified"}
+    http_client = mock_client_class.return_value.__enter__.return_value
+    http_client.get.side_effect = [initial, initial, verified]
+    http_client.post.return_value = write
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(enabled=False, profile_sync_enabled=True),
+        mailcow_client=MailcowClient(
+            base_url="https://mail.dotmac.ng/api/v1", api_key="test-key"
+        ),
+    )
+
+    result = service.sync_mailbox_profile(organization_id, employee.employee_id)
+
+    assert result.designation_changed is True
+    assert http_client.post.call_args.kwargs["json"]["attr"] == {
+        "attribute": ["department", "designation"],
+        "value": ["Engineering", "Network Engineer"],
+    }
+    assert http_client.get.call_count == 3
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "draft",
+        "on_leave",
+        "suspended",
+        "person_inactive",
+        "person_other_tenant",
+        "employee_other_tenant",
+        "employment_ended",
+        "unmanaged_domain",
+        "designation_other_tenant",
+        "designation_missing",
+    ],
+)
+def test_profile_sync_skips_ineligible_erp_state(reason: str) -> None:
+    organization_id = uuid4()
+    employee = _profile_employee(organization_id)
+    if reason == "draft":
+        employee.status = EmployeeStatus.DRAFT
+    elif reason == "on_leave":
+        employee.status = EmployeeStatus.ON_LEAVE
+    elif reason == "suspended":
+        employee.status = EmployeeStatus.SUSPENDED
+    elif reason == "person_inactive":
+        employee.person.is_active = False
+    elif reason == "person_other_tenant":
+        employee.person.organization_id = uuid4()
+    elif reason == "employee_other_tenant":
+        employee.organization_id = uuid4()
+    elif reason == "employment_ended":
+        employee.date_of_leaving = datetime.now(timezone.utc).date() - timedelta(days=1)
+    elif reason == "unmanaged_domain":
+        employee.person.email = "ada@example.com"
+    elif reason == "designation_other_tenant":
+        employee.designation.organization_id = uuid4()
+    elif reason == "designation_missing":
+        employee.designation = None
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(enabled=False, profile_sync_enabled=True),
+        mailcow_client=mailcow,
+    )
+
+    result = service.sync_mailbox_profile(organization_id, employee.employee_id)
+
+    assert result.skipped
+    mailcow.get_mailbox.assert_not_called()
+    mailcow.set_mailbox_custom_attribute.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("mailbox", "skip_reason"),
+    [
+        (None, "mailbox does not exist"),
+        (
+            {"username": "other@dotmac.ng", "active": "1"},
+            "mailbox mapping is ambiguous",
+        ),
+        ({"username": "ada@dotmac.ng", "active": "0"}, "mailbox is inactive"),
+    ],
+)
+def test_profile_sync_skips_unavailable_mailbox(mailbox, skip_reason: str) -> None:
+    organization_id = uuid4()
+    employee = _profile_employee(organization_id)
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    mailcow.get_mailbox.return_value = mailbox
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(enabled=False, profile_sync_enabled=True),
+        mailcow_client=mailcow,
+    )
+
+    result = service.sync_mailbox_profile(organization_id, employee.employee_id)
+
+    assert result.skipped == [skip_reason]
+    mailcow.set_mailbox_custom_attribute.assert_not_called()
+    mailcow.create_mailbox.assert_not_called()
+
+
+def test_profile_sync_skips_ambiguous_mailbox_response() -> None:
+    organization_id = uuid4()
+    employee = _profile_employee(organization_id)
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    mailcow.get_mailbox.side_effect = MailcowAmbiguousMailboxError("multiple records")
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(enabled=False, profile_sync_enabled=True),
+        mailcow_client=mailcow,
+    )
+
+    result = service.sync_mailbox_profile(organization_id, employee.employee_id)
+
+    assert result.skipped == ["mailbox mapping is ambiguous"]
+    mailcow.set_mailbox_custom_attribute.assert_not_called()
+
+
+def test_profile_sync_removes_only_managed_attribute() -> None:
+    organization_id = uuid4()
+    employee = _profile_employee(organization_id)
+    employee.designation_id = None
+    employee.designation = None
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    mailcow.get_mailbox.return_value = {"username": "ada@dotmac.ng", "active": "1"}
+    mailcow.set_mailbox_custom_attribute.return_value = True
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(enabled=False, profile_sync_enabled=True),
+        mailcow_client=mailcow,
+    )
+
+    result = service.sync_mailbox_profile(organization_id, employee.employee_id)
+
+    assert result.designation_changed
+    mailcow.set_mailbox_custom_attribute.assert_called_once_with(
+        "ada@dotmac.ng", "designation", None
+    )
+
+
+def test_provisioning_ignores_profile_flag_for_creation_but_not_designation() -> None:
+    organization_id = uuid4()
+    employee = _profile_employee(organization_id)
+    employee.personal_email = "ada.personal@example.com"
+    employee.mailcow_provisioning_requested_at = datetime.now(timezone.utc)
+    employee.mailcow_mailbox_provisioned_at = None
+    employee.mailcow_activated_at = datetime.now(timezone.utc)
+    db = Mock()
+    db.scalar.return_value = employee
+    mailcow = Mock()
+    mailcow.get_mailbox.return_value = {"username": "ada@dotmac.ng"}
+    service = EmployeeMailboxProvisioningService(
+        db,
+        config=_config(enabled=True, profile_sync_enabled=False),
+        mailcow_client=mailcow,
+    )
+
+    result = service.ensure_mailbox(organization_id, employee.employee_id)
+
+    assert result.already_exists
+    mailcow.set_mailbox_custom_attribute.assert_not_called()
 
 
 def test_activation_locks_only_employee_row(monkeypatch) -> None:

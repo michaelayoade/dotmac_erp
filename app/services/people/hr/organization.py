@@ -722,28 +722,33 @@ class OrganizationService:
     ) -> None:
         """Refresh every mailbox after the shared designation name changes."""
         from app.config import settings as app_settings
+        from app.services.people.hr.mailbox_provisioning import (
+            profile_sync_ineligibility,
+        )
 
-        if not getattr(app_settings, "mailcow_provisioning_enabled", False):
+        if not app_settings.mailcow_profile_sync_enabled:
             return
-        employee_ids = self.db.scalars(
-            select(Employee.employee_id).where(
+        employees = self.db.scalars(
+            select(Employee)
+            .options(joinedload(Employee.person))
+            .where(
                 Employee.organization_id == self.organization_id,
                 Employee.designation_id == designation_id,
-                Employee.status.notin_(
-                    (
-                        EmployeeStatus.RESIGNED,
-                        EmployeeStatus.TERMINATED,
-                        EmployeeStatus.RETIRED,
-                    )
-                ),
+                Employee.status == EmployeeStatus.ACTIVE,
             )
         ).all()
         try:
             from app.tasks.email import run_employee_mailcow_provisioning
 
-            for employee_id in employee_ids:
+            for employee in employees:
+                if profile_sync_ineligibility(
+                    employee,
+                    self.organization_id,
+                    app_settings.mailcow_provisioning_domain,
+                ):
+                    continue
                 run_employee_mailcow_provisioning.apply_async(
-                    args=[str(employee_id), str(self.organization_id)],
+                    args=[str(employee.employee_id), str(self.organization_id)],
                     kwargs={"profile_only": True},
                     countdown=10,
                 )

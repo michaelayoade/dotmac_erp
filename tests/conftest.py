@@ -376,6 +376,8 @@ class MockSettings:
     dotmac_sub_webhook_org_resolution = "shadow"
     dotmac_sub_api_url = ""
     mailcow_provisioning_enabled = False
+    mailcow_profile_sync_enabled = False
+    mailcow_provisioning_domain = "dotmac.ng"
     # Dedicated employee Nextcloud provisioning remains disabled in tests.
     nextcloud_provisioning_enabled = False
     nextcloud_provisioning_server_url = ""

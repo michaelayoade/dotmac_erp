@@ -246,6 +246,9 @@ class Settings:
     mailcow_provisioning_enabled: bool = (
         os.getenv("MAILCOW_PROVISIONING_ENABLED", "false").lower() == "true"
     )
+    mailcow_profile_sync_enabled: bool = (
+        os.getenv("MAILCOW_PROFILE_SYNC_ENABLED", "false").lower() == "true"
+    )
     mailcow_provisioning_domain: str = (
         os.getenv("MAILCOW_PROVISIONING_DOMAIN", "dotmac.ng").strip().lower()
     )
