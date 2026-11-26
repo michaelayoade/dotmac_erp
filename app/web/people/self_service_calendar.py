@@ -255,7 +255,7 @@ def _form_context(
             "employees": eligible,
             "recipient_groups": service.recipient_groups(),
             "participant_options": selected_options,
-            "participant_search_url": "/self/calendar/participant-options",
+            "participant_search_url": "/people/self/calendar/participant-options",
             "excluded_count": len(excluded),
             "can_invite": auth.has_permission("calendar:personal:invite"),
             "error": error,

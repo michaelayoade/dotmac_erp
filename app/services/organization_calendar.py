@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import Text, and_, cast, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.finance.core_org.organization import Organization
@@ -34,6 +35,7 @@ from app.services.notification import NotificationService
 DEFAULT_TIMEZONE = "Africa/Lagos"
 MAX_REMINDERS = 3
 MAX_PARTICIPANTS = 1000
+CALENDAR_ELIGIBLE_STATUSES = (EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE)
 _HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
 UTC = timezone.utc
 
@@ -114,7 +116,10 @@ class OrganizationCalendarService:
             .outerjoin(
                 Designation, Designation.designation_id == Employee.designation_id
             )
-            .where(Employee.organization_id == self.organization_id)
+            .where(
+                Employee.organization_id == self.organization_id,
+                Person.organization_id == self.organization_id,
+            )
             .order_by(Person.first_name, Person.last_name, Employee.employee_code)
         ).all()
         eligible: list[ParticipantCandidate] = []
@@ -190,6 +195,7 @@ class OrganizationCalendarService:
         if len(needle) < 2:
             return []
 
+        today = date.today()
         employee_rows = self.db.execute(
             select(
                 Employee,
@@ -202,12 +208,15 @@ class OrganizationCalendarService:
             .outerjoin(
                 Designation, Designation.designation_id == Employee.designation_id
             )
-            .where(Employee.organization_id == self.organization_id)
+            .where(
+                Employee.organization_id == self.organization_id,
+                Person.organization_id == self.organization_id,
+                self._eligible_employee_sql(today),
+            )
             .order_by(Person.first_name, Person.last_name, Employee.employee_code)
         ).all()
         items: list[dict[str, str]] = []
         seen: set[tuple[str, str]] = set()
-        today = date.today()
         for employee, person, department_name, designation_name in employee_rows:
             if exclude_person_id and person.id == exclude_person_id:
                 continue
@@ -360,7 +369,7 @@ class OrganizationCalendarService:
     def _eligibility_failure(
         employee: Employee, person: Person, *, today: date
     ) -> str | None:
-        if employee.status != EmployeeStatus.ACTIVE:
+        if employee.status not in CALENDAR_ELIGIBLE_STATUSES:
             return "Employee is not active"
         if employee.date_of_leaving and employee.date_of_leaving < today:
             return "Employment has ended"
@@ -369,6 +378,17 @@ class OrganizationCalendarService:
         if not (person.email or "").strip() or "@" not in person.email:
             return "Work email is missing or invalid"
         return None
+
+    @staticmethod
+    def _eligible_employee_sql(today: date) -> ColumnElement[bool]:
+        return and_(
+            Employee.status.in_(CALENDAR_ELIGIBLE_STATUSES),
+            or_(Employee.date_of_leaving.is_(None), Employee.date_of_leaving >= today),
+            Person.is_active.is_(True),
+            Person.status == PersonStatus.active,
+            func.trim(Person.email) != "",
+            Person.email.contains("@"),
+        )
 
     def get_event(
         self,
@@ -400,8 +420,10 @@ class OrganizationCalendarService:
     def _dynamic_target_exists(self, person_id: uuid.UUID):
         return exists().where(
             Employee.organization_id == self.organization_id,
+            Person.organization_id == self.organization_id,
+            Employee.person_id == Person.id,
             Employee.person_id == person_id,
-            Employee.status == EmployeeStatus.ACTIVE,
+            self._eligible_employee_sql(date.today()),
             or_(
                 func.jsonb_exists(
                     OrganizationCalendarEvent.recipient_targets["departments"],
@@ -532,10 +554,13 @@ class OrganizationCalendarService:
         if not targets.get("departments") and not targets.get("designations"):
             return False
         employee = self.db.scalar(
-            select(Employee).where(
+            select(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .where(
                 Employee.organization_id == self.organization_id,
+                Person.organization_id == self.organization_id,
                 Employee.person_id == person_id,
-                Employee.status == EmployeeStatus.ACTIVE,
+                self._eligible_employee_sql(date.today()),
             )
         )
         if employee is None:
