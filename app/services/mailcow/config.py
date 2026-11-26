@@ -16,6 +16,7 @@ class MailcowProvisioningConfig:
     domain: str
     quota_mb: int
     activation_ttl_hours: int = 24
+    profile_sync_enabled: bool = False
 
     @property
     def mailcow_api_configured(self) -> bool:
@@ -98,4 +99,5 @@ def get_mailcow_provisioning_config() -> MailcowProvisioningConfig:
         domain=settings.mailcow_provisioning_domain,
         quota_mb=settings.mailcow_provisioning_quota_mb,
         activation_ttl_hours=settings.mailcow_activation_ttl_hours,
+        profile_sync_enabled=settings.mailcow_profile_sync_enabled,
     )

@@ -168,6 +168,13 @@ def run_employee_mailcow_provisioning(
             "mailbox_found": profile.mailbox_found,
             "designation_changed": profile.designation_changed,
             "skipped": profile.skipped,
+            "outcome": (
+                "skipped"
+                if profile.skipped
+                else "updated"
+                if profile.designation_changed
+                else "unchanged"
+            ),
         }
 
     _record_workforce_stage(organization_id, employee_id, "mailcow", "running")

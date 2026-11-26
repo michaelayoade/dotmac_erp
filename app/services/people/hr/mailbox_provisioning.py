@@ -6,14 +6,16 @@ import hashlib
 import secrets
 import string
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
+from pydantic import EmailStr, TypeAdapter, ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
-from app.services.mailcow.client import MailcowClient
+from app.models.person import PersonStatus
+from app.services.mailcow.client import MailcowAmbiguousMailboxError, MailcowClient
 from app.services.mailcow.config import (
     MailcowProvisioningConfig,
     get_mailcow_provisioning_config,
@@ -59,6 +61,33 @@ def parse_mailbox_activation_organization(token: str) -> UUID:
         return UUID(organization_text)
     except ValueError as exc:
         raise ValueError("Invalid or expired mailbox activation link") from exc
+
+
+def profile_sync_ineligibility(
+    employee: Employee, organization_id: UUID, domain: str
+) -> str | None:
+    """Return the shared ERP-side reason a designation cannot be projected."""
+    if employee.organization_id != organization_id:
+        return "employee belongs to another organization"
+    if employee.status != EmployeeStatus.ACTIVE:
+        return "employee is not active"
+    if employee.date_of_leaving and employee.date_of_leaving < date.today():
+        return "employment has ended"
+    person = employee.person
+    if (
+        person is None
+        or person.organization_id != organization_id
+        or not person.is_active
+        or person.status != PersonStatus.active
+    ):
+        return "person is inactive or belongs to another organization"
+    try:
+        email = str(TypeAdapter(EmailStr).validate_python(person.email)).lower()
+    except (PydanticValidationError, TypeError):
+        return "employee has no valid work email"
+    if email.partition("@")[2] != domain:
+        return "work email domain is not managed by Mailcow"
+    return None
 
 
 class EmployeeMailboxProvisioningService:
@@ -181,35 +210,53 @@ class EmployeeMailboxProvisioningService:
             raise RuntimeError(f"Employee {employee_id} is not committed yet")
 
         result = EmployeeMailboxProfileSyncResult(employee_id=str(employee_id))
-        if not self.config.enabled:
-            result.skipped.append("mailcow provisioning integration disabled")
+        if not self.config.profile_sync_enabled:
+            result.skipped.append("mailcow profile sync disabled")
             return result
         if not self.config.mailcow_api_configured:
-            raise RuntimeError("Mailcow provisioning API is not configured")
-        if employee.status in {
-            EmployeeStatus.RESIGNED,
-            EmployeeStatus.TERMINATED,
-            EmployeeStatus.RETIRED,
-        }:
-            result.skipped.append("employee is no longer profile-sync eligible")
+            raise RuntimeError("Mailcow profile sync API is not configured")
+        reason = profile_sync_ineligibility(
+            employee, organization_id, self.config.domain
+        )
+        if reason:
+            result.skipped.append(reason)
             return result
 
-        person = employee.person
-        email = ((person.email if person else "") or "").strip().lower()
-        result.email = email or None
-        local_part, separator, domain = email.partition("@")
-        if not separator or not local_part or not domain:
-            result.skipped.append("employee has no valid work email")
-            return result
-        if domain != self.config.domain:
-            result.skipped.append(
-                f"work email domain {domain} is not managed by Mailcow"
-            )
-            return result
+        email = employee.person.email.strip().lower()
+        result.email = email
+        if employee.designation_id is not None:
+            assigned = employee.designation
+            if (
+                assigned is None
+                or assigned.organization_id != organization_id
+                or not assigned.is_active
+                or not self._designation_name(employee)
+            ):
+                result.skipped.append("assigned designation is unavailable")
+                return result
 
-        designation = self._designation_name(employee)
+        designation = (
+            self._designation_name(employee)
+            if employee.designation_id is not None
+            else None
+        )
         result.designation = designation
-        changed = self._get_mailcow_client().set_mailbox_custom_attribute(
+        mailcow = self._get_mailcow_client()
+        try:
+            mailbox = mailcow.get_mailbox(email)
+        except MailcowAmbiguousMailboxError:
+            result.skipped.append("mailbox mapping is ambiguous")
+            return result
+        if mailbox is None:
+            result.skipped.append("mailbox does not exist")
+            return result
+        if str(mailbox.get("username", "")).strip().lower() != email:
+            result.skipped.append("mailbox mapping is ambiguous")
+            return result
+        if str(mailbox.get("active", "")).lower() not in {"1", "true"}:
+            result.skipped.append("mailbox is inactive")
+            return result
+        changed = mailcow.set_mailbox_custom_attribute(
             email,
             "designation",
             designation,
@@ -235,10 +282,25 @@ class EmployeeMailboxProvisioningService:
         employee: Employee,
         email: str,
     ) -> None:
+        if not self.config.profile_sync_enabled:
+            return
+        if profile_sync_ineligibility(
+            employee, employee.organization_id, self.config.domain
+        ):
+            return
+        if employee.designation_id is not None and (
+            employee.designation is None
+            or employee.designation.organization_id != employee.organization_id
+            or not employee.designation.is_active
+            or not self._designation_name(employee)
+        ):
+            return
         mailbox_found = mailcow.set_mailbox_custom_attribute(
             email,
             "designation",
-            self._designation_name(employee),
+            self._designation_name(employee)
+            if employee.designation_id is not None
+            else None,
         )
         if mailbox_found is None:
             raise RuntimeError(

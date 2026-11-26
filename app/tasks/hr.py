@@ -18,6 +18,7 @@ from typing import Any
 from celery import shared_task
 from sqlalchemy import extract, func, select, text
 from sqlalchemy.engine import Connection
+from sqlalchemy.orm import joinedload
 
 from app.services import formatters as _date_formatters
 from app.services.formatting_context import resolve_from_org
@@ -172,40 +173,46 @@ def reconcile_employee_mailcow_provisioning() -> dict[str, Any]:
 def reconcile_employee_mailcow_profiles() -> dict[str, Any]:
     """Queue an idempotent designation projection for every eligible employee."""
     from app.config import settings
+    from app.services.people.hr.mailbox_provisioning import profile_sync_ineligibility
     from app.tasks.email import run_employee_mailcow_provisioning
 
-    if not settings.mailcow_provisioning_enabled:
-        return {"queued": 0, "errors": [], "skipped": "integration disabled"}
+    if not settings.mailcow_profile_sync_enabled:
+        return {"queued": 0, "errors": [], "skipped": "profile sync disabled"}
 
     queued = 0
+    ineligible = 0
     errors: list[dict[str, str]] = []
-    excluded_statuses = (
-        EmployeeStatus.RESIGNED,
-        EmployeeStatus.TERMINATED,
-        EmployeeStatus.RETIRED,
-    )
-    for org_id in _list_organization_ids():
+    for org_id in _list_organization_ids(include_inactive=False):
         with session_for_org(org_id) as db:
-            employee_ids = db.scalars(
-                select(Employee.employee_id).where(
+            employees = db.scalars(
+                select(Employee)
+                .options(joinedload(Employee.person))
+                .where(
                     Employee.organization_id == org_id,
-                    Employee.status.notin_(excluded_statuses),
+                    Employee.status == EmployeeStatus.ACTIVE,
                 )
             ).all()
-        for employee_id in employee_ids:
+        for employee in employees:
+            if profile_sync_ineligibility(
+                employee, org_id, settings.mailcow_provisioning_domain
+            ):
+                ineligible += 1
+                continue
             try:
                 run_employee_mailcow_provisioning.apply_async(
-                    args=[str(employee_id), str(org_id)],
+                    args=[str(employee.employee_id), str(org_id)],
                     kwargs={"profile_only": True},
                 )
                 queued += 1
             except Exception as exc:  # noqa: BLE001 -- continue the repair sweep
                 logger.exception(
                     "Could not queue Mailcow profile reconciliation for employee %s",
-                    employee_id,
+                    employee.employee_id,
                 )
-                errors.append({"employee_id": str(employee_id), "error": str(exc)})
-    return {"queued": queued, "errors": errors}
+                errors.append(
+                    {"employee_id": str(employee.employee_id), "error": str(exc)}
+                )
+    return {"queued": queued, "ineligible": ineligible, "errors": errors}
 
 
 @shared_task

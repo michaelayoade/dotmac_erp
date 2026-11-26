@@ -1,52 +1,65 @@
-# ERP designation projection into Mailcow and SOGo
+# ERP designation projection into the Mailcow footer
 
-## Ownership
+ERP is the source of truth for `Employee.designation.designation_name`. The
+existing `EmployeeMailboxProvisioningService` projects that value to the
+lowercase `mailbox.custom_attributes.designation` key. Mailcow's domain-wide
+HTML footer renders `{= designation =}` for authenticated outgoing mail. The
+plain-text footer is empty. The old Mailcow-local SOGo designation writer is
+retired; do not reinstall or enable its service or timer, and do not add a
+designation to SOGo signatures.
 
-ERP is the source of truth for an employee's designation. The authoritative
-value is `Employee.designation.designation_name`.
+## Independent controls
 
-The following values are derived projections and are never authoritative:
+- `MAILCOW_PROVISIONING_ENABLED` controls mailbox creation and activation.
+- `MAILCOW_PROFILE_SYNC_ENABLED` controls designation writes to existing
+  mailboxes, including writes during authorized mailbox creation. Both default
+  to `false`; enabling profile sync does not enable account provisioning.
+- `MAILCOW_OFFBOARDING_ENABLED` remains independent.
 
-- Mailcow `mailbox.custom_attributes.designation`.
-- The `<span data-dotmac-erp-designation="true">...</span>` block in a SOGo
-  identity signature.
+Set the profile flag in the deployment's canonical environment configuration,
+not only `.env.example`. Host Compose uses `.env` as an `env_file` for app,
+worker, and Beat. Verify the effective setting in all three runtimes before
+activation. Keep workforce provisioning settings disabled when only profile
+sync is intended. The separate `deploy/product.toml` and `deploy/rendered/`
+topology is not the live runtime yet. Before adopting it, bind this flag for
+all three roles in the descriptor and regenerate the rendered assets with
+`dotmac-deploy`; never hand-edit generated Compose files.
 
-The existing `EmployeeMailboxProvisioningService` is the sole ERP writer of
-the Mailcow projection. The Mailcow-local `sogo_designation_sync.py` process is
-the sole writer of the managed SOGo signature block. It preserves all other
-signature content and SOGo preferences.
+## Flow and safety
 
-## Flow
+An employee designation change or shared designation rename queues the
+existing `run_employee_mailcow_provisioning(..., profile_only=True)` task. The
+daily `employee-mailbox-profile-reconcile` schedule requeues eligible employees
+to repair missed dispatches. The worker rereads committed ERP state and checks
+the profile flag at execution. A ten-second enqueue countdown is not a commit
+guarantee. A new employee may retry before its row is committed; an existing
+employee may briefly project old state. The daily sweep repairs missed events.
 
-1. An employee designation assignment or designation name changes in ERP.
-2. ERP queues the existing grandfathered Mailcow provisioning task in an
-   idempotent profile-only mode after the transaction is expected to commit.
-3. The existing direct Mailcow API integration reads the complete mailbox
-   custom-attribute map, merges `designation`, writes the complete map, and
-   reads it back to verify the result.
-4. Every five minutes, a process local to the Mailcow host reads the Mailcow
-   designation attribute and reconciles the managed block in SOGo.
-5. A daily ERP reconciliation queues every eligible employee again so broker,
-   API, or timing failures do not cause permanent drift.
+Only ACTIVE employees with an active person, unended employment, same-tenant
+references, a managed-domain work email, and an existing active Mailcow mailbox
+qualify. ON_LEAVE, draft, suspended, and exited employees are excluded. A
+missing mailbox is skipped, never created by profile-only work. A removed
+designation clears only the lowercase managed attribute; missing or invalid
+assigned designation data is skipped. The Mailcow client reads the complete
+custom-attribute map, merges the change, writes the complete map, and verifies
+the read-back. Unrelated attributes are preserved. An unsupported map fails
+without writing.
 
-Mailbox provisioning also writes the designation before it completes, so a
-new mailbox enters the same reconciliation flow. A SOGo profile is created by
-SOGo when the user first uses webmail; the next Mailcow-local run then applies
-the managed block.
+The profile-only task returns `updated`, `unchanged`, or `skipped`. Mailcow API
+errors and read-back mismatches fail the task for bounded retries. It never
+changes mailbox lifecycle settings, workforce stages, activation, Nextcloud,
+Selfcare, Talk, or SOGo state.
 
-## Failure and repair behavior
+## Rollout and rollback
 
-- Missing and unmanaged-domain mailboxes are skipped without inventing state.
-- Mailcow updates preserve unrelated custom attributes and fail if read-back
-  verification differs from the intended complete map.
-- Removing an ERP designation removes only the managed SOGo block.
-- Renaming a designation queues every active employee assigned to it.
-- The ERP daily sweep and Mailcow five-minute sweep are both idempotent.
+After a separately authorized deployment, verify `MAILCOW_PROVISIONING_ENABLED`
+remains false. Preview eligible ERP-to-mailbox mappings without writes, then
+enable `MAILCOW_PROFILE_SYNC_ENABLED` in the canonical deployment
+configuration and verify app, worker, and Beat. Run a bounded projection and
+read back each expected attribute map. Confirm the designation appears once in
+the existing HTML company footer. To roll back, disable only profile sync.
+Do not enable provisioning or the retired SOGo designation timer.
 
-## Architecture status
-
-This implementation intentionally uses the production system's grandfathered
-direct ERP-to-Mailcow API path. Michael approved that legacy approach for this
-production change on 2026-11-23. It does not authorize additional direct
-external connectors. Moving this projection behind Dotmac Integrator remains
-migration debt under the cross-repository connector boundary.
+This uses the already grandfathered direct ERP-to-Mailcow API path. Moving it
+behind Dotmac Integrator remains migration debt under the cross-repository
+connector boundary.

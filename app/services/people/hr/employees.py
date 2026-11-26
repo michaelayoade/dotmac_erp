@@ -1647,8 +1647,13 @@ class EmployeeService:
     def _enqueue_mailcow_profile_sync(self, employee: Employee) -> None:
         """Queue the idempotent Mailcow designation projection after commit."""
         from app.config import settings as app_settings
+        from app.services.people.hr.mailbox_provisioning import (
+            profile_sync_ineligibility,
+        )
 
-        if not getattr(app_settings, "mailcow_provisioning_enabled", False):
+        if not app_settings.mailcow_profile_sync_enabled or profile_sync_ineligibility(
+            employee, employee.organization_id, app_settings.mailcow_provisioning_domain
+        ):
             return
         try:
             from app.tasks.email import run_employee_mailcow_provisioning
