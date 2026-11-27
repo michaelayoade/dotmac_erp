@@ -17,7 +17,7 @@
     <div class="grid gap-4 md:grid-cols-4">
         <div class="admin-card p-4">
             <p class="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Current Status</p>
-            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ summary.status }}</p>
+            <div class="mt-3">{{ status_badge(summary.status_raw, 'lg') }}</div>
         </div>
         <div class="admin-card p-4">
             <p class="text-xs font-medium uppercase text-slate-500 dark:text-slate-400">Open Alerts</p>
