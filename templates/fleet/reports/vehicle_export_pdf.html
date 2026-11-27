@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page { size: A4; margin: 18mm; }
+        body { font-family: sans-serif; color: #0f172a; font-size: 10pt; }
+        h1 { font-size: 20pt; margin: 0 0 6mm; }
+        h2 { font-size: 12pt; margin: 8mm 0 3mm; }
+        .meta { margin-bottom: 5mm; color: #475569; }
+        .summary { display: flex; gap: 16mm; margin: 5mm 0; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 5mm; }
+        thead { display: table-header-group; }
+        th, td { padding: 2.5mm; border-bottom: 1px solid #cbd5e1; text-align: left; }
+        th { background: #f1f5f9; }
+        .amount { text-align: right; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <h1>{{ title }}</h1>
+    <div class="meta">
+        <strong>{{ vehicle.registration_number }}</strong>
+        {% if vehicle_name %} &middot; {{ vehicle_name }}{% endif %}
+        &middot; Assigned to {{ assigned_to }}
+    </div>
+    <div class="meta">
+        {% if filter_start_date or filter_end_date %}Dates: {{ filter_start_date or "Any" }} to {{ filter_end_date or "Any" }}{% endif %}
+        {% if filter_year %} Year: {{ filter_year }}{% endif %}
+        {% if filter_month %} Month: {{ filter_month }}{% endif %}
+    </div>
+    <div class="summary">
+        <span>{{ count_label }}: {{ count }}</span>
+        <span>Total Amount: {{ total_amount | report_money }}</span>
+    </div>
+
+    <h2>{{ breakdown_label }}</h2>
+    <table>
+        <thead><tr><th>{{ "Category" if reference_label == "Claim" else "Account" }}</th><th class="amount">Total Amount</th></tr></thead>
+        <tbody>
+        {% for row in category_rows %}
+        <tr><td>{{ row.category_name }}</td><td class="amount">{{ row.total_amount | report_money }}</td></tr>
+        {% else %}
+        <tr><td colspan="2">No matching records</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>{{ "Claims" if reference_label == "Claim" else "Invoices" }}</h2>
+    <table>
+        <thead><tr><th>{{ reference_label }}</th><th>Date</th><th>Status</th><th class="amount">Total Amount</th></tr></thead>
+        <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.reference }}</td>
+            <td>{{ row.date | report_date }}</td>
+            <td>{{ row.status | replace("_", " ") | title }}</td>
+            <td class="amount">{{ row.amount | report_money }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No matching records</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -12,8 +12,10 @@ from app.web.deps import WebAuthContext
 from app.web.fleet import (
     fleet_reports_expenses,
     fleet_reports_expense_vehicle_detail,
+    fleet_reports_expense_vehicle_export,
     fleet_reports_invoices,
     fleet_reports_invoice_vehicle_detail,
+    fleet_reports_invoice_vehicle_export,
 )
 
 
@@ -344,4 +346,106 @@ def test_detail_routes_reject_invalid_filter_values(route_name, kwargs, monkeypa
             **kwargs,
         )
 
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("detail_route", "export_route", "service_method"),
+    [
+        (
+            fleet_reports_expense_vehicle_detail,
+            fleet_reports_expense_vehicle_export,
+            "reports_expense_vehicle_context",
+        ),
+        (
+            fleet_reports_invoice_vehicle_detail,
+            fleet_reports_invoice_vehicle_export,
+            "reports_invoice_vehicle_context",
+        ),
+    ],
+)
+def test_vehicle_report_page_and_export_use_same_filters(
+    monkeypatch, detail_route, export_route, service_method
+):
+    captured = []
+
+    class FakeFleetWebService:
+        def __init__(self, db):
+            self.db = db
+
+        def report_context(self, organization_id, vehicle_id, **kwargs):
+            captured.append((organization_id, vehicle_id, kwargs))
+            return {"vehicle": SimpleNamespace(vehicle_id=vehicle_id)}
+
+    setattr(FakeFleetWebService, service_method, FakeFleetWebService.report_context)
+    _install_template_stub(monkeypatch)
+    monkeypatch.setattr("app.web.fleet.FleetWebService", FakeFleetWebService)
+    monkeypatch.setattr(
+        "app.web.fleet.vehicle_report_export_response",
+        lambda context, kind, format: SimpleNamespace(
+            status_code=200, context=context, kind=kind, format=format
+        ),
+    )
+    vehicle_id = uuid4()
+    common = {
+        "vehicle_id": vehicle_id,
+        "start_date": "2026-04-01",
+        "end_date": "2026-04-30",
+        "year": "2026",
+        "month": "4",
+        "auth": _make_auth(),
+        "db": object(),
+    }
+
+    detail = detail_route(
+        request=_make_request("/fleet/reports/test"), page=3, limit=50, **common
+    )
+    export = export_route(format="xlsx", **common)
+
+    assert detail.status_code == export.status_code == 200
+    assert captured[0][0] == captured[1][0] == TEST_ORG_ID
+    assert captured[0][1] == captured[1][1] == vehicle_id
+    assert captured[0][2] == {
+        "start_date": date(2026, 4, 1),
+        "end_date": date(2026, 4, 30),
+        "year": 2026,
+        "month": 4,
+        "page": 3,
+        "limit": 50,
+    }
+    assert captured[1][2] == {
+        "start_date": date(2026, 4, 1),
+        "end_date": date(2026, 4, 30),
+        "year": 2026,
+        "month": 4,
+        "limit": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "route",
+    [fleet_reports_expense_vehicle_detail, fleet_reports_invoice_vehicle_detail],
+)
+@pytest.mark.parametrize("page, limit", [(0, 25), (1, 0), (1, 200)])
+def test_vehicle_report_rejects_invalid_pagination(monkeypatch, route, page, limit):
+    _install_template_stub(monkeypatch)
+    with pytest.raises(HTTPException) as exc_info:
+        route(
+            request=_make_request("/fleet/reports/test"),
+            vehicle_id=uuid4(),
+            page=page,
+            limit=limit,
+            auth=_make_auth(),
+            db=object(),
+        )
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "route",
+    [fleet_reports_expense_vehicle_export, fleet_reports_invoice_vehicle_export],
+)
+def test_vehicle_report_rejects_unsupported_export_format(route):
+    with pytest.raises(HTTPException) as exc_info:
+        route(vehicle_id=uuid4(), format="csv", auth=_make_auth(), db=object())
     assert exc_info.value.status_code == 400

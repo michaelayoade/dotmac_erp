@@ -267,3 +267,80 @@ def test_reports_expense_vehicle_context_filters_all_queries_to_paid_claims(
         assert FleetWebService.REPORT_EXPENSE_CATEGORY_NAMES in [
             tuple(value) for value in category_values
         ]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "count_key", "row_key", "query_marker"),
+    [
+        (
+            "reports_expense_vehicle_context",
+            "claim_count",
+            "claim_rows",
+            "expense.expense_claim.claim_number",
+        ),
+        (
+            "reports_invoice_vehicle_context",
+            "invoice_count",
+            "invoice_rows",
+            "ap.supplier_invoice.invoice_number",
+        ),
+    ],
+)
+def test_vehicle_report_paginates_rows_but_not_summary(
+    monkeypatch, method_name, count_key, row_key, query_marker
+):
+    class PaginationDb(_FakeDb):
+        def execute(self, stmt):
+            self.executed.append(stmt)
+            if " AS claim_count" in str(stmt):
+                return _FakeExecuteResult(
+                    one_result=SimpleNamespace(
+                        claim_count=251, total_amount=Decimal("251.00")
+                    )
+                )
+            if " AS invoice_count" in str(stmt):
+                return _FakeExecuteResult(
+                    one_result=SimpleNamespace(
+                        invoice_count=251, total_amount=Decimal("251.00")
+                    )
+                )
+            return _FakeExecuteResult()
+
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.inspect", lambda bind: _InspectorStub()
+    )
+    monkeypatch.setattr(
+        "app.services.fleet.web.fleet_web.VehicleService", _VehicleServiceStub
+    )
+    db = PaginationDb()
+    service = FleetWebService(db)
+    method = getattr(service, method_name)
+
+    page_context = method(TEST_ORG_ID, uuid4(), page=3, limit=25)
+    page_query = next(
+        stmt
+        for stmt in db.executed + db.scalars_calls
+        if query_marker in str(stmt) and "ORDER BY" in str(stmt)
+    )
+
+    assert page_context[count_key] == 251
+    assert page_context["total_amount"] == Decimal("251.00")
+    assert page_context[row_key] == []
+    assert page_context["page"] == 3
+    assert page_context["total_pages"] == 11
+    assert " LIMIT " in str(page_query)
+    assert " OFFSET " in str(page_query)
+    assert 25 in page_query.compile().params.values()
+    assert 50 in page_query.compile().params.values()
+
+    db.executed.clear()
+    db.scalars_calls.clear()
+    export_context = method(TEST_ORG_ID, uuid4(), limit=None)
+    export_query = next(
+        stmt
+        for stmt in db.executed + db.scalars_calls
+        if query_marker in str(stmt) and "ORDER BY" in str(stmt)
+    )
+    assert export_context[count_key] == 251
+    assert " LIMIT " not in str(export_query)
+    assert " OFFSET " not in str(export_query)
