@@ -135,11 +135,11 @@ def test_every_disposition_states_a_reason() -> None:
 
 def test_composed_modules_are_exactly_the_pinned_modules() -> None:
     pins = _module_pins(_pyproject())
-    assert set(pins) == bom.COMPOSED_DISTRIBUTIONS, (
+    assert set(pins) == bom.INSTALLED_DISTRIBUTIONS, (
         "pinned but not recorded as composed: "
-        f"{sorted(set(pins) - bom.COMPOSED_DISTRIBUTIONS)}; "
+        f"{sorted(set(pins) - bom.INSTALLED_DISTRIBUTIONS)}; "
         "recorded as composed but not pinned: "
-        f"{sorted(bom.COMPOSED_DISTRIBUTIONS - set(pins))}"
+        f"{sorted(bom.INSTALLED_DISTRIBUTIONS - set(pins))}"
     )
 
 
@@ -448,3 +448,19 @@ def test_the_kernel_floor_detector_is_sensitive() -> None:
     pinned = _module_pins(_pyproject())["dotmac-kernel"]
     impossible = f"0.1.0a{_alpha(pinned) + 1}"
     assert _alpha(pinned) < _alpha(impossible)
+
+
+def test_contract_consumption_does_not_admit_payroll_storage() -> None:
+    assert {"dotmac-payroll"} == bom.CONTRACT_CONSUMER_DISTRIBUTIONS
+    assert "dotmac-payroll" not in bom.COMPOSED_DISTRIBUTIONS
+    assert _plan()["dotmac-payroll"].tranche != 0
+    assert _plan()["dotmac-payroll"].lineage_branch == "payroll"
+    consumers = bom.CALCULATION_CONTRACT_CONSUMERS
+    assert len(consumers) == 1
+    assert consumers[0].kind is bom.ContractConsumerKind.CALCULATION
+    assert consumers[0].rationale
+
+
+def test_payroll_calculation_consumer_requires_the_released_contract_pin() -> None:
+    # Deliberately fails before the coordinator adds the released a2 pin/lock.
+    assert _module_pins(_pyproject())["dotmac-payroll"] == "0.1.0a2"
