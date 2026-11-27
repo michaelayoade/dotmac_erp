@@ -493,6 +493,8 @@ class FleetWebService:
         end_date: date | None = None,
         year: int | None = None,
         month: int | None = None,
+        page: int = 1,
+        limit: int | None = 25,
     ) -> dict[str, Any]:
         """Context for Fleet → Reports → Expenses for a single vehicle."""
         if not self._fleet_tables_ready():
@@ -612,6 +614,45 @@ class FleetWebService:
                 ).all()
             ]
 
+            claim_pages = max(1, (claim_count + limit - 1) // limit) if limit else 1
+            current_page = min(page, claim_pages) if limit else 1
+            claim_stmt = (
+                sa_select(
+                    ExpenseClaim.claim_id,
+                    ExpenseClaim.claim_number,
+                    ExpenseClaim.claim_date,
+                    ExpenseClaim.status,
+                    func.coalesce(func.sum(ExpenseClaimItem.claimed_amount), 0),
+                )
+                .select_from(ExpenseClaimItem)
+                .join(
+                    ExpenseClaim,
+                    ExpenseClaim.claim_id == ExpenseClaimItem.claim_id,
+                )
+                .join(
+                    ExpenseCategory,
+                    ExpenseCategory.category_id == ExpenseClaimItem.category_id,
+                )
+                .where(
+                    *claim_filters,
+                    ExpenseCategory.category_name.in_(
+                        self.REPORT_EXPENSE_CATEGORY_NAMES
+                    ),
+                )
+                .group_by(
+                    ExpenseClaim.claim_id,
+                    ExpenseClaim.claim_number,
+                    ExpenseClaim.claim_date,
+                    ExpenseClaim.status,
+                )
+                .order_by(
+                    ExpenseClaim.claim_date.desc(),
+                    ExpenseClaim.claim_number.desc(),
+                    ExpenseClaim.claim_id.desc(),
+                )
+            )
+            if limit:
+                claim_stmt = claim_stmt.offset((current_page - 1) * limit).limit(limit)
             claim_rows = [
                 {
                     "claim_id": claim_id,
@@ -621,42 +662,11 @@ class FleetWebService:
                     "total_amount": claim_total or Decimal("0"),
                 }
                 for claim_id, claim_number, claim_date, status, claim_total in self.db.execute(
-                    sa_select(
-                        ExpenseClaim.claim_id,
-                        ExpenseClaim.claim_number,
-                        ExpenseClaim.claim_date,
-                        ExpenseClaim.status,
-                        func.coalesce(func.sum(ExpenseClaimItem.claimed_amount), 0),
-                    )
-                    .select_from(ExpenseClaimItem)
-                    .join(
-                        ExpenseClaim,
-                        ExpenseClaim.claim_id == ExpenseClaimItem.claim_id,
-                    )
-                    .join(
-                        ExpenseCategory,
-                        ExpenseCategory.category_id == ExpenseClaimItem.category_id,
-                    )
-                    .where(
-                        *claim_filters,
-                        ExpenseCategory.category_name.in_(
-                            self.REPORT_EXPENSE_CATEGORY_NAMES
-                        ),
-                    )
-                    .group_by(
-                        ExpenseClaim.claim_id,
-                        ExpenseClaim.claim_number,
-                        ExpenseClaim.claim_date,
-                        ExpenseClaim.status,
-                    )
-                    .order_by(
-                        ExpenseClaim.claim_date.desc(),
-                        ExpenseClaim.claim_number.desc(),
-                    )
-                    .limit(200)
+                    claim_stmt
                 ).all()
             ]
 
+        total_pages = max(1, (claim_count + limit - 1) // limit) if limit else 1
         return {
             "tables_ready": True,
             **header_context,
@@ -664,6 +674,9 @@ class FleetWebService:
             "total_amount": total_amount,
             "category_rows": category_rows,
             "claim_rows": claim_rows,
+            "page": min(page, total_pages) if limit else 1,
+            "limit": limit,
+            "total_pages": total_pages,
             "filter_start_date": start_date.isoformat() if start_date else "",
             "filter_end_date": end_date.isoformat() if end_date else "",
             "filter_year": str(year) if year else "",
@@ -771,6 +784,8 @@ class FleetWebService:
         end_date: date | None = None,
         year: int | None = None,
         month: int | None = None,
+        page: int = 1,
+        limit: int | None = 25,
     ) -> dict[str, Any]:
         """Context for Fleet → Reports → Invoices for a single vehicle."""
         if not self._fleet_tables_ready():
@@ -870,6 +885,22 @@ class FleetWebService:
                 ).all()
             ]
 
+        if inspector.has_table("supplier_invoice", schema="ap"):
+            invoice_pages = max(1, (invoice_count + limit - 1) // limit) if limit else 1
+            current_page = min(page, invoice_pages) if limit else 1
+            invoice_stmt = (
+                sa_select(SupplierInvoice)
+                .where(*invoice_filters)
+                .order_by(
+                    SupplierInvoice.invoice_date.desc(),
+                    SupplierInvoice.invoice_number.desc(),
+                    SupplierInvoice.invoice_id.desc(),
+                )
+            )
+            if limit:
+                invoice_stmt = invoice_stmt.offset((current_page - 1) * limit).limit(
+                    limit
+                )
             invoice_rows = [
                 {
                     "invoice_id": inv.invoice_id,
@@ -878,17 +909,10 @@ class FleetWebService:
                     "status": inv.status.value if inv.status else "",
                     "total_amount": inv.total_amount or Decimal("0"),
                 }
-                for inv in self.db.scalars(
-                    sa_select(SupplierInvoice)
-                    .where(*invoice_filters)
-                    .order_by(
-                        SupplierInvoice.invoice_date.desc(),
-                        SupplierInvoice.invoice_number.desc(),
-                    )
-                    .limit(200)
-                ).all()
+                for inv in self.db.scalars(invoice_stmt).all()
             ]
 
+        total_pages = max(1, (invoice_count + limit - 1) // limit) if limit else 1
         return {
             "tables_ready": True,
             **header_context,
@@ -896,6 +920,9 @@ class FleetWebService:
             "total_amount": total_amount,
             "category_rows": category_rows,
             "invoice_rows": invoice_rows,
+            "page": min(page, total_pages) if limit else 1,
+            "limit": limit,
+            "total_pages": total_pages,
             "filter_start_date": start_date.isoformat() if start_date else "",
             "filter_end_date": end_date.isoformat() if end_date else "",
             "filter_year": str(year) if year else "",
