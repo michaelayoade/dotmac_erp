@@ -425,3 +425,26 @@ def test_status_badge_unknown_status_falls_back_to_draft_style():
 
     assert "badge-draft" in html
     assert "Not A Real Status" in html
+
+
+@pytest.mark.parametrize(
+    ("status", "badge_class", "symbol"),
+    [
+        ("healthy", "badge-approved", "+"),
+        ("degraded", "badge-pending", "!"),
+        ("unhealthy", "badge-rejected", "x"),
+        ("unknown", "badge-draft", "?"),
+    ],
+)
+def test_status_badge_colors_infrastructure_health(status, badge_class, symbol):
+    html = _render(
+        """
+{% from "components/macros.html" import status_badge %}
+{{ status_badge(status, 'sm') }}
+""",
+        status=status,
+    )
+
+    assert f"badge badge-sm {badge_class}" in html
+    assert f">{symbol}</span>" in html
+    assert status.title() in html

@@ -15,6 +15,10 @@
 {% set status_upper = status_value|upper %}
 {% set status_clean = status_upper|replace('_', ' ') %}
 {% set badge_classes = {
+  'HEALTHY': 'badge-approved',
+  'DEGRADED': 'badge-pending',
+  'UNHEALTHY': 'badge-rejected',
+  'UNKNOWN': 'badge-draft',
   'URGENT': 'badge-overdue',
   'CRITICAL': 'badge-overdue',
   'LOW': 'badge-pending',
@@ -123,6 +127,10 @@
   'lg': 'badge-lg'
 } %}
 {% set badge_symbol = {
+  'HEALTHY': '+',
+  'DEGRADED': '!',
+  'UNHEALTHY': 'x',
+  'UNKNOWN': '?',
   'APPROVED': '+',
   'BUDGET_VERIFIED': '+',
   'BUDGET VERIFIED': '+',
