@@ -18,9 +18,11 @@ from app.services.finance.rpt.report_instance import (
 from app.services.storage import get_storage
 
 
-# Invoice exports at or below this combined invoice-and-line row count return
-# the XLSX or CSV response inline. Larger sets use the background worker.
-INLINE_EXPORT_ROW_THRESHOLD = 3000
+# General Ledger exports at or below this row count return directly.
+INLINE_EXPORT_ROW_THRESHOLD = 5000
+
+# AR and AP invoice exports count invoices and their line items together.
+INLINE_INVOICE_EXPORT_ROW_THRESHOLD = 3000
 
 EXPORT_DEFINITIONS = {
     "GENERAL_LEDGER": {

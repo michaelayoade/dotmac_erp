@@ -18,7 +18,7 @@ from app.services.finance.ar.invoice_bulk import get_ar_invoice_bulk_service
 from app.services.finance.ar.web import ar_web_service
 from app.services.finance.ar.web.base import normalize_date_range_filters
 from app.services.finance.rpt.async_exports import (
-    INLINE_EXPORT_ROW_THRESHOLD,
+    INLINE_INVOICE_EXPORT_ROW_THRESHOLD,
     get_completed_export_for_download,
     get_export_status,
     queue_background_export,
@@ -349,7 +349,7 @@ async def queue_invoices_export(
         invoice_service.count_export_rows(
             search, status, normalized_start or "", normalized_end or "", filters
         )
-        <= INLINE_EXPORT_ROW_THRESHOLD
+        <= INLINE_INVOICE_EXPORT_ROW_THRESHOLD
     ):
         return await invoice_service.export_all(
             search,
