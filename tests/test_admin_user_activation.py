@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -6,8 +7,9 @@ try:
 except ImportError:  # pragma: no cover
     UTC = timezone.utc
 
-from app.models.person import PersonStatus
+from app.models.person import Person, PersonStatus
 from app.services.admin.web import admin_web_service
+from app.services.admin.web._legacy import LegacyAdminWebService
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +39,51 @@ def test_activate_user_account_reactivates_profile_and_local_credential(
     assert user_credential.is_active is True
     assert user_credential.failed_login_attempts == 0
     assert user_credential.locked_until is None
+
+
+def test_admin_page_activation_does_not_read_person_after_commit(
+    db_session,
+    person,
+    monkeypatch,
+):
+    person_id = person.id
+    organization_id = person.organization_id
+    person.status = PersonStatus.inactive
+    person.is_active = False
+    db_session.commit()
+
+    audit_events = []
+    monkeypatch.setattr(
+        sys.modules[LegacyAdminWebService.__module__],
+        "fire_audit_event",
+        lambda **kwargs: audit_events.append(kwargs),
+    )
+    monkeypatch.setattr(
+        LegacyAdminWebService,
+        "_require_admin_web_auth",
+        lambda self, request, db, auth: auth,
+    )
+    original_commit = db_session.commit
+
+    def commit_and_detach():
+        original_commit()
+        db_session.expunge_all()
+
+    monkeypatch.setattr(db_session, "commit", commit_and_detach)
+
+    response = admin_web_service.users_activate_response(
+        object(), db_session, object(), str(person_id)
+    )
+    assert response.status_code == 302
+    assert response.headers["location"] == f"/admin/users/{person_id}?activated=1"
+    assert len(audit_events) == 1
+    assert audit_events[0]["organization_id"] == organization_id
+    assert audit_events[0]["record_id"] == str(person_id)
+
+    activated = db_session.get(Person, person_id)
+    assert activated is not None
+    assert activated.status == PersonStatus.active
+    assert activated.is_active is True
 
 
 def test_users_context_filters_by_visible_profile_status(
