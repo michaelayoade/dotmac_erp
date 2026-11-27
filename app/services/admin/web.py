@@ -1179,8 +1179,8 @@ class AdminWebService:
                 credential.failed_login_attempts = 0
                 credential.locked_until = None
 
-            db.commit()
-
+            # Audit before committing: commit expires ORM attributes, and a
+            # later refresh can fail after activation is already persisted.
             fire_audit_event(
                 db=db,
                 organization_id=person.organization_id,
@@ -1194,6 +1194,7 @@ class AdminWebService:
                     "credential_unlocked": bool(credential),
                 },
             )
+            db.commit()
             return None
 
         except Exception as e:
