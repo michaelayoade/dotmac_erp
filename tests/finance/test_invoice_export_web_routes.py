@@ -98,7 +98,7 @@ async def test_queued_invoice_route_preserves_filters_and_defaults_to_xlsx(
 ):
     queued = MagicMock(return_value=SimpleNamespace(instance_id=uuid4()))
     monkeypatch.setattr(module, "queue_background_export", queued)
-    bulk_service = SimpleNamespace(count_export_rows=MagicMock(return_value=5001))
+    bulk_service = SimpleNamespace(count_export_rows=MagicMock(return_value=3001))
     factory_name = (
         "get_ap_invoice_bulk_service"
         if module is ap_routes
@@ -148,7 +148,7 @@ async def test_small_invoice_export_returns_xlsx_without_queue(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     bulk_service = SimpleNamespace(
-        count_export_rows=MagicMock(return_value=5000),
+        count_export_rows=MagicMock(return_value=3000),
         export_all=AsyncMock(return_value=workbook),
     )
     factory_name = (
