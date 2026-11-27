@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from app.services.finance.ap.invoice_bulk import get_ap_invoice_bulk_service
 from app.services.finance.ap.web import ap_web_service
 from app.services.finance.rpt.async_exports import (
-    INLINE_EXPORT_ROW_THRESHOLD,
+    INLINE_INVOICE_EXPORT_ROW_THRESHOLD,
     get_completed_export_for_download,
     get_export_status,
     queue_background_export,
@@ -432,7 +432,7 @@ async def queue_ap_invoices_export(
     filters = {"supplier_id": supplier_id, "invoice_type": invoice_type}
     if (
         invoice_service.count_export_rows(search, status, start_date, end_date, filters)
-        <= INLINE_EXPORT_ROW_THRESHOLD
+        <= INLINE_INVOICE_EXPORT_ROW_THRESHOLD
     ):
         return await invoice_service.export_all(
             search, status, start_date, end_date, filters, format=format
