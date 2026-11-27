@@ -1,5 +1,5 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import icon_svg, currency, data_table, filter_date_field, filter_select_field %}
+{% from "components/macros.html" import icon_svg, currency, data_table, filter_date_field, filter_select_field, pagination, export_menu %}
 
 {% block page_title %}Vehicle Expense Report{% endblock %}
 
@@ -27,11 +27,15 @@
 <div class="space-y-6 page-enter">
     <div class="card p-6">
         <div class="space-y-3">
-            <div>
-                <p class="text-sm font-medium uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Vehicle Expense Report</p>
-                <h2 class="mt-2 text-2xl font-bold font-display text-slate-900 dark:text-white">
-                    {{ vehicle.registration_number }}
-                </h2>
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <p class="text-sm font-medium uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400">Vehicle Expense Report</p>
+                    <h2 class="mt-2 text-2xl font-bold font-display text-slate-900 dark:text-white">
+                        {{ vehicle.registration_number }}
+                    </h2>
+                </div>
+                {% set export_query = "start_date=" ~ filter_start_date ~ "&end_date=" ~ filter_end_date ~ "&year=" ~ filter_year ~ "&month=" ~ filter_month %}
+                {{ export_menu("/fleet/reports/expenses/" ~ vehicle.vehicle_id, export_query, ["xlsx", "pdf"]) }}
             </div>
             <dl class="grid gap-3 sm:grid-cols-3">
                 <div>
@@ -59,6 +63,7 @@
             <a href="/fleet/reports/expenses/{{ vehicle.vehicle_id }}" class="btn btn-secondary">Clear</a>
         </div>
         <form method="get" action="/fleet/reports/expenses/{{ vehicle.vehicle_id }}" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <input type="hidden" name="limit" value="{{ limit }}">
             {{ filter_date_field("start_date", "Start date", filter_start_date or "") }}
             {{ filter_date_field("end_date", "End date", filter_end_date or "") }}
             {{ filter_select_field("year", "Year", filter_year, year_options, "", "All Years") }}
@@ -105,7 +110,7 @@
 
         <div class="card p-6">
             <h3 class="text-base font-semibold text-slate-900 dark:text-white">Recent Claims</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Up to the latest 200 paid claims with matching fuel or repairs records linked to this vehicle.</p>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Paid claims with matching fuel or repairs records linked to this vehicle, {{ limit }} per page.</p>
             <div class="mt-4">
                 {% call data_table(
                     headers=[
@@ -129,6 +134,7 @@
                     {% endfor %}
                 {% endcall %}
             </div>
+            {{ pagination(page, total_pages, claim_count, limit=limit, filters={"start_date": filter_start_date, "end_date": filter_end_date, "year": filter_year, "month": filter_month}, page_sizes=[10, 25, 50, 100], bordered=false) }}
         </div>
     </div>
 </div>

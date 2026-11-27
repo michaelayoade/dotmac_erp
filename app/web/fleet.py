@@ -23,6 +23,7 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     RedirectResponse,
+    Response,
     StreamingResponse,
 )
 from sqlalchemy.orm import Session
@@ -31,6 +32,7 @@ from app.services.common import NotFoundError
 from app.services.finance.import_export.base import ImportConfig
 from app.services.finance.import_export.import_service import ImportService
 from app.services.fleet.import_export import VehicleImporter
+from app.services.fleet.report_export import vehicle_report_export_response
 from app.services.fleet.web.fleet_web import FleetWebService
 from app.services.fleet.web.import_web import fleet_import_web_service
 from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
@@ -159,6 +161,40 @@ def _parse_report_date_range(
     return parsed_start, parsed_end, None
 
 
+def _vehicle_report_filters(
+    start_date: str | None,
+    end_date: str | None,
+    year: str | None,
+    month: str | None,
+) -> dict:
+    try:
+        parsed_start = date.fromisoformat(start_date) if start_date else None
+        parsed_end = date.fromisoformat(end_date) if end_date else None
+        parsed_year = int(year) if year else None
+        parsed_month = int(month) if month else None
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail="Invalid date filter value"
+        ) from exc
+    if parsed_year is not None and not 1900 <= parsed_year <= 2100:
+        raise HTTPException(
+            status_code=400, detail="Year must be between 1900 and 2100"
+        )
+    if parsed_month is not None and not 1 <= parsed_month <= 12:
+        raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+    return {
+        "start_date": parsed_start,
+        "end_date": parsed_end,
+        "year": parsed_year,
+        "month": parsed_month,
+    }
+
+
+def _validate_vehicle_report_pagination(page: int, limit: int) -> None:
+    if page < 1 or limit not in (10, 25, 50, 100):
+        raise HTTPException(status_code=400, detail="Invalid report page or page size")
+
+
 @router.get("/reports", response_class=HTMLResponse)
 def fleet_reports_index(
     request: Request,
@@ -206,6 +242,8 @@ def fleet_reports_expense_vehicle_detail(
     end_date: str | None = None,
     year: str | None = None,
     month: str | None = None,
+    page: int = 1,
+    limit: int = 25,
     auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
@@ -218,30 +256,16 @@ def fleet_reports_expense_vehicle_detail(
         db=db,
     )
     web_service = FleetWebService(db)
-    try:
-        parsed_start_date = date.fromisoformat(start_date) if start_date else None
-        parsed_end_date = date.fromisoformat(end_date) if end_date else None
-        parsed_year = int(year) if year else None
-        parsed_month = int(month) if month else None
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail="Invalid date filter value"
-        ) from exc
-    if parsed_year is not None and not 1900 <= parsed_year <= 2100:
-        raise HTTPException(
-            status_code=400, detail="Year must be between 1900 and 2100"
-        )
-    if parsed_month is not None and not 1 <= parsed_month <= 12:
-        raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+    filters = _vehicle_report_filters(start_date, end_date, year, month)
+    _validate_vehicle_report_pagination(page, limit)
     try:
         context.update(
             web_service.reports_expense_vehicle_context(
                 auth.organization_id,
                 vehicle_id,
-                start_date=parsed_start_date,
-                end_date=parsed_end_date,
-                year=parsed_year,
-                month=parsed_month,
+                **filters,
+                page=page,
+                limit=limit,
             )
         )
         return templates.TemplateResponse(
@@ -254,6 +278,30 @@ def fleet_reports_expense_vehicle_detail(
             url="/fleet/reports/expenses?error=not_found",
             status_code=303,
         )
+
+
+@router.get("/reports/expenses/{vehicle_id}/export")
+def fleet_reports_expense_vehicle_export(
+    vehicle_id: UUID,
+    format: str = "xlsx",
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: str | None = None,
+    month: str | None = None,
+    auth: WebAuthContext = Depends(require_fleet_report_read),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Export all filtered expense claims for one vehicle."""
+    if format not in ("xlsx", "pdf"):
+        raise HTTPException(status_code=400, detail="Unsupported export format")
+    filters = _vehicle_report_filters(start_date, end_date, year, month)
+    try:
+        context = FleetWebService(db).reports_expense_vehicle_context(
+            auth.organization_id, vehicle_id, **filters, limit=None
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Vehicle not found") from exc
+    return vehicle_report_export_response(context, "expense", format)
 
 
 @router.get("/reports/invoices", response_class=HTMLResponse)
@@ -290,6 +338,8 @@ def fleet_reports_invoice_vehicle_detail(
     end_date: str | None = None,
     year: str | None = None,
     month: str | None = None,
+    page: int = 1,
+    limit: int = 25,
     auth: WebAuthContext = Depends(require_fleet_report_read),
     db: Session = Depends(get_db_for_org),
 ):
@@ -302,30 +352,16 @@ def fleet_reports_invoice_vehicle_detail(
         db=db,
     )
     web_service = FleetWebService(db)
-    try:
-        parsed_start_date = date.fromisoformat(start_date) if start_date else None
-        parsed_end_date = date.fromisoformat(end_date) if end_date else None
-        parsed_year = int(year) if year else None
-        parsed_month = int(month) if month else None
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail="Invalid date filter value"
-        ) from exc
-    if parsed_year is not None and not 1900 <= parsed_year <= 2100:
-        raise HTTPException(
-            status_code=400, detail="Year must be between 1900 and 2100"
-        )
-    if parsed_month is not None and not 1 <= parsed_month <= 12:
-        raise HTTPException(status_code=400, detail="Month must be between 1 and 12")
+    filters = _vehicle_report_filters(start_date, end_date, year, month)
+    _validate_vehicle_report_pagination(page, limit)
     try:
         context.update(
             web_service.reports_invoice_vehicle_context(
                 auth.organization_id,
                 vehicle_id,
-                start_date=parsed_start_date,
-                end_date=parsed_end_date,
-                year=parsed_year,
-                month=parsed_month,
+                **filters,
+                page=page,
+                limit=limit,
             )
         )
         return templates.TemplateResponse(
@@ -338,6 +374,30 @@ def fleet_reports_invoice_vehicle_detail(
             url="/fleet/reports/invoices?error=not_found",
             status_code=303,
         )
+
+
+@router.get("/reports/invoices/{vehicle_id}/export")
+def fleet_reports_invoice_vehicle_export(
+    vehicle_id: UUID,
+    format: str = "xlsx",
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: str | None = None,
+    month: str | None = None,
+    auth: WebAuthContext = Depends(require_fleet_report_read),
+    db: Session = Depends(get_db_for_org),
+) -> Response:
+    """Export all filtered invoices for one vehicle."""
+    if format not in ("xlsx", "pdf"):
+        raise HTTPException(status_code=400, detail="Unsupported export format")
+    filters = _vehicle_report_filters(start_date, end_date, year, month)
+    try:
+        context = FleetWebService(db).reports_invoice_vehicle_context(
+            auth.organization_id, vehicle_id, **filters, limit=None
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Vehicle not found") from exc
+    return vehicle_report_export_response(context, "invoice", format)
 
 
 # =============================================================================
