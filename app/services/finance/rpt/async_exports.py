@@ -20,7 +20,7 @@ from app.services.storage import get_storage
 
 # Invoice exports at or below this combined invoice-and-line row count return
 # the XLSX or CSV response inline. Larger sets use the background worker.
-INLINE_EXPORT_ROW_THRESHOLD = 5000
+INLINE_EXPORT_ROW_THRESHOLD = 3000
 
 EXPORT_DEFINITIONS = {
     "GENERAL_LEDGER": {
