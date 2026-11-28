@@ -18,8 +18,8 @@ from app.services.finance.rpt.report_instance import (
 from app.services.storage import get_storage
 
 
-# General Ledger exports at or below this row count return directly.
-INLINE_EXPORT_ROW_THRESHOLD = 5000
+# Ledger Transactions exports at or below this row count return directly.
+INLINE_EXPORT_ROW_THRESHOLD = 3000
 
 # AR and AP invoice exports count invoices and their line items together.
 INLINE_INVOICE_EXPORT_ROW_THRESHOLD = 3000
