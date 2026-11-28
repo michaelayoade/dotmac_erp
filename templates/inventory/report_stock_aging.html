@@ -52,29 +52,6 @@
         </div>
     </div>
 
-    {% call(filter_attrs) compact_filters(
-        base_url="/inventory/reports/aging",
-        active_filters=active_filters | default([]),
-        show_search=true,
-        search=search,
-        search_placeholder="Search lot, item, warehouse, or reference..."
-    ) %}
-        {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
-            {% for wh in warehouses | default([]) %}
-            <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
-                {{ wh.warehouse_name }}
-            </option>
-            {% endfor %}
-        {% endcall %}
-        {% call filter_custom_select_field("item", "Item", filter_attrs) %}
-            {% for filter_item in items | default([]) %}
-            <option value="{{ filter_item.item_id }}" {{ 'selected' if item == filter_item.item_id|string else '' }}>
-                {{ filter_item.item_code }} - {{ filter_item.item_name }}
-            </option>
-            {% endfor %}
-        {% endcall %}
-    {% endcall %}
-
     <div class="card p-4">
         <div class="grid gap-4 sm:grid-cols-3">
             <div>
@@ -92,11 +69,38 @@
         </div>
     </div>
 
+    {% call(filter_attrs) compact_filters(
+        base_url="/inventory/reports/aging",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search lot, item, warehouse, or reference...",
+        auto_submit=false,
+        show_apply_button=true,
+        htmx_apply=false
+    ) %}
+        {% call filter_custom_select_field("warehouse", "Warehouse", filter_attrs) %}
+            {% for wh in warehouses | default([]) %}
+            <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
+                {{ wh.warehouse_name }}
+            </option>
+            {% endfor %}
+        {% endcall %}
+        {% call filter_custom_select_field("item", "Item", filter_attrs) %}
+            {% for filter_item in items | default([]) %}
+            <option value="{{ filter_item.item_id }}" {{ 'selected' if item == filter_item.item_id|string else '' }}>
+                {{ filter_item.item_code }} - {{ filter_item.item_name }}
+            </option>
+            {% endfor %}
+        {% endcall %}
+    {% endcall %}
+
     <div id="results-container">
         <div class="card overflow-hidden">
             {% if aging_rows | default([]) | length > 0 %}
-            <div class="table-container">
-                <table class="table-ledger">
+            <div class="table-container" role="region" aria-label="Stock aging results" tabindex="0">
+                <table class="table table-ledger">
+                    <caption class="sr-only">Open stock lots by receipt date</caption>
                     <thead>
                         <tr>
                             <th scope="col">Receipt Date</th>

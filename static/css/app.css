@@ -2675,6 +2675,8 @@ video {
         white-space: nowrap;
     }
 
+.table th.text-right { text-align: right; }
+
 .table th.sortable { cursor: pointer; -webkit-user-select: none; -moz-user-select: none; user-select: none; }
 
 .table th.sortable:hover { color: var(--ink); }
@@ -9662,6 +9664,16 @@ a.stat-hero-link:active { transform: scale(0.98); }
         gap: var(--spacing-sm);
         max-width: 100%;
     }
+}
+
+@media (min-width: 640px) {
+
+    .table th.sm\:text-right { text-align: right; }
+}
+
+@media (min-width: 1024px) {
+
+    .table th.lg\:text-right { text-align: right; }
 }
 
 .file\:mr-4::file-selector-button {

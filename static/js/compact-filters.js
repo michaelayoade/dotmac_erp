@@ -2,7 +2,7 @@
  * Compact Filters — companion JS for the compact_filters Jinja2 macro.
  *
  * Handles chip removal: clicking the ✕ on an active filter chip clears
- * the corresponding form field and triggers an HTMX request to refresh results.
+ * the corresponding form field and refreshes results.
  *
  * Spinner handling is delegated to live-search.js via the shared
  * [data-live-search] + [data-live-search-spinner] convention.
@@ -31,9 +31,10 @@
             } else {
                 field.value = "";
             }
-            // Trigger HTMX change event to refresh results
-            if (window.htmx) {
+            if (window.htmx && field.hasAttribute("hx-get")) {
                 htmx.trigger(field, "change");
+            } else {
+                form.requestSubmit();
             }
         } else {
             // Field might not be visible (date_range inputs handled by macro).

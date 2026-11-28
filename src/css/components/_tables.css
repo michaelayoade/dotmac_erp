@@ -36,6 +36,8 @@
         white-space: nowrap;
     }
 
+    .table th.text-right { text-align: right; }
+
     .table th.sortable { cursor: pointer; user-select: none; }
     .table th.sortable:hover { color: var(--ink); }
     .table th .sort-icon { display: inline-block; margin-left: var(--spacing-md); opacity: 0.4; }
